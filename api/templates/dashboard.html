@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — Investment Advisor{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+
+{% block content %}
+{% if session %}
+<div class="market-summary">
+    <div class="label" style="display:flex;align-items:center;justify-content:space-between;">
+        <span>Market Summary &middot; {{ session.analysis_date }}</span>
+        {% if session.risk_temperature %}
+        <span class="risk-temp risk-temp-{{ session.risk_temperature }}">
+            <span class="risk-temp-dot"></span>
+            {{ session.risk_temperature|upper }}
+        </span>
+        {% endif %}
+    </div>
+    {{ session.market_summary or "(분석 요약 없음)" }}
+</div>
+
+<!-- 투자 신호 -->
+{% if signals %}
+<div class="signals-section">
+    <div class="section-title" style="margin-top:0;">투자 신호</div>
+    <div class="signal-list">
+        {% for s in signals %}
+        <div class="signal-item signal-{{ s.type }}">
+            <span class="signal-icon">
+                {% if s.icon == 'new' %}+{% elif s.icon == 'change' %}~{% elif s.icon == 'up' %}▲{% elif s.icon == 'down' %}▼{% elif s.icon == 'gone' %}×{% endif %}
+            </span>
+            <span>{{ s.text }}</span>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<div class="stat-grid">
+    <div class="stat-card">
+        <div class="stat-value">{{ issue_count }}</div>
+        <div class="stat-label">글로벌 이슈</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ theme_count }}</div>
+        <div class="stat-label">투자 테마</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ buy_count }}</div>
+        <div class="stat-label">매수 제안</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ "%.1f"|format(total_alloc) }}%</div>
+        <div class="stat-label">총 비중</div>
+    </div>
+</div>
+
+<!-- 투자 테마 -->
+<div class="section-title">투자 테마</div>
+{% for theme in themes %}
+<div class="card">
+    <div class="card-header">
+        <span style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            <span class="card-title">{{ theme.theme_name }}</span>
+            <!-- 추적 뱃지 -->
+            {% for t in active_tracking %}
+                {% if t.theme_name == theme.theme_name %}
+                    {% if t.appearances == 1 %}
+                    <span class="tracking-badge tracking-badge-new">신규</span>
+                    {% elif t.streak_days >= 2 %}
+                    <span class="tracking-badge tracking-badge-streak">{{ t.streak_days }}일 연속</span>
+                    {% endif %}
+                    {% if t.prev_confidence is not none and t.latest_confidence is not none %}
+                        {% set diff = t.latest_confidence - t.prev_confidence %}
+                        {% if diff > 0.03 %}
+                        <span class="confidence-change confidence-up">▲{{ "%.0f"|format(diff * 100) }}p</span>
+                        {% elif diff < -0.03 %}
+                        <span class="confidence-change confidence-down">▼{{ "%.0f"|format(diff|abs * 100) }}p</span>
+                        {% endif %}
+                    {% endif %}
+                {% endif %}
+            {% endfor %}
+        </span>
+        <span style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            {% if theme.theme_type %}
+            <span class="badge badge-{{ theme.theme_type }}">{{ theme.theme_type }}</span>
+            {% endif %}
+            {% if theme.theme_validity %}
+            <span class="badge badge-{{ theme.theme_validity }}">{{ theme.theme_validity }}</span>
+            {% endif %}
+            <span class="badge badge-{{ theme.time_horizon }}">{{ theme.time_horizon }}</span>
+            <span>
+                <span class="confidence-bar"><span class="confidence-bar-fill" style="width:{{ (theme.confidence_score|float * 100)|int }}%"></span></span>
+                {{ "%.0f"|format(theme.confidence_score|float * 100) }}%
+            </span>
+        </span>
+    </div>
+    <div class="detail-text">{{ theme.description }}</div>
+    {% if theme.key_indicators %}
+    <div class="indicators">
+        {% for ind in theme.key_indicators %}
+        <span class="indicator-tag">{{ ind }}</span>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- 시나리오 -->
+    {% if theme.scenarios %}
+    <div class="scenario-grid">
+        {% for sc in theme.scenarios %}
+        <div class="scenario-card scenario-card-{{ sc.scenario_type }}">
+            <div class="scenario-header">
+                <span>{{ sc.scenario_type|upper }}</span>
+                {% if sc.probability %}<span class="scenario-prob">{{ sc.probability }}%</span>{% endif %}
+            </div>
+            <div class="scenario-body">{{ sc.description }}</div>
+            {% if sc.market_impact %}<div class="scenario-impact">{{ sc.market_impact }}</div>{% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- 제안 -->
+    {% if theme.proposals %}
+    <div style="margin-top:16px;">
+        {% for p in theme.proposals %}
+        <div class="proposal-card" style="margin-bottom:12px;">
+            <div class="proposal-card-header">
+                <span class="badge badge-{{ p.action }}">{{ p.action|upper }}</span>
+                <span class="asset-name">{{ p.asset_name }}</span>
+                <span class="ticker">
+                    <a href="/pages/proposals/history/{{ p.ticker }}">{{ p.ticker }}</a> @ {{ p.market }}
+                </span>
+                <span class="badge badge-{{ p.conviction }}">{{ p.conviction }}</span>
+                <span style="font-size:14px;">
+                    <span class="alloc-bar"><span class="alloc-bar-fill" style="width:{{ (p.target_allocation|float)|int }}%"></span></span>
+                    {{ p.target_allocation }}%
+                </span>
+                {% if p.quant_score %}<span class="score-display">Q {{ p.quant_score }}/5</span>{% endif %}
+                {% if p.sentiment_score is not none and p.sentiment_score != None %}
+                <span class="score-display score-sentiment">S {{ p.sentiment_score }}</span>
+                {% endif %}
+            </div>
+            {% if p.target_price_low and p.target_price_high %}
+            <div class="price-target">
+                <span style="color:var(--text-muted);">목표가</span>
+                <span class="price-range">{{ p.currency or '' }}{{ p.target_price_low }} ~ {{ p.target_price_high }}</span>
+                {% if p.upside_pct %}
+                <span class="upside-badge {% if p.upside_pct > 0 %}upside-positive{% else %}upside-negative{% endif %}">
+                    {% if p.upside_pct > 0 %}+{% endif %}{{ p.upside_pct }}%
+                </span>
+                {% endif %}
+            </div>
+            {% endif %}
+            {% if p.rationale or p.risk_factors %}
+            <div class="proposal-card-body">
+                {% if p.rationale %}
+                <div class="field-group"><div class="field-label">근거</div><div class="field-value">{{ p.rationale }}</div></div>
+                {% endif %}
+                {% if p.risk_factors %}
+                <div class="field-group"><div class="field-label">리스크</div><div class="field-value">{{ p.risk_factors }}</div></div>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>
+{% endfor %}
+
+<!-- 소멸 테마 -->
+{% if disappeared_themes %}
+<div class="section-title">최근 소멸 테마</div>
+{% for t in disappeared_themes %}
+<div class="card" style="opacity:0.6;">
+    <div class="card-header">
+        <span style="display:flex;align-items:center;gap:10px;">
+            <span class="tracking-badge tracking-badge-gone">소멸</span>
+            <span class="card-title">{{ t.theme_name }}</span>
+        </span>
+        <span style="font-size:14px;color:var(--text-muted);">
+            마지막 등장: {{ t.last_seen_date }} &middot; 총 {{ t.appearances }}회
+        </span>
+    </div>
+</div>
+{% endfor %}
+{% endif %}
+
+{% else %}
+<div class="empty-state">
+    <h3>분석 데이터 없음</h3>
+    <p>아직 분석이 실행되지 않았습니다. <code>python -m analyzer.main</code>을 실행하세요.</p>
+</div>
+{% endif %}
+{% endblock %}

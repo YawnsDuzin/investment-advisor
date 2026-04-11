@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% block title %}Proposals — Investment Advisor{% endblock %}
+{% block page_title %}투자 제안{% endblock %}
+
+{% block content %}
+<form class="filters" method="get" action="/pages/proposals">
+    <select name="action" class="filter-select">
+        <option value="">Action 전체</option>
+        <option value="buy" {% if action == 'buy' %}selected{% endif %}>Buy</option>
+        <option value="sell" {% if action == 'sell' %}selected{% endif %}>Sell</option>
+        <option value="hold" {% if action == 'hold' %}selected{% endif %}>Hold</option>
+        <option value="watch" {% if action == 'watch' %}selected{% endif %}>Watch</option>
+    </select>
+    <select name="asset_type" class="filter-select">
+        <option value="">자산 전체</option>
+        <option value="stock" {% if asset_type == 'stock' %}selected{% endif %}>Stock</option>
+        <option value="etf" {% if asset_type == 'etf' %}selected{% endif %}>ETF</option>
+        <option value="commodity" {% if asset_type == 'commodity' %}selected{% endif %}>Commodity</option>
+        <option value="currency" {% if asset_type == 'currency' %}selected{% endif %}>Currency</option>
+        <option value="bond" {% if asset_type == 'bond' %}selected{% endif %}>Bond</option>
+        <option value="crypto" {% if asset_type == 'crypto' %}selected{% endif %}>Crypto</option>
+    </select>
+    <select name="conviction" class="filter-select">
+        <option value="">확신도 전체</option>
+        <option value="high" {% if conviction == 'high' %}selected{% endif %}>High</option>
+        <option value="medium" {% if conviction == 'medium' %}selected{% endif %}>Medium</option>
+        <option value="low" {% if conviction == 'low' %}selected{% endif %}>Low</option>
+    </select>
+    <input type="text" name="ticker" class="filter-input" placeholder="티커 검색 (예: NVDA)" value="{{ ticker or '' }}">
+    <button type="submit" class="btn btn-primary">필터</button>
+</form>
+
+{% if proposals %}
+{% for p in proposals %}
+<div class="proposal-card">
+    <div class="proposal-card-header">
+        <span class="badge badge-{{ p.action }}">{{ p.action|upper }}</span>
+        <span class="asset-name">{{ p.asset_name }}</span>
+        <span class="ticker">
+            <a href="/pages/proposals/history/{{ p.ticker }}">{{ p.ticker }}</a> @ {{ p.market }}
+        </span>
+        {% if p.quant_score %}<span class="score-display">Q {{ p.quant_score }}/5</span>{% endif %}
+        {% if p.sentiment_score is not none and p.sentiment_score != None %}
+        <span class="score-display score-sentiment">S {{ p.sentiment_score }}</span>
+        {% endif %}
+    </div>
+
+    <div class="proposal-card-meta">
+        <span class="meta-item">
+            <span class="meta-label">날짜</span>
+            {{ p.analysis_date }}
+        </span>
+        <span class="meta-item">
+            <span class="meta-label">유형</span>
+            <span class="badge badge-category">{{ p.asset_type }}</span>
+        </span>
+        <span class="meta-item">
+            <span class="meta-label">확신도</span>
+            <span class="badge badge-{{ p.conviction }}">{{ p.conviction }}</span>
+        </span>
+        <span class="meta-item">
+            <span class="meta-label">비중</span>
+            <span class="alloc-bar"><span class="alloc-bar-fill" style="width:{{ (p.target_allocation|float)|int }}%"></span></span>
+            {{ p.target_allocation }}%
+        </span>
+        <span class="meta-item">
+            <span class="meta-label">테마</span>
+            {{ p.theme_name }}
+        </span>
+        {% if p.sector %}
+        <span class="meta-item">
+            <span class="meta-label">섹터</span>
+            {{ p.sector }}
+        </span>
+        {% endif %}
+    </div>
+
+    {% if p.target_price_low and p.target_price_high %}
+    <div class="price-target" style="margin-bottom:12px;">
+        {% if p.current_price %}
+        <span style="color:var(--text-muted);">현재가</span>
+        <span style="font-weight:600;">{{ p.currency or '' }}{{ p.current_price }}</span>
+        <span style="color:var(--text-muted);margin:0 4px;">→</span>
+        {% endif %}
+        <span style="color:var(--text-muted);">목표가</span>
+        <span class="price-range">{{ p.currency or '' }}{{ p.target_price_low }} ~ {{ p.target_price_high }}</span>
+        {% if p.upside_pct %}
+        <span class="upside-badge {% if p.upside_pct > 0 %}upside-positive{% else %}upside-negative{% endif %}">
+            {% if p.upside_pct > 0 %}+{% endif %}{{ p.upside_pct }}%
+        </span>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <div class="proposal-card-body">
+        {% if p.rationale %}
+        <div class="field-group"><div class="field-label">근거</div><div class="field-value">{{ p.rationale }}</div></div>
+        {% endif %}
+        {% if p.risk_factors %}
+        <div class="field-group"><div class="field-label">리스크</div><div class="field-value">{{ p.risk_factors }}</div></div>
+        {% endif %}
+    </div>
+    {% if p.entry_condition or p.exit_condition %}
+    <div class="proposal-card-body" style="margin-top:10px;">
+        {% if p.entry_condition %}
+        <div class="field-group"><div class="field-label">진입 조건</div><div class="field-value">{{ p.entry_condition }}</div></div>
+        {% endif %}
+        {% if p.exit_condition %}
+        <div class="field-group"><div class="field-label">청산 조건</div><div class="field-value">{{ p.exit_condition }}</div></div>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+{% endfor %}
+{% else %}
+<div class="empty-state">
+    <h3>조건에 맞는 제안 없음</h3>
+    <p>필터를 조정하거나 분석을 먼저 실행하세요.</p>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block title %}테마 추이 — Investment Advisor{% endblock %}
+{% block page_title %}테마 추이{% endblock %}
+{% block header_actions %}<a href="/pages/themes" class="btn">테마 목록</a>{% endblock %}
+
+{% block content %}
+{% if tracking %}
+<div class="card" style="margin-bottom:28px;">
+    <div class="card-header">
+        <span style="display:flex;align-items:center;gap:12px;">
+            <span class="card-title" style="font-size:22px;">{{ tracking.theme_name }}</span>
+            {% if tracking.streak_days >= 2 %}
+            <span class="tracking-badge tracking-badge-streak">{{ tracking.streak_days }}일 연속</span>
+            {% endif %}
+        </span>
+    </div>
+    <div class="stat-grid" style="margin-bottom:0;">
+        <div class="stat-card">
+            <div class="stat-value">{{ tracking.appearances }}</div>
+            <div class="stat-label">총 등장 횟수</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ tracking.streak_days }}</div>
+            <div class="stat-label">연속 일수</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ "%.0f"|format(tracking.latest_confidence|float * 100) }}%</div>
+            <div class="stat-label">최신 신뢰도</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ tracking.first_seen_date }}</div>
+            <div class="stat-label">최초 등장</div>
+        </div>
+    </div>
+</div>
+
+{% if history %}
+<div class="section-title">일자별 추이</div>
+<div class="history-timeline">
+    {% for h in history %}
+    <div class="history-entry">
+        <div class="history-date">
+            {{ h.analysis_date }}
+            <span style="margin-left:12px;">
+                <span class="confidence-bar"><span class="confidence-bar-fill" style="width:{{ (h.confidence_score|float * 100)|int }}%"></span></span>
+                신뢰도 {{ "%.0f"|format(h.confidence_score|float * 100) }}%
+            </span>
+            {% if h.time_horizon %}
+            <span class="badge badge-{{ h.time_horizon }}" style="margin-left:8px;">{{ h.time_horizon }}</span>
+            {% endif %}
+            {% if h.theme_validity %}
+            <span class="badge badge-{{ h.theme_validity }}" style="margin-left:4px;">{{ h.theme_validity }}</span>
+            {% endif %}
+        </div>
+        <div class="detail-text" style="margin-top:6px;">{{ h.description }}</div>
+
+        {% if h.scenarios %}
+        <div class="scenario-grid" style="margin-top:12px;">
+            {% for sc in h.scenarios %}
+            <div class="scenario-card scenario-card-{{ sc.scenario_type }}">
+                <div class="scenario-header">
+                    <span>{{ sc.scenario_type|upper }}</span>
+                    {% if sc.probability %}<span class="scenario-prob">{{ sc.probability }}%</span>{% endif %}
+                </div>
+                <div class="scenario-body">{{ sc.description }}</div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if h.proposals %}
+        <div style="margin-top:12px;">
+            {% for p in h.proposals %}
+            <div class="proposal-row">
+                <span class="badge badge-{{ p.action }}">{{ p.action|upper }}</span>
+                <span class="proposal-name">{{ p.asset_name }}</span>
+                <span class="proposal-ticker">
+                    <a href="/pages/proposals/history/{{ p.ticker }}">{{ p.ticker }}</a>
+                </span>
+                <span class="badge badge-{{ p.conviction }}">{{ p.conviction }}</span>
+                <span class="proposal-alloc">{{ p.target_allocation }}%</span>
+                {% if p.target_price_low and p.target_price_high %}
+                <span class="price-range" style="font-size:13px;">{{ p.currency or '' }}{{ p.target_price_low }}~{{ p.target_price_high }}</span>
+                {% endif %}
+                {% if p.quant_score %}<span class="score-display">Q {{ p.quant_score }}/5</span>{% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+{% else %}
+<div class="empty-state">
+    <h3>테마를 찾을 수 없습니다</h3>
+    <p>올바른 테마 키를 확인하세요.</p>
+</div>
+{% endif %}
+{% endblock %}

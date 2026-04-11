@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Sessions — Investment Advisor{% endblock %}
+{% block page_title %}분석 세션{% endblock %}
+
+{% block content %}
+{% if sessions %}
+{% for s in sessions %}
+<div class="card">
+    <div class="card-header">
+        <span style="display:flex;align-items:center;gap:12px;">
+            <span class="card-title">{{ s.analysis_date }}</span>
+            <span style="font-size:13px;color:var(--text-muted);">세션 #{{ s.id }}</span>
+            {% if s.risk_temperature %}
+            <span class="risk-temp risk-temp-{{ s.risk_temperature }}">
+                <span class="risk-temp-dot"></span>
+                {{ s.risk_temperature|upper }}
+            </span>
+            {% endif %}
+        </span>
+        <span style="display:flex;align-items:center;gap:12px;">
+            <span class="badge badge-category">이슈 {{ s.issue_count }}건</span>
+            <span class="badge badge-category">테마 {{ s.theme_count }}건</span>
+            <a href="/pages/sessions/{{ s.id }}" class="btn btn-primary">상세 보기</a>
+        </span>
+    </div>
+    {% if s.market_summary %}
+    <div class="detail-text">{{ s.market_summary }}</div>
+    {% endif %}
+</div>
+{% endfor %}
+{% else %}
+<div class="empty-state">
+    <h3>세션 없음</h3>
+    <p>분석을 먼저 실행하세요.</p>
+</div>
+{% endif %}
+{% endblock %}

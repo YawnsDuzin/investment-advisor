@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block title %}{{ ticker }} 이력 — Investment Advisor{% endblock %}
+{% block page_title %}{{ ticker }} 추천 이력{% endblock %}
+{% block header_actions %}<a href="/pages/proposals" class="btn">제안 목록</a>{% endblock %}
+
+{% block content %}
+{% if tracking_list %}
+<!-- 추적 요약 카드 -->
+{% for tr in tracking_list %}
+<div class="card" style="margin-bottom:16px;">
+    <div class="card-header">
+        <span style="display:flex;align-items:center;gap:12px;">
+            <span class="card-title" style="font-size:20px;">{{ tr.asset_name or ticker }}</span>
+            <span style="font-size:15px;color:var(--text-muted);">{{ ticker }}</span>
+            {% if tr.recommendation_count >= 2 %}
+            <span class="tracking-badge tracking-badge-streak">{{ tr.recommendation_count }}회 추천</span>
+            {% endif %}
+        </span>
+        <span style="display:flex;align-items:center;gap:10px;">
+            <span class="badge badge-{{ tr.latest_action }}">{{ tr.latest_action|upper }}</span>
+            {% if tr.prev_action and tr.prev_action != tr.latest_action %}
+            <span style="font-size:14px;color:var(--text-muted);">(이전: {{ tr.prev_action }})</span>
+            {% endif %}
+            <span class="badge badge-{{ tr.latest_conviction }}">{{ tr.latest_conviction }}</span>
+        </span>
+    </div>
+    <div class="stat-grid" style="margin-bottom:0;">
+        <div class="stat-card">
+            <div class="stat-value">{{ tr.recommendation_count }}</div>
+            <div class="stat-label">추천 횟수</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ tr.first_recommended_date }}</div>
+            <div class="stat-label">최초 추천</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ tr.last_recommended_date }}</div>
+            <div class="stat-label">최근 추천</div>
+        </div>
+        <div class="stat-card">
+            {% if tr.latest_target_price_low and tr.latest_target_price_high %}
+            <div class="stat-value" style="font-size:22px;">{{ tr.latest_target_price_low }}~{{ tr.latest_target_price_high }}</div>
+            {% else %}
+            <div class="stat-value">-</div>
+            {% endif %}
+            <div class="stat-label">최신 목표가</div>
+        </div>
+    </div>
+    {% if tr.prev_target_price_low and tr.latest_target_price_low %}
+    <div style="margin-top:12px;font-size:14px;color:var(--text-muted);">
+        이전 목표가: {{ tr.prev_target_price_low }}~{{ tr.prev_target_price_high }}
+        → 현재: {{ tr.latest_target_price_low }}~{{ tr.latest_target_price_high }}
+    </div>
+    {% endif %}
+</div>
+{% endfor %}
+{% endif %}
+
+{% if history %}
+<div class="section-title">일자별 추천 이력</div>
+<div class="table-wrap">
+    <table>
+        <thead>
+            <tr>
+                <th>날짜</th>
+                <th>Action</th>
+                <th>확신도</th>
+                <th>비중</th>
+                <th>목표가</th>
+                <th>상승여력</th>
+                <th>퀀트</th>
+                <th>센티먼트</th>
+                <th>테마</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for h in history %}
+            <tr>
+                <td><a href="/pages/sessions/date/{{ h.analysis_date }}">{{ h.analysis_date }}</a></td>
+                <td><span class="badge badge-{{ h.action }}">{{ h.action|upper }}</span></td>
+                <td><span class="badge badge-{{ h.conviction }}">{{ h.conviction }}</span></td>
+                <td>{{ h.target_allocation }}%</td>
+                <td>
+                    {% if h.target_price_low and h.target_price_high %}
+                    {{ h.currency or '' }}{{ h.target_price_low }}~{{ h.target_price_high }}
+                    {% else %}-{% endif %}
+                </td>
+                <td>
+                    {% if h.upside_pct %}
+                    <span class="{% if h.upside_pct > 0 %}confidence-up{% else %}confidence-down{% endif %}">
+                        {% if h.upside_pct > 0 %}+{% endif %}{{ h.upside_pct }}%
+                    </span>
+                    {% else %}-{% endif %}
+                </td>
+                <td>{% if h.quant_score %}{{ h.quant_score }}/5{% else %}-{% endif %}</td>
+                <td>{% if h.sentiment_score is not none and h.sentiment_score != None %}{{ h.sentiment_score }}{% else %}-{% endif %}</td>
+                <td>{{ h.theme_name }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="empty-state">
+    <h3>{{ ticker }}의 추천 이력이 없습니다</h3>
+</div>
+{% endif %}
+{% endblock %}

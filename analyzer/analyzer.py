@@ -1,0 +1,163 @@
+"""Claude Code SDK 기반 멀티스테이지 분석 파이프라인
+
+Stage 1: 뉴스 → 이슈 분석 + 테마 발굴 (시나리오/매크로 포함)
+Stage 2: 핵심 종목 심층분석 (펀더멘털·퀀트·센티먼트)
+"""
+import json
+import anyio
+from claude_agent_sdk import query, ClaudeAgentOptions, AssistantMessage, TextBlock
+
+from analyzer.prompts import (
+    STAGE1_SYSTEM, STAGE1_PROMPT,
+    STAGE2_SYSTEM, STAGE2_PROMPT,
+)
+from shared.config import AnalyzerConfig
+
+
+def _parse_json_response(full_response: str) -> dict:
+    """Claude 응답에서 JSON 추출 및 파싱"""
+    json_str = full_response.strip()
+    if "```json" in json_str:
+        json_str = json_str.split("```json")[1].split("```")[0].strip()
+    elif "```" in json_str:
+        json_str = json_str.split("```")[1].split("```")[0].strip()
+
+    try:
+        return json.loads(json_str)
+    except json.JSONDecodeError as e:
+        print(f"[분석] JSON 파싱 실패: {e}")
+        print(f"[분석] 원본 응답:\n{full_response[:500]}")
+        return {"error": str(e)}
+
+
+async def _query_claude(prompt: str, system_prompt: str, max_turns: int) -> str:
+    """Claude SDK 쿼리 공통 함수"""
+    full_response = ""
+    async for message in query(
+        prompt=prompt,
+        options=ClaudeAgentOptions(
+            system_prompt=system_prompt,
+            max_turns=max_turns,
+        ),
+    ):
+        if isinstance(message, AssistantMessage):
+            for block in message.content:
+                if isinstance(block, TextBlock):
+                    full_response += block.text
+    return full_response
+
+
+# ── Stage 1: 이슈 분석 + 테마 발굴 ──────────────────
+
+async def stage1_discover_themes(news_text: str, date: str, max_turns: int = 6) -> dict:
+    """Stage 1: 뉴스 기반 이슈 분석 + 테마 발굴 + 시나리오/매크로 분석 + 투자 제안"""
+    prompt = STAGE1_PROMPT.format(news_text=news_text, date=date)
+    response = await _query_claude(prompt, STAGE1_SYSTEM, max_turns)
+    return _parse_json_response(response)
+
+
+# ── Stage 2: 핵심 종목 심층분석 ──────────────────────
+
+async def stage2_analyze_stock(
+    ticker: str, asset_name: str, market: str,
+    theme_context: str, date: str, max_turns: int = 6,
+) -> dict:
+    """Stage 2: 개별 종목 심층분석 (펀더멘털·산업·모멘텀·퀀트·리스크)"""
+    prompt = STAGE2_PROMPT.format(
+        ticker=ticker, asset_name=asset_name,
+        market=market, theme_context=theme_context, date=date,
+    )
+    response = await _query_claude(prompt, STAGE2_SYSTEM, max_turns)
+    return _parse_json_response(response)
+
+
+# ── 통합 파이프라인 ──────────────────────────────────
+
+async def run_pipeline(
+    news_text: str, date: str, cfg: AnalyzerConfig,
+) -> dict:
+    """멀티스테이지 분석 파이프라인 실행
+
+    Stage 1: 뉴스 → 이슈/테마/시나리오/매크로/제안
+    Stage 2: 상위 테마의 핵심 종목 심층분석 (선택적)
+    """
+    # ── Stage 1 ──
+    print("[Stage 1] 이슈 분석 + 테마 발굴 중...")
+    result = await stage1_discover_themes(news_text, date, cfg.max_turns)
+
+    if result.get("error"):
+        return result
+
+    themes = result.get("themes", [])
+    issues = result.get("issues", [])
+    print(f"[Stage 1] 완료 — 이슈 {len(issues)}건, 테마 {len(themes)}건")
+
+    # ── Stage 2: 핵심 종목 심층분석 ──
+    if not cfg.enable_stock_analysis:
+        print("[Stage 2] 종목 심층분석 비활성화 — 건너뜀")
+        return result
+
+    # 상위 테마에서 buy/sell 제안 중 stock 타입 종목 추출
+    stock_targets = []
+    for theme in themes[:cfg.top_themes]:
+        for proposal in theme.get("proposals", []):
+            if (proposal.get("asset_type") == "stock"
+                    and proposal.get("action") in ("buy", "sell")
+                    and proposal.get("ticker")):
+                stock_targets.append((proposal, theme.get("theme_name", "")))
+                if len(stock_targets) >= cfg.top_themes * cfg.top_stocks_per_theme:
+                    break
+
+    if not stock_targets:
+        print("[Stage 2] 심층분석 대상 종목 없음 — 건너뜀")
+        return result
+
+    print(f"[Stage 2] 종목 심층분석 시작 — {len(stock_targets)}종목")
+    for proposal, theme_name in stock_targets:
+        ticker = proposal["ticker"]
+        asset_name = proposal.get("asset_name", ticker)
+        market = proposal.get("market", "")
+        print(f"  → {asset_name} ({ticker}) 분석 중...")
+
+        try:
+            stock_result = await stage2_analyze_stock(
+                ticker=ticker, asset_name=asset_name,
+                market=market, theme_context=theme_name,
+                date=date, max_turns=cfg.max_turns,
+            )
+
+            if not stock_result.get("error"):
+                # 심층분석 결과를 proposal에 병합
+                proposal["stock_analysis"] = stock_result
+                # 센티먼트/퀀트 스코어를 proposal 레벨에도 반영
+                if stock_result.get("sentiment_score") is not None:
+                    proposal["sentiment_score"] = stock_result["sentiment_score"]
+                if stock_result.get("factor_scores", {}).get("composite") is not None:
+                    proposal["quant_score"] = stock_result["factor_scores"]["composite"]
+                # 목표가 업데이트 (심층분석이 더 정확)
+                if stock_result.get("target_price_low") is not None:
+                    proposal["target_price_low"] = stock_result["target_price_low"]
+                if stock_result.get("target_price_high") is not None:
+                    proposal["target_price_high"] = stock_result["target_price_high"]
+
+                print(f"  ✓ {asset_name} 심층분석 완료")
+            else:
+                print(f"  ✗ {asset_name} 심층분석 실패: {stock_result['error']}")
+
+        except Exception as e:
+            print(f"  ✗ {asset_name} 심층분석 오류: {e}")
+
+    print(f"[Stage 2] 종목 심층분석 완료")
+    return result
+
+
+# ── 동기 래퍼 (하위호환) ─────────────────────────────
+
+def run_analysis(news_text: str, date: str, max_turns: int = 6) -> dict:
+    """동기 래퍼 — 기존 인터페이스 호환 (Stage 1만 실행)"""
+    return anyio.run(stage1_discover_themes, news_text, date, max_turns)
+
+
+def run_full_analysis(news_text: str, date: str, cfg: AnalyzerConfig) -> dict:
+    """동기 래퍼 — 멀티스테이지 전체 파이프라인"""
+    return anyio.run(run_pipeline, news_text, date, cfg)

@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Investment Advisor{% endblock %}</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <nav class="sidebar">
+        <div class="sidebar-header">
+            <h1>Investment<br>Advisor</h1>
+        </div>
+        <ul class="nav-menu">
+            <li><a href="/" class="{% if active_page == 'dashboard' %}active{% endif %}">Dashboard</a></li>
+            <li><a href="/pages/sessions" class="{% if active_page == 'sessions' %}active{% endif %}">Sessions</a></li>
+            <li><a href="/pages/themes" class="{% if active_page == 'themes' %}active{% endif %}">Themes</a></li>
+            <li><a href="/pages/proposals" class="{% if active_page == 'proposals' %}active{% endif %}">Proposals</a></li>
+        </ul>
+        <div class="sidebar-footer">
+            <a href="/docs" target="_blank">API Docs</a>
+        </div>
+    </nav>
+
+    <main class="content">
+        <header class="content-header">
+            <h2>{% block page_title %}{% endblock %}</h2>
+            {% block header_actions %}{% endblock %}
+        </header>
+        <div class="content-body">
+            {% block content %}{% endblock %}
+        </div>
+    </main>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>
