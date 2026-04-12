@@ -718,13 +718,124 @@ tbody tr:hover { background: var(--bg-card-hover); }
     padding-left: 28px;
 }
 
+/* ===== Mobile Menu Button ===== */
+.mobile-menu-btn {
+    display: none;
+    position: fixed;
+    top: 14px;
+    left: 14px;
+    z-index: 1100;
+    width: 40px;
+    height: 40px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg-card);
+    cursor: pointer;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+}
+.mobile-menu-btn span {
+    display: block;
+    width: 20px;
+    height: 2px;
+    background: var(--text);
+    border-radius: 2px;
+    transition: all 0.2s;
+}
+.sidebar-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 999;
+}
+
 /* ===== Responsive ===== */
 @media (max-width: 768px) {
-    .sidebar { width: 60px; }
-    .sidebar-header h1, .nav-menu li a, .sidebar-footer { font-size: 0; }
-    .content { margin-left: 60px; }
-    .content-body { padding: 16px; }
-    .stat-grid { grid-template-columns: repeat(2, 1fr); }
+    /* 사이드바: 숨김 → 슬라이드 오버레이 */
+    .mobile-menu-btn { display: flex; }
+
+    .sidebar {
+        transform: translateX(-100%);
+        transition: transform 0.25s ease;
+        z-index: 1000;
+        width: var(--sidebar-w);
+    }
+    .sidebar-open .sidebar { transform: translateX(0); }
+    .sidebar-open .sidebar-overlay { display: block; }
+    .sidebar-open .mobile-menu-btn span:nth-child(1) { transform: rotate(45deg) translate(5px, 5px); }
+    .sidebar-open .mobile-menu-btn span:nth-child(2) { opacity: 0; }
+    .sidebar-open .mobile-menu-btn span:nth-child(3) { transform: rotate(-45deg) translate(5px, -5px); }
+
+    /* 컨텐츠: 전체 너비 사용 */
+    .content { margin-left: 0; }
+    .content-header {
+        padding: 14px 16px;
+        padding-left: 62px; /* 햄버거 버튼 공간 확보 */
+    }
+    .content-header h2 { font-size: 18px; }
+    .content-body { padding: 14px 12px; }
+
+    /* 그리드 축소 */
+    .stat-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .stat-card { padding: 14px; }
+    .stat-value { font-size: 26px; }
     .scenario-grid { grid-template-columns: 1fr; }
     .impact-timeline { grid-template-columns: 1fr; }
+
+    /* 카드 패딩 축소 */
+    .card { padding: 14px; margin-bottom: 12px; }
+    .card-title { font-size: 16px; }
+    .card-header { gap: 6px; }
+
+    .market-summary { padding: 16px; margin-bottom: 18px; font-size: 14px; }
+
+    /* 필터: 2열 그리드 */
+    .filters {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+    }
+    .filter-select, .filter-input { width: 100%; font-size: 13px; padding: 8px 10px; }
+    .filters .btn-primary { grid-column: 1 / -1; }
+
+    /* 제안 카드 (메타) */
+    .proposal-card { padding: 14px; margin-bottom: 10px; }
+    .proposal-card-header { gap: 6px; margin-bottom: 10px; }
+    .proposal-card-header .asset-name { font-size: 15px; }
+    .proposal-card-meta {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px 12px;
+        margin-bottom: 12px;
+        font-size: 13px;
+    }
+    .proposal-card-body { grid-template-columns: 1fr; gap: 12px; }
+
+    /* 가격 목표: 줄바꿈 허용 */
+    .price-target { flex-wrap: wrap; gap: 6px; font-size: 13px; }
+
+    /* 시나리오 카드 */
+    .scenario-card { padding: 12px; }
+
+    /* 신호 */
+    .signal-item { padding: 10px 12px; font-size: 13px; gap: 8px; }
+    .signal-icon { width: 24px; height: 24px; font-size: 12px; }
+
+    /* 섹션 타이틀 */
+    .section-title { font-size: 16px; margin: 24px 0 12px; }
+
+    /* 신뢰도/비중 바 축소 */
+    .confidence-bar { width: 60px; }
+    .alloc-bar { width: 50px; }
+
+    /* 테이블 스크롤 */
+    .table-wrap { margin: 0 -12px; padding: 0 12px; }
+
+    /* 히스토리 타임라인 */
+    .history-timeline { padding-left: 18px; }
+    .history-entry { padding: 14px; }
+    .history-entry::before { left: -16px; width: 8px; height: 8px; }
 }

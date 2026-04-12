@@ -8,15 +8,22 @@
     {% block head %}{% endblock %}
 </head>
 <body>
+    <!-- 모바일 햄버거 버튼 -->
+    <button class="mobile-menu-btn" onclick="document.body.classList.toggle('sidebar-open')" aria-label="메뉴">
+        <span></span><span></span><span></span>
+    </button>
+    <!-- 모바일 오버레이 -->
+    <div class="sidebar-overlay" onclick="document.body.classList.remove('sidebar-open')"></div>
+
     <nav class="sidebar">
         <div class="sidebar-header">
             <h1>Investment<br>Advisor</h1>
         </div>
         <ul class="nav-menu">
-            <li><a href="/" class="{% if active_page == 'dashboard' %}active{% endif %}">Dashboard</a></li>
-            <li><a href="/pages/sessions" class="{% if active_page == 'sessions' %}active{% endif %}">Sessions</a></li>
-            <li><a href="/pages/themes" class="{% if active_page == 'themes' %}active{% endif %}">Themes</a></li>
-            <li><a href="/pages/proposals" class="{% if active_page == 'proposals' %}active{% endif %}">Proposals</a></li>
+            <li><a href="/" class="{% if active_page == 'dashboard' %}active{% endif %}" onclick="document.body.classList.remove('sidebar-open')">Dashboard</a></li>
+            <li><a href="/pages/sessions" class="{% if active_page == 'sessions' %}active{% endif %}" onclick="document.body.classList.remove('sidebar-open')">Sessions</a></li>
+            <li><a href="/pages/themes" class="{% if active_page == 'themes' %}active{% endif %}" onclick="document.body.classList.remove('sidebar-open')">Themes</a></li>
+            <li><a href="/pages/proposals" class="{% if active_page == 'proposals' %}active{% endif %}" onclick="document.body.classList.remove('sidebar-open')">Proposals</a></li>
         </ul>
         <div class="sidebar-footer">
             <a href="/docs" target="_blank">API Docs</a>
