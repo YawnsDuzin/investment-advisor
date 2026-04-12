@@ -98,7 +98,7 @@ sudo systemctl enable --now investment-advisor-analyzer.timer    # 매일 03:00 
                     claude_agent_sdk.query()                    yfinance             claude_agent_sdk.query()
 ```
 
-- **Stage 1**: 뉴스 → 8~15개 이슈(시계별 영향) → 4~7개 테마(시나리오·매크로) → 테마당 2~4개 투자 제안
+- **Stage 1**: 뉴스 → 8~15개 이슈(시계별 영향) → 4~7개 테마(시나리오·매크로) → 테마당 15~20개 투자 제안
 - **주가 데이터**: Stage 1 추천 종목의 현재가/PER/PBR/시총 등을 yfinance로 실시간 조회 (ENABLE_STOCK_DATA로 on/off)
 - **Stage 2**: 실제 주가 데이터 + 5관점 심층분석 (펀더멘털·산업·모멘텀·퀀트·리스크)
 - `AnalyzerConfig`로 심층분석 대상 수(`top_themes`, `top_stocks_per_theme`) 및 활성화 여부 조절 가능

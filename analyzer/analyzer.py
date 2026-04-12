@@ -105,16 +105,17 @@ async def run_pipeline(
         print("[Stage 2] 종목 심층분석 비활성화 — 건너뜀")
         return result
 
-    # 상위 테마에서 buy/sell 제안 중 stock 타입 종목 추출
+    # 상위 테마에서 buy/sell 제안 중 stock 타입 종목 추출 (테마당 top_stocks_per_theme개)
     stock_targets = []
     for theme in themes[:cfg.top_themes]:
+        theme_stocks = 0
         for proposal in theme.get("proposals", []):
             if (proposal.get("asset_type") == "stock"
                     and proposal.get("action") in ("buy", "sell")
-                    and proposal.get("ticker")):
+                    and proposal.get("ticker")
+                    and theme_stocks < cfg.top_stocks_per_theme):
                 stock_targets.append((proposal, theme.get("theme_name", "")))
-                if len(stock_targets) >= cfg.top_themes * cfg.top_stocks_per_theme:
-                    break
+                theme_stocks += 1
 
     if not stock_targets:
         print("[Stage 2] 심층분석 대상 종목 없음 — 건너뜀")
@@ -165,6 +166,12 @@ async def run_pipeline(
                     proposal["target_price_low"] = stock_result["target_price_low"]
                 if stock_result.get("target_price_high") is not None:
                     proposal["target_price_high"] = stock_result["target_price_high"]
+
+                # 진입/청산 조건 병합 (Stage 2에서 상세 분석)
+                if stock_result.get("entry_condition"):
+                    proposal["entry_condition"] = stock_result["entry_condition"]
+                if stock_result.get("exit_condition"):
+                    proposal["exit_condition"] = stock_result["exit_condition"]
 
                 # 실시간 현재가로 보정 (yfinance 데이터 기준)
                 if sd and sd.get("price"):
