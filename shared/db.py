@@ -5,7 +5,7 @@ from psycopg2.extras import execute_values, RealDictCursor
 from shared.config import DatabaseConfig
 
 # ── 스키마 버전 관리 ──────────────────────────────
-SCHEMA_VERSION = 3  # v1: 초기 4테이블, v2: 멀티에이전트 확장, v3: 일자별 추적
+SCHEMA_VERSION = 4  # v1: 초기 4테이블, v2: 멀티에이전트 확장, v3: 일자별 추적, v4: 공급망 분석
 
 
 def _ensure_database(cfg: DatabaseConfig) -> None:
@@ -250,6 +250,22 @@ def _migrate_to_v3(cur) -> None:
     print("[DB] v3 마이그레이션 완료 — theme_tracking + proposal_tracking 생성")
 
 
+def _migrate_to_v4(cur) -> None:
+    """v4: 공급망 분석 — 벤더 티어, 공급망 위치 컬럼 추가"""
+    cur.execute("""
+        ALTER TABLE investment_proposals
+            ADD COLUMN IF NOT EXISTS vendor_tier INT,
+            ADD COLUMN IF NOT EXISTS supply_chain_position VARCHAR(200);
+    """)
+
+    cur.execute("""
+        INSERT INTO schema_version (version) VALUES (4)
+        ON CONFLICT (version) DO NOTHING;
+    """)
+
+    print("[DB] v4 마이그레이션 완료 — vendor_tier, supply_chain_position 컬럼 추가")
+
+
 def init_db(cfg: DatabaseConfig) -> None:
     """PostgreSQL 설치 확인 → 데이터베이스 생성 → 스키마 마이그레이션"""
     from shared.pg_setup import ensure_postgresql
@@ -270,6 +286,9 @@ def init_db(cfg: DatabaseConfig) -> None:
 
             if current < 3:
                 _migrate_to_v3(cur)
+
+            if current < 4:
+                _migrate_to_v4(cur)
 
         conn.commit()
         print("[DB] 테이블 초기화 완료")
@@ -372,8 +391,8 @@ def save_analysis(cfg: DatabaseConfig, analysis_date: str, result: dict) -> int:
                             entry_condition, exit_condition, target_allocation,
                             current_price, target_price_low, target_price_high,
                             upside_pct, sentiment_score, quant_score,
-                            sector, currency)
-                           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                            sector, currency, vendor_tier, supply_chain_position)
+                           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                            RETURNING id""",
                         (theme_id, proposal.get("asset_type"),
                          proposal.get("asset_name"), proposal.get("ticker"),
@@ -385,7 +404,8 @@ def save_analysis(cfg: DatabaseConfig, analysis_date: str, result: dict) -> int:
                          proposal.get("current_price"), proposal.get("target_price_low"),
                          proposal.get("target_price_high"), proposal.get("upside_pct"),
                          proposal.get("sentiment_score"), proposal.get("quant_score"),
-                         proposal.get("sector"), proposal.get("currency"))
+                         proposal.get("sector"), proposal.get("currency"),
+                         proposal.get("vendor_tier"), proposal.get("supply_chain_position"))
                     )
                     proposal_id = cur.fetchone()[0]
 

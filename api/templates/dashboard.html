@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import proposal_card_compact, theme_header, scenario_grid, indicator_tags %}
 {% block title %}Dashboard — Investment Advisor{% endblock %}
 {% block page_title %}Dashboard{% endblock %}
 
@@ -53,114 +54,23 @@
     </div>
 </div>
 
-<!-- 투자 테마 -->
+<!-- 투자 테마 (대시보드: 시나리오 + 제안 요약) -->
 <div class="section-title">투자 테마</div>
 {% for theme in themes %}
+{% set tk = none %}
+{% for t in active_tracking %}
+    {% if t.theme_name == theme.theme_name %}{% set tk = t %}{% endif %}
+{% endfor %}
 <div class="card">
-    <div class="card-header">
-        <span style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-            <span class="card-title">{{ theme.theme_name }}</span>
-            <!-- 추적 뱃지 -->
-            {% for t in active_tracking %}
-                {% if t.theme_name == theme.theme_name %}
-                    {% if t.appearances == 1 %}
-                    <span class="tracking-badge tracking-badge-new">신규</span>
-                    {% elif t.streak_days >= 2 %}
-                    <span class="tracking-badge tracking-badge-streak">{{ t.streak_days }}일 연속</span>
-                    {% endif %}
-                    {% if t.prev_confidence is not none and t.latest_confidence is not none %}
-                        {% set diff = t.latest_confidence - t.prev_confidence %}
-                        {% if diff > 0.03 %}
-                        <span class="confidence-change confidence-up">▲{{ "%.0f"|format(diff * 100) }}p</span>
-                        {% elif diff < -0.03 %}
-                        <span class="confidence-change confidence-down">▼{{ "%.0f"|format(diff|abs * 100) }}p</span>
-                        {% endif %}
-                    {% endif %}
-                {% endif %}
-            {% endfor %}
-        </span>
-        <span style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-            {% if theme.theme_type %}
-            <span class="badge badge-{{ theme.theme_type }}">{{ theme.theme_type }}</span>
-            {% endif %}
-            {% if theme.theme_validity %}
-            <span class="badge badge-{{ theme.theme_validity }}">{{ theme.theme_validity }}</span>
-            {% endif %}
-            <span class="badge badge-{{ theme.time_horizon }}">{{ theme.time_horizon }}</span>
-            <span>
-                <span class="confidence-bar"><span class="confidence-bar-fill" style="width:{{ (theme.confidence_score|float * 100)|int }}%"></span></span>
-                {{ "%.0f"|format(theme.confidence_score|float * 100) }}%
-            </span>
-        </span>
-    </div>
+    {{ theme_header(theme, tk) }}
     <div class="detail-text">{{ theme.description }}</div>
-    {% if theme.key_indicators %}
-    <div class="indicators">
-        {% for ind in theme.key_indicators %}
-        <span class="indicator-tag">{{ ind }}</span>
-        {% endfor %}
-    </div>
-    {% endif %}
+    {{ indicator_tags(theme.key_indicators) }}
+    {{ scenario_grid(theme.scenarios) }}
 
-    <!-- 시나리오 -->
-    {% if theme.scenarios %}
-    <div class="scenario-grid">
-        {% for sc in theme.scenarios %}
-        <div class="scenario-card scenario-card-{{ sc.scenario_type }}">
-            <div class="scenario-header">
-                <span>{{ sc.scenario_type|upper }}</span>
-                {% if sc.probability %}<span class="scenario-prob">{{ sc.probability }}%</span>{% endif %}
-            </div>
-            <div class="scenario-body">{{ sc.description }}</div>
-            {% if sc.market_impact %}<div class="scenario-impact">{{ sc.market_impact }}</div>{% endif %}
-        </div>
-        {% endfor %}
-    </div>
-    {% endif %}
-
-    <!-- 제안 -->
     {% if theme.proposals %}
     <div style="margin-top:16px;">
         {% for p in theme.proposals %}
-        <div class="proposal-card" style="margin-bottom:12px;">
-            <div class="proposal-card-header">
-                <span class="badge badge-{{ p.action }}">{{ p.action|upper }}</span>
-                <span class="asset-name">{{ p.asset_name }}</span>
-                <span class="ticker">
-                    <a href="/pages/proposals/history/{{ p.ticker }}">{{ p.ticker }}</a> @ {{ p.market }}
-                </span>
-                <span class="badge badge-{{ p.conviction }}">{{ p.conviction }}</span>
-                <span style="font-size:14px;">
-                    <span class="alloc-bar"><span class="alloc-bar-fill" style="width:{{ (p.target_allocation|float)|int }}%"></span></span>
-                    {{ p.target_allocation }}%
-                </span>
-                {% if p.quant_score %}<span class="score-display">Q {{ p.quant_score }}/5</span>{% endif %}
-                {% if p.sentiment_score is not none and p.sentiment_score != None %}
-                <span class="score-display score-sentiment">S {{ p.sentiment_score }}</span>
-                {% endif %}
-            </div>
-            {% if p.target_price_low and p.target_price_high %}
-            <div class="price-target">
-                <span style="color:var(--text-muted);">목표가</span>
-                <span class="price-range">{{ p.currency or '' }}{{ p.target_price_low }} ~ {{ p.target_price_high }}</span>
-                {% if p.upside_pct %}
-                <span class="upside-badge {% if p.upside_pct > 0 %}upside-positive{% else %}upside-negative{% endif %}">
-                    {% if p.upside_pct > 0 %}+{% endif %}{{ p.upside_pct }}%
-                </span>
-                {% endif %}
-            </div>
-            {% endif %}
-            {% if p.rationale or p.risk_factors %}
-            <div class="proposal-card-body">
-                {% if p.rationale %}
-                <div class="field-group"><div class="field-label">근거</div><div class="field-value">{{ p.rationale }}</div></div>
-                {% endif %}
-                {% if p.risk_factors %}
-                <div class="field-group"><div class="field-label">리스크</div><div class="field-value">{{ p.risk_factors }}</div></div>
-                {% endif %}
-            </div>
-            {% endif %}
-        </div>
+        {{ proposal_card_compact(p) }}
         {% endfor %}
     </div>
     {% endif %}

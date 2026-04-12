@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import proposal_card_compact, theme_header, indicator_tags %}
 {% block title %}Themes — Investment Advisor{% endblock %}
 {% block page_title %}투자 테마{% endblock %}
 
@@ -24,94 +25,15 @@
 {% for theme in themes %}
 {% set tk = tracking_map.get(theme.theme_name|lower|replace(' ','')|replace('-','')|replace('·',''), {}) %}
 <div class="card">
-    <div class="card-header">
-        <span style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-            <span class="card-title">{{ theme.theme_name }}</span>
-            <span style="font-size:14px;color:var(--text-muted);">{{ theme.analysis_date }}</span>
-            {% if tk %}
-                {% if tk.appearances == 1 %}
-                <span class="tracking-badge tracking-badge-new">신규</span>
-                {% elif tk.streak_days >= 2 %}
-                <span class="tracking-badge tracking-badge-streak">{{ tk.streak_days }}일 연속</span>
-                {% endif %}
-                {% if tk.appearances >= 2 %}
-                <a href="/pages/themes/history/{{ tk.theme_key }}" class="btn" style="padding:2px 10px;font-size:12px;">추이 보기</a>
-                {% endif %}
-            {% endif %}
-        </span>
-        <span style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-            {% if theme.theme_type %}
-            <span class="badge badge-{{ theme.theme_type }}">{{ theme.theme_type }}</span>
-            {% endif %}
-            {% if theme.theme_validity %}
-            <span class="badge badge-{{ theme.theme_validity }}">{{ theme.theme_validity }}</span>
-            {% endif %}
-            <span class="badge badge-{{ theme.time_horizon }}">{{ theme.time_horizon }}</span>
-            <span>
-                <span class="confidence-bar"><span class="confidence-bar-fill" style="width:{{ (theme.confidence_score|float * 100)|int }}%"></span></span>
-                {{ "%.0f"|format(theme.confidence_score|float * 100) }}%
-                {% if tk and tk.prev_confidence is not none and tk.latest_confidence is not none %}
-                    {% set diff = tk.latest_confidence - tk.prev_confidence %}
-                    {% if diff > 0.03 %}
-                    <span class="confidence-change confidence-up">▲{{ "%.0f"|format(diff * 100) }}p</span>
-                    {% elif diff < -0.03 %}
-                    <span class="confidence-change confidence-down">▼{{ "%.0f"|format(diff|abs * 100) }}p</span>
-                    {% endif %}
-                {% endif %}
-            </span>
-        </span>
-    </div>
+    {{ theme_header(theme, tk if tk else none) }}
     <div class="detail-text">{{ theme.description }}</div>
-    {% if theme.key_indicators %}
-    <div class="indicators">
-        {% for ind in theme.key_indicators %}
-        <span class="indicator-tag">{{ ind }}</span>
-        {% endfor %}
-    </div>
-    {% endif %}
+    {{ indicator_tags(theme.key_indicators) }}
 
+    {# 테마 페이지: 제안만 표시 (시나리오는 session_detail에서) #}
     {% if theme.proposals %}
     <div style="margin-top:16px;">
         {% for p in theme.proposals %}
-        <div class="proposal-card" style="margin-bottom:12px;">
-            <div class="proposal-card-header">
-                <span class="badge badge-{{ p.action }}">{{ p.action|upper }}</span>
-                <span class="asset-name">{{ p.asset_name }}</span>
-                <span class="ticker">
-                    <a href="/pages/proposals/history/{{ p.ticker }}">{{ p.ticker }}</a> @ {{ p.market }}
-                </span>
-                <span class="badge badge-{{ p.conviction }}">{{ p.conviction }}</span>
-                <span style="font-size:14px;">
-                    <span class="alloc-bar"><span class="alloc-bar-fill" style="width:{{ (p.target_allocation|float)|int }}%"></span></span>
-                    {{ p.target_allocation }}%
-                </span>
-                {% if p.quant_score %}<span class="score-display">Q {{ p.quant_score }}/5</span>{% endif %}
-                {% if p.sentiment_score is not none and p.sentiment_score != None %}
-                <span class="score-display score-sentiment">S {{ p.sentiment_score }}</span>
-                {% endif %}
-            </div>
-            {% if p.target_price_low and p.target_price_high %}
-            <div class="price-target">
-                <span style="color:var(--text-muted);">목표가</span>
-                <span class="price-range">{{ p.currency or '' }}{{ p.target_price_low }} ~ {{ p.target_price_high }}</span>
-                {% if p.upside_pct %}
-                <span class="upside-badge {% if p.upside_pct > 0 %}upside-positive{% else %}upside-negative{% endif %}">
-                    {% if p.upside_pct > 0 %}+{% endif %}{{ p.upside_pct }}%
-                </span>
-                {% endif %}
-            </div>
-            {% endif %}
-            {% if p.rationale or p.risk_factors %}
-            <div class="proposal-card-body">
-                {% if p.rationale %}
-                <div class="field-group"><div class="field-label">근거</div><div class="field-value">{{ p.rationale }}</div></div>
-                {% endif %}
-                {% if p.risk_factors %}
-                <div class="field-group"><div class="field-label">리스크</div><div class="field-value">{{ p.risk_factors }}</div></div>
-                {% endif %}
-            </div>
-            {% endif %}
-        </div>
+        {{ proposal_card_compact(p) }}
         {% endfor %}
     </div>
     {% endif %}

@@ -1,0 +1,244 @@
+{# ── 공통 매크로 ─────────────────────────────── #}
+
+{# ── 제안 카드 (테마 내부용: 간결 모드) ── #}
+{% macro proposal_card_compact(p) %}
+<div class="proposal-card" style="margin-bottom:12px;">
+    <div class="proposal-card-header">
+        <span class="badge badge-{{ p.action }}">{{ p.action|upper }}</span>
+        <span class="asset-name">{{ p.asset_name }}</span>
+        <span class="ticker">
+            <a href="/pages/proposals/history/{{ p.ticker }}">{{ p.ticker }}</a> @ {{ p.market }}
+        </span>
+        {% if p.vendor_tier %}
+        <span class="badge badge-tier{{ p.vendor_tier }}">Tier {{ p.vendor_tier }}</span>
+        {% endif %}
+        <span class="badge badge-{{ p.conviction }}">{{ p.conviction }}</span>
+        <span style="font-size:14px;">
+            <span class="alloc-bar"><span class="alloc-bar-fill" style="width:{{ (p.target_allocation|float)|int }}%"></span></span>
+            {{ p.target_allocation }}%
+        </span>
+        {% if p.quant_score %}<span class="score-display">Q {{ p.quant_score }}/5</span>{% endif %}
+        {% if p.sentiment_score is not none and p.sentiment_score != None %}
+        <span class="score-display score-sentiment">S {{ p.sentiment_score }}</span>
+        {% endif %}
+    </div>
+    {% if p.target_price_low and p.target_price_high %}
+    <div class="price-target">
+        <span style="color:var(--text-muted);">목표가</span>
+        <span class="price-range">{{ p.currency or '' }}{{ p.target_price_low }} ~ {{ p.target_price_high }}</span>
+        {% if p.upside_pct %}
+        <span class="upside-badge {% if p.upside_pct > 0 %}upside-positive{% else %}upside-negative{% endif %}">
+            {% if p.upside_pct > 0 %}+{% endif %}{{ p.upside_pct }}%
+        </span>
+        {% endif %}
+    </div>
+    {% endif %}
+    {% if p.rationale or p.risk_factors %}
+    <div class="proposal-card-body">
+        {% if p.rationale %}
+        <div class="field-group"><div class="field-label">근거</div><div class="field-value">{{ p.rationale }}</div></div>
+        {% endif %}
+        {% if p.risk_factors %}
+        <div class="field-group"><div class="field-label">리스크</div><div class="field-value">{{ p.risk_factors }}</div></div>
+        {% endif %}
+    </div>
+    {% endif %}
+    {% if p.has_stock_analysis %}
+    <a href="/proposals/{{ p.id }}/stock-analysis" target="_blank" class="stock-analysis-link">종목 심층분석 보기</a>
+    {% endif %}
+</div>
+{% endmacro %}
+
+
+{# ── 제안 카드 (독립 목록용: 상세 모드) ── #}
+{% macro proposal_card_full(p) %}
+<div class="proposal-card">
+    <div class="proposal-card-header">
+        <span class="badge badge-{{ p.action }}">{{ p.action|upper }}</span>
+        <span class="asset-name">{{ p.asset_name }}</span>
+        <span class="ticker">
+            <a href="/pages/proposals/history/{{ p.ticker }}">{{ p.ticker }}</a> @ {{ p.market }}
+        </span>
+        {% if p.vendor_tier %}
+        <span class="badge badge-tier{{ p.vendor_tier }}">Tier {{ p.vendor_tier }}</span>
+        {% endif %}
+        {% if p.quant_score %}<span class="score-display">Q {{ p.quant_score }}/5</span>{% endif %}
+        {% if p.sentiment_score is not none and p.sentiment_score != None %}
+        <span class="score-display score-sentiment">S {{ p.sentiment_score }}</span>
+        {% endif %}
+    </div>
+
+    <div class="proposal-card-meta">
+        <span class="meta-item">
+            <span class="meta-label">날짜</span>
+            {{ p.analysis_date }}
+        </span>
+        <span class="meta-item">
+            <span class="meta-label">유형</span>
+            <span class="badge badge-category">{{ p.asset_type }}</span>
+        </span>
+        <span class="meta-item">
+            <span class="meta-label">확신도</span>
+            <span class="badge badge-{{ p.conviction }}">{{ p.conviction }}</span>
+        </span>
+        <span class="meta-item">
+            <span class="meta-label">비중</span>
+            <span class="alloc-bar"><span class="alloc-bar-fill" style="width:{{ (p.target_allocation|float)|int }}%"></span></span>
+            {{ p.target_allocation }}%
+        </span>
+        <span class="meta-item">
+            <span class="meta-label">테마</span>
+            {{ p.theme_name }}
+        </span>
+        {% if p.sector %}
+        <span class="meta-item">
+            <span class="meta-label">섹터</span>
+            {{ p.sector }}
+        </span>
+        {% endif %}
+        {% if p.supply_chain_position %}
+        <span class="meta-item">
+            <span class="meta-label">공급망</span>
+            {{ p.supply_chain_position }}
+        </span>
+        {% endif %}
+    </div>
+
+    {% if p.target_price_low and p.target_price_high %}
+    <div class="price-target" style="margin-bottom:12px;">
+        {% if p.current_price %}
+        <span style="color:var(--text-muted);">현재가</span>
+        <span style="font-weight:600;">{{ p.currency or '' }}{{ p.current_price }}</span>
+        <span style="color:var(--text-muted);margin:0 4px;">→</span>
+        {% endif %}
+        <span style="color:var(--text-muted);">목표가</span>
+        <span class="price-range">{{ p.currency or '' }}{{ p.target_price_low }} ~ {{ p.target_price_high }}</span>
+        {% if p.upside_pct %}
+        <span class="upside-badge {% if p.upside_pct > 0 %}upside-positive{% else %}upside-negative{% endif %}">
+            {% if p.upside_pct > 0 %}+{% endif %}{{ p.upside_pct }}%
+        </span>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <div class="proposal-card-body">
+        {% if p.rationale %}
+        <div class="field-group"><div class="field-label">근거</div><div class="field-value">{{ p.rationale }}</div></div>
+        {% endif %}
+        {% if p.risk_factors %}
+        <div class="field-group"><div class="field-label">리스크</div><div class="field-value">{{ p.risk_factors }}</div></div>
+        {% endif %}
+    </div>
+    {% if p.entry_condition or p.exit_condition %}
+    <div class="proposal-card-body" style="margin-top:10px;">
+        {% if p.entry_condition %}
+        <div class="field-group"><div class="field-label">진입 조건</div><div class="field-value">{{ p.entry_condition }}</div></div>
+        {% endif %}
+        {% if p.exit_condition %}
+        <div class="field-group"><div class="field-label">청산 조건</div><div class="field-value">{{ p.exit_condition }}</div></div>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+{% endmacro %}
+
+
+{# ── 테마 헤더 (배지 + 신뢰도 바) ── #}
+{% macro theme_header(theme, tk=none) %}
+<div class="card-header">
+    <span style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <span class="card-title">{{ theme.theme_name }}</span>
+        {% if theme.analysis_date %}
+        <span style="font-size:14px;color:var(--text-muted);">{{ theme.analysis_date }}</span>
+        {% endif %}
+        {% if tk %}
+            {% if tk.appearances == 1 %}
+            <span class="tracking-badge tracking-badge-new">신규</span>
+            {% elif tk.streak_days >= 2 %}
+            <span class="tracking-badge tracking-badge-streak">{{ tk.streak_days }}일 연속{% if tk.appearances %} (총 {{ tk.appearances }}회){% endif %}</span>
+            {% endif %}
+            {% if tk.prev_confidence is not none and tk.latest_confidence is not none %}
+                {% set diff = tk.latest_confidence - tk.prev_confidence %}
+                {% if diff > 0.03 %}
+                <span class="confidence-change confidence-up">▲{{ "%.0f"|format(diff * 100) }}p</span>
+                {% elif diff < -0.03 %}
+                <span class="confidence-change confidence-down">▼{{ "%.0f"|format(diff|abs * 100) }}p</span>
+                {% endif %}
+            {% endif %}
+            {% if tk.appearances >= 2 and tk.theme_key %}
+            <a href="/pages/themes/history/{{ tk.theme_key }}" class="btn" style="padding:2px 10px;font-size:12px;">추이 보기</a>
+            {% endif %}
+        {% endif %}
+    </span>
+    <span style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        {% if theme.theme_type %}
+        <span class="badge badge-{{ theme.theme_type }}">{{ theme.theme_type }}</span>
+        {% endif %}
+        {% if theme.theme_validity %}
+        <span class="badge badge-{{ theme.theme_validity }}">{{ theme.theme_validity }}</span>
+        {% endif %}
+        <span class="badge badge-{{ theme.time_horizon }}">{{ theme.time_horizon }}</span>
+        <span>
+            <span class="confidence-bar"><span class="confidence-bar-fill" style="width:{{ (theme.confidence_score|float * 100)|int }}%"></span></span>
+            {{ "%.0f"|format(theme.confidence_score|float * 100) }}%
+        </span>
+    </span>
+</div>
+{% endmacro %}
+
+
+{# ── 시나리오 그리드 ── #}
+{% macro scenario_grid(scenarios) %}
+{% if scenarios %}
+<div class="scenario-grid">
+    {% for sc in scenarios %}
+    <div class="scenario-card scenario-card-{{ sc.scenario_type }}">
+        <div class="scenario-header">
+            <span>{{ sc.scenario_type|upper }}</span>
+            {% if sc.probability %}<span class="scenario-prob">{{ sc.probability }}%</span>{% endif %}
+        </div>
+        <div class="scenario-body">{{ sc.description }}</div>
+        {% if sc.key_assumptions %}
+        <div style="margin-top:6px;font-size:13px;color:var(--text-muted);"><strong>가정:</strong> {{ sc.key_assumptions }}</div>
+        {% endif %}
+        {% if sc.market_impact %}<div class="scenario-impact">{{ sc.market_impact }}</div>{% endif %}
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+{% endmacro %}
+
+
+{# ── 핵심 지표 태그 ── #}
+{% macro indicator_tags(key_indicators) %}
+{% if key_indicators %}
+<div class="indicators">
+    {% for ind in key_indicators %}
+    <span class="indicator-tag">{{ ind }}</span>
+    {% endfor %}
+</div>
+{% endif %}
+{% endmacro %}
+
+
+{# ── 매크로 영향 테이블 ── #}
+{% macro macro_impact_table(macro_impacts) %}
+{% if macro_impacts %}
+<div class="macro-table table-wrap">
+    <table>
+        <thead><tr><th>변수</th><th>Base Case</th><th>Worse Case</th><th>Better Case</th><th>단위</th></tr></thead>
+        <tbody>
+            {% for m in macro_impacts %}
+            <tr>
+                <td style="font-weight:600;">{{ m.variable_name }}</td>
+                <td>{{ m.base_case or '-' }}</td>
+                <td style="color:var(--red);">{{ m.worse_case or '-' }}</td>
+                <td style="color:var(--green);">{{ m.better_case or '-' }}</td>
+                <td style="color:var(--text-muted);">{{ m.unit or '' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+{% endmacro %}
