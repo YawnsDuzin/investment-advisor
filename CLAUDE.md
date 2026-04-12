@@ -10,6 +10,29 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 과금은 Claude Code 구독(Max 5x 등) 사용량에 포함되며, 별도 API 토큰 과금이 없다.
 
+## Tech Stack
+
+- **AI**: Claude Code SDK (`claude-agent-sdk`) — 멀티스테이지 분석 파이프라인
+- **Backend**: FastAPI + Uvicorn (REST API + HTML 서빙)
+- **Template**: Jinja2 (다크 테마 UI)
+- **Database**: PostgreSQL + psycopg2 (스키마 자동 마이그레이션)
+- **News**: feedparser + httpx (RSS 수집)
+- **Async**: anyio (async/sync 브릿지)
+- **Runtime**: Python 3.10+, Node.js LTS (Claude Code CLI 의존)
+- **Deploy**: systemd (API 상시 기동 + 배치 타이머), Raspberry Pi 4 24/7 운영 가능
+
+## Project Structure
+
+```
+investment-advisor/
+├── shared/              ← 공용: config(.env 로드), db(마이그레이션+저장), pg_setup(자동 설치)
+├── analyzer/            ← 배치: main(엔트리) → news_collector(RSS) → analyzer(2단계) → prompts
+├── api/                 ← 웹: main(FastAPI) → routes/(pages, sessions, themes, proposals)
+│   ├── templates/       ← Jinja2 HTML (다크 테마)
+│   └── static/css/
+└── _docs/               ← 운영 문서 (분석 파이프라인, 라즈베리파이 매뉴얼)
+```
+
 ## Commands
 
 ```bash
@@ -31,14 +54,16 @@ python -m analyzer.main
 python -m api.main
 # 또는: uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
 
-# 라즈베리파이 자동 실행
-sudo systemctl enable --now investment-advisor.timer
+# 라즈베리파이 24/7 운영 (systemd)
+sudo systemctl enable --now investment-advisor-api.service       # API 상시 기동
+sudo systemctl enable --now investment-advisor-analyzer.timer    # 매일 03:00 배치
 ```
 
 - 웹 UI: `http://localhost:8000`
 - Swagger 문서: `http://localhost:8000/docs`
 - PostgreSQL 필요 (Windows는 별도 설치). DB 접속 정보는 `.env` 파일로 관리.
 - Claude Code CLI 필요: `npm install -g @anthropic-ai/claude-code` → `claude login`
+- 라즈베리파이 배포 상세: `_docs/raspberry-pi-setup.md` (OS 설치부터 포트포워딩까지)
 
 ## Environment Variables
 
