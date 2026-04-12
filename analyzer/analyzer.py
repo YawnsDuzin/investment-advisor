@@ -4,6 +4,7 @@ Stage 1: 뉴스 → 이슈 분석 + 테마 발굴 (시나리오/매크로 포함
 Stage 2: 핵심 종목 심층분석 (펀더멘털·퀀트·센티먼트)
 """
 import json
+import asyncio
 import anyio
 from claude_agent_sdk import query, ClaudeAgentOptions, AssistantMessage, TextBlock
 
@@ -134,15 +135,16 @@ async def run_pipeline(
     else:
         print("[주가 데이터] 비활성화 — Claude 추정치 사용")
 
-    print(f"[Stage 2] 종목 심층분석 시작 — {len(stock_targets)}종목")
-    for proposal, theme_name in stock_targets:
+    print(f"[Stage 2] 종목 심층분석 시작 — {len(stock_targets)}종목 (병렬 실행)")
+
+    # 병렬 분석 태스크 생성
+    async def _analyze_one(proposal: dict, theme_name: str) -> None:
         ticker = proposal["ticker"]
         asset_name = proposal.get("asset_name", ticker)
         market = proposal.get("market", "")
         print(f"  → {asset_name} ({ticker}) 분석 중...")
 
         try:
-            # 주가 데이터가 있으면 텍스트로 포맷
             sd = stock_data_map.get(ticker.upper())
             sd_text = format_stock_data_text(sd) if sd else ""
 
@@ -154,35 +156,31 @@ async def run_pipeline(
             )
 
             if not stock_result.get("error"):
-                # 심층분석 결과를 proposal에 병합
                 proposal["stock_analysis"] = stock_result
-                # 센티먼트/퀀트 스코어를 proposal 레벨에도 반영
                 if stock_result.get("sentiment_score") is not None:
                     proposal["sentiment_score"] = stock_result["sentiment_score"]
                 if stock_result.get("factor_scores", {}).get("composite") is not None:
                     proposal["quant_score"] = stock_result["factor_scores"]["composite"]
-                # 목표가 업데이트 (심층분석이 더 정확)
                 if stock_result.get("target_price_low") is not None:
                     proposal["target_price_low"] = stock_result["target_price_low"]
                 if stock_result.get("target_price_high") is not None:
                     proposal["target_price_high"] = stock_result["target_price_high"]
-
-                # 진입/청산 조건 병합 (Stage 2에서 상세 분석)
                 if stock_result.get("entry_condition"):
                     proposal["entry_condition"] = stock_result["entry_condition"]
                 if stock_result.get("exit_condition"):
                     proposal["exit_condition"] = stock_result["exit_condition"]
-
-                # 실시간 현재가로 보정 (yfinance 데이터 기준)
                 if sd and sd.get("price"):
                     proposal["current_price"] = sd["price"]
-
                 print(f"  ✓ {asset_name} 심층분석 완료")
             else:
                 print(f"  ✗ {asset_name} 심층분석 실패: {stock_result['error']}")
-
         except Exception as e:
             print(f"  ✗ {asset_name} 심층분석 오류: {e}")
+
+    await asyncio.gather(*[
+        _analyze_one(proposal, theme_name)
+        for proposal, theme_name in stock_targets
+    ])
 
     print(f"[Stage 2] 종목 심층분석 완료")
     return result

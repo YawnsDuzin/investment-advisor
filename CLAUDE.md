@@ -77,8 +77,8 @@ sudo systemctl enable --now investment-advisor-analyzer.timer    # 매일 03:00 
 | `DB_NAME` | `investment_advisor` | 데이터베이스명 |
 | `DB_USER` | `postgres` | DB 사용자 |
 | `DB_PASSWORD` | `postgres` | DB 비밀번호 |
-| `MAX_TURNS` | `6` | Claude SDK 최대 턴 수 (Stage 1·2 공통) |
-| `TOP_THEMES` | `3` | Stage 2 심층분석 대상 상위 테마 수 |
+| `MAX_TURNS` | `2` | Claude SDK 최대 턴 수 (Stage 1·2 공통) |
+| `TOP_THEMES` | `2` | Stage 2 심층분석 대상 상위 테마 수 |
 | `TOP_STOCKS_PER_THEME` | `2` | 각 테마당 심층분석할 종목 수 |
 | `ENABLE_STOCK_ANALYSIS` | `true` | Stage 2(종목 심층분석) 활성화 스위치 (true/false) |
 | `ENABLE_STOCK_DATA` | `true` | yfinance 실시간 주가 데이터 조회 스위치 (true/false) |

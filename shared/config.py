@@ -35,23 +35,18 @@ class NewsConfig:
         # 글로벌 종합 뉴스
         "global": [
             "https://feeds.bbci.co.uk/news/world/rss.xml",
-            "https://rss.nytimes.com/services/xml/rss/nyt/World.xml",
             "https://feeds.reuters.com/reuters/worldNews",
         ],
         # 경제·금융·시장
         "finance": [
-            "https://feeds.bbci.co.uk/news/business/rss.xml",
-            "https://rss.nytimes.com/services/xml/rss/nyt/Business.xml",
             "https://feeds.reuters.com/reuters/businessNews",
             "https://feeds.bloomberg.com/markets/news.rss",
-            "https://www.cnbc.com/id/10001147/device/rss/rss.html",  # CNBC 경제
-            "https://feeds.marketwatch.com/marketwatch/topstories",
+            "https://www.cnbc.com/id/10001147/device/rss/rss.html",
         ],
         # 기술·AI·반도체
         "technology": [
             "https://rss.nytimes.com/services/xml/rss/nyt/Technology.xml",
             "https://feeds.arstechnica.com/arstechnica/technology-lab",
-            "https://www.theverge.com/rss/index.xml",
         ],
         # 에너지·원자재
         "commodities": [
@@ -61,10 +56,9 @@ class NewsConfig:
         "korea": [
             "https://www.hankyung.com/feed/economy",
             "https://www.hankyung.com/feed/stock",
-            "https://www.hankyung.com/feed/realestate",
         ],
     })
-    max_articles_per_feed: int = 15
+    max_articles_per_feed: int = 10
 
 
 def _env_bool(key: str, default: bool) -> bool:
@@ -77,8 +71,8 @@ def _env_bool(key: str, default: bool) -> bool:
 @dataclass
 class AnalyzerConfig:
     """멀티스테이지 분석 파이프라인 설정"""
-    max_turns: int = field(default_factory=lambda: int(os.getenv("MAX_TURNS", "6")))
-    top_themes: int = field(default_factory=lambda: int(os.getenv("TOP_THEMES", "3")))
+    max_turns: int = field(default_factory=lambda: int(os.getenv("MAX_TURNS", "2")))
+    top_themes: int = field(default_factory=lambda: int(os.getenv("TOP_THEMES", "2")))
     top_stocks_per_theme: int = field(default_factory=lambda: int(os.getenv("TOP_STOCKS_PER_THEME", "2")))
     enable_stock_analysis: bool = field(default_factory=lambda: _env_bool("ENABLE_STOCK_ANALYSIS", True))
     enable_stock_data: bool = field(default_factory=lambda: _env_bool("ENABLE_STOCK_DATA", True))
@@ -89,4 +83,4 @@ class AppConfig:
     db: DatabaseConfig = field(default_factory=DatabaseConfig)
     news: NewsConfig = field(default_factory=NewsConfig)
     analyzer: AnalyzerConfig = field(default_factory=AnalyzerConfig)
-    max_turns: int = field(default_factory=lambda: int(os.getenv("MAX_TURNS", "6")))  # 하위호환
+    max_turns: int = field(default_factory=lambda: int(os.getenv("MAX_TURNS", "2")))  # 하위호환

@@ -1,26 +1,57 @@
 """실시간 주가/재무 데이터 조회 모듈 — yfinance 기반"""
-import yfinance as yf
+try:
+    import yfinance as yf
+except ImportError:
+    yf = None
 
 
 def _normalize_ticker(ticker: str, market: str) -> str:
     """시장 코드에 맞는 yfinance 티커 형식으로 변환
 
     KRX(코스피) → 005930.KS, KQ(코스닥) → 247540.KQ
+    HKEX → 1211.HK, TSE → 6758.T, TWSE → 2330.TW
     미국 시장 → 그대로 사용
     """
     ticker = ticker.strip().upper()
     market = (market or "").strip().upper()
 
+    # 이미 접미사가 붙어 있으면 그대로 반환
+    if "." in ticker:
+        return ticker
+
     if market in ("KRX", "KOSPI", "KSE"):
-        # 한국 코스피: 숫자 6자리.KS
-        digits = ticker.lstrip("0") if not ticker.startswith("0") else ticker
-        if ticker.replace(".", "").isdigit():
+        if ticker.isdigit():
             return f"{ticker}.KS"
         return ticker
     elif market in ("KOSDAQ", "KQ"):
-        if ticker.replace(".", "").isdigit():
+        if ticker.isdigit():
             return f"{ticker}.KQ"
         return ticker
+    elif market in ("HKEX", "HKG", "HKSE"):
+        # 홍콩: 숫자 티커에 .HK 접미사 (예: 1211 → 1211.HK)
+        if ticker.isdigit():
+            return f"{ticker}.HK"
+        return ticker
+    elif market in ("TSE", "JPX", "TYO"):
+        # 일본: 숫자 티커에 .T 접미사 (예: 6758 → 6758.T)
+        if ticker.isdigit():
+            return f"{ticker}.T"
+        return ticker
+    elif market in ("TWSE", "TPE"):
+        # 대만: 숫자 티커에 .TW 접미사 (예: 2330 → 2330.TW)
+        if ticker.isdigit():
+            return f"{ticker}.TW"
+        return ticker
+    elif market in ("SSE", "SZSE", "SHA", "SHE"):
+        # 중국: 상해 .SS, 심천 .SZ
+        if ticker.isdigit():
+            suffix = ".SS" if market in ("SSE", "SHA") else ".SZ"
+            return f"{ticker}{suffix}"
+        return ticker
+    elif market in ("LSE", "LON"):
+        return f"{ticker}.L"
+    elif market in ("FSE", "FRA", "XETRA"):
+        return f"{ticker}.DE"
     # 미국/기타: 그대로
     return ticker
 
@@ -46,6 +77,10 @@ def fetch_stock_data(ticker: str, market: str) -> dict | None:
         volume_avg, market_cap, per, pbr, eps, dividend_yield, currency
         실패 시 None
     """
+    if yf is None:
+        print("  [주가] yfinance 미설치 — 건너뜀")
+        return None
+
     yf_ticker = _normalize_ticker(ticker, market)
     try:
         stock = yf.Ticker(yf_ticker)
@@ -87,7 +122,7 @@ def fetch_stock_data(ticker: str, market: str) -> dict | None:
 
 
 def fetch_multiple_stocks(stocks: list[dict]) -> dict[str, dict]:
-    """복수 종목 일괄 조회
+    """복수 종목 병렬 조회 (ThreadPoolExecutor)
 
     Args:
         stocks: [{"ticker": "NVDA", "market": "NASDAQ"}, ...] 형태 리스트
@@ -95,22 +130,39 @@ def fetch_multiple_stocks(stocks: list[dict]) -> dict[str, dict]:
     Returns:
         {ticker: stock_data_dict} 매핑. 조회 실패 종목은 제외.
     """
-    results = {}
-    seen = set()
+    from concurrent.futures import ThreadPoolExecutor, as_completed
 
+    # 중복 제거
+    unique_stocks = []
+    seen = set()
     for stock in stocks:
         ticker = stock.get("ticker", "").strip().upper()
-        market = stock.get("market", "")
         if not ticker or ticker in seen:
             continue
         seen.add(ticker)
+        unique_stocks.append((ticker, stock.get("market", "")))
 
-        print(f"  [주가] {ticker} ({market}) 조회 중...")
-        data = fetch_stock_data(ticker, market)
-        if data:
-            results[ticker] = data
-            price_str = f"{data['currency']}{data['price']:,.2f}" if data['price'] else "N/A"
-            print(f"  [주가] {ticker} → {price_str}")
+    if not unique_stocks:
+        return {}
+
+    results = {}
+    print(f"  [주가] {len(unique_stocks)}종목 병렬 조회 시작...")
+
+    with ThreadPoolExecutor(max_workers=min(len(unique_stocks), 8)) as pool:
+        futures = {
+            pool.submit(fetch_stock_data, ticker, market): ticker
+            for ticker, market in unique_stocks
+        }
+        for future in as_completed(futures):
+            ticker = futures[future]
+            try:
+                data = future.result()
+                if data:
+                    results[ticker] = data
+                    price_str = f"{data['currency']}{data['price']:,.2f}" if data['price'] else "N/A"
+                    print(f"  [주가] {ticker} → {price_str}")
+            except Exception as e:
+                print(f"  [주가] {ticker} 조회 오류: {e}")
 
     return results
 
