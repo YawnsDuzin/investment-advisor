@@ -17,6 +17,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Template**: Jinja2 (다크 테마 UI)
 - **Database**: PostgreSQL + psycopg2 (스키마 자동 마이그레이션)
 - **News**: feedparser + httpx (RSS 수집)
+- **Stock Data**: yfinance (실시간 주가/재무 데이터 조회)
 - **Async**: anyio (async/sync 브릿지)
 - **Runtime**: Python 3.10+, Node.js LTS (Claude Code CLI 의존)
 - **Deploy**: systemd (API 상시 기동 + 배치 타이머), Raspberry Pi 4 24/7 운영 가능
@@ -26,7 +27,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```
 investment-advisor/
 ├── shared/              ← 공용: config(.env 로드), db(마이그레이션+저장), pg_setup(자동 설치)
-├── analyzer/            ← 배치: main(엔트리) → news_collector(RSS) → analyzer(2단계) → prompts
+├── analyzer/            ← 배치: main(엔트리) → news_collector(RSS) → stock_data(주가조회) → analyzer(2단계) → prompts
 ├── api/                 ← 웹: main(FastAPI) → routes/(pages, sessions, themes, proposals)
 │   ├── templates/       ← Jinja2 HTML (다크 테마)
 │   └── static/css/
@@ -80,6 +81,7 @@ sudo systemctl enable --now investment-advisor-analyzer.timer    # 매일 03:00 
 | `TOP_THEMES` | `3` | Stage 2 심층분석 대상 상위 테마 수 |
 | `TOP_STOCKS_PER_THEME` | `2` | 각 테마당 심층분석할 종목 수 |
 | `ENABLE_STOCK_ANALYSIS` | `true` | Stage 2(종목 심층분석) 활성화 스위치 (true/false) |
+| `ENABLE_STOCK_DATA` | `true` | yfinance 실시간 주가 데이터 조회 스위치 (true/false) |
 
 - `.env`는 `.gitignore`에 포함 — Git에 커밋되지 않음
 - `.env.example`은 Git에 포함 — 플레이스홀더 값으로 구성
@@ -92,12 +94,13 @@ sudo systemctl enable --now investment-advisor-analyzer.timer    # 매일 03:00 
 ### 데이터 흐름
 
 ```
-[RSS 뉴스 수집] → [Stage 1: 이슈/테마/시나리오/매크로/제안] → [Stage 2: 핵심 종목 심층분석] → [DB 저장 + tracking 갱신]
-                    claude_agent_sdk.query()                    claude_agent_sdk.query()
+[RSS 뉴스 수집] → [Stage 1: 이슈/테마/시나리오/매크로/제안] → [주가 데이터 조회] → [Stage 2: 핵심 종목 심층분석] → [DB 저장 + tracking 갱신]
+                    claude_agent_sdk.query()                    yfinance             claude_agent_sdk.query()
 ```
 
-- **Stage 1**: 뉴스 → 8~15개 이슈(시계별 영향) → 4~7개 테마(시나리오·매크로) → 테마당 2~4개 투자 제안
-- **Stage 2**: 상위 테마의 stock 타입 buy/sell 종목에 대해 5관점 심층분석 (펀더멘털·산업·모멘텀·퀀트·리스크)
+- **Stage 1**: 뉴스 → 8~15개 이슈(시계별 영향) → 4~7개 테마(시나리오·매크로) → 테마당 15~20개 투자 제안
+- **주가 데이터**: Stage 1 추천 종목의 현재가/PER/PBR/시총 등을 yfinance로 실시간 조회 (ENABLE_STOCK_DATA로 on/off)
+- **Stage 2**: 실제 주가 데이터 + 5관점 심층분석 (펀더멘털·산업·모멘텀·퀀트·리스크)
 - `AnalyzerConfig`로 심층분석 대상 수(`top_themes`, `top_stocks_per_theme`) 및 활성화 여부 조절 가능
 - 저장 시 `theme_tracking`, `proposal_tracking` 테이블 자동 갱신 (연속성 추적)
 
@@ -106,6 +109,7 @@ sudo systemctl enable --now investment-advisor-analyzer.timer    # 매일 03:00 
 - `analyzer.py` — `stage1_discover_themes()`, `stage2_analyze_stock()`, `run_pipeline()`. 하위호환용 `run_analysis()` 유지
 - `prompts.py` — 스테이지별 시스템 프롬프트 및 JSON 출력 템플릿
 - `news_collector.py` — `feedparser`로 RSS 피드 수집, 카테고리별 마크다운 텍스트 생성
+- `stock_data.py` — `yfinance`로 실시간 주가/재무 데이터 조회, 프롬프트 삽입용 텍스트 포맷팅
 
 ### api/ — FastAPI 웹서비스 (상시 기동)
 - `routes/sessions.py` — 세션 목록/상세/날짜별 조회. `_serialize_row()` 공유 유틸.

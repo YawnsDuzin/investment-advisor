@@ -11,6 +11,7 @@ from analyzer.prompts import (
     STAGE1_SYSTEM, STAGE1_PROMPT,
     STAGE2_SYSTEM, STAGE2_PROMPT,
 )
+from analyzer.stock_data import fetch_multiple_stocks, format_stock_data_text
 from shared.config import AnalyzerConfig
 
 
@@ -61,11 +62,18 @@ async def stage1_discover_themes(news_text: str, date: str, max_turns: int = 6) 
 async def stage2_analyze_stock(
     ticker: str, asset_name: str, market: str,
     theme_context: str, date: str, max_turns: int = 6,
+    stock_data_text: str = "",
 ) -> dict:
     """Stage 2: 개별 종목 심층분석 (펀더멘털·산업·모멘텀·퀀트·리스크)"""
+    # 주가 데이터가 있으면 프롬프트에 삽입
+    stock_data_section = ""
+    if stock_data_text:
+        stock_data_section = f"\n\n## 실시간 시장 데이터 (조회 시점: {date})\n\n{stock_data_text}\n"
+
     prompt = STAGE2_PROMPT.format(
         ticker=ticker, asset_name=asset_name,
         market=market, theme_context=theme_context, date=date,
+        stock_data_section=stock_data_section,
     )
     response = await _query_claude(prompt, STAGE2_SYSTEM, max_turns)
     return _parse_json_response(response)
@@ -97,20 +105,34 @@ async def run_pipeline(
         print("[Stage 2] 종목 심층분석 비활성화 — 건너뜀")
         return result
 
-    # 상위 테마에서 buy/sell 제안 중 stock 타입 종목 추출
+    # 상위 테마에서 buy/sell 제안 중 stock 타입 종목 추출 (테마당 top_stocks_per_theme개)
     stock_targets = []
     for theme in themes[:cfg.top_themes]:
+        theme_stocks = 0
         for proposal in theme.get("proposals", []):
             if (proposal.get("asset_type") == "stock"
                     and proposal.get("action") in ("buy", "sell")
-                    and proposal.get("ticker")):
+                    and proposal.get("ticker")
+                    and theme_stocks < cfg.top_stocks_per_theme):
                 stock_targets.append((proposal, theme.get("theme_name", "")))
-                if len(stock_targets) >= cfg.top_themes * cfg.top_stocks_per_theme:
-                    break
+                theme_stocks += 1
 
     if not stock_targets:
         print("[Stage 2] 심층분석 대상 종목 없음 — 건너뜀")
         return result
+
+    # ── 주가 데이터 일괄 조회 ──
+    stock_data_map: dict[str, dict] = {}
+    if cfg.enable_stock_data:
+        print(f"[주가 데이터] {len(stock_targets)}종목 실시간 데이터 조회 시작...")
+        stock_list = [
+            {"ticker": p["ticker"], "market": p.get("market", "")}
+            for p, _ in stock_targets
+        ]
+        stock_data_map = fetch_multiple_stocks(stock_list)
+        print(f"[주가 데이터] {len(stock_data_map)}/{len(stock_targets)}종목 조회 완료")
+    else:
+        print("[주가 데이터] 비활성화 — Claude 추정치 사용")
 
     print(f"[Stage 2] 종목 심층분석 시작 — {len(stock_targets)}종목")
     for proposal, theme_name in stock_targets:
@@ -120,10 +142,15 @@ async def run_pipeline(
         print(f"  → {asset_name} ({ticker}) 분석 중...")
 
         try:
+            # 주가 데이터가 있으면 텍스트로 포맷
+            sd = stock_data_map.get(ticker.upper())
+            sd_text = format_stock_data_text(sd) if sd else ""
+
             stock_result = await stage2_analyze_stock(
                 ticker=ticker, asset_name=asset_name,
                 market=market, theme_context=theme_name,
                 date=date, max_turns=cfg.max_turns,
+                stock_data_text=sd_text,
             )
 
             if not stock_result.get("error"):
@@ -139,6 +166,16 @@ async def run_pipeline(
                     proposal["target_price_low"] = stock_result["target_price_low"]
                 if stock_result.get("target_price_high") is not None:
                     proposal["target_price_high"] = stock_result["target_price_high"]
+
+                # 진입/청산 조건 병합 (Stage 2에서 상세 분석)
+                if stock_result.get("entry_condition"):
+                    proposal["entry_condition"] = stock_result["entry_condition"]
+                if stock_result.get("exit_condition"):
+                    proposal["exit_condition"] = stock_result["exit_condition"]
+
+                # 실시간 현재가로 보정 (yfinance 데이터 기준)
+                if sd and sd.get("price"):
+                    proposal["current_price"] = sd["price"]
 
                 print(f"  ✓ {asset_name} 심층분석 완료")
             else:

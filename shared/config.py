@@ -81,6 +81,7 @@ class AnalyzerConfig:
     top_themes: int = field(default_factory=lambda: int(os.getenv("TOP_THEMES", "3")))
     top_stocks_per_theme: int = field(default_factory=lambda: int(os.getenv("TOP_STOCKS_PER_THEME", "2")))
     enable_stock_analysis: bool = field(default_factory=lambda: _env_bool("ENABLE_STOCK_ANALYSIS", True))
+    enable_stock_data: bool = field(default_factory=lambda: _env_bool("ENABLE_STOCK_DATA", True))
 
 
 @dataclass
