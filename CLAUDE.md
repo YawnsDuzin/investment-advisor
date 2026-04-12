@@ -51,6 +51,10 @@ sudo systemctl enable --now investment-advisor.timer
 | `DB_NAME` | `investment_advisor` | 데이터베이스명 |
 | `DB_USER` | `postgres` | DB 사용자 |
 | `DB_PASSWORD` | `postgres` | DB 비밀번호 |
+| `MAX_TURNS` | `6` | Claude SDK 최대 턴 수 (Stage 1·2 공통) |
+| `TOP_THEMES` | `3` | Stage 2 심층분석 대상 상위 테마 수 |
+| `TOP_STOCKS_PER_THEME` | `2` | 각 테마당 심층분석할 종목 수 |
+| `ENABLE_STOCK_ANALYSIS` | `true` | Stage 2(종목 심층분석) 활성화 스위치 (true/false) |
 
 - `.env`는 `.gitignore`에 포함 — Git에 커밋되지 않음
 - `.env.example`은 Git에 포함 — 플레이스홀더 값으로 구성

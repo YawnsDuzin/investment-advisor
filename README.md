@@ -62,15 +62,30 @@ cp .env.example .env
 copy .env.example .env
 ```
 
-`.env` 파일을 열어 DB 접속 정보를 환경에 맞게 수정합니다:
+`.env` 파일을 열어 DB 접속 정보와 분석 파이프라인 설정을 환경에 맞게 수정합니다:
 
 ```
+# PostgreSQL 접속 정보
 DB_HOST=localhost
 DB_PORT=5432
 DB_NAME=investment_advisor
 DB_USER=postgres
 DB_PASSWORD=your_password_here
+
+# 분석 파이프라인 설정 (AnalyzerConfig)
+MAX_TURNS=6                 # Claude SDK 최대 턴 수 (Stage 1·2 공통)
+TOP_THEMES=3                # Stage 2 심층분석 대상 상위 테마 수
+TOP_STOCKS_PER_THEME=2      # 각 테마당 심층분석 종목 수
+ENABLE_STOCK_ANALYSIS=true  # Stage 2 활성화 스위치 (true/false)
 ```
+
+| 변수 | 기본값 | 설명 |
+|------|--------|------|
+| `DB_HOST` / `DB_PORT` / `DB_NAME` / `DB_USER` / `DB_PASSWORD` | — | PostgreSQL 접속 정보 |
+| `MAX_TURNS` | `6` | Claude SDK 최대 턴 수 (값이 클수록 추론이 깊어지지만 사용량 증가) |
+| `TOP_THEMES` | `3` | Stage 2에서 심층분석 대상이 되는 상위 테마 수 (신뢰도 내림차순) |
+| `TOP_STOCKS_PER_THEME` | `2` | 각 상위 테마에서 심층분석할 종목 수 |
+| `ENABLE_STOCK_ANALYSIS` | `true` | Stage 2(종목 심층분석) 활성화 여부. `false`면 Stage 1 결과만 저장 |
 
 > `.env`는 `.gitignore`에 포함되어 Git에 커밋되지 않습니다.
 > `.env.example`이 템플릿으로 Git에 포함됩니다.

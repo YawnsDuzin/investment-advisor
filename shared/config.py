@@ -67,13 +67,20 @@ class NewsConfig:
     max_articles_per_feed: int = 15
 
 
+def _env_bool(key: str, default: bool) -> bool:
+    raw = os.getenv(key)
+    if raw is None:
+        return default
+    return raw.strip().lower() in ("1", "true", "yes", "y", "on")
+
+
 @dataclass
 class AnalyzerConfig:
     """멀티스테이지 분석 파이프라인 설정"""
-    max_turns: int = 6                  # Claude SDK 최대 턴 수
-    top_themes: int = 3                 # 심층분석할 상위 테마 수
-    top_stocks_per_theme: int = 2       # 테마당 심층분석할 종목 수
-    enable_stock_analysis: bool = True  # 종목 심층분석 활성화 여부
+    max_turns: int = field(default_factory=lambda: int(os.getenv("MAX_TURNS", "6")))
+    top_themes: int = field(default_factory=lambda: int(os.getenv("TOP_THEMES", "3")))
+    top_stocks_per_theme: int = field(default_factory=lambda: int(os.getenv("TOP_STOCKS_PER_THEME", "2")))
+    enable_stock_analysis: bool = field(default_factory=lambda: _env_bool("ENABLE_STOCK_ANALYSIS", True))
 
 
 @dataclass
@@ -81,4 +88,4 @@ class AppConfig:
     db: DatabaseConfig = field(default_factory=DatabaseConfig)
     news: NewsConfig = field(default_factory=NewsConfig)
     analyzer: AnalyzerConfig = field(default_factory=AnalyzerConfig)
-    max_turns: int = 6  # Claude SDK 최대 턴 수 (하위호환)
+    max_turns: int = field(default_factory=lambda: int(os.getenv("MAX_TURNS", "6")))  # 하위호환
