@@ -3,8 +3,26 @@
 매일 글로벌 뉴스를 수집하고 Claude Code SDK로 멀티스테이지 분석을 수행하여 투자 테마와 제안을 PostgreSQL에 저장합니다.
 FastAPI + Jinja2 웹 UI로 분석 결과를 조회하고, 일자별 변화를 추적할 수 있습니다.
 
+라즈베리파이 4에서 24시간 운영 가능하며, systemd 서비스/타이머로 API 상시 기동 + 매일 자동 분석을 제공합니다.
+
 > **과금**: Claude Code SDK는 Claude Code 구독(Max 5x 등) 사용량에 포함됩니다.
 > API 키 방식과 달리 별도 토큰 과금이 없습니다.
+
+---
+
+## 기술 스택
+
+| 분류 | 기술 | 설명 |
+|------|------|------|
+| AI 분석 | **Claude Code SDK** (`claude-agent-sdk`) | 멀티스테이지 투자 분석 파이프라인 |
+| 백엔드 | **FastAPI** + **Uvicorn** | REST API + HTML 웹서비스 |
+| 템플릿 | **Jinja2** | 다크 테마 HTML UI |
+| 데이터베이스 | **PostgreSQL** + `psycopg2` | 분석 결과 저장, 스키마 자동 마이그레이션 |
+| 뉴스 수집 | **feedparser** + **httpx** | RSS 피드 수집 |
+| 비동기 | **anyio** | async/sync 브릿지 |
+| 런타임 | **Python 3.10+**, **Node.js LTS** | Claude Code CLI가 Node.js 필요 |
+| 배포 | **systemd** | API 서버 상시 기동 + 배치 타이머 |
+| 대상 하드웨어 | **Raspberry Pi 4** (2GB+) | 저전력 24/7 홈서버 |
 
 ---
 
@@ -15,6 +33,7 @@ investment-advisor/
 ├── .env.example             ← 환경변수 템플릿 (.env로 복사하여 사용)
 ├── .gitignore
 ├── requirements.txt
+├── CLAUDE.md                ← Claude Code 가이드 (아키텍처, 컨벤션)
 ├── shared/                  ← 공용 모듈 (설정, DB)
 │   ├── config.py            ← .env 자동 로드 + dataclass 설정
 │   ├── db.py                ← 스키마 마이그레이션(v1~v3) + 저장 + tracking
@@ -33,6 +52,9 @@ investment-advisor/
 │   │   └── proposals.py     ← JSON API: 투자 제안 + 종목 심층분석
 │   ├── templates/           ← Jinja2 HTML 템플릿 (다크 테마)
 │   └── static/css/          ← 스타일시트
+└── _docs/                   ← 운영 문서
+    ├── analysis_pipeline.md ← 분석 파이프라인 상세
+    └── raspberry-pi-setup.md← 라즈베리파이 설치·배포 매뉴얼
 ```
 
 ---
@@ -194,61 +216,45 @@ python -m api.main
 
 ---
 
-## 4. 자동 실행 설정 (라즈베리파이)
+## 4. 라즈베리파이 24/7 운영
 
-### Systemd 서비스
+라즈베리파이 4에서 **API 웹서버 상시 기동 + 매일 자동 분석**을 systemd로 운영합니다. 저전력(~5W)으로 24시간 홈서버로 활용할 수 있습니다.
 
-```bash
-sudo tee /etc/systemd/system/investment-advisor.service << 'EOF'
-[Unit]
-Description=Investment Advisor Analysis
-After=postgresql.service network-online.target
-Wants=network-online.target
+> 상세 설치·배포 매뉴얼은 [`_docs/raspberry-pi-setup.md`](_docs/raspberry-pi-setup.md) 를 참고하세요.
+> (OS 설치, Python/PostgreSQL/Node.js 설정, 포트포워딩, HTTPS까지 전체 절차를 다룹니다)
 
-[Service]
-Type=oneshot
-User=pi
-WorkingDirectory=/home/pi/investment-advisor
-ExecStart=/home/pi/investment-advisor/venv/bin/python -m analyzer.main
-Environment=HOME=/home/pi
-StandardOutput=journal
-StandardError=journal
-TimeoutStartSec=300
+### systemd 서비스 구성
 
-[Install]
-WantedBy=multi-user.target
-EOF
-```
-
-### 타이머 (매일 오전 7시)
-
-```bash
-sudo tee /etc/systemd/system/investment-advisor.timer << 'EOF'
-[Unit]
-Description=Run investment analysis daily at 7 AM
-
-[Timer]
-OnCalendar=*-*-* 07:00:00
-Persistent=true
-RandomizedDelaySec=300
-
-[Install]
-WantedBy=timers.target
-EOF
-```
+| 유닛 | 역할 | 동작 |
+|------|------|------|
+| `investment-advisor-api.service` | API 웹서버 | 상시 기동, 장애 시 자동 재시작 |
+| `investment-advisor-analyzer.service` | 분석 배치 | oneshot, 타이머에 의해 트리거 |
+| `investment-advisor-analyzer.timer` | 배치 스케줄 | 매일 03:00 (KST) 자동 실행 |
 
 ### 활성화
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable --now investment-advisor.timer
+sudo systemctl enable --now investment-advisor-api.service
+sudo systemctl enable --now investment-advisor-analyzer.timer
 
 # 상태 확인
-systemctl status investment-advisor.timer
-journalctl -u investment-advisor --since today
+systemctl status investment-advisor-api.service --no-pager
+systemctl list-timers | grep investment-advisor
 ```
 
-실행 시간 변경 예시:
+### 로그 확인
+
+```bash
+journalctl -u investment-advisor-api.service -f            # API 실시간
+journalctl -u investment-advisor-analyzer.service -n 200   # 최근 배치 결과
+```
+
+### 외부 접속
+
+포트포워딩 + DDNS 또는 Nginx 리버스 프록시 + Let's Encrypt HTTPS를 설정하면 외부에서도 접속할 수 있습니다. 자세한 절차는 [`_docs/raspberry-pi-setup.md`](_docs/raspberry-pi-setup.md) 의 8장을 참고하세요.
+
+타이머 시간 변경 예시:
 - `*-*-* 06:30:00` → 매일 오전 6시 30분
 - `*-*-* 07:00:00,19:00:00` → 하루 2회
 - `Mon..Fri *-*-* 07:00:00` → 평일만
