@@ -1,5 +1,6 @@
 """Jinja2 템플릿 기반 웹 페이지 라우트"""
 from fastapi import APIRouter, Request, Query
+from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 from shared.config import DatabaseConfig
 from shared.db import get_connection
@@ -39,7 +40,7 @@ def dashboard(request: Request):
             cur.execute("SELECT COUNT(*) AS cnt FROM global_issues WHERE session_id = %s", (session_id,))
             issue_count = cur.fetchone()["cnt"]
 
-            # 테마 + 시나리오 + 제안
+            # 테마 (요약만 — 시나리오/제안 상세는 세션 상세에서)
             cur.execute(
                 "SELECT * FROM investment_themes WHERE session_id = %s ORDER BY confidence_score DESC",
                 (session_id,)
@@ -49,14 +50,6 @@ def dashboard(request: Request):
             buy_count = 0
             total_alloc = 0.0
             for theme in themes:
-                # 시나리오
-                cur.execute(
-                    "SELECT * FROM theme_scenarios WHERE theme_id = %s ORDER BY probability DESC",
-                    (theme["id"],)
-                )
-                theme["scenarios"] = [_serialize_row(s) for s in cur.fetchall()]
-
-                # 제안
                 cur.execute(
                     "SELECT * FROM investment_proposals WHERE theme_id = %s ORDER BY target_allocation DESC",
                     (theme["id"],)
@@ -68,19 +61,14 @@ def dashboard(request: Request):
                         buy_count += 1
                     total_alloc += float(p.get("target_allocation") or 0)
 
-            # ── 추적 데이터: 테마 변화 감지 ──
-            # 연속 등장 테마 (streak >= 2)
+            # ── 추적 데이터 ──
             cur.execute("""
-                SELECT * FROM theme_tracking
-                WHERE last_seen_date = %s
+                SELECT * FROM theme_tracking WHERE last_seen_date = %s
                 ORDER BY streak_days DESC, appearances DESC
             """, (today_date,))
             active_tracking = [_serialize_row(r) for r in cur.fetchall()]
 
-            # 신규 테마 (오늘 처음 등장)
-            new_themes = [t for t in active_tracking if t["appearances"] == 1]
-
-            # 소멸 테마 (어제까지 있었는데 오늘 없음)
+            # 소멸 테마
             cur.execute("""
                 SELECT * FROM theme_tracking
                 WHERE last_seen_date < %s
@@ -89,56 +77,29 @@ def dashboard(request: Request):
             """, (today_date, today_date))
             disappeared_themes = [_serialize_row(r) for r in cur.fetchall()]
 
-            # 신뢰도 변동 큰 테마
-            confidence_changes = []
-            for t in active_tracking:
-                if t.get("prev_confidence") is not None and t.get("latest_confidence") is not None:
-                    diff = t["latest_confidence"] - t["prev_confidence"]
-                    if abs(diff) >= 0.05:
-                        t["confidence_diff"] = round(diff, 2)
-                        confidence_changes.append(t)
-            confidence_changes.sort(key=lambda x: abs(x["confidence_diff"]), reverse=True)
-
-            # ── 추적 데이터: 종목 변화 감지 ──
-            # 신규 진입 종목 (오늘 처음 추천)
+            # ── 뉴스 기사 (카테고리별 그룹핑) ──
             cur.execute("""
-                SELECT * FROM proposal_tracking
-                WHERE first_recommended_date = %s
-                ORDER BY latest_action, ticker
-            """, (today_date,))
-            new_proposals = [_serialize_row(r) for r in cur.fetchall()]
-
-            # 액션 변경 종목 (hold→buy, buy→sell 등)
-            cur.execute("""
-                SELECT * FROM proposal_tracking
-                WHERE last_recommended_date = %s
-                  AND prev_action IS NOT NULL
-                  AND prev_action != latest_action
-                ORDER BY ticker
-            """, (today_date,))
-            action_changes = [_serialize_row(r) for r in cur.fetchall()]
+                SELECT category, source, title, title_ko, summary, link, published
+                FROM news_articles
+                WHERE session_id = %s
+                ORDER BY category, id
+            """, (session_id,))
+            raw_news = cur.fetchall()
 
     finally:
         conn.close()
 
-    # 투자 신호 생성
-    signals = []
-    for p in new_proposals:
-        if p.get("latest_action") == "buy":
-            signals.append({"type": "new_buy", "icon": "new",
-                            "text": f"{p['asset_name'] or p['ticker']} ({p['ticker']}) 신규 매수 진입"})
-    for p in action_changes:
-        signals.append({"type": "action_change", "icon": "change",
-                        "text": f"{p['asset_name'] or p['ticker']} ({p['ticker']}) "
-                                f"{p['prev_action']}→{p['latest_action']}"})
-    for t in confidence_changes[:3]:
-        direction = "up" if t["confidence_diff"] > 0 else "down"
-        signals.append({"type": f"confidence_{direction}", "icon": direction,
-                        "text": f"'{t['theme_name']}' 신뢰도 "
-                                f"{t['prev_confidence']*100:.0f}%→{t['latest_confidence']*100:.0f}%"})
-    for t in disappeared_themes[:2]:
-        signals.append({"type": "disappeared", "icon": "gone",
-                        "text": f"'{t['theme_name']}' 테마 소멸 (마지막: {t['last_seen_date']})"})
+    # 뉴스를 카테고리별로 그룹핑
+    from analyzer.news_collector import CATEGORY_LABELS
+    news_by_category = {}
+    for row in raw_news:
+        cat = row["category"]
+        if cat not in news_by_category:
+            news_by_category[cat] = {
+                "label": CATEGORY_LABELS.get(cat, cat),
+                "articles": [],
+            }
+        news_by_category[cat]["articles"].append(_serialize_row(row))
 
     return templates.TemplateResponse(request=request, name="dashboard.html", context={
         "active_page": "dashboard",
@@ -148,10 +109,9 @@ def dashboard(request: Request):
         "theme_count": len(themes),
         "buy_count": buy_count,
         "total_alloc": total_alloc,
-        "signals": signals,
         "active_tracking": active_tracking,
-        "new_themes": new_themes,
         "disappeared_themes": disappeared_themes,
+        "news_by_category": news_by_category,
     })
 
 
@@ -456,4 +416,113 @@ def proposals_page(
         "asset_type": asset_type,
         "conviction": conviction,
         "ticker": ticker,
+    })
+
+
+# ──────────────────────────────────────────────
+# Theme Chat
+# ────────────────────────────��─────────────────
+@router.get("/pages/chat")
+def chat_list_page(request: Request, theme_id: int | None = Query(default=None)):
+    """채팅 세션 목록"""
+    conn = get_connection(_get_cfg())
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # 테마 목록 (드롭다운용)
+            cur.execute("""
+                SELECT t.id, t.theme_name, s.analysis_date
+                FROM investment_themes t
+                JOIN analysis_sessions s ON t.session_id = s.id
+                ORDER BY s.analysis_date DESC, t.confidence_score DESC
+            """)
+            themes = cur.fetchall()
+
+            # 채팅 세션 목록
+            query = """
+                SELECT cs.*, t.theme_name, s.analysis_date AS theme_date,
+                       (SELECT COUNT(*) FROM theme_chat_messages m
+                        WHERE m.chat_session_id = cs.id) AS message_count
+                FROM theme_chat_sessions cs
+                JOIN investment_themes t ON cs.theme_id = t.id
+                JOIN analysis_sessions s ON t.session_id = s.id
+            """
+            params = []
+            if theme_id is not None:
+                query += " WHERE cs.theme_id = %s"
+                params.append(theme_id)
+            query += " ORDER BY cs.updated_at DESC"
+            cur.execute(query, params)
+            chat_sessions = cur.fetchall()
+    finally:
+        conn.close()
+
+    return templates.TemplateResponse(request=request, name="chat_list.html", context={
+        "active_page": "chat",
+        "themes": [_serialize_row(t) for t in themes],
+        "chat_sessions": [_serialize_row(s) for s in chat_sessions],
+        "selected_theme_id": theme_id,
+    })
+
+
+@router.get("/pages/chat/new/{theme_id}")
+def chat_new_redirect(request: Request, theme_id: int):
+    """새 채팅 세션 생성 → 채팅방으로 리다이렉트"""
+    cfg = _get_cfg()
+    conn = get_connection(cfg)
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT id, theme_name FROM investment_themes WHERE id = %s",
+                        (theme_id,))
+            theme = cur.fetchone()
+            if not theme:
+                return RedirectResponse(url="/pages/chat", status_code=302)
+
+            cur.execute(
+                """INSERT INTO theme_chat_sessions (theme_id, title)
+                   VALUES (%s, %s) RETURNING id""",
+                (theme_id, f"{theme['theme_name']} 채팅")
+            )
+            new_id = cur.fetchone()["id"]
+        conn.commit()
+    finally:
+        conn.close()
+
+    return RedirectResponse(url=f"/pages/chat/{new_id}", status_code=302)
+
+
+@router.get("/pages/chat/{chat_session_id}")
+def chat_room_page(request: Request, chat_session_id: int):
+    """채팅 대화 화면"""
+    conn = get_connection(_get_cfg())
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # 세션 정보
+            cur.execute("""
+                SELECT cs.*, t.theme_name, t.description AS theme_description,
+                       t.confidence_score, t.time_horizon, t.theme_type,
+                       s.analysis_date
+                FROM theme_chat_sessions cs
+                JOIN investment_themes t ON cs.theme_id = t.id
+                JOIN analysis_sessions s ON t.session_id = s.id
+                WHERE cs.id = %s
+            """, (chat_session_id,))
+            session = cur.fetchone()
+            if not session:
+                return RedirectResponse(url="/pages/chat", status_code=302)
+
+            # 메시지 이력
+            cur.execute("""
+                SELECT id, role, content, created_at
+                FROM theme_chat_messages
+                WHERE chat_session_id = %s
+                ORDER BY created_at
+            """, (chat_session_id,))
+            messages = cur.fetchall()
+    finally:
+        conn.close()
+
+    return templates.TemplateResponse(request=request, name="chat_room.html", context={
+        "active_page": "chat",
+        "session": _serialize_row(session),
+        "messages": [_serialize_row(m) for m in messages],
     })

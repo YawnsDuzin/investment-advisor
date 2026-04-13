@@ -32,6 +32,7 @@ investment-advisor/
 │   ├── templates/       ← Jinja2 HTML (다크 테마)
 │   └── static/css/
 └── _docs/               ← 운영 문서 (분석 파이프라인, 라즈베리파이 매뉴얼)
+    └── _prompts/        ← 작업 요청 프롬프트 기록 (날짜별)
 ```
 
 ## Commands
@@ -98,9 +99,14 @@ sudo systemctl enable --now investment-advisor-analyzer.timer    # 매일 03:00 
                     claude_agent_sdk.query()                    yfinance             claude_agent_sdk.query()
 ```
 
-- **Stage 1**: 뉴스 → 8~15개 이슈(시계별 영향) → 4~7개 테마(시나리오·매크로) → 테마당 15~20개 투자 제안
+- **Stage 1**: 뉴스 → 8~15개 이슈(시계별 영향) → 4~7개 테마(시나리오·매크로) → 테마당 10~15개 투자 제안
+  - 최근 7일 추천 이력 피드백으로 중복 추천 방지
+  - 컨센서스/얼리시그널/컨트래리안/딥밸류 분류 (`discovery_type`)
+  - 주가 반영도 태깅 (`price_momentum_check`)
+- **모멘텀 체크**: Stage 1 추천 종목의 1개월 수익률 조회, 급등(+20%) 종목 필터링
 - **주가 데이터**: Stage 1 추천 종목의 현재가/PER/PBR/시총 등을 yfinance로 실시간 조회 (ENABLE_STOCK_DATA로 on/off)
 - **Stage 2**: 실제 주가 데이터 + 5관점 심층분석 (펀더멘털·산업·모멘텀·퀀트·리스크)
+  - 급등 종목보다 미반영 종목(early_signal/undervalued) 우선 선정
 - `AnalyzerConfig`로 심층분석 대상 수(`top_themes`, `top_stocks_per_theme`) 및 활성화 여부 조절 가능
 - 저장 시 `theme_tracking`, `proposal_tracking` 테이블 자동 갱신 (연속성 추적)
 
@@ -109,7 +115,7 @@ sudo systemctl enable --now investment-advisor-analyzer.timer    # 매일 03:00 
 - `analyzer.py` — `stage1_discover_themes()`, `stage2_analyze_stock()`, `run_pipeline()`. 하위호환용 `run_analysis()` 유지
 - `prompts.py` — 스테이지별 시스템 프롬프트 및 JSON 출력 템플릿
 - `news_collector.py` — `feedparser`로 RSS 피드 수집, 카테고리별 마크다운 텍스트 생성
-- `stock_data.py` — `yfinance`로 실시간 주가/재무 데이터 조회, 프롬프트 삽입용 텍스트 포맷팅
+- `stock_data.py` — `yfinance`로 실시간 주가/재무 데이터 조회, 1개월 모멘텀 체크, 프롬프트 삽입용 텍스트 포맷팅
 
 ### api/ — FastAPI 웹서비스 (상시 기동)
 - `routes/sessions.py` — 세션 목록/상세/날짜별 조회. `_serialize_row()` 공유 유틸.
@@ -120,7 +126,7 @@ sudo systemctl enable --now investment-advisor-analyzer.timer    # 매일 03:00 
 
 ### shared/ — 공용 모듈
 - `config.py` — `.env` 파일 자동 로드, `DatabaseConfig`(환경변수 기반), `NewsConfig`, `AnalyzerConfig`, `AppConfig`
-- `db.py` — `schema_version` 기반 자동 마이그레이션(v1~v3), `save_analysis()` + tracking 갱신, `get_connection()`
+- `db.py` — `schema_version` 기반 자동 마이그레이션(v1~v5), `save_analysis()` + tracking 갱신, `get_recent_recommendations()`, `get_connection()`
 - `pg_setup.py` — PostgreSQL 설치 감지 및 자동 설치 (Linux apt, Windows winget/choco)
 
 ## DB Schema

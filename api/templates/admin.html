@@ -1,0 +1,338 @@
+{% extends "base.html" %}
+{% block title %}Admin — Investment Advisor{% endblock %}
+{% block page_title %}Admin{% endblock %}
+
+{% block content %}
+<!-- 실행 컨트롤 -->
+<div class="card" style="padding:20px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+        <div>
+            <div style="font-size:16px;font-weight:600;margin-bottom:4px;">분석 파이프라인 실행</div>
+            <div style="font-size:13px;color:var(--text-muted);">
+                RSS 뉴스 수집 → Claude 분석 → DB 저장 (python -m analyzer.main)
+            </div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+            <span id="statusBadge" class="admin-status admin-status-idle">대기</span>
+            <button id="btnRun" class="btn btn-primary" onclick="startAnalysis()">분석 실행</button>
+            <button id="btnStop" class="btn" onclick="stopAnalysis()" style="display:none;color:var(--red);">중단</button>
+        </div>
+    </div>
+</div>
+
+<!-- 뉴스 번역 -->
+<div class="card" style="padding:20px;margin-top:12px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+        <div>
+            <div style="font-size:16px;font-weight:600;margin-bottom:4px;">뉴스 한글 번역</div>
+            <div style="font-size:13px;color:var(--text-muted);">
+                기존 미번역 뉴스 제목을 한글로 일괄 번역합니다.
+                <span id="untranslatedCount" style="color:var(--accent);font-weight:600;"></span>
+            </div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+            <span id="translateBadge" class="admin-status admin-status-idle">대기</span>
+            <button id="btnTranslate" class="btn btn-primary" onclick="startTranslation()">번역 실행</button>
+        </div>
+    </div>
+</div>
+
+<!-- 진행률 표시 -->
+<div id="progressSection" style="display:none;margin-bottom:18px;">
+    <div class="admin-progress-bar">
+        <div class="admin-progress-fill" id="progressFill"></div>
+    </div>
+    <div class="admin-progress-label" id="progressLabel"></div>
+</div>
+
+<!-- 로그 뷰어 -->
+<div class="section-title" style="display:flex;align-items:center;justify-content:space-between;">
+    <span>실행 로그</span>
+    <button class="btn" onclick="clearLog()" style="font-size:12px;padding:4px 12px;">지우기</button>
+</div>
+<div class="admin-log-viewer" id="logViewer">
+    <div class="admin-log-empty" id="logEmpty">분석을 실행하면 로그가 여기에 표시됩니다.</div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const btnRun = document.getElementById('btnRun');
+const btnStop = document.getElementById('btnStop');
+const statusBadge = document.getElementById('statusBadge');
+const logViewer = document.getElementById('logViewer');
+const logEmpty = document.getElementById('logEmpty');
+const progressSection = document.getElementById('progressSection');
+const progressFill = document.getElementById('progressFill');
+const progressLabel = document.getElementById('progressLabel');
+
+let eventSource = null;
+
+// 단계별 진행률 매핑
+const PROGRESS_MAP = [
+    { pattern: /\[뉴스\] 총.*수집 완료/, pct: 15, label: '뉴스 수집 완료' },
+    { pattern: /\[피드백\]/, pct: 20, label: '추천 이력 로드' },
+    { pattern: /\[Stage 1\] 이슈 분석/, pct: 25, label: 'Stage 1: 이슈 분석 중...' },
+    { pattern: /\[Stage 1\] 완료/, pct: 40, label: 'Stage 1 완료' },
+    { pattern: /\[모멘텀 체크\].*종목/, pct: 45, label: '모멘텀 체크 중...' },
+    { pattern: /\[모멘텀 체크\] 완료/, pct: 50, label: '모멘텀 체크 완료' },
+    { pattern: /\[주가 데이터\].*조회 시작/, pct: 55, label: '주가 데이터 조회 중...' },
+    { pattern: /\[주가 데이터\].*조회 완료/, pct: 60, label: '주가 데이터 조회 완료' },
+    { pattern: /\[Stage 2\] 종목 심층분석 시작/, pct: 65, label: 'Stage 2: 종목 심층분석 중...' },
+    { pattern: /✓.*심층분석 완료/, pct: null, label: null },  // 개별 종목은 동적 처리
+    { pattern: /\[Stage 2\] 종목 심층분석 완료/, pct: 85, label: 'Stage 2 완료' },
+    { pattern: /\[DB\] 세션.*저장 완료/, pct: 90, label: 'DB 저장 완료' },
+    { pattern: /\[DB\] 뉴스 기사.*저장/, pct: 95, label: '뉴스 저장 완료' },
+    { pattern: /\[완료\]/, pct: 100, label: '분석 완료' },
+];
+
+function updateProgress(text) {
+    for (const step of PROGRESS_MAP) {
+        if (step.pattern.test(text) && step.pct !== null) {
+            progressFill.style.width = step.pct + '%';
+            progressLabel.textContent = step.label + ' (' + step.pct + '%)';
+            break;
+        }
+    }
+}
+
+function setRunning(running) {
+    btnRun.disabled = running;
+    btnRun.style.display = running ? 'none' : '';
+    btnStop.style.display = running ? '' : 'none';
+    progressSection.style.display = running ? '' : 'none';
+
+    if (running) {
+        statusBadge.className = 'admin-status admin-status-running';
+        statusBadge.textContent = '실행 중';
+        progressFill.style.width = '5%';
+        progressLabel.textContent = '시작 중...';
+    } else {
+        statusBadge.className = 'admin-status admin-status-idle';
+        statusBadge.textContent = '대기';
+    }
+}
+
+function appendLog(text, type) {
+    if (logEmpty) logEmpty.remove();
+
+    const line = document.createElement('div');
+    line.className = 'admin-log-line';
+    if (type) line.classList.add('admin-log-' + type);
+
+    // 색상 코딩
+    if (/\[에러\]|✗|오류|Error|실패/.test(text)) {
+        line.classList.add('admin-log-error');
+    } else if (/\[완료\]|✓|완료|성공/.test(text)) {
+        line.classList.add('admin-log-success');
+    } else if (/\[시작\]|Stage|═/.test(text)) {
+        line.classList.add('admin-log-info');
+    }
+
+    line.textContent = text;
+    logViewer.appendChild(line);
+    logViewer.scrollTop = logViewer.scrollHeight;
+}
+
+function startAnalysis() {
+    setRunning(true);
+
+    eventSource = new EventSource('/admin/run', { method: 'POST' });
+
+    // EventSource는 GET만 지원하므로, fetch + ReadableStream 사용
+    eventSource.close();
+    eventSource = null;
+
+    fetch('/admin/run', { method: 'POST' }).then(response => {
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        function read() {
+            reader.read().then(({ done, value }) => {
+                if (done) {
+                    setRunning(false);
+                    return;
+                }
+
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop();  // 마지막 불완전 라인은 버퍼에 유지
+
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        const text = line.substring(6);
+                        if (text) {
+                            appendLog(text);
+                            updateProgress(text);
+                        }
+                    } else if (line.startsWith('event: done')) {
+                        setRunning(false);
+                        progressFill.style.width = '100%';
+                        progressLabel.textContent = '완료';
+                    }
+                }
+
+                read();
+            });
+        }
+
+        read();
+    }).catch(err => {
+        appendLog('[오류] 연결 실패: ' + err.message, 'error');
+        setRunning(false);
+    });
+}
+
+function stopAnalysis() {
+    fetch('/admin/stop', { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+            appendLog('[중단] ' + data.message);
+            setRunning(false);
+        });
+}
+
+function clearLog() {
+    logViewer.innerHTML = '<div class="admin-log-empty" id="logEmpty">분석을 실행하면 로그가 여기에 표시됩니다.</div>';
+    progressFill.style.width = '0%';
+    progressLabel.textContent = '';
+    progressSection.style.display = 'none';
+}
+
+function connectToStream() {
+    // 실행 중인 분석의 실시간 로그 구독
+    fetch('/admin/stream').then(response => {
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        function read() {
+            reader.read().then(({ done, value }) => {
+                if (done) {
+                    setRunning(false);
+                    return;
+                }
+
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop();
+
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        const text = line.substring(6);
+                        if (text) {
+                            appendLog(text);
+                            updateProgress(text);
+                        }
+                    } else if (line.startsWith('event: done')) {
+                        setRunning(false);
+                        progressFill.style.width = '100%';
+                        progressLabel.textContent = '완료';
+                    }
+                }
+
+                read();
+            });
+        }
+
+        read();
+    }).catch(() => {});
+}
+
+// ── 뉴스 번역 ──
+const btnTranslate = document.getElementById('btnTranslate');
+const translateBadge = document.getElementById('translateBadge');
+const untranslatedCount = document.getElementById('untranslatedCount');
+
+function loadTranslateStatus() {
+    fetch('/admin/translate-news/status').then(r => r.json()).then(data => {
+        if (data.untranslated_count > 0) {
+            untranslatedCount.textContent = `(미번역 ${data.untranslated_count}건)`;
+        } else {
+            untranslatedCount.textContent = '(모두 번역 완료)';
+        }
+        if (data.translating) {
+            translateBadge.className = 'admin-status admin-status-running';
+            translateBadge.textContent = '실행 중';
+            btnTranslate.disabled = true;
+        }
+    }).catch(() => {});
+}
+
+function startTranslation() {
+    btnTranslate.disabled = true;
+    translateBadge.className = 'admin-status admin-status-running';
+    translateBadge.textContent = '번역 중';
+
+    fetch('/admin/translate-news', { method: 'POST' }).then(response => {
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        function read() {
+            reader.read().then(({ done, value }) => {
+                if (done) {
+                    translateBadge.className = 'admin-status admin-status-idle';
+                    translateBadge.textContent = '대기';
+                    btnTranslate.disabled = false;
+                    loadTranslateStatus();
+                    return;
+                }
+
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop();
+
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        const text = line.substring(6);
+                        if (text) appendLog(text);
+                    } else if (line.startsWith('event: done')) {
+                        translateBadge.className = 'admin-status admin-status-idle';
+                        translateBadge.textContent = '대기';
+                        btnTranslate.disabled = false;
+                        loadTranslateStatus();
+                    }
+                }
+
+                read();
+            });
+        }
+
+        read();
+    }).catch(err => {
+        appendLog('[오류] 번역 연결 실패: ' + err.message, 'error');
+        translateBadge.className = 'admin-status admin-status-idle';
+        translateBadge.textContent = '대기';
+        btnTranslate.disabled = false;
+    });
+}
+
+loadTranslateStatus();
+
+// 페이지 로드 시: 실행 중이면 기존 로그 복원 + 실시간 구독
+fetch('/admin/status').then(r => r.json()).then(data => {
+    if (data.running) {
+        setRunning(true);
+        // 기존 로그 복원
+        fetch('/admin/logs').then(r => r.json()).then(logData => {
+            for (const text of logData.logs) {
+                appendLog(text);
+                updateProgress(text);
+            }
+            // 실시간 로그 구독 시작
+            connectToStream();
+        });
+    } else if (data.log_count > 0) {
+        // 이미 완료된 로그가 있으면 표시
+        fetch('/admin/logs').then(r => r.json()).then(logData => {
+            for (const text of logData.logs) {
+                appendLog(text);
+                updateProgress(text);
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

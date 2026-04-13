@@ -1,0 +1,193 @@
+{% extends "base.html" %}
+{% block title %}{{ session.title or '채팅' }} — Investment Advisor{% endblock %}
+{% block page_title %}{{ session.title or '채팅' }}{% endblock %}
+{% block header_actions %}
+<div style="display:flex;gap:8px;align-items:center;">
+    <a href="/pages/chat" class="btn">목록으로</a>
+    <button class="btn" onclick="deleteSession()" style="color:var(--red);">삭제</button>
+</div>
+{% endblock %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<!-- 테마 정보 헤더 -->
+<div class="chat-theme-header">
+    <span style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <span style="font-weight:600;">{{ session.theme_name }}</span>
+        {% if session.analysis_date %}
+        <span style="font-size:13px;color:var(--text-muted);">{{ session.analysis_date }}</span>
+        {% endif %}
+        {% if session.theme_type %}
+        <span class="badge badge-{{ session.theme_type }}">{{ session.theme_type }}</span>
+        {% endif %}
+        {% if session.time_horizon %}
+        <span class="badge badge-{{ session.time_horizon }}">{{ session.time_horizon }}</span>
+        {% endif %}
+    </span>
+    {% if session.confidence_score %}
+    <span>
+        <span class="confidence-bar"><span class="confidence-bar-fill" style="width:{{ (session.confidence_score|float * 100)|int }}%"></span></span>
+        {{ "%.0f"|format(session.confidence_score|float * 100) }}%
+    </span>
+    {% endif %}
+</div>
+
+<!-- 채팅 영역 -->
+<div class="chat-container">
+    <div class="chat-messages" id="chatMessages">
+        {% if not messages %}
+        <div class="chat-empty" id="chatWelcome">
+            <p>이 테마에 대해 궁금한 점을 질문해 보세요.</p>
+            <p style="font-size:13px;margin-top:8px;">예: "이 테마의 주요 리스크는?", "추천 종목의 밸류에이션 분석"</p>
+        </div>
+        {% endif %}
+
+        {% for msg in messages %}
+        <div class="chat-bubble chat-bubble-{{ msg.role }}">
+            {% if msg.role == 'assistant' %}
+            <div class="chat-bubble-content">{{ msg.content }}</div>
+            {% else %}
+            {{ msg.content }}
+            {% endif %}
+            <div class="chat-bubble-time">{{ msg.created_at }}</div>
+        </div>
+        {% endfor %}
+
+        <div class="chat-loading" id="chatLoading">
+            <span class="chat-loading-dots">분석 중<span>.</span><span>.</span><span>.</span></span>
+        </div>
+    </div>
+
+    <div class="chat-input-bar">
+        <textarea id="chatInput" rows="1" placeholder="질문을 입력하세요..."
+                  onkeydown="handleKeyDown(event)"></textarea>
+        <button class="btn-send" id="btnSend" onclick="sendMessage()">전송</button>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const SESSION_ID = {{ session.id }};
+const chatMessages = document.getElementById('chatMessages');
+const chatInput = document.getElementById('chatInput');
+const btnSend = document.getElementById('btnSend');
+const chatLoading = document.getElementById('chatLoading');
+const chatWelcome = document.getElementById('chatWelcome');
+
+// marked.js 설정
+if (typeof marked !== 'undefined') {
+    marked.setOptions({ breaks: true, gfm: true });
+}
+
+// 기존 assistant 메시지 Markdown 렌더링
+document.querySelectorAll('.chat-bubble-assistant .chat-bubble-content').forEach(el => {
+    if (typeof marked !== 'undefined') {
+        el.innerHTML = marked.parse(el.textContent);
+    }
+});
+
+// textarea 자동 높이 조절
+chatInput.addEventListener('input', function() {
+    this.style.height = 'auto';
+    this.style.height = Math.min(this.scrollHeight, 160) + 'px';
+});
+
+// Enter: 전송, Shift+Enter: 줄바꿈
+function handleKeyDown(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+    }
+}
+
+function scrollToBottom() {
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+function appendMessage(role, content, time) {
+    const bubble = document.createElement('div');
+    bubble.className = `chat-bubble chat-bubble-${role}`;
+
+    if (role === 'assistant' && typeof marked !== 'undefined') {
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'chat-bubble-content';
+        contentDiv.innerHTML = marked.parse(content);
+        bubble.appendChild(contentDiv);
+    } else {
+        bubble.textContent = content;
+    }
+
+    if (time) {
+        const timeDiv = document.createElement('div');
+        timeDiv.className = 'chat-bubble-time';
+        timeDiv.textContent = time;
+        bubble.appendChild(timeDiv);
+    }
+
+    // 로딩 표시 앞에 삽입
+    chatMessages.insertBefore(bubble, chatLoading);
+    scrollToBottom();
+}
+
+async function sendMessage() {
+    const content = chatInput.value.trim();
+    if (!content) return;
+
+    // 환영 메시지 제거
+    if (chatWelcome) chatWelcome.remove();
+
+    // UI 업데이트
+    appendMessage('user', content);
+    chatInput.value = '';
+    chatInput.style.height = 'auto';
+    btnSend.disabled = true;
+    chatLoading.classList.add('active');
+    scrollToBottom();
+
+    try {
+        const res = await fetch(`/chat/sessions/${SESSION_ID}/messages`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content }),
+        });
+
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.detail || `오류 (${res.status})`);
+        }
+
+        const data = await res.json();
+        appendMessage(
+            'assistant',
+            data.assistant_message.content,
+            data.assistant_message.created_at
+        );
+    } catch (err) {
+        appendMessage('assistant', `오류가 발생했습니다: ${err.message}`);
+    } finally {
+        chatLoading.classList.remove('active');
+        btnSend.disabled = false;
+        chatInput.focus();
+        scrollToBottom();
+    }
+}
+
+async function deleteSession() {
+    if (!confirm('이 채팅을 삭제하시겠습니까?')) return;
+    try {
+        await fetch(`/chat/sessions/${SESSION_ID}`, { method: 'DELETE' });
+        window.location.href = '/pages/chat';
+    } catch (err) {
+        alert('삭제 실패: ' + err.message);
+    }
+}
+
+// 초기 스크롤
+scrollToBottom();
+chatInput.focus();
+</script>
+{% endblock %}

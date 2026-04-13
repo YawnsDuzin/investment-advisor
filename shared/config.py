@@ -57,6 +57,16 @@ class NewsConfig:
             "https://www.hankyung.com/feed/economy",
             "https://www.hankyung.com/feed/stock",
         ],
+        # 선행 지표 — 산업 전문·규제·공급망 얼리 시그널
+        "early_signals": [
+            "https://www.federalregister.gov/documents/search.atom?conditions%5Btype%5D=RULE",  # 미국 연방관보 (규제 선행)
+            "https://www.digitimes.com/rss/daily_news.xml",  # 아시아 IT 공급망 선행 지표
+        ],
+        # 한국 산업·M&A·자본시장 선행
+        "korea_early": [
+            "https://www.etnews.com/rss/Section901.xml",  # 전자신문 (산업 기술)
+            "https://www.thebell.co.kr/rss/rss_news_all.xml",  # 더벨 (M&A/자본시장)
+        ],
     })
     max_articles_per_feed: int = 10
 

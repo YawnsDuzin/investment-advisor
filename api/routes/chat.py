@@ -1,0 +1,232 @@
+"""테마 채팅 API — 대화 세션 CRUD + 메시지 전송"""
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
+from shared.config import DatabaseConfig
+from shared.db import get_connection
+from psycopg2.extras import RealDictCursor
+from api.routes.sessions import _serialize_row
+from api.chat_engine import build_theme_context, query_theme_chat_sync
+
+router = APIRouter(prefix="/chat", tags=["채팅"])
+
+
+def _get_cfg() -> DatabaseConfig:
+    return DatabaseConfig()
+
+
+class CreateSessionRequest(BaseModel):
+    theme_id: int
+
+
+class ChatMessageRequest(BaseModel):
+    content: str
+
+
+# ── 채팅 세션 CRUD ──────────────────────────────
+
+
+@router.post("/sessions")
+def create_chat_session(body: CreateSessionRequest):
+    """새 채팅 세션 생성"""
+    cfg = _get_cfg()
+    conn = get_connection(cfg)
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # 테마 존재 확인
+            cur.execute("SELECT id, theme_name FROM investment_themes WHERE id = %s",
+                        (body.theme_id,))
+            theme = cur.fetchone()
+            if not theme:
+                raise HTTPException(status_code=404, detail="테마를 찾을 수 없습니다")
+
+            cur.execute(
+                """INSERT INTO theme_chat_sessions (theme_id, title)
+                   VALUES (%s, %s) RETURNING id, theme_id, title, created_at, updated_at""",
+                (body.theme_id, f"{theme['theme_name']} 채팅")
+            )
+            session = cur.fetchone()
+        conn.commit()
+        return _serialize_row(session)
+    finally:
+        conn.close()
+
+
+@router.get("/sessions")
+def list_chat_sessions(theme_id: int | None = None):
+    """채팅 세션 목록 조회 (theme_id 필터 선택적)"""
+    cfg = _get_cfg()
+    conn = get_connection(cfg)
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            query = """
+                SELECT cs.*, t.theme_name,
+                       (SELECT COUNT(*) FROM theme_chat_messages m
+                        WHERE m.chat_session_id = cs.id) AS message_count
+                FROM theme_chat_sessions cs
+                JOIN investment_themes t ON cs.theme_id = t.id
+            """
+            params = []
+            if theme_id is not None:
+                query += " WHERE cs.theme_id = %s"
+                params.append(theme_id)
+            query += " ORDER BY cs.updated_at DESC"
+            cur.execute(query, params)
+            sessions = cur.fetchall()
+        return [_serialize_row(s) for s in sessions]
+    finally:
+        conn.close()
+
+
+@router.get("/sessions/{session_id}")
+def get_chat_session(session_id: int):
+    """채팅 세션 상세 + 메시지 이력"""
+    cfg = _get_cfg()
+    conn = get_connection(cfg)
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                SELECT cs.*, t.theme_name
+                FROM theme_chat_sessions cs
+                JOIN investment_themes t ON cs.theme_id = t.id
+                WHERE cs.id = %s
+            """, (session_id,))
+            session = cur.fetchone()
+            if not session:
+                raise HTTPException(status_code=404, detail="채팅 세션을 찾을 수 없습니다")
+
+            cur.execute("""
+                SELECT id, role, content, created_at
+                FROM theme_chat_messages
+                WHERE chat_session_id = %s
+                ORDER BY created_at
+            """, (session_id,))
+            messages = cur.fetchall()
+
+        result = _serialize_row(session)
+        result["messages"] = [_serialize_row(m) for m in messages]
+        return result
+    finally:
+        conn.close()
+
+
+@router.delete("/sessions/{session_id}")
+def delete_chat_session(session_id: int):
+    """채팅 세션 삭제"""
+    cfg = _get_cfg()
+    conn = get_connection(cfg)
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM theme_chat_sessions WHERE id = %s RETURNING id",
+                        (session_id,))
+            if not cur.fetchone():
+                raise HTTPException(status_code=404, detail="채팅 세션을 찾을 수 없습니다")
+        conn.commit()
+        return {"message": "삭제 완료"}
+    finally:
+        conn.close()
+
+
+# ── 메시지 전송 + Claude 응답 ──────────────────
+
+
+@router.post("/sessions/{session_id}/messages")
+def send_message(session_id: int, body: ChatMessageRequest):
+    """사용자 메시지 전송 → Claude 응답 생성 → 양쪽 DB 저장
+
+    동기 함수 — FastAPI가 threadpool에서 실행.
+    Claude SDK는 anyio.run()으로 별도 이벤트 루프에서 호출하여
+    uvicorn 이벤트 루프 충돌 방지.
+    """
+    cfg = _get_cfg()
+    conn = get_connection(cfg)
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # 1) 세션 + 테마 정보 조회
+            cur.execute("""
+                SELECT cs.id, cs.theme_id, t.theme_name
+                FROM theme_chat_sessions cs
+                JOIN investment_themes t ON cs.theme_id = t.id
+                WHERE cs.id = %s
+            """, (session_id,))
+            session = cur.fetchone()
+            if not session:
+                raise HTTPException(status_code=404, detail="채팅 세션을 찾을 수 없습니다")
+
+            theme_id = session["theme_id"]
+
+            # 2) 테마 컨텍스트 구성
+            cur.execute("SELECT * FROM investment_themes WHERE id = %s", (theme_id,))
+            theme = cur.fetchone()
+
+            cur.execute("SELECT * FROM theme_scenarios WHERE theme_id = %s ORDER BY probability DESC",
+                        (theme_id,))
+            scenarios = cur.fetchall()
+
+            cur.execute("SELECT * FROM investment_proposals WHERE theme_id = %s ORDER BY target_allocation DESC",
+                        (theme_id,))
+            proposals = cur.fetchall()
+
+            cur.execute("SELECT * FROM macro_impacts WHERE theme_id = %s", (theme_id,))
+            macro_impacts = cur.fetchall()
+
+            theme_context = build_theme_context(
+                dict(theme), [dict(s) for s in scenarios],
+                [dict(p) for p in proposals], [dict(m) for m in macro_impacts],
+            )
+
+            # 3) 기존 대화 이력 로드
+            cur.execute("""
+                SELECT role, content FROM theme_chat_messages
+                WHERE chat_session_id = %s ORDER BY created_at
+            """, (session_id,))
+            history = [dict(row) for row in cur.fetchall()]
+
+            # 4) 사용자 메시지 저장
+            cur.execute(
+                """INSERT INTO theme_chat_messages (chat_session_id, role, content)
+                   VALUES (%s, 'user', %s) RETURNING id, role, content, created_at""",
+                (session_id, body.content)
+            )
+            user_msg = cur.fetchone()
+        conn.commit()
+
+        # 5) Claude SDK 호출 (별도 이벤트 루프에서 동기 실행)
+        assistant_text = query_theme_chat_sync(
+            theme_context=theme_context,
+            conversation_history=history,
+            user_message=body.content,
+        )
+
+        # 6) 응답 메시지 저장 + 세션 업데이트
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """INSERT INTO theme_chat_messages (chat_session_id, role, content)
+                   VALUES (%s, 'assistant', %s) RETURNING id, role, content, created_at""",
+                (session_id, assistant_text)
+            )
+            assistant_msg = cur.fetchone()
+
+            # 첫 메시지면 제목 자동 설정 (질문 앞 50자)
+            cur.execute(
+                "SELECT COUNT(*) AS cnt FROM theme_chat_messages WHERE chat_session_id = %s",
+                (session_id,)
+            )
+            if cur.fetchone()["cnt"] <= 2:
+                title = body.content[:50] + ("..." if len(body.content) > 50 else "")
+                cur.execute(
+                    "UPDATE theme_chat_sessions SET title = %s, updated_at = NOW() WHERE id = %s",
+                    (title, session_id)
+                )
+            else:
+                cur.execute(
+                    "UPDATE theme_chat_sessions SET updated_at = NOW() WHERE id = %s",
+                    (session_id,)
+                )
+        conn.commit()
+
+        return {
+            "user_message": _serialize_row(user_msg),
+            "assistant_message": _serialize_row(assistant_msg),
+        }
+    finally:
+        conn.close()

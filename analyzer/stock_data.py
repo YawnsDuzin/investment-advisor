@@ -109,7 +109,7 @@ def fetch_stock_data(ticker: str, market: str) -> dict | None:
             "per": info.get("trailingPE") or info.get("forwardPE"),
             "pbr": info.get("priceToBook"),
             "eps": info.get("trailingEps"),
-            "dividend_yield": info.get("dividendYield"),
+            "dividend_yield": info.get("dividendRate"),
             "currency": info.get("currency", ""),
             "sector": info.get("sector", ""),
             "industry": info.get("industry", ""),
@@ -119,6 +119,87 @@ def fetch_stock_data(ticker: str, market: str) -> dict | None:
     except Exception as e:
         print(f"  [주가] {yf_ticker} 조회 실패: {e}")
         return None
+
+
+def fetch_momentum_check(ticker: str, market: str) -> dict | None:
+    """종목의 1개월 수익률 조회 — 급등 종목 필터링용 (경량)
+
+    Returns:
+        {"ticker": "...", "return_1m_pct": float, "momentum_tag": "already_run|fair_priced|undervalued|unknown"}
+        실패 시 None
+    """
+    if yf is None:
+        return None
+
+    yf_ticker = _normalize_ticker(ticker, market)
+    try:
+        stock = yf.Ticker(yf_ticker)
+        hist = stock.history(period="1mo")
+        if hist.empty or len(hist) < 2:
+            return None
+
+        price_start = hist["Close"].iloc[0]
+        price_end = hist["Close"].iloc[-1]
+        if price_start <= 0:
+            return None
+
+        return_1m = round((price_end - price_start) / price_start * 100, 2)
+
+        if return_1m >= 20:
+            tag = "already_run"
+        elif return_1m <= -10:
+            tag = "undervalued"
+        else:
+            tag = "fair_priced"
+
+        return {
+            "ticker": ticker,
+            "return_1m_pct": return_1m,
+            "momentum_tag": tag,
+        }
+    except Exception:
+        return None
+
+
+def fetch_momentum_batch(stocks: list[dict]) -> dict[str, dict]:
+    """복수 종목 1개월 수익률 병렬 조회
+
+    Args:
+        stocks: [{"ticker": "NVDA", "market": "NASDAQ"}, ...]
+
+    Returns:
+        {ticker: {"return_1m_pct": float, "momentum_tag": str}}
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    unique_stocks = []
+    seen = set()
+    for stock in stocks:
+        ticker = stock.get("ticker", "").strip().upper()
+        if not ticker or ticker in seen:
+            continue
+        seen.add(ticker)
+        unique_stocks.append((ticker, stock.get("market", "")))
+
+    if not unique_stocks:
+        return {}
+
+    results = {}
+    with ThreadPoolExecutor(max_workers=min(len(unique_stocks), 8)) as pool:
+        futures = {
+            pool.submit(fetch_momentum_check, ticker, market): ticker
+            for ticker, market in unique_stocks
+        }
+        for future in as_completed(futures):
+            ticker = futures[future]
+            try:
+                data = future.result()
+                if data:
+                    results[ticker] = data
+            except Exception:
+                pass
+
+    return results
 
 
 def fetch_multiple_stocks(stocks: list[dict]) -> dict[str, dict]:
@@ -173,7 +254,9 @@ def format_stock_data_text(data: dict) -> str:
         return ""
 
     currency = data.get("currency", "")
-    c = "₩" if currency == "KRW" else f"${'' if currency == 'USD' else currency + ' '}" if currency else ""
+    currency_symbols = {"KRW": "₩", "USD": "$", "JPY": "¥", "EUR": "€",
+                        "GBP": "£", "CNY": "¥", "HKD": "HK$", "TWD": "NT$"}
+    c = currency_symbols.get(currency, f"{currency} " if currency else "")
 
     lines = [f"### {data.get('short_name', data['ticker'])} ({data['ticker']})"]
 
@@ -218,10 +301,12 @@ def format_stock_data_text(data: dict) -> str:
     if vol:
         lines.append(f"- 평균 거래량(10일): {vol:,.0f}주")
 
-    # 배당
-    div = data.get("dividend_yield")
-    if div and div > 0:
-        lines.append(f"- 배당수익률: {div * 100:.2f}%")
+    # 배당 (dividendRate / price로 직접 계산 — dividendYield는 시장별 단위 불일치)
+    div_rate = data.get("dividend_yield")  # dividendRate 저장값
+    price = data.get("price")
+    if div_rate and div_rate > 0 and price and price > 0:
+        div_pct = div_rate / price * 100
+        lines.append(f"- 배당수익률: {div_pct:.2f}%")
 
     # 섹터/업종
     sector = data.get("sector")

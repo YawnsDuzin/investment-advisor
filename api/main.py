@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from shared.config import DatabaseConfig
 from shared.db import init_db
-from api.routes import sessions, themes, proposals, pages
+from api.routes import sessions, themes, proposals, pages, chat, admin
 
 
 @asynccontextmanager
@@ -24,10 +24,12 @@ app = FastAPI(
 # 정적 파일 (CSS, JS)
 app.mount("/static", StaticFiles(directory="api/static"), name="static")
 
-# JSON API 라우트 (/sessions, /themes, /proposals)
+# JSON API 라우트 (/sessions, /themes, /proposals, /chat)
 app.include_router(sessions.router)
 app.include_router(themes.router)
 app.include_router(proposals.router)
+app.include_router(chat.router)
+app.include_router(admin.router)
 
 # HTML 페이지 라우트 (/, /pages/*)
 app.include_router(pages.router)
