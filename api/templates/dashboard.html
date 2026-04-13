@@ -50,7 +50,11 @@
 <div class="card" style="padding:18px;">
     <div class="card-header" style="margin-bottom:8px;">
         <span style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            {% if tk and tk.theme_key %}
+            <a href="/pages/themes/history/{{ tk.theme_key }}" class="card-title" style="font-size:16px;text-decoration:none;color:inherit;">{{ theme.theme_name }}</a>
+            {% else %}
             <span class="card-title" style="font-size:16px;">{{ theme.theme_name }}</span>
+            {% endif %}
             {% if tk %}
                 {% if tk.appearances == 1 %}
                 <span class="tracking-badge tracking-badge-new">신규</span>
@@ -74,11 +78,11 @@
     {% if theme.proposals %}
     <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px;">
         {% for p in theme.proposals[:5] %}
-        <span style="font-size:13px;padding:3px 10px;border-radius:8px;background:rgba(79,140,255,0.08);border:1px solid var(--border);">
+        <a href="/pages/proposals/history/{{ p.ticker }}" style="font-size:13px;padding:3px 10px;border-radius:8px;background:rgba(79,140,255,0.08);border:1px solid var(--border);text-decoration:none;color:inherit;">
             <span class="badge badge-{{ p.action }}" style="font-size:11px;padding:1px 6px;">{{ p.action|upper }}</span>
             {{ p.asset_name }}
             <span style="color:var(--text-muted);">{{ p.ticker }}</span>
-        </span>
+        </a>
         {% endfor %}
         {% if theme.proposals|length > 5 %}
         <span style="font-size:13px;color:var(--text-muted);padding:3px 10px;">+{{ theme.proposals|length - 5 }}건</span>
@@ -96,7 +100,11 @@
     <div style="display:flex;align-items:center;justify-content:space-between;">
         <span style="display:flex;align-items:center;gap:8px;">
             <span class="tracking-badge tracking-badge-gone">소멸</span>
+            {% if t.theme_key %}
+            <a href="/pages/themes/history/{{ t.theme_key }}" style="font-weight:600;text-decoration:none;color:inherit;">{{ t.theme_name }}</a>
+            {% else %}
             <span style="font-weight:600;">{{ t.theme_name }}</span>
+            {% endif %}
         </span>
         <span style="font-size:13px;color:var(--text-muted);">
             마지막: {{ t.last_seen_date }} &middot; 총 {{ t.appearances }}회

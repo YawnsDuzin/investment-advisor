@@ -1,7 +1,6 @@
 {% extends "base.html" %}
-{% from "_macros.html" import proposal_card_full %}
 {% block title %}Proposals — Investment Advisor{% endblock %}
-{% block page_title %}투자 제안{% endblock %}
+{% block page_title %}종목 스크리너{% endblock %}
 
 {% block content %}
 <form class="filters" method="get" action="/pages/proposals">
@@ -32,13 +31,127 @@
 </form>
 
 {% if proposals %}
-{% for p in proposals %}
-{{ proposal_card_full(p) }}
-{% endfor %}
+<div class="table-wrap">
+<table class="screener-table">
+    <thead>
+        <tr>
+            <th>Action</th>
+            <th>종목</th>
+            <th>티커</th>
+            <th>확신도</th>
+            <th>비중</th>
+            <th>현재가</th>
+            <th>목표가</th>
+            <th>상승여력</th>
+            <th>Q점수</th>
+            <th>테마</th>
+            <th>날짜</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for p in proposals %}
+        <tr class="screener-row" data-idx="{{ loop.index0 }}">
+            <td><span class="badge badge-{{ p.action }}">{{ p.action|upper }}</span></td>
+            <td style="font-weight:600;">{{ p.asset_name }}</td>
+            <td>
+                <a href="/pages/proposals/history/{{ p.ticker }}" style="color:var(--accent);" onclick="event.stopPropagation();">{{ p.ticker }}</a>
+                {% if p.market %}<span style="font-size:11px;color:var(--text-muted);">{{ p.market }}</span>{% endif %}
+            </td>
+            <td><span class="badge badge-{{ p.conviction }}">{{ p.conviction }}</span></td>
+            <td>
+                <span class="alloc-bar" style="width:40px;"><span class="alloc-bar-fill" style="width:{{ (p.target_allocation|float)|int }}%"></span></span>
+                {{ p.target_allocation }}%
+            </td>
+            <td>{{ p.current_price|fmt_price(p.currency) }}</td>
+            <td>{% if p.target_price_low and p.target_price_high %}{{ p.target_price_low|fmt_price(p.currency) }}~{{ p.target_price_high|fmt_price(p.currency) }}{% else %}-{% endif %}</td>
+            <td>
+                {% if p.upside_pct %}
+                <span class="{% if p.upside_pct > 0 %}upside-positive{% else %}upside-negative{% endif %}">
+                    {% if p.upside_pct > 0 %}+{% endif %}{{ p.upside_pct }}%
+                </span>
+                {% else %}-{% endif %}
+            </td>
+            <td>{% if p.quant_score %}<span class="score-display">{{ p.quant_score }}/5</span>{% else %}-{% endif %}</td>
+            <td style="font-size:12px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{{ p.theme_name }}">{{ p.theme_name }}</td>
+            <td style="font-size:12px;color:var(--text-muted);white-space:nowrap;">{{ p.analysis_date }}</td>
+        </tr>
+        <tr class="detail-row" data-idx="{{ loop.index0 }}" style="display:none;">
+            <td colspan="11" style="padding:0;">
+                <div style="padding:14px 18px;background:rgba(79,140,255,0.04);border-left:3px solid var(--accent);font-size:14px;line-height:1.7;">
+                    {# 메타 태그: 섹터, 발굴유형, 주가반영도, 공급망, 벤더티어, 센티먼트 #}
+                    {% if p.sector or p.discovery_type or p.price_momentum_check or p.supply_chain_position or p.vendor_tier or (p.sentiment_score is not none and p.sentiment_score != None) %}
+                    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+                        {% if p.sector %}
+                        <span style="font-size:12px;padding:3px 10px;border-radius:6px;background:rgba(147,130,255,0.1);border:1px solid rgba(147,130,255,0.2);color:var(--purple);">{{ p.sector }}</span>
+                        {% endif %}
+                        {% if p.discovery_type %}
+                        <span style="font-size:12px;padding:3px 10px;border-radius:6px;background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.2);color:var(--green);">{{ p.discovery_type }}</span>
+                        {% endif %}
+                        {% if p.price_momentum_check %}
+                        <span style="font-size:12px;padding:3px 10px;border-radius:6px;background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.2);color:var(--orange);">모멘텀: {{ p.price_momentum_check }}</span>
+                        {% endif %}
+                        {% if p.supply_chain_position %}
+                        <span style="font-size:12px;padding:3px 10px;border-radius:6px;background:rgba(79,140,255,0.1);border:1px solid rgba(79,140,255,0.2);color:var(--accent);">공급망: {{ p.supply_chain_position }}</span>
+                        {% endif %}
+                        {% if p.vendor_tier %}
+                        <span class="badge badge-tier{{ p.vendor_tier }}" style="font-size:12px;">Tier {{ p.vendor_tier }}</span>
+                        {% endif %}
+                        {% if p.sentiment_score is not none and p.sentiment_score != None %}
+                        <span style="font-size:12px;padding:3px 10px;border-radius:6px;background:rgba(255,255,255,0.05);border:1px solid var(--border);">센티먼트 {{ p.sentiment_score }}</span>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+
+                    {% if p.rationale %}
+                    <div style="margin-bottom:10px;"><strong style="color:var(--text-muted);font-size:12px;text-transform:uppercase;">근거</strong><br>{{ p.rationale|nl_numbered }}</div>
+                    {% endif %}
+                    {% if p.risk_factors %}
+                    <div style="margin-bottom:10px;"><strong style="color:var(--text-muted);font-size:12px;text-transform:uppercase;">리스크</strong><br>{{ p.risk_factors|nl_numbered }}</div>
+                    {% endif %}
+                    {% if p.entry_condition or p.exit_condition %}
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:4px;">
+                        {% if p.entry_condition %}
+                        <div><strong style="color:var(--green);font-size:12px;text-transform:uppercase;">진입 조건</strong><br>{{ p.entry_condition }}</div>
+                        {% endif %}
+                        {% if p.exit_condition %}
+                        <div><strong style="color:var(--red);font-size:12px;text-transform:uppercase;">청산 조건</strong><br>{{ p.exit_condition }}</div>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                </div>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+</div>
+
 {% else %}
 <div class="empty-state">
     <h3>조건에 맞는 제안 없음</h3>
     <p>필터를 조정하거나 분석을 먼저 실행하세요.</p>
 </div>
 {% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+// 데이터 행 클릭 시 바로 아래 상세 행 토글
+document.querySelectorAll('.screener-row').forEach(function(row) {
+    row.style.cursor = 'pointer';
+    row.addEventListener('click', function() {
+        var idx = row.getAttribute('data-idx');
+        var detail = document.querySelector('.detail-row[data-idx="' + idx + '"]');
+        var isOpen = detail.style.display !== 'none';
+        // 모든 상세 행 닫기
+        document.querySelectorAll('.detail-row').forEach(function(d) { d.style.display = 'none'; });
+        document.querySelectorAll('.screener-row').forEach(function(r) { r.classList.remove('row-selected'); });
+        // 토글
+        if (!isOpen) {
+            detail.style.display = 'table-row';
+            row.classList.add('row-selected');
+        }
+    });
+});
+</script>
 {% endblock %}

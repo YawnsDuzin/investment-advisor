@@ -492,6 +492,18 @@ def save_analysis(cfg: DatabaseConfig, analysis_date: str, result: dict) -> int:
 
                 # 4) 투자 제안 저장
                 for proposal in theme.get("proposals", []):
+                    # upside_pct를 현재가·목표저가 기반으로 재계산
+                    cur_price = proposal.get("current_price")
+                    tgt_low = proposal.get("target_price_low")
+                    upside = proposal.get("upside_pct")
+                    if cur_price and tgt_low:
+                        try:
+                            cp = float(cur_price)
+                            tl = float(tgt_low)
+                            if cp > 0 and tl > 0:
+                                upside = round((tl - cp) / cp * 100, 2)
+                        except (ValueError, TypeError):
+                            pass
                     cur.execute(
                         """INSERT INTO investment_proposals
                            (theme_id, asset_type, asset_name, ticker, market,
@@ -511,7 +523,7 @@ def save_analysis(cfg: DatabaseConfig, analysis_date: str, result: dict) -> int:
                          proposal.get("entry_condition"), proposal.get("exit_condition"),
                          proposal.get("target_allocation"),
                          proposal.get("current_price"), proposal.get("target_price_low"),
-                         proposal.get("target_price_high"), proposal.get("upside_pct"),
+                         proposal.get("target_price_high"), upside,
                          proposal.get("sentiment_score"), proposal.get("quant_score"),
                          proposal.get("sector"), proposal.get("currency"),
                          proposal.get("vendor_tier"), proposal.get("supply_chain_position"),
