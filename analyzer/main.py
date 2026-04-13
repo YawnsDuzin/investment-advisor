@@ -13,9 +13,9 @@ import sys
 from datetime import date
 
 from shared.config import AppConfig
-from shared.db import init_db, save_analysis
-from analyzer.news_collector import collect_news
-from analyzer.analyzer import run_full_analysis
+from shared.db import init_db, save_analysis, save_news_articles
+from analyzer.news_collector import collect_news_structured
+from analyzer.analyzer import run_full_analysis, translate_news
 
 
 def main() -> int:
@@ -33,7 +33,7 @@ def main() -> int:
     print(f"[시작] {date.today()} 투자 분석 (멀티스테이지)")
     print("=" * 60)
 
-    news_text = collect_news(cfg.news)
+    news_text, news_articles = collect_news_structured(cfg.news)
     if not news_text:
         print("[경고] 수집된 뉴스가 없습니다. 종료합니다.")
         return 1
@@ -55,9 +55,15 @@ def main() -> int:
     themes = result.get("themes", [])
     print(f"\n[분석] 전체 완료 — 이슈 {len(issues)}건, 테마 {len(themes)}건")
 
-    # 3) DB 저장
+    # 3) 뉴스 제목 한글 번역
+    news_articles = translate_news(news_articles)
+
+    # 4) DB 저장
     try:
         session_id = save_analysis(cfg.db, str(date.today()), result)
+        # 뉴스 기사 저장
+        news_count = save_news_articles(cfg.db, session_id, news_articles)
+        print(f"[DB] 뉴스 기사 {news_count}건 저장 완료")
     except Exception as e:
         print(f"[에러] DB 저장 실패: {e}")
         return 1

@@ -109,7 +109,7 @@ def fetch_stock_data(ticker: str, market: str) -> dict | None:
             "per": info.get("trailingPE") or info.get("forwardPE"),
             "pbr": info.get("priceToBook"),
             "eps": info.get("trailingEps"),
-            "dividend_yield": info.get("dividendYield"),
+            "dividend_yield": info.get("dividendRate"),
             "currency": info.get("currency", ""),
             "sector": info.get("sector", ""),
             "industry": info.get("industry", ""),
@@ -254,7 +254,9 @@ def format_stock_data_text(data: dict) -> str:
         return ""
 
     currency = data.get("currency", "")
-    c = "₩" if currency == "KRW" else f"${'' if currency == 'USD' else currency + ' '}" if currency else ""
+    currency_symbols = {"KRW": "₩", "USD": "$", "JPY": "¥", "EUR": "€",
+                        "GBP": "£", "CNY": "¥", "HKD": "HK$", "TWD": "NT$"}
+    c = currency_symbols.get(currency, f"{currency} " if currency else "")
 
     lines = [f"### {data.get('short_name', data['ticker'])} ({data['ticker']})"]
 
@@ -299,10 +301,12 @@ def format_stock_data_text(data: dict) -> str:
     if vol:
         lines.append(f"- 평균 거래량(10일): {vol:,.0f}주")
 
-    # 배당
-    div = data.get("dividend_yield")
-    if div and div > 0:
-        lines.append(f"- 배당수익률: {div * 100:.2f}%")
+    # 배당 (dividendRate / price로 직접 계산 — dividendYield는 시장별 단위 불일치)
+    div_rate = data.get("dividend_yield")  # dividendRate 저장값
+    price = data.get("price")
+    if div_rate and div_rate > 0 and price and price > 0:
+        div_pct = div_rate / price * 100
+        lines.append(f"- 배당수익률: {div_pct:.2f}%")
 
     # 섹터/업종
     sector = data.get("sector")

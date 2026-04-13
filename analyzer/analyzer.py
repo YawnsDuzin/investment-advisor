@@ -264,6 +264,70 @@ async def run_pipeline(
     return result
 
 
+# ── 뉴스 제목 한글 번역 ─────────────────────────────
+
+async def _translate_news_titles(articles: list[dict]) -> list[dict]:
+    """뉴스 기사 제목을 한글로 일괄 번역 (Claude SDK 단일 호출)"""
+    if not articles:
+        return articles
+
+    # 이미 한글인 제목은 번역 불필요 — 한글 포함 여부로 판별
+    import re
+    def _has_korean(text: str) -> bool:
+        return bool(re.search(r'[\uac00-\ud7af]', text))
+
+    to_translate = []
+    for i, a in enumerate(articles):
+        title = a.get("title", "")
+        if _has_korean(title):
+            a["title_ko"] = title  # 이미 한글
+        else:
+            to_translate.append((i, title))
+
+    if not to_translate:
+        print("[번역] 모든 뉴스가 한글 — 번역 건너뜀")
+        return articles
+
+    # 번역 대상 제목 목록 구성
+    title_lines = "\n".join(f"{idx}: {title}" for idx, title in to_translate)
+
+    prompt = f"""아래 뉴스 제목들을 한국어로 번역해주세요.
+각 줄은 "번호: 제목" 형식입니다. 같은 형식으로 번역 결과를 JSON으로 반환하세요.
+
+```
+{title_lines}
+```
+
+반드시 아래 JSON 형식으로만 응답:
+{{"translations": {{"번호": "한글 번역", ...}}}}"""
+
+    system_prompt = "뉴스 제목 번역 전문가입니다. 간결하고 자연스러운 한국어로 번역합니다. JSON으로만 응답합니다."
+
+    print(f"[번역] {len(to_translate)}건 뉴스 제목 한글 번역 중...")
+    try:
+        response = await _query_claude(prompt, system_prompt, max_turns=1)
+        parsed = _parse_json_response(response)
+        translations = parsed.get("translations", {})
+
+        translated_count = 0
+        for idx_str, ko_title in translations.items():
+            idx = int(idx_str)
+            if 0 <= idx < len(articles):
+                articles[idx]["title_ko"] = ko_title
+                translated_count += 1
+
+        print(f"[번역] {translated_count}/{len(to_translate)}건 번역 완료")
+    except Exception as e:
+        print(f"[번역] 번역 실패 (원문 유지): {e}")
+
+    return articles
+
+
+def translate_news(articles: list[dict]) -> list[dict]:
+    """뉴스 제목 한글 번역 — 동기 래퍼"""
+    return anyio.run(_translate_news_titles, articles)
+
+
 # ── 동기 래퍼 (하위호환) ─────────────────────────────
 
 def run_analysis(news_text: str, date: str, max_turns: int = 6) -> dict:

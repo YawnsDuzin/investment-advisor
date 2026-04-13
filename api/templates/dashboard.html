@@ -1,10 +1,10 @@
 {% extends "base.html" %}
-{% from "_macros.html" import proposal_card_compact, theme_header, scenario_grid, indicator_tags %}
 {% block title %}Dashboard — Investment Advisor{% endblock %}
 {% block page_title %}Dashboard{% endblock %}
 
 {% block content %}
 {% if session %}
+<!-- 시장 요약 -->
 <div class="market-summary">
     <div class="label" style="display:flex;align-items:center;justify-content:space-between;">
         <span>Market Summary &middot; {{ session.analysis_date }}</span>
@@ -18,23 +18,7 @@
     {{ session.market_summary or "(분석 요약 없음)" }}
 </div>
 
-<!-- 투자 신호 -->
-{% if signals %}
-<div class="signals-section">
-    <div class="section-title" style="margin-top:0;">투자 신호</div>
-    <div class="signal-list">
-        {% for s in signals %}
-        <div class="signal-item signal-{{ s.type }}">
-            <span class="signal-icon">
-                {% if s.icon == 'new' %}+{% elif s.icon == 'change' %}~{% elif s.icon == 'up' %}▲{% elif s.icon == 'down' %}▼{% elif s.icon == 'gone' %}×{% endif %}
-            </span>
-            <span>{{ s.text }}</span>
-        </div>
-        {% endfor %}
-    </div>
-</div>
-{% endif %}
-
+<!-- 핵심 지표 -->
 <div class="stat-grid">
     <div class="stat-card">
         <div class="stat-value">{{ issue_count }}</div>
@@ -54,24 +38,51 @@
     </div>
 </div>
 
-<!-- 투자 테마 (대시보드: 시나리오 + 제안 요약) -->
-<div class="section-title">투자 테마</div>
+<!-- 테마 요약 (간소화: 테마명 + 신뢰도 + 핵심 종목만) -->
+<div class="section-title">투자 테마
+    <a href="/pages/sessions/{{ session.id }}" class="btn" style="float:right;font-size:12px;padding:4px 12px;">상세 보기</a>
+</div>
 {% for theme in themes %}
 {% set tk = none %}
 {% for t in active_tracking %}
     {% if t.theme_name == theme.theme_name %}{% set tk = t %}{% endif %}
 {% endfor %}
-<div class="card">
-    {{ theme_header(theme, tk) }}
-    <div class="detail-text">{{ theme.description }}</div>
-    {{ indicator_tags(theme.key_indicators) }}
-    {{ scenario_grid(theme.scenarios) }}
-
+<div class="card" style="padding:18px;">
+    <div class="card-header" style="margin-bottom:8px;">
+        <span style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <span class="card-title" style="font-size:16px;">{{ theme.theme_name }}</span>
+            {% if tk %}
+                {% if tk.appearances == 1 %}
+                <span class="tracking-badge tracking-badge-new">신규</span>
+                {% elif tk.streak_days >= 2 %}
+                <span class="tracking-badge tracking-badge-streak">{{ tk.streak_days }}일 연속</span>
+                {% endif %}
+            {% endif %}
+        </span>
+        <span style="display:flex;align-items:center;gap:6px;">
+            {% if theme.theme_type %}
+            <span class="badge badge-{{ theme.theme_type }}" style="font-size:12px;">{{ theme.theme_type }}</span>
+            {% endif %}
+            <span class="badge badge-{{ theme.time_horizon }}" style="font-size:12px;">{{ theme.time_horizon }}</span>
+            <span style="font-size:13px;">
+                <span class="confidence-bar"><span class="confidence-bar-fill" style="width:{{ (theme.confidence_score|float * 100)|int }}%"></span></span>
+                {{ "%.0f"|format(theme.confidence_score|float * 100) }}%
+            </span>
+        </span>
+    </div>
+    <!-- 핵심 종목 한줄 요약 -->
     {% if theme.proposals %}
-    <div style="margin-top:16px;">
-        {% for p in theme.proposals %}
-        {{ proposal_card_compact(p) }}
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px;">
+        {% for p in theme.proposals[:5] %}
+        <span style="font-size:13px;padding:3px 10px;border-radius:8px;background:rgba(79,140,255,0.08);border:1px solid var(--border);">
+            <span class="badge badge-{{ p.action }}" style="font-size:11px;padding:1px 6px;">{{ p.action|upper }}</span>
+            {{ p.asset_name }}
+            <span style="color:var(--text-muted);">{{ p.ticker }}</span>
+        </span>
         {% endfor %}
+        {% if theme.proposals|length > 5 %}
+        <span style="font-size:13px;color:var(--text-muted);padding:3px 10px;">+{{ theme.proposals|length - 5 }}건</span>
+        {% endif %}
     </div>
     {% endif %}
 </div>
@@ -81,18 +92,70 @@
 {% if disappeared_themes %}
 <div class="section-title">최근 소멸 테마</div>
 {% for t in disappeared_themes %}
-<div class="card" style="opacity:0.6;">
-    <div class="card-header">
-        <span style="display:flex;align-items:center;gap:10px;">
+<div class="card" style="opacity:0.6;padding:14px 18px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;">
+        <span style="display:flex;align-items:center;gap:8px;">
             <span class="tracking-badge tracking-badge-gone">소멸</span>
-            <span class="card-title">{{ t.theme_name }}</span>
+            <span style="font-weight:600;">{{ t.theme_name }}</span>
         </span>
-        <span style="font-size:14px;color:var(--text-muted);">
-            마지막 등장: {{ t.last_seen_date }} &middot; 총 {{ t.appearances }}회
+        <span style="font-size:13px;color:var(--text-muted);">
+            마지막: {{ t.last_seen_date }} &middot; 총 {{ t.appearances }}회
         </span>
     </div>
 </div>
 {% endfor %}
+{% endif %}
+
+<!-- 수집 뉴스 (카테고리별) -->
+{% if news_by_category %}
+<div class="section-title">수집 뉴스 ({{ session.analysis_date }})</div>
+
+<div class="news-categories">
+    {% for cat, data in news_by_category.items() %}
+    <div class="news-category-card">
+        <div class="news-category-header" onclick="this.parentElement.classList.toggle('open')">
+            <span>
+                <span class="news-category-label">{{ data.label }}</span>
+                <span class="news-category-count">{{ data.articles|length }}건</span>
+            </span>
+            <span class="news-toggle">&#9660;</span>
+        </div>
+        <div class="news-category-body">
+            {% for article in data.articles %}
+            <div class="news-item">
+                <div class="news-item-title">
+                    {% if article.title_ko and article.title_ko != article.title %}
+                    <div style="margin-bottom:2px;">
+                        {% if article.link %}
+                        <a href="{{ article.link }}" target="_blank" rel="noopener">{{ article.title_ko }}</a>
+                        {% else %}
+                        {{ article.title_ko }}
+                        {% endif %}
+                    </div>
+                    <div style="font-size:12px;color:var(--text-muted);font-weight:normal;">{{ article.title }}</div>
+                    {% else %}
+                    {% if article.link %}
+                    <a href="{{ article.link }}" target="_blank" rel="noopener">{{ article.title }}</a>
+                    {% else %}
+                    {{ article.title }}
+                    {% endif %}
+                    {% endif %}
+                </div>
+                <div class="news-item-meta">
+                    <span class="news-source">{{ article.source }}</span>
+                    {% if article.published %}
+                    <span>{{ article.published }}</span>
+                    {% endif %}
+                </div>
+                {% if article.summary %}
+                <div class="news-item-summary">{{ article.summary[:200] }}{% if article.summary|length > 200 %}...{% endif %}</div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
 {% endif %}
 
 {% else %}
@@ -101,4 +164,14 @@
     <p>아직 분석이 실행되지 않았습니다. <code>python -m analyzer.main</code>을 실행하세요.</p>
 </div>
 {% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+// 첫 번째 카테고리 자동 열기
+document.addEventListener('DOMContentLoaded', function() {
+    const first = document.querySelector('.news-category-card');
+    if (first) first.classList.add('open');
+});
+</script>
 {% endblock %}

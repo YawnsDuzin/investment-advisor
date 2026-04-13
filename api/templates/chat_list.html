@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Theme Chat — Investment Advisor{% endblock %}
+{% block page_title %}Theme Chat{% endblock %}
+
+{% block content %}
+<!-- 필터 + 새 채팅 시작 -->
+<div class="filters">
+    <form method="get" action="/pages/chat" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;width:100%;">
+        <select name="theme_id" class="filter-select" onchange="this.form.submit()">
+            <option value="">전체 테마</option>
+            {% for t in themes %}
+            <option value="{{ t.id }}" {% if selected_theme_id == t.id %}selected{% endif %}>
+                [{{ t.analysis_date }}] {{ t.theme_name }}
+            </option>
+            {% endfor %}
+        </select>
+    </form>
+</div>
+
+{% if selected_theme_id %}
+<div style="margin-bottom:20px;">
+    <a href="/pages/chat/new/{{ selected_theme_id }}" class="btn btn-primary">새 채팅 시작</a>
+</div>
+{% endif %}
+
+<!-- 채팅 세션 목록 -->
+{% if chat_sessions %}
+{% for cs in chat_sessions %}
+<a href="/pages/chat/{{ cs.id }}" class="chat-session-card">
+    <div class="chat-session-info">
+        <div class="chat-session-title">{{ cs.title or '새 채팅' }}</div>
+        <div class="chat-session-meta">
+            <span>{{ cs.theme_name }}</span>
+            {% if cs.theme_date %}
+            <span>분석일: {{ cs.theme_date }}</span>
+            {% endif %}
+            <span>{{ cs.updated_at }}</span>
+        </div>
+    </div>
+    <span class="chat-session-count">{{ cs.message_count }}건</span>
+</a>
+{% endfor %}
+{% else %}
+<div class="chat-empty">
+    <h3>채팅 이력이 없습니다</h3>
+    <p>위에서 테마를 선택한 후 "새 채팅 시작" 버튼을 눌러주세요.</p>
+</div>
+{% endif %}
+{% endblock %}
