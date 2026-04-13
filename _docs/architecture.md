@@ -1,6 +1,6 @@
 # Investment Advisor — 기술 아키텍처 문서
 
-> 최종 갱신: 2026-04-13 | DB 스키마 v5 | Python 3.10+
+> 최종 갱신: 2026-04-13 | DB 스키마 v8 | Python 3.10+
 
 ---
 
@@ -74,29 +74,35 @@ investment-advisor/
 ├── api/                      # ── FastAPI 웹서비스 모듈 ──
 │   ├── __init__.py
 │   ├── main.py               # FastAPI 앱 초기화, 라우터 등록, Uvicorn 실행
+│   ├── chat_engine.py        # Claude SDK 기반 테마 채팅 엔진
 │   ├── routes/
 │   │   ├── __init__.py
 │   │   ├── sessions.py       # 세션 CRUD API + _serialize_row() 공유 유틸
 │   │   ├── themes.py         # 테마 필터/검색 API
 │   │   ├── proposals.py      # 제안 필터/요약/종목분석 API
-│   │   └── pages.py          # Jinja2 HTML 페이지 라우트 (대시보드, 이력 등)
+│   │   ├── chat.py           # 테마 채팅 세션 CRUD + 메시지 전송
+│   │   ├── admin.py          # 관리자: 분석 실행/중지, SSE 로그, 뉴스 번역
+│   │   └── pages.py          # Jinja2 HTML 페이지 라우트 + 커스텀 필터(nl_numbered, fmt_price)
 │   ├── templates/
 │   │   ├── base.html         # 마스터 레이아웃 (사이드바, 반응형)
 │   │   ├── _macros.html      # 재사용 매크로 (proposal_card, theme_header 등)
-│   │   ├── dashboard.html    # 홈: 투자 신호, 시장 요약, 테마/제안 카드
-│   │   ├── sessions.html     # 세션 목록
+│   │   ├── dashboard.html    # 홈: 시장 요약, 테마 카드(링크), 종목 태그(링크), 뉴스
+│   │   ├── sessions.html     # 세션 테이블 (날짜/리스크/시장요약)
 │   │   ├── session_detail.html  # 세션 상세: 이슈·테마·시나리오·매크로
-│   │   ├── themes.html       # 테마 목록 (필터링)
-│   │   ├── proposals.html    # 제안 목록 (필터링)
+│   │   ├── themes.html       # 테마 목록 (종목 태그 표시)
+│   │   ├── proposals.html    # 종목 스크리너 테이블 (행 클릭→상세 펼침)
 │   │   ├── theme_history.html   # 테마 이력 추적 (신뢰도 변화)
-│   │   └── ticker_history.html  # 종목 추천 이력 (액션 변화)
+│   │   ├── ticker_history.html  # 종목 추천 이력 (액션 변화)
+│   │   ├── chat_list.html    # 테마 채팅 세션 목록
+│   │   ├── chat_room.html    # 채팅 대화 화면
+│   │   └── admin.html        # 관리자 페이지
 │   └── static/
 │       └── css/style.css     # 다크 테마 스타일시트
 │
 ├── shared/                   # ── 공용 모듈 ──
 │   ├── __init__.py
 │   ├── config.py             # .env 파싱, DatabaseConfig/NewsConfig/AnalyzerConfig/AppConfig
-│   ├── db.py                 # 스키마 마이그레이션(v1~v5), save_analysis(), tracking 갱신
+│   ├── db.py                 # 스키마 마이그레이션(v1~v8), save_analysis(), tracking 갱신
 │   └── pg_setup.py           # PostgreSQL 설치 감지 및 자동 설치
 │
 └── _docs/                    # ── 운영 문서 ──
@@ -389,6 +395,8 @@ async def lifespan(app):
 app.include_router(sessions.router)
 app.include_router(themes.router)
 app.include_router(proposals.router)
+app.include_router(chat.router)
+app.include_router(admin.router)
 app.include_router(pages.router)
 
 # 정적 파일
@@ -438,8 +446,12 @@ def _serialize_row(row: dict) -> dict:
 | GET | `/pages/sessions/{id}` | `session_detail.html` | 세션 상세 |
 | GET | `/pages/themes` | `themes.html` | 테마 목록 (필터링) |
 | GET | `/pages/themes/history/{theme_key}` | `theme_history.html` | 테마 이력 추적 |
-| GET | `/pages/proposals` | `proposals.html` | 제안 목록 (필터링) |
+| GET | `/pages/proposals` | `proposals.html` | 종목 스크리너 테이블 (행 클릭→상세) |
 | GET | `/pages/proposals/history/{ticker}` | `ticker_history.html` | 종목 추천 이력 |
+| GET | `/pages/chat` | `chat_list.html` | 테마 채팅 세션 목록 |
+| GET | `/pages/chat/new/{theme_id}` | — | 새 채팅 생성 → 리다이렉트 |
+| GET | `/pages/chat/{id}` | `chat_room.html` | 채팅 대화 화면 |
+| GET | `/admin` | `admin.html` | 관리자 페이지 |
 
 **대시보드 투자 신호 로직** (`GET /`):
 ```python
@@ -461,8 +473,7 @@ def _serialize_row(row: dict) -> dict:
 
 | 매크로 | 용도 |
 |--------|------|
-| `proposal_card_compact(p)` | 테마 내 제안 카드 (축약형: 액션 뱃지, 퀀트/센티먼트, 목표가) |
-| `proposal_card_full(p)` | 제안 목록 카드 (상세형: 진입/청산 조건, 섹터, 공급망 포지션) |
+| `proposal_card_compact(p)` | 세션 상세 내 제안 카드 (축약형: 액션 뱃지, 퀀트/센티먼트, 목표가) |
 | `theme_header(theme, tk)` | 테마 헤더 (신뢰도 바, tracking 뱃지, 트렌드 링크) |
 | `scenario_grid(scenarios)` | Bull/Base/Bear 시나리오 카드 그리드 |
 | `indicator_tags(key_indicators)` | 핵심 모니터링 지표 태그 |
@@ -507,7 +518,7 @@ def _env_bool(key: str, default: bool) -> bool:
 
 | 함수 | 설명 |
 |------|------|
-| `init_db(cfg)` | DB 존재 확인 → 생성 → 스키마 마이그레이션 (v1~v5) |
+| `init_db(cfg)` | DB 존재 확인 → 생성 → 스키마 마이그레이션 (v1~v8) |
 | `get_connection(cfg)` | psycopg2 커넥션 반환 (DSN 기반) |
 | `save_analysis(cfg, date, result) -> int` | 분석 결과 저장 + tracking 갱신, session_id 반환 |
 | `get_recent_recommendations(cfg, days=7)` | 최근 N일 추천 이력 조회 (중복 방지용) |
@@ -602,6 +613,28 @@ finally:
                                                                │  report_markdown            │
                                                                └─────────────────────────────┘
 
+──── v6: 테마 채팅 ────
+
+┌─────────────────────────────────┐    ┌────────────────────────────────────┐
+│    theme_chat_sessions          │    │     theme_chat_messages            │
+│  id (PK)                       │    │  id (PK)                          │
+│  theme_id (FK→investment_themes)│───→│  chat_session_id (FK)             │
+│  title                         │ 1:N│  role ('user'|'assistant')        │
+│  created_at, updated_at        │    │  content (TEXT)                   │
+└─────────────────────────────────┘    │  created_at                       │
+                                       └────────────────────────────────────┘
+
+──── v7~v8: 뉴스 저장 ────
+
+┌─────────────────────────────────┐
+│        news_articles            │
+│  id (PK)                       │
+│  session_id (FK→analysis_sessions)│
+│  category, source, title       │
+│  title_ko (v8, 한글 번역)       │
+│  summary, link, published      │
+└─────────────────────────────────┘
+
 ──── 독립 추적 테이블 (UPSERT) ────
 
 ┌─────────────────────────────────┐    ┌────────────────────────────────────┐
@@ -650,6 +683,9 @@ finally:
 | **v3** | 일별 추적 — `theme_tracking`, `proposal_tracking` 신규 생성 |
 | **v4** | 공급망 분석 — `investment_proposals`에 `vendor_tier`, `supply_chain_position` 추가 |
 | **v5** | 발굴 유형 — `investment_proposals`에 `discovery_type`, `price_momentum_check` 추가 |
+| **v6** | 테마 채팅 — `theme_chat_sessions`, `theme_chat_messages` 신규 생성 |
+| **v7** | 뉴스 저장 — `news_articles` 신규 생성 (session_id, category, source, title, summary, link, published) |
+| **v8** | 뉴스 번역 — `news_articles`에 `title_ko` 한글 번역 컬럼 추가 |
 
 **마이그레이션 실행 방식**:
 ```python
@@ -660,6 +696,9 @@ def init_db(cfg):
     if current < 3: _migrate_to_v3(cur)
     if current < 4: _migrate_to_v4(cur)
     if current < 5: _migrate_to_v5(cur)
+    if current < 6: _migrate_to_v6(cur)
+    if current < 7: _migrate_to_v7(cur)
+    if current < 8: _migrate_to_v8(cur)
     conn.commit()
 ```
 - 서버 시작 시(`api/main.py` lifespan) 및 배치 시작 시(`analyzer/main.py`) 자동 실행

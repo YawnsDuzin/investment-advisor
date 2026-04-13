@@ -36,20 +36,24 @@ investment-advisor/
 ├── CLAUDE.md                ← Claude Code 가이드 (아키텍처, 컨벤션)
 ├── shared/                  ← 공용 모듈 (설정, DB)
 │   ├── config.py            ← .env 자동 로드 + dataclass 설정
-│   ├── db.py                ← 스키마 마이그레이션(v1~v3) + 저장 + tracking
+│   ├── db.py                ← 스키마 마이그레이션(v1~v8) + 저장 + tracking
 │   └── pg_setup.py          ← PostgreSQL 자동 설치
 ├── analyzer/                ← 멀티스테이지 분석 서비스 (배치)
 │   ├── main.py              ← 분석 엔트리포인트
 │   ├── news_collector.py    ← RSS 뉴스 수집
 │   ├── analyzer.py          ← 2단계 파이프라인 (테마 발굴 → 종목 심층분석)
-│   └── prompts.py           ← 스테이지별 프롬프트 템플릿
+│   ├── prompts.py           ← 스테이지별 프롬프트 템플릿
+│   └── stock_data.py        ← yfinance 주가 조회, 모멘텀 체크
 ├── api/                     ← FastAPI 웹서비스 (상시 기동)
 │   ├── main.py              ← API 엔트리포인트
+│   ├── chat_engine.py       ← Claude SDK 기반 테마 채팅 엔진
 │   ├── routes/
 │   │   ├── pages.py         ← HTML 페이지 (Dashboard, 히스토리 등)
 │   │   ├── sessions.py      ← JSON API: 세션
 │   │   ├── themes.py        ← JSON API: 테마
-│   │   └── proposals.py     ← JSON API: 투자 제안 + 종목 심층분석
+│   │   ├── proposals.py     ← JSON API: 투자 제안 + 종목 심층분석
+│   │   ├── chat.py          ← 테마 채팅 세션 CRUD + 메시지
+│   │   └── admin.py         ← 관리자: 분석 실행/중지, 로그, 뉴스 번역
 │   ├── templates/           ← Jinja2 HTML 템플릿 (다크 테마)
 │   └── static/css/          ← 스타일시트
 └── _docs/                   ← 운영 문서
@@ -180,13 +184,15 @@ python -m api.main
 
 | 페이지 | URL | 설명 |
 |--------|-----|------|
-| Dashboard | `/` | 투자 신호, 어제 대비 변화, 테마별 제안 |
-| Sessions | `/pages/sessions` | 분석 세션 목록 (리스크 온도 포함) |
+| Dashboard | `/` | 시장 요약, 테마 카드(클릭→히스토리), 종목 태그(클릭→이력), 뉴스 |
+| Sessions | `/pages/sessions` | 분석 세션 테이블 (날짜, 리스크, 시장 요약) |
 | Session Detail | `/pages/sessions/{id}` | 이슈(시계별 영향) + 테마(시나리오/매크로) + 제안(스코어) |
-| Themes | `/pages/themes` | 시계/신뢰도/키워드 필터, tracking 뱃지 |
+| Themes | `/pages/themes` | 시계/신뢰도/키워드 필터, 종목 태그, tracking 뱃지 |
 | Theme History | `/pages/themes/history/{key}` | 특정 테마의 일자별 신뢰도·시나리오·종목 변화 |
-| Proposals | `/pages/proposals` | action/자산유형/확신도/티커 필터 |
+| Stocks | `/pages/proposals` | 종목 스크리너 테이블 (행 클릭→근거/리스크 펼침) |
 | Ticker History | `/pages/proposals/history/{ticker}` | 특정 종목의 일자별 추천 이력 |
+| Theme Chat | `/pages/chat` | 테마 기반 AI 채팅 (Claude SDK) |
+| Admin | `/admin` | 분석 실행/중지, SSE 로그 스트리밍, 뉴스 번역 |
 
 ### JSON API 엔드포인트
 
@@ -201,6 +207,12 @@ python -m api.main
 | `GET /proposals/ticker/{TICKER}` | 티커별 제안 이력 |
 | `GET /proposals/summary/latest` | 최신 포트폴리오 요약 |
 | `GET /proposals/{id}/stock-analysis` | 종목 심층분석 조회 |
+| `POST /chat/sessions` | 테마 채팅 세션 생성 |
+| `GET /chat/sessions` | 채팅 세션 목록 |
+| `POST /chat/sessions/{id}/messages` | 채팅 메시지 전송 |
+| `GET /admin/status` | 분석 실행 상태 |
+| `POST /admin/run` | 분석 배치 실행 |
+| `POST /admin/translate-news` | 뉴스 한글 번역 |
 
 ---
 

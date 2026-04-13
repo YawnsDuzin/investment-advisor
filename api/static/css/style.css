@@ -232,6 +232,13 @@ tbody td {
     vertical-align: top;
 }
 
+/* ── Screener Table (Proposals, Sessions) ── */
+.screener-table tbody tr { transition: background 0.15s; }
+.screener-table tbody tr:hover { background: var(--bg-card-hover); }
+.screener-table tbody tr.row-selected { background: rgba(79,140,255,0.08); }
+.screener-table td { padding: 10px 14px; vertical-align: middle; font-size: 14px; }
+.screener-table th { padding: 10px 14px; }
+
 tbody tr:hover { background: var(--bg-card-hover); }
 
 /* ===== Confidence Bar ===== */

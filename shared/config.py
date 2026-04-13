@@ -68,7 +68,7 @@ class NewsConfig:
             "https://www.thebell.co.kr/rss/rss_news_all.xml",  # 더벨 (M&A/자본시장)
         ],
     })
-    max_articles_per_feed: int = 10
+    max_articles_per_feed: int = field(default_factory=lambda: int(os.getenv("MAX_ARTICLES_PER_FEED", "5")))
 
 
 def _env_bool(key: str, default: bool) -> bool:

@@ -28,7 +28,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 investment-advisor/
 ├── shared/              ← 공용: config(.env 로드), db(마이그레이션+저장), pg_setup(자동 설치)
 ├── analyzer/            ← 배치: main(엔트리) → news_collector(RSS) → stock_data(주가조회) → analyzer(2단계) → prompts
-├── api/                 ← 웹: main(FastAPI) → routes/(pages, sessions, themes, proposals)
+├── api/                 ← 웹: main(FastAPI) → routes/(pages, sessions, themes, proposals, chat, admin)
+│   ├── chat_engine.py   ← Claude SDK 기반 테마 채팅 엔진
 │   ├── templates/       ← Jinja2 HTML (다크 테마)
 │   └── static/css/
 └── _docs/               ← 운영 문서 (분석 파이프라인, 라즈베리파이 매뉴얼)
@@ -103,8 +104,8 @@ sudo systemctl enable --now investment-advisor-analyzer.timer    # 매일 03:00 
   - 최근 7일 추천 이력 피드백으로 중복 추천 방지
   - 컨센서스/얼리시그널/컨트래리안/딥밸류 분류 (`discovery_type`)
   - 주가 반영도 태깅 (`price_momentum_check`)
-- **모멘텀 체크**: Stage 1 추천 종목의 1개월 수익률 조회, 급등(+20%) 종목 필터링
-- **주가 데이터**: Stage 1 추천 종목의 현재가/PER/PBR/시총 등을 yfinance로 실시간 조회 (ENABLE_STOCK_DATA로 on/off)
+- **모멘텀 체크**: Stage 1 추천 종목의 1개월 수익률 조회, 급등(+20%) 종목 필터링. 동시에 **모든 종목의 `current_price`를 yfinance 실시간 가격으로 설정**
+- **주가 데이터**: Stage 2 대상 종목의 현재가/PER/PBR/시총 등을 yfinance로 실시간 조회 (ENABLE_STOCK_DATA로 on/off)
 - **Stage 2**: 실제 주가 데이터 + 5관점 심층분석 (펀더멘털·산업·모멘텀·퀀트·리스크)
   - 급등 종목보다 미반영 종목(early_signal/undervalued) 우선 선정
 - `AnalyzerConfig`로 심층분석 대상 수(`top_themes`, `top_stocks_per_theme`) 및 활성화 여부 조절 가능
@@ -115,18 +116,21 @@ sudo systemctl enable --now investment-advisor-analyzer.timer    # 매일 03:00 
 - `analyzer.py` — `stage1_discover_themes()`, `stage2_analyze_stock()`, `run_pipeline()`. 하위호환용 `run_analysis()` 유지
 - `prompts.py` — 스테이지별 시스템 프롬프트 및 JSON 출력 템플릿
 - `news_collector.py` — `feedparser`로 RSS 피드 수집, 카테고리별 마크다운 텍스트 생성
-- `stock_data.py` — `yfinance`로 실시간 주가/재무 데이터 조회, 1개월 모멘텀 체크, 프롬프트 삽입용 텍스트 포맷팅
+- `stock_data.py` — `yfinance`로 실시간 주가/재무 데이터 조회, 1개월 모멘텀 체크(`current_price` 포함 반환), 프롬프트 삽입용 텍스트 포맷팅
 
 ### api/ — FastAPI 웹서비스 (상시 기동)
 - `routes/sessions.py` — 세션 목록/상세/날짜별 조회. `_serialize_row()` 공유 유틸.
 - `routes/themes.py` — 테마 목록 (horizon, confidence, type, validity 필터), 키워드 검색. 시나리오·매크로·제안 중첩 반환.
 - `routes/proposals.py` — 제안 목록 (action, asset_type, conviction, sector 필터), 티커별 이력, 최신 포트폴리오 요약, `/{proposal_id}/stock-analysis` 엔드포인트.
-- `routes/pages.py` — Jinja2 HTML 페이지 라우트. 투자 신호, tracking 뱃지, 테마·종목 히스토리 페이지 포함.
-- `templates/` — 다크 테마 UI. base, dashboard, sessions, session_detail, themes, proposals, theme_history, ticker_history.
+- `routes/chat.py` — 테마 채팅 세션 CRUD + 메시지 전송. Claude SDK로 테마 맥락 기반 대화.
+- `routes/admin.py` — 관리자 페이지. 분석 실행/중지, SSE 실시간 로그 스트리밍, 뉴스 한글 번역.
+- `routes/pages.py` — Jinja2 HTML 페이지 라우트. 대시보드, tracking 뱃지, 테마·종목 히스토리, 채팅, 관리자 페이지. 커스텀 Jinja2 필터(`nl_numbered`, `fmt_price`) 등록.
+- `chat_engine.py` — Claude Agent SDK 기반 테마 채팅 엔진. 테마 컨텍스트를 시스템 프롬프트에 주입하여 대화.
+- `templates/` — 다크 테마 UI. base, dashboard, sessions, session_detail, themes, proposals, theme_history, ticker_history, chat_list, chat_room, admin.
 
 ### shared/ — 공용 모듈
 - `config.py` — `.env` 파일 자동 로드, `DatabaseConfig`(환경변수 기반), `NewsConfig`, `AnalyzerConfig`, `AppConfig`
-- `db.py` — `schema_version` 기반 자동 마이그레이션(v1~v5), `save_analysis()` + tracking 갱신, `get_recent_recommendations()`, `get_connection()`
+- `db.py` — `schema_version` 기반 자동 마이그레이션(v1~v8), `save_analysis()` + tracking 갱신, `get_recent_recommendations()`, `get_connection()`
 - `pg_setup.py` — PostgreSQL 설치 감지 및 자동 설치 (Linux apt, Windows winget/choco)
 
 ## DB Schema
@@ -139,6 +143,9 @@ analysis_sessions → global_issues
                   → investment_themes → theme_scenarios
                                       → macro_impacts
                                       → investment_proposals → stock_analyses
+                  → news_articles (v7, 뉴스 원문 저장, v8에서 title_ko 한글 번역 추가)
+
+theme_chat_sessions → theme_chat_messages (v6, 테마 기반 채팅)
 
 theme_tracking (독립, UPSERT로 갱신)
 proposal_tracking (독립, UPSERT로 갱신)
@@ -160,3 +167,7 @@ proposal_tracking (독립, UPSERT로 갱신)
 - API 라우트에서 DB 조회 시 `RealDictCursor` 사용하여 dict 반환. `_serialize_row()`로 date/Decimal 변환.
 - 새 마이그레이션 추가 시: `SCHEMA_VERSION` 증가, `_migrate_to_vN()` 함수 생성, `init_db()`에 `if current < N` 추가
 - 프론트엔드에서 새 필드 표시 시 `{% if field %}` 가드 필수 — 이전 버전 데이터에서 NULL일 수 있음
+- Stage 1의 `target_price_low/high`는 AI 추정치(학습 데이터 기반)로 실제 시세와 괴리가 클 수 있음. Stage 2 분석 종목만 신뢰할 수 있는 목표가를 가짐
+- DB 저장 시 `upside_pct`는 `(target_price_low - current_price) / current_price * 100`으로 재계산됨 (`shared/db.py`)
+- 가격 표시 시 `fmt_price` Jinja2 필터 사용 — 통화 기호(₩/$€¥£) + 천 단위 쉼표, KRW/JPY는 소수점 제거
+- 번호 목록(①②③) 표시 시 `nl_numbered` Jinja2 필터 사용 — 원문자 앞에 `<br>` 삽입

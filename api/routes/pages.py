@@ -1,7 +1,9 @@
 """Jinja2 템플릿 기반 웹 페이지 라우트"""
+import re
 from fastapi import APIRouter, Request, Query
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
+from markupsafe import Markup
 from shared.config import DatabaseConfig
 from shared.db import get_connection
 from psycopg2.extras import RealDictCursor
@@ -10,6 +12,48 @@ from api.routes.sessions import _serialize_row
 router = APIRouter(tags=["페이지"])
 
 templates = Jinja2Templates(directory="api/templates")
+
+
+def _nl_numbered(text: str) -> Markup:
+    """①②③ 또는 1. 2. 3. 형태의 번호 리스트를 줄바꿈으로 분리"""
+    if not text:
+        return Markup("")
+    # ① ② ③ … ⑳ 원문자 앞에 <br> 삽입
+    parts = re.split(r'\s*(?=[①-⑳])', text)
+    if len(parts) > 1:
+        # 각 파트의 양쪽 공백 제거 후 결합
+        stripped = [p.strip() for p in parts if p.strip()]
+        result = '<br>'.join(stripped)
+        return Markup(result)
+    # 1. 2. 3. 형태 처리
+    result = re.sub(r'(?<=\S)\s+(\d+)\.\s', r'<br>\1. ', text)
+    return Markup(result)
+
+
+templates.env.filters["nl_numbered"] = _nl_numbered
+
+
+_CURRENCY_SYMBOLS = {"KRW": "₩", "USD": "$", "EUR": "€", "JPY": "¥", "GBP": "£", "CNY": "¥"}
+
+
+def _fmt_price(value, currency: str = "") -> str:
+    """가격을 통화 기호 + 천 단위 쉼표로 포맷팅 (정수 통화는 소수점 제거)"""
+    if value is None:
+        return "-"
+    try:
+        num = float(value)
+    except (ValueError, TypeError):
+        return str(value)
+    if num == 0:
+        return "-"
+    symbol = _CURRENCY_SYMBOLS.get((currency or "").upper(), "")
+    # KRW, JPY 등은 소수점 없이 표시
+    if (currency or "").upper() in ("KRW", "JPY", "KRW"):
+        return f"{symbol}{num:,.0f}"
+    return f"{symbol}{num:,.2f}"
+
+
+templates.env.filters["fmt_price"] = _fmt_price
 
 
 def _get_cfg() -> DatabaseConfig:

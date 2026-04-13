@@ -156,6 +156,7 @@ def fetch_momentum_check(ticker: str, market: str) -> dict | None:
             "ticker": ticker,
             "return_1m_pct": return_1m,
             "momentum_tag": tag,
+            "current_price": round(float(price_end), 2),
         }
     except Exception:
         return None

@@ -165,6 +165,8 @@ async def run_pipeline(
                 mdata = momentum_map.get(ticker)
                 if mdata:
                     p["price_momentum_check"] = mdata["momentum_tag"]
+                    if mdata.get("current_price"):
+                        p["current_price"] = mdata["current_price"]
                     if mdata["momentum_tag"] == "already_run":
                         run_count += 1
 

@@ -5,26 +5,25 @@
 {% block content %}
 {% if sessions %}
 {% for s in sessions %}
-<div class="card">
-    <div class="card-header">
-        <span style="display:flex;align-items:center;gap:12px;">
-            <span class="card-title">{{ s.analysis_date }}</span>
-            <span style="font-size:13px;color:var(--text-muted);">세션 #{{ s.id }}</span>
+<div class="card" style="padding:18px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+        <span style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+            <span style="font-weight:700;font-size:16px;">{{ s.analysis_date }}</span>
             {% if s.risk_temperature %}
             <span class="risk-temp risk-temp-{{ s.risk_temperature }}">
                 <span class="risk-temp-dot"></span>
                 {{ s.risk_temperature|upper }}
             </span>
             {% endif %}
-        </span>
-        <span style="display:flex;align-items:center;gap:12px;">
             <span class="badge badge-category">이슈 {{ s.issue_count }}건</span>
             <span class="badge badge-category">테마 {{ s.theme_count }}건</span>
-            <a href="/pages/sessions/{{ s.id }}" class="btn btn-primary">상세 보기</a>
         </span>
+        <a href="/pages/sessions/{{ s.id }}" class="btn btn-primary" style="padding:6px 16px;font-size:13px;white-space:nowrap;">상세 보기</a>
     </div>
     {% if s.market_summary %}
-    <div class="detail-text">{{ s.market_summary }}</div>
+    <div style="font-size:14px;color:var(--text-muted);line-height:1.8;padding:12px 14px;background:rgba(255,255,255,0.02);border-radius:8px;border:1px solid var(--border);">
+        {{ s.market_summary|replace('. ', '.<br>')|safe }}
+    </div>
     {% endif %}
 </div>
 {% endfor %}
