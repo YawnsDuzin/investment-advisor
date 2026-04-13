@@ -254,6 +254,7 @@ tbody tr:hover { background: var(--bg-card-hover); }
 }
 
 .confidence-bar-fill {
+    display: block;
     height: 100%;
     border-radius: 4px;
     background: var(--accent);
@@ -272,6 +273,7 @@ tbody tr:hover { background: var(--bg-card-hover); }
 }
 
 .alloc-bar-fill {
+    display: block;
     height: 100%;
     border-radius: 4px;
     background: var(--green);

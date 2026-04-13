@@ -19,6 +19,13 @@ def list_proposals(
     asset_type: str | None = Query(default=None, description="stock|etf|commodity|currency|bond|crypto"),
     conviction: str | None = Query(default=None, description="high|medium|low"),
     sector: str | None = Query(default=None, description="섹터 필터"),
+    date_from: str | None = Query(default=None, description="조회 시작일 (YYYY-MM-DD)"),
+    date_to: str | None = Query(default=None, description="조회 종료일 (YYYY-MM-DD)"),
+    market: str | None = Query(default=None, description="시장 (KRX, NASDAQ 등)"),
+    discovery_type: str | None = Query(default=None, description="발굴유형"),
+    time_horizon: str | None = Query(default=None, description="투자기간"),
+    ticker: str | None = Query(default=None, description="티커 검색"),
+    sort: str | None = Query(default=None, description="정렬: date|upside|quant|allocation|conviction_sort"),
 ):
     """투자 제안 목록 (최신순, 필터 가능)"""
     conn = get_connection(_get_cfg())
@@ -46,8 +53,34 @@ def list_proposals(
             if sector:
                 query += " AND p.sector ILIKE %s"
                 params.append(f"%{sector}%")
+            if date_from:
+                query += " AND s.analysis_date >= %s"
+                params.append(date_from)
+            if date_to:
+                query += " AND s.analysis_date <= %s"
+                params.append(date_to)
+            if market:
+                query += " AND UPPER(p.market) = UPPER(%s)"
+                params.append(market)
+            if discovery_type:
+                query += " AND p.discovery_type = %s"
+                params.append(discovery_type)
+            if time_horizon:
+                query += " AND t.time_horizon = %s"
+                params.append(time_horizon)
+            if ticker:
+                query += " AND UPPER(p.ticker) = UPPER(%s)"
+                params.append(ticker)
 
-            query += " ORDER BY s.analysis_date DESC, p.target_allocation DESC LIMIT %s"
+            sort_map = {
+                "date": "s.analysis_date DESC",
+                "upside": "p.upside_pct DESC NULLS LAST",
+                "quant": "p.quant_score DESC NULLS LAST",
+                "allocation": "p.target_allocation DESC NULLS LAST",
+                "conviction_sort": "CASE p.conviction WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END",
+            }
+            order_by = sort_map.get(sort, "s.analysis_date DESC, p.target_allocation DESC")
+            query += f" ORDER BY {order_by} LIMIT %s"
             params.append(limit)
 
             cur.execute(query, params)
