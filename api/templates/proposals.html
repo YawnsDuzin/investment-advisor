@@ -3,7 +3,16 @@
 {% block page_title %}종목 스크리너{% endblock %}
 
 {% block content %}
-<form class="filters" method="get" action="/pages/proposals">
+<form class="filters" method="get" action="/pages/proposals" style="display:flex;flex-wrap:wrap;gap:8px;align-items:end;">
+    {# 1행: 날짜 범위 + 기존 필터 #}
+    <div style="display:flex;flex-direction:column;gap:2px;">
+        <label style="font-size:11px;color:var(--text-muted);">시작일</label>
+        <input type="date" name="date_from" class="filter-input" value="{{ date_from or '' }}" style="width:140px;">
+    </div>
+    <div style="display:flex;flex-direction:column;gap:2px;">
+        <label style="font-size:11px;color:var(--text-muted);">종료일</label>
+        <input type="date" name="date_to" class="filter-input" value="{{ date_to or '' }}" style="width:140px;">
+    </div>
     <select name="action" class="filter-select">
         <option value="">Action 전체</option>
         <option value="buy" {% if action == 'buy' %}selected{% endif %}>Buy</option>
@@ -26,8 +35,40 @@
         <option value="medium" {% if conviction == 'medium' %}selected{% endif %}>Medium</option>
         <option value="low" {% if conviction == 'low' %}selected{% endif %}>Low</option>
     </select>
+    <select name="market" class="filter-select">
+        <option value="">시장 전체</option>
+        {% for m in market_options %}
+        <option value="{{ m }}" {% if market == m %}selected{% endif %}>{{ m }}</option>
+        {% endfor %}
+    </select>
+    <select name="sector" class="filter-select">
+        <option value="">섹터 전체</option>
+        {% for s in sector_options %}
+        <option value="{{ s }}" {% if sector == s %}selected{% endif %}>{{ s }}</option>
+        {% endfor %}
+    </select>
+    <select name="discovery_type" class="filter-select">
+        <option value="">발굴유형 전체</option>
+        {% for d in discovery_type_options %}
+        <option value="{{ d }}" {% if discovery_type == d %}selected{% endif %}>{{ d }}</option>
+        {% endfor %}
+    </select>
+    <select name="time_horizon" class="filter-select">
+        <option value="">투자기간 전체</option>
+        {% for h in time_horizon_options %}
+        <option value="{{ h }}" {% if time_horizon == h %}selected{% endif %}>{{ h }}</option>
+        {% endfor %}
+    </select>
     <input type="text" name="ticker" class="filter-input" placeholder="티커 검색 (예: NVDA)" value="{{ ticker or '' }}">
+    <select name="sort" class="filter-select">
+        <option value="">정렬: 최신순</option>
+        <option value="upside" {% if sort == 'upside' %}selected{% endif %}>상승여력순</option>
+        <option value="quant" {% if sort == 'quant' %}selected{% endif %}>Q점수순</option>
+        <option value="allocation" {% if sort == 'allocation' %}selected{% endif %}>비중순</option>
+        <option value="conviction_sort" {% if sort == 'conviction_sort' %}selected{% endif %}>확신도순</option>
+    </select>
     <button type="submit" class="btn btn-primary">필터</button>
+    <a href="/pages/proposals" class="btn" style="background:var(--bg-secondary);color:var(--text-muted);text-decoration:none;padding:6px 14px;border-radius:6px;font-size:13px;">초기화</a>
 </form>
 
 {% if proposals %}
@@ -44,6 +85,8 @@
             <th>목표가</th>
             <th>상승여력</th>
             <th>Q점수</th>
+            <th>발굴유형</th>
+            <th>투자기간</th>
             <th>테마</th>
             <th>날짜</th>
         </tr>
@@ -72,11 +115,13 @@
                 {% else %}-{% endif %}
             </td>
             <td>{% if p.quant_score %}<span class="score-display">{{ p.quant_score }}/5</span>{% else %}-{% endif %}</td>
+            <td>{% if p.discovery_type %}<span style="font-size:12px;padding:2px 8px;border-radius:5px;background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.2);color:var(--green);white-space:nowrap;">{{ p.discovery_type }}</span>{% else %}-{% endif %}</td>
+            <td>{% if p.time_horizon %}<span style="font-size:12px;color:var(--text-muted);white-space:nowrap;">{{ p.time_horizon }}</span>{% else %}-{% endif %}</td>
             <td style="font-size:12px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{{ p.theme_name }}">{{ p.theme_name }}</td>
             <td style="font-size:12px;color:var(--text-muted);white-space:nowrap;">{{ p.analysis_date }}</td>
         </tr>
         <tr class="detail-row" data-idx="{{ loop.index0 }}" style="display:none;">
-            <td colspan="11" style="padding:0;">
+            <td colspan="13" style="padding:0;">
                 <div style="padding:14px 18px;background:rgba(79,140,255,0.04);border-left:3px solid var(--accent);font-size:14px;line-height:1.7;">
                     {# 메타 태그: 섹터, 발굴유형, 주가반영도, 공급망, 벤더티어, 센티먼트 #}
                     {% if p.sector or p.discovery_type or p.price_momentum_check or p.supply_chain_position or p.vendor_tier or (p.sentiment_score is not none and p.sentiment_score != None) %}

@@ -1,5 +1,6 @@
 """Jinja2 템플릿 기반 웹 페이지 라우트"""
 import re
+from datetime import date
 from fastapi import APIRouter, Request, Query
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -186,6 +187,24 @@ def sessions_page(request: Request, limit: int = Query(default=30, ge=1, le=100)
     })
 
 
+@router.get("/pages/sessions/date/{analysis_date}")
+def session_by_date_page(analysis_date: str):
+    """날짜로 세션 상세 페이지 리다이렉트"""
+    conn = get_connection(_get_cfg())
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                "SELECT id FROM analysis_sessions WHERE analysis_date = %s",
+                (analysis_date,)
+            )
+            row = cur.fetchone()
+    finally:
+        conn.close()
+    if not row:
+        return RedirectResponse(url="/pages/sessions", status_code=302)
+    return RedirectResponse(url=f"/pages/sessions/{row['id']}", status_code=302)
+
+
 @router.get("/pages/sessions/{session_id}")
 def session_detail_page(request: Request, session_id: int):
     conn = get_connection(_get_cfg())
@@ -334,6 +353,12 @@ def ticker_history_page(request: Request, ticker: str):
     finally:
         conn.close()
 
+    # tracking에 currency 보충 (최신 이력에서 가져옴)
+    if history and tracking_list:
+        currency = history[0].get("currency")
+        for tr in tracking_list:
+            tr["latest_currency"] = currency
+
     return templates.TemplateResponse(request=request, name="ticker_history.html", context={
         "active_page": "proposals",
         "ticker": ticker.upper(),
@@ -411,8 +436,22 @@ def proposals_page(
     asset_type: str | None = Query(default=None),
     conviction: str | None = Query(default=None),
     ticker: str | None = Query(default=None),
+    date_from: str | None = Query(default=None, description="조회 시작일 (YYYY-MM-DD)"),
+    date_to: str | None = Query(default=None, description="조회 종료일 (YYYY-MM-DD)"),
+    market: str | None = Query(default=None, description="시장 (KRX, NASDAQ 등)"),
+    sector: str | None = Query(default=None, description="섹터"),
+    discovery_type: str | None = Query(default=None, description="발굴유형"),
+    time_horizon: str | None = Query(default=None, description="투자기간"),
+    sort: str | None = Query(default=None, description="정렬 기준"),
     limit: int = Query(default=50, ge=1, le=200),
 ):
+    # 날짜 기본값: 오늘
+    today = date.today().isoformat()
+    if not date_from:
+        date_from = today
+    if not date_to:
+        date_to = today
+
     conn = get_connection(_get_cfg())
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -437,11 +476,51 @@ def proposals_page(
             if ticker:
                 query += " AND UPPER(p.ticker) = UPPER(%s)"
                 params.append(ticker)
+            if date_from:
+                query += " AND s.analysis_date >= %s"
+                params.append(date_from)
+            if date_to:
+                query += " AND s.analysis_date <= %s"
+                params.append(date_to)
+            if market:
+                query += " AND UPPER(p.market) = UPPER(%s)"
+                params.append(market)
+            if sector:
+                query += " AND p.sector ILIKE %s"
+                params.append(f"%{sector}%")
+            if discovery_type:
+                query += " AND p.discovery_type = %s"
+                params.append(discovery_type)
+            if time_horizon:
+                query += " AND t.time_horizon = %s"
+                params.append(time_horizon)
 
-            query += " ORDER BY s.analysis_date DESC, p.target_allocation DESC LIMIT %s"
+            # 정렬
+            sort_map = {
+                "date": "s.analysis_date DESC",
+                "upside": "p.upside_pct DESC NULLS LAST",
+                "quant": "p.quant_score DESC NULLS LAST",
+                "allocation": "p.target_allocation DESC NULLS LAST",
+                "conviction_sort": "CASE p.conviction WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END",
+            }
+            order_by = sort_map.get(sort, "s.analysis_date DESC, p.target_allocation DESC")
+            query += f" ORDER BY {order_by} LIMIT %s"
             params.append(limit)
             cur.execute(query, params)
             proposals = cur.fetchall()
+
+            # 필터 옵션용 고유값 조회
+            cur.execute("SELECT DISTINCT market FROM investment_proposals WHERE market IS NOT NULL ORDER BY market")
+            market_options = [r["market"] for r in cur.fetchall()]
+
+            cur.execute("SELECT DISTINCT sector FROM investment_proposals WHERE sector IS NOT NULL ORDER BY sector")
+            sector_options = [r["sector"] for r in cur.fetchall()]
+
+            cur.execute("SELECT DISTINCT discovery_type FROM investment_proposals WHERE discovery_type IS NOT NULL ORDER BY discovery_type")
+            discovery_type_options = [r["discovery_type"] for r in cur.fetchall()]
+
+            cur.execute("SELECT DISTINCT time_horizon FROM investment_themes WHERE time_horizon IS NOT NULL ORDER BY time_horizon")
+            time_horizon_options = [r["time_horizon"] for r in cur.fetchall()]
 
             # 추적 데이터
             cur.execute("SELECT * FROM proposal_tracking ORDER BY last_recommended_date DESC")
@@ -460,6 +539,17 @@ def proposals_page(
         "asset_type": asset_type,
         "conviction": conviction,
         "ticker": ticker,
+        "date_from": date_from,
+        "date_to": date_to,
+        "market": market,
+        "sector": sector,
+        "discovery_type": discovery_type,
+        "time_horizon": time_horizon,
+        "sort": sort,
+        "market_options": market_options,
+        "sector_options": sector_options,
+        "discovery_type_options": discovery_type_options,
+        "time_horizon_options": time_horizon_options,
     })
 
 

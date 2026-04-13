@@ -39,7 +39,7 @@
         </div>
         <div class="stat-card">
             {% if tr.latest_target_price_low and tr.latest_target_price_high %}
-            <div class="stat-value" style="font-size:22px;">{{ tr.latest_target_price_low }}~{{ tr.latest_target_price_high }}</div>
+            <div class="stat-value">{{ tr.latest_target_price_low|int|fmt_price(tr.latest_currency) }}~{{ tr.latest_target_price_high|int|fmt_price(tr.latest_currency) }}</div>
             {% else %}
             <div class="stat-value">-</div>
             {% endif %}
@@ -48,8 +48,8 @@
     </div>
     {% if tr.prev_target_price_low and tr.latest_target_price_low %}
     <div style="margin-top:12px;font-size:14px;color:var(--text-muted);">
-        이전 목표가: {{ tr.prev_target_price_low }}~{{ tr.prev_target_price_high }}
-        → 현재: {{ tr.latest_target_price_low }}~{{ tr.latest_target_price_high }}
+        이전 목표가: {{ tr.prev_target_price_low|int|fmt_price(tr.latest_currency) }}~{{ tr.prev_target_price_high|int|fmt_price(tr.latest_currency) }}
+        → 현재: {{ tr.latest_target_price_low|int|fmt_price(tr.latest_currency) }}~{{ tr.latest_target_price_high|int|fmt_price(tr.latest_currency) }}
     </div>
     {% endif %}
 </div>
@@ -66,6 +66,7 @@
                 <th>Action</th>
                 <th>확신도</th>
                 <th>비중</th>
+                <th>현재가</th>
                 <th>목표가</th>
                 <th>상승여력</th>
                 <th>퀀트</th>
@@ -80,9 +81,10 @@
                 <td><span class="badge badge-{{ h.action }}">{{ h.action|upper }}</span></td>
                 <td><span class="badge badge-{{ h.conviction }}">{{ h.conviction }}</span></td>
                 <td>{{ h.target_allocation }}%</td>
+                <td>{{ h.current_price|fmt_price(h.currency) if h.current_price else '-' }}</td>
                 <td>
                     {% if h.target_price_low and h.target_price_high %}
-                    {{ h.currency or '' }}{{ h.target_price_low }}~{{ h.target_price_high }}
+                    {{ h.target_price_low|fmt_price(h.currency) }}~{{ h.target_price_high|fmt_price(h.currency) }}
                     {% else %}-{% endif %}
                 </td>
                 <td>
