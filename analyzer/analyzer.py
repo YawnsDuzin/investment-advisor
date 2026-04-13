@@ -12,8 +12,9 @@ from analyzer.prompts import (
     STAGE1_SYSTEM, STAGE1_PROMPT,
     STAGE2_SYSTEM, STAGE2_PROMPT,
 )
-from analyzer.stock_data import fetch_multiple_stocks, format_stock_data_text
-from shared.config import AnalyzerConfig
+from analyzer.stock_data import fetch_multiple_stocks, format_stock_data_text, fetch_momentum_batch
+from shared.config import AnalyzerConfig, DatabaseConfig
+from shared.db import get_recent_recommendations
 
 
 def _parse_json_response(full_response: str) -> dict:
@@ -51,9 +52,40 @@ async def _query_claude(prompt: str, system_prompt: str, max_turns: int) -> str:
 
 # ── Stage 1: 이슈 분석 + 테마 발굴 ──────────────────
 
-async def stage1_discover_themes(news_text: str, date: str, max_turns: int = 6) -> dict:
+def _format_recent_recommendations(recent_recs: list[dict]) -> str:
+    """최근 추천 이력을 프롬프트용 텍스트로 포맷팅"""
+    if not recent_recs:
+        return ""
+
+    lines = [
+        "\n---\n",
+        "## 최근 추천 이력 (중복 방지 — 최근 7일)",
+        "",
+        "아래 종목은 최근 이미 추천된 종목입니다.",
+        "**이 종목들은 신규 추천에서 제외**하고, 동일 밸류체인 내 아직 발굴되지 않은 2~3차 수혜주를 대신 찾으세요.",
+        "단, 기존 포지션의 목표가 조정이나 청산 판단이 필요하면 별도 언급할 수 있습니다.",
+        "",
+    ]
+    for rec in recent_recs:
+        lines.append(
+            f"  - {rec['ticker']} ({rec['asset_name']}) — "
+            f"테마: {rec['theme_name']}, {rec['action']}/{rec['conviction']}, "
+            f"{rec['count']}회 추천 ({rec['first_date']}~{rec['last_date']})"
+        )
+    lines.append("")
+    return "\n".join(lines)
+
+
+async def stage1_discover_themes(
+    news_text: str, date: str, max_turns: int = 6,
+    recent_recs: list[dict] | None = None,
+) -> dict:
     """Stage 1: 뉴스 기반 이슈 분석 + 테마 발굴 + 시나리오/매크로 분석 + 투자 제안"""
-    prompt = STAGE1_PROMPT.format(news_text=news_text, date=date)
+    recent_section = _format_recent_recommendations(recent_recs or [])
+    prompt = STAGE1_PROMPT.format(
+        news_text=news_text, date=date,
+        recent_recommendations_section=recent_section,
+    )
     response = await _query_claude(prompt, STAGE1_SYSTEM, max_turns)
     return _parse_json_response(response)
 
@@ -84,15 +116,26 @@ async def stage2_analyze_stock(
 
 async def run_pipeline(
     news_text: str, date: str, cfg: AnalyzerConfig,
+    db_cfg: DatabaseConfig | None = None,
 ) -> dict:
     """멀티스테이지 분석 파이프라인 실행
 
     Stage 1: 뉴스 → 이슈/테마/시나리오/매크로/제안
     Stage 2: 상위 테마의 핵심 종목 심층분석 (선택적)
     """
+    # ── 최근 추천 이력 조회 (중복 방지용) ──
+    recent_recs = []
+    if db_cfg:
+        try:
+            recent_recs = get_recent_recommendations(db_cfg, days=7)
+            if recent_recs:
+                print(f"[피드백] 최근 7일 추천 이력 {len(recent_recs)}건 로드 — 중복 방지 적용")
+        except Exception as e:
+            print(f"[피드백] 추천 이력 조회 실패 (무시): {e}")
+
     # ── Stage 1 ──
     print("[Stage 1] 이슈 분석 + 테마 발굴 중...")
-    result = await stage1_discover_themes(news_text, date, cfg.max_turns)
+    result = await stage1_discover_themes(news_text, date, cfg.max_turns, recent_recs)
 
     if result.get("error"):
         return result
@@ -101,22 +144,57 @@ async def run_pipeline(
     issues = result.get("issues", [])
     print(f"[Stage 1] 완료 — 이슈 {len(issues)}건, 테마 {len(themes)}건")
 
+    # ── 모멘텀 체크: Stage 1 추천 종목의 1개월 수익률 조회 ──
+    if cfg.enable_stock_data:
+        all_proposals = []
+        for theme in themes:
+            for p in theme.get("proposals", []):
+                if p.get("ticker") and p.get("asset_type") == "stock":
+                    all_proposals.append(p)
+
+        if all_proposals:
+            print(f"[모멘텀 체크] {len(all_proposals)}종목 1개월 수익률 조회...")
+            momentum_map = fetch_momentum_batch([
+                {"ticker": p["ticker"], "market": p.get("market", "")}
+                for p in all_proposals
+            ])
+
+            run_count = 0
+            for p in all_proposals:
+                ticker = p["ticker"].strip().upper()
+                mdata = momentum_map.get(ticker)
+                if mdata:
+                    p["price_momentum_check"] = mdata["momentum_tag"]
+                    if mdata["momentum_tag"] == "already_run":
+                        run_count += 1
+
+            if run_count:
+                print(f"[모멘텀 체크] {run_count}종목 급등 감지 (1개월 +20% 이상)")
+            print(f"[모멘텀 체크] 완료 — {len(momentum_map)}/{len(all_proposals)}종목 조회 성공")
+
     # ── Stage 2: 핵심 종목 심층분석 ──
     if not cfg.enable_stock_analysis:
         print("[Stage 2] 종목 심층분석 비활성화 — 건너뜀")
         return result
 
     # 상위 테마에서 buy/sell 제안 중 stock 타입 종목 추출 (테마당 top_stocks_per_theme개)
+    # 급등 종목(already_run)보다 미반영 종목(early_signal/undervalued)을 우선 선정
     stock_targets = []
     for theme in themes[:cfg.top_themes]:
-        theme_stocks = 0
-        for proposal in theme.get("proposals", []):
-            if (proposal.get("asset_type") == "stock"
-                    and proposal.get("action") in ("buy", "sell")
-                    and proposal.get("ticker")
-                    and theme_stocks < cfg.top_stocks_per_theme):
-                stock_targets.append((proposal, theme.get("theme_name", "")))
-                theme_stocks += 1
+        candidates = [
+            p for p in theme.get("proposals", [])
+            if (p.get("asset_type") == "stock"
+                and p.get("action") in ("buy", "sell")
+                and p.get("ticker"))
+        ]
+        # 정렬: already_run 종목은 뒤로, early_signal/undervalued 우선
+        priority = {"undervalued": 0, "early_signal": 0, "unknown": 1, "fair_priced": 1, "already_run": 2}
+        candidates.sort(key=lambda p: (
+            priority.get(p.get("price_momentum_check", "unknown"), 1),
+            -1 if p.get("discovery_type") in ("early_signal", "contrarian", "deep_value") else 0,
+        ))
+        for proposal in candidates[:cfg.top_stocks_per_theme]:
+            stock_targets.append((proposal, theme.get("theme_name", "")))
 
     if not stock_targets:
         print("[Stage 2] 심층분석 대상 종목 없음 — 건너뜀")
@@ -193,6 +271,9 @@ def run_analysis(news_text: str, date: str, max_turns: int = 6) -> dict:
     return anyio.run(stage1_discover_themes, news_text, date, max_turns)
 
 
-def run_full_analysis(news_text: str, date: str, cfg: AnalyzerConfig) -> dict:
+def run_full_analysis(
+    news_text: str, date: str, cfg: AnalyzerConfig,
+    db_cfg: DatabaseConfig | None = None,
+) -> dict:
     """동기 래퍼 — 멀티스테이지 전체 파이프라인"""
-    return anyio.run(run_pipeline, news_text, date, cfg)
+    return anyio.run(run_pipeline, news_text, date, cfg, db_cfg)

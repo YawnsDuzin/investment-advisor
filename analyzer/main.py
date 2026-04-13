@@ -44,6 +44,7 @@ def main() -> int:
         news_text=news_text,
         date=str(date.today()),
         cfg=cfg.analyzer,
+        db_cfg=cfg.db,
     )
 
     if result.get("error"):

@@ -5,7 +5,7 @@ from psycopg2.extras import execute_values, RealDictCursor
 from shared.config import DatabaseConfig
 
 # ── 스키마 버전 관리 ──────────────────────────────
-SCHEMA_VERSION = 4  # v1: 초기 4테이블, v2: 멀티에이전트 확장, v3: 일자별 추적, v4: 공급망 분석
+SCHEMA_VERSION = 5  # v1: 초기 4테이블, v2: 멀티에이전트 확장, v3: 일자별 추적, v4: 공급망 분석, v5: 발굴 유형
 
 
 def _ensure_database(cfg: DatabaseConfig) -> None:
@@ -266,6 +266,22 @@ def _migrate_to_v4(cur) -> None:
     print("[DB] v4 마이그레이션 완료 — vendor_tier, supply_chain_position 컬럼 추가")
 
 
+def _migrate_to_v5(cur) -> None:
+    """v5: 발굴 유형 — discovery_type, price_momentum_check 컬럼 추가"""
+    cur.execute("""
+        ALTER TABLE investment_proposals
+            ADD COLUMN IF NOT EXISTS discovery_type VARCHAR(20),
+            ADD COLUMN IF NOT EXISTS price_momentum_check VARCHAR(20);
+    """)
+
+    cur.execute("""
+        INSERT INTO schema_version (version) VALUES (5)
+        ON CONFLICT (version) DO NOTHING;
+    """)
+
+    print("[DB] v5 마이그레이션 완료 — discovery_type, price_momentum_check 컬럼 추가")
+
+
 def init_db(cfg: DatabaseConfig) -> None:
     """PostgreSQL 설치 확인 → 데이터베이스 생성 → 스키마 마이그레이션"""
     from shared.pg_setup import ensure_postgresql
@@ -289,6 +305,9 @@ def init_db(cfg: DatabaseConfig) -> None:
 
             if current < 4:
                 _migrate_to_v4(cur)
+
+            if current < 5:
+                _migrate_to_v5(cur)
 
         conn.commit()
         print("[DB] 테이블 초기화 완료")
@@ -391,8 +410,9 @@ def save_analysis(cfg: DatabaseConfig, analysis_date: str, result: dict) -> int:
                             entry_condition, exit_condition, target_allocation,
                             current_price, target_price_low, target_price_high,
                             upside_pct, sentiment_score, quant_score,
-                            sector, currency, vendor_tier, supply_chain_position)
-                           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                            sector, currency, vendor_tier, supply_chain_position,
+                            discovery_type, price_momentum_check)
+                           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                            RETURNING id""",
                         (theme_id, proposal.get("asset_type"),
                          proposal.get("asset_name"), proposal.get("ticker"),
@@ -405,7 +425,8 @@ def save_analysis(cfg: DatabaseConfig, analysis_date: str, result: dict) -> int:
                          proposal.get("target_price_high"), proposal.get("upside_pct"),
                          proposal.get("sentiment_score"), proposal.get("quant_score"),
                          proposal.get("sector"), proposal.get("currency"),
-                         proposal.get("vendor_tier"), proposal.get("supply_chain_position"))
+                         proposal.get("vendor_tier"), proposal.get("supply_chain_position"),
+                         proposal.get("discovery_type"), proposal.get("price_momentum_check"))
                     )
                     proposal_id = cur.fetchone()[0]
 
@@ -441,6 +462,43 @@ def save_analysis(cfg: DatabaseConfig, analysis_date: str, result: dict) -> int:
         conn.commit()
         print(f"[DB] 세션 #{session_id} 저장 완료 — 이슈 {len(issues)}건, 테마 {len(themes)}건")
         return session_id
+    finally:
+        conn.close()
+
+
+def get_recent_recommendations(cfg: DatabaseConfig, days: int = 7) -> list[dict]:
+    """최근 N일간 추천된 종목 이력 조회 (중복 제거 피드백용)
+
+    Returns:
+        [{"ticker": "005930", "asset_name": "삼성전자", "theme_name": "AI 반도체",
+          "action": "buy", "conviction": "high", "count": 3,
+          "first_date": "2026-04-07", "last_date": "2026-04-13"}]
+    """
+    conn = get_connection(cfg)
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                SELECT
+                    p.ticker,
+                    p.asset_name,
+                    t.theme_name,
+                    p.action,
+                    p.conviction,
+                    COUNT(*) as count,
+                    MIN(s.analysis_date)::text as first_date,
+                    MAX(s.analysis_date)::text as last_date
+                FROM investment_proposals p
+                JOIN investment_themes t ON p.theme_id = t.id
+                JOIN analysis_sessions s ON t.session_id = s.id
+                WHERE s.analysis_date >= CURRENT_DATE - %s
+                  AND p.ticker IS NOT NULL
+                GROUP BY p.ticker, p.asset_name, t.theme_name, p.action, p.conviction
+                ORDER BY count DESC, p.ticker
+            """, (days,))
+            return [dict(row) for row in cur.fetchall()]
+    except Exception as e:
+        print(f"[DB] 최근 추천 이력 조회 실패: {e}")
+        return []
     finally:
         conn.close()
 

@@ -14,6 +14,8 @@ def collect_news(cfg: NewsConfig) -> str:
         "technology": "기술·AI·반도체",
         "commodities": "에너지·원자재",
         "korea": "한국 경제",
+        "early_signals": "선행 지표·규제·공급망",
+        "korea_early": "한국 산업·M&A·자본시장",
     }
 
     for category, feed_urls in cfg.feeds.items():
