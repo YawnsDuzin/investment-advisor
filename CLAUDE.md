@@ -32,6 +32,7 @@ investment-advisor/
 │   ├── templates/       ← Jinja2 HTML (다크 테마)
 │   └── static/css/
 └── _docs/               ← 운영 문서 (분석 파이프라인, 라즈베리파이 매뉴얼)
+    └── _prompts/        ← 작업 요청 프롬프트 기록 (날짜별)
 ```
 
 ## Commands
