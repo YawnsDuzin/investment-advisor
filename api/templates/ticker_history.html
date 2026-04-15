@@ -1,7 +1,12 @@
 {% extends "base.html" %}
 {% block title %}{{ ticker }} 이력 — Investment Advisor{% endblock %}
 {% block page_title %}{{ ticker }} 추천 이력{% endblock %}
-{% block header_actions %}<a href="/pages/proposals" class="btn">제안 목록</a>{% endblock %}
+{% block header_actions %}
+{% if current_user %}
+<button class="btn" id="subTickerBtn" onclick="toggleTickerSub('{{ ticker }}')" style="font-size:12px;padding:4px 12px;margin-right:8px;">구독</button>
+{% endif %}
+<a href="/pages/proposals" class="btn">제안 목록</a>
+{% endblock %}
 
 {% block content %}
 {% if tracking_list %}
@@ -106,5 +111,25 @@
 <div class="empty-state">
     <h3>{{ ticker }}의 추천 이력이 없습니다</h3>
 </div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if current_user %}
+<script>
+async function toggleTickerSub(ticker) {
+    var btn = document.getElementById('subTickerBtn');
+    var res = await fetch('/api/subscriptions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sub_type: 'ticker', sub_key: ticker, label: ticker }),
+    });
+    if (res.ok) {
+        btn.textContent = '구독 완료';
+        btn.disabled = true;
+        btn.style.opacity = '0.6';
+    }
+}
+</script>
 {% endif %}
 {% endblock %}

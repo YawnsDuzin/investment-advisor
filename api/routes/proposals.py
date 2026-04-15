@@ -1,9 +1,12 @@
 """투자 제안 조회 API"""
-from fastapi import APIRouter, HTTPException, Query
+from typing import Optional
+from fastapi import APIRouter, HTTPException, Query, Depends
 from shared.config import DatabaseConfig
 from shared.db import get_connection
 from psycopg2.extras import RealDictCursor
 from api.routes.sessions import _serialize_row
+from api.auth.dependencies import get_current_user_required
+from api.auth.models import UserInDB
 
 router = APIRouter(prefix="/proposals", tags=["투자 제안"])
 
@@ -26,6 +29,7 @@ def list_proposals(
     time_horizon: str | None = Query(default=None, description="투자기간"),
     ticker: str | None = Query(default=None, description="티커 검색"),
     sort: str | None = Query(default=None, description="정렬: date|upside|quant|allocation|conviction_sort"),
+    _user: Optional[UserInDB] = Depends(get_current_user_required),
 ):
     """투자 제안 목록 (최신순, 필터 가능)"""
     conn = get_connection(_get_cfg())
@@ -95,6 +99,7 @@ def list_proposals(
 def get_by_ticker(
     ticker: str,
     limit: int = Query(default=10, ge=1, le=50),
+    _user: Optional[UserInDB] = Depends(get_current_user_required),
 ):
     """특정 티커의 투자 제안 이력"""
     conn = get_connection(_get_cfg())
@@ -118,7 +123,7 @@ def get_by_ticker(
 
 
 @router.get("/summary/latest")
-def latest_portfolio_summary():
+def latest_portfolio_summary(_user: Optional[UserInDB] = Depends(get_current_user_required)):
     """최신 분석의 포트폴리오 요약 (buy 제안만, 비중순)"""
     conn = get_connection(_get_cfg())
     try:
@@ -161,7 +166,7 @@ def latest_portfolio_summary():
 
 
 @router.get("/{proposal_id}/stock-analysis")
-def get_stock_analysis(proposal_id: int):
+def get_stock_analysis(proposal_id: int, _user: Optional[UserInDB] = Depends(get_current_user_required)):
     """투자 제안에 대한 종목 심층분석 조회"""
     conn = get_connection(_get_cfg())
     try:

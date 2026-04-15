@@ -1,11 +1,14 @@
 """테마 채팅 API — 대화 세션 CRUD + 메시지 전송"""
-from fastapi import APIRouter, HTTPException
+from typing import Optional
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from shared.config import DatabaseConfig
 from shared.db import get_connection
 from psycopg2.extras import RealDictCursor
 from api.routes.sessions import _serialize_row
 from api.chat_engine import build_theme_context, query_theme_chat_sync
+from api.auth.dependencies import require_role
+from api.auth.models import UserInDB
 
 router = APIRouter(prefix="/chat", tags=["채팅"])
 
@@ -26,7 +29,7 @@ class ChatMessageRequest(BaseModel):
 
 
 @router.post("/sessions")
-def create_chat_session(body: CreateSessionRequest):
+def create_chat_session(body: CreateSessionRequest, user: Optional[UserInDB] = Depends(require_role("admin", "moderator"))):
     """새 채팅 세션 생성"""
     cfg = _get_cfg()
     conn = get_connection(cfg)
@@ -39,10 +42,11 @@ def create_chat_session(body: CreateSessionRequest):
             if not theme:
                 raise HTTPException(status_code=404, detail="테마를 찾을 수 없습니다")
 
+            user_id = user.id if user else None
             cur.execute(
-                """INSERT INTO theme_chat_sessions (theme_id, title)
-                   VALUES (%s, %s) RETURNING id, theme_id, title, created_at, updated_at""",
-                (body.theme_id, f"{theme['theme_name']} 채팅")
+                """INSERT INTO theme_chat_sessions (theme_id, title, user_id)
+                   VALUES (%s, %s, %s) RETURNING id, theme_id, title, created_at, updated_at""",
+                (body.theme_id, f"{theme['theme_name']} 채팅", user_id)
             )
             session = cur.fetchone()
         conn.commit()
@@ -52,8 +56,8 @@ def create_chat_session(body: CreateSessionRequest):
 
 
 @router.get("/sessions")
-def list_chat_sessions(theme_id: int | None = None):
-    """채팅 세션 목록 조회 (theme_id 필터 선택적)"""
+def list_chat_sessions(theme_id: int | None = None, user: Optional[UserInDB] = Depends(require_role("admin", "moderator"))):
+    """채팅 세션 목록 조회 — 본인 세션만 (Admin은 전체)"""
     cfg = _get_cfg()
     conn = get_connection(cfg)
     try:
@@ -65,10 +69,20 @@ def list_chat_sessions(theme_id: int | None = None):
                 FROM theme_chat_sessions cs
                 JOIN investment_themes t ON cs.theme_id = t.id
             """
+            conditions = []
             params = []
+
+            # Admin이 아니면 본인 세션만
+            if user and user.role != "admin":
+                conditions.append("cs.user_id = %s")
+                params.append(user.id)
+
             if theme_id is not None:
-                query += " WHERE cs.theme_id = %s"
+                conditions.append("cs.theme_id = %s")
                 params.append(theme_id)
+
+            if conditions:
+                query += " WHERE " + " AND ".join(conditions)
             query += " ORDER BY cs.updated_at DESC"
             cur.execute(query, params)
             sessions = cur.fetchall()
@@ -78,8 +92,8 @@ def list_chat_sessions(theme_id: int | None = None):
 
 
 @router.get("/sessions/{session_id}")
-def get_chat_session(session_id: int):
-    """채팅 세션 상세 + 메시지 이력"""
+def get_chat_session(session_id: int, user: Optional[UserInDB] = Depends(require_role("admin", "moderator"))):
+    """채팅 세션 상세 + 메시지 이력 — 본인 세션만 (Admin은 전체)"""
     cfg = _get_cfg()
     conn = get_connection(cfg)
     try:
@@ -93,6 +107,10 @@ def get_chat_session(session_id: int):
             session = cur.fetchone()
             if not session:
                 raise HTTPException(status_code=404, detail="채팅 세션을 찾을 수 없습니다")
+
+            # 소유권 검증 (Admin은 모든 세션 접근 가능)
+            if user and user.role != "admin" and session.get("user_id") != user.id:
+                raise HTTPException(status_code=403, detail="본인의 채팅 세션만 조회할 수 있습니다")
 
             cur.execute("""
                 SELECT id, role, content, created_at
@@ -110,16 +128,22 @@ def get_chat_session(session_id: int):
 
 
 @router.delete("/sessions/{session_id}")
-def delete_chat_session(session_id: int):
-    """채팅 세션 삭제"""
+def delete_chat_session(session_id: int, user: Optional[UserInDB] = Depends(require_role("admin", "moderator"))):
+    """채팅 세션 삭제 — 본인 세션만 (Admin은 전체)"""
     cfg = _get_cfg()
     conn = get_connection(cfg)
     try:
-        with conn.cursor() as cur:
-            cur.execute("DELETE FROM theme_chat_sessions WHERE id = %s RETURNING id",
-                        (session_id,))
-            if not cur.fetchone():
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT id, user_id FROM theme_chat_sessions WHERE id = %s", (session_id,))
+            session = cur.fetchone()
+            if not session:
                 raise HTTPException(status_code=404, detail="채팅 세션을 찾을 수 없습니다")
+
+            # 소유권 검증 (Admin은 모든 세션 삭제 가능)
+            if user and user.role != "admin" and session.get("user_id") != user.id:
+                raise HTTPException(status_code=403, detail="본인의 채팅 세션만 삭제할 수 있습니다")
+
+            cur.execute("DELETE FROM theme_chat_sessions WHERE id = %s", (session_id,))
         conn.commit()
         return {"message": "삭제 완료"}
     finally:
@@ -130,7 +154,7 @@ def delete_chat_session(session_id: int):
 
 
 @router.post("/sessions/{session_id}/messages")
-def send_message(session_id: int, body: ChatMessageRequest):
+def send_message(session_id: int, body: ChatMessageRequest, user: Optional[UserInDB] = Depends(require_role("admin", "moderator"))):
     """사용자 메시지 전송 → Claude 응답 생성 → 양쪽 DB 저장
 
     동기 함수 — FastAPI가 threadpool에서 실행.
@@ -143,7 +167,7 @@ def send_message(session_id: int, body: ChatMessageRequest):
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             # 1) 세션 + 테마 정보 조회
             cur.execute("""
-                SELECT cs.id, cs.theme_id, t.theme_name
+                SELECT cs.id, cs.theme_id, cs.user_id, t.theme_name
                 FROM theme_chat_sessions cs
                 JOIN investment_themes t ON cs.theme_id = t.id
                 WHERE cs.id = %s
@@ -151,6 +175,10 @@ def send_message(session_id: int, body: ChatMessageRequest):
             session = cur.fetchone()
             if not session:
                 raise HTTPException(status_code=404, detail="채팅 세션을 찾을 수 없습니다")
+
+            # 소유권 검증 (Admin은 모든 세션에 메시지 전송 가능)
+            if user and user.role != "admin" and session.get("user_id") != user.id:
+                raise HTTPException(status_code=403, detail="본인의 채팅 세션에만 메시지를 보낼 수 있습니다")
 
             theme_id = session["theme_id"]
 

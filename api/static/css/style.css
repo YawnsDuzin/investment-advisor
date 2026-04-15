@@ -92,9 +92,160 @@ a:hover { color: var(--accent-hover); }
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 12px;
 }
 
 .content-header h2 { font-size: 22px; font-weight: 600; }
+
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-left: auto;
+}
+
+/* ===== 알림 아이콘 ===== */
+.header-noti {
+    position: relative;
+    color: var(--text-muted);
+    padding: 6px;
+    border-radius: 8px;
+    transition: background 0.15s, color 0.15s;
+    display: flex;
+    align-items: center;
+}
+.header-noti:hover { background: var(--bg-card-hover); color: var(--text); }
+.header-noti-badge {
+    position: absolute;
+    top: 1px; right: 0;
+    background: var(--red);
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    min-width: 16px;
+    height: 16px;
+    line-height: 16px;
+    text-align: center;
+    border-radius: 8px;
+    padding: 0 4px;
+}
+
+/* ===== 유저 드롭다운 ===== */
+.user-dropdown { position: relative; }
+.user-dropdown-trigger {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 10px 5px 5px;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    background: none;
+    color: var(--text);
+    cursor: pointer;
+    font-size: 13px;
+    transition: background 0.15s, border-color 0.15s;
+}
+.user-dropdown-trigger:hover,
+.user-dropdown.open .user-dropdown-trigger {
+    background: var(--bg-card);
+    border-color: var(--border);
+}
+.user-avatar {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #fff;
+    font-weight: 700;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+.user-dropdown-name {
+    max-width: 100px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.user-dropdown-arrow {
+    transition: transform 0.2s;
+    color: var(--text-muted);
+}
+.user-dropdown.open .user-dropdown-arrow {
+    transform: rotate(180deg);
+}
+
+.user-dropdown-menu {
+    display: none;
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    min-width: 200px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+    z-index: 1000;
+    padding: 6px 0;
+    animation: dropdown-in 0.15s ease-out;
+}
+.user-dropdown.open .user-dropdown-menu { display: block; }
+
+@keyframes dropdown-in {
+    from { opacity: 0; transform: translateY(-6px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.user-dropdown-header {
+    padding: 10px 16px;
+}
+.user-dropdown-header-name {
+    font-weight: 600;
+    font-size: 14px;
+}
+.user-dropdown-header-email {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+
+.user-dropdown-divider {
+    height: 1px;
+    background: var(--border);
+    margin: 4px 0;
+}
+
+.user-dropdown-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 16px;
+    font-size: 13px;
+    color: var(--text);
+    text-decoration: none;
+    transition: background 0.1s;
+    cursor: pointer;
+    width: 100%;
+    border: none;
+    background: none;
+    text-align: left;
+}
+.user-dropdown-item:hover {
+    background: var(--bg-card-hover);
+}
+.user-dropdown-logout {
+    color: var(--red);
+    font-size: 13px;
+}
+.user-dropdown-badge {
+    background: var(--red);
+    color: #fff;
+    font-size: 11px;
+    padding: 1px 7px;
+    border-radius: 10px;
+    font-weight: 600;
+}
 
 .content-body { padding: 28px 36px; }
 
@@ -786,6 +937,8 @@ tbody tr:hover { background: var(--bg-card-hover); }
     }
     .content-header h2 { font-size: 18px; }
     .content-body { padding: 14px 12px; }
+    .user-dropdown-name { display: none; }
+    .user-dropdown-menu { right: -8px; }
 
     /* 그리드 축소 */
     .stat-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
@@ -1236,3 +1389,14 @@ tbody tr:hover { background: var(--bg-card-hover); }
 .admin-log-error { color: var(--red); }
 .admin-log-success { color: var(--green); }
 .admin-log-info { color: var(--accent); }
+
+/* ===== 워치리스트 토글 ===== */
+.watchlist-toggle {
+    cursor: pointer;
+    font-size: 18px;
+    color: var(--text-muted);
+    transition: color 0.15s;
+    user-select: none;
+}
+.watchlist-toggle:hover { color: #fbbf24; }
+.watchlist-toggle.watched { color: #fbbf24; }

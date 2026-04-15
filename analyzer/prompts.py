@@ -98,7 +98,7 @@ STAGE1_PROMPT = """## 분석 날짜: {date}
 - 구체적 종목/ETF (티커 포함), 시장(KRX/NYSE/NASDAQ 등)
 - 매매 판단: buy / sell / hold / watch
 - 확신도: high / medium / low
-- **현재가** (₩ 또는 $ 기준, 추정 가능)
+- **현재가**: null로 설정 (실시간 시세는 별도 시스템에서 자동 주입됨 — 추정 금지)
 - **목표가 범위** (상한/하한)
 - **상승여력 %**
 - **벤더 티어** (1 = 대형 리더 / 2 = 중견 핵심 부품·소재·장비 / 3 = 니치 전문기업) — 참고 분류용
@@ -199,9 +199,9 @@ STAGE1_PROMPT = """## 분석 날짜: {date}
           "action": "buy|sell|hold|watch",
           "conviction": "high|medium|low",
           "current_price": null,
-          "target_price_low": "향후 상승 목표가의 보수적 하단 (반드시 current_price 이상)",
+          "target_price_low": "향후 상승 목표가의 보수적 하단 (추정치, 별도 시스템에서 현재가 확인 후 검증됨)",
           "target_price_high": "향후 상승 목표가의 낙관적 상단",
-          "upside_pct": "target_price_low 기준 상승여력% = (target_price_low - current_price) / current_price * 100",
+          "upside_pct": null,
           "vendor_tier": 1|2|3,
           "supply_chain_position": "밸류체인 내 역할 (예: HBM 핵심 장비, 2차전지 분리막)",
           "discovery_type": "consensus|early_signal|contrarian|deep_value",

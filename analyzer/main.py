@@ -13,7 +13,7 @@ import sys
 from datetime import date
 
 from shared.config import AppConfig
-from shared.db import init_db, save_analysis, save_news_articles
+from shared.db import init_db, save_analysis, save_news_articles, get_latest_news_titles
 from analyzer.news_collector import collect_news_structured
 from analyzer.analyzer import run_full_analysis, translate_news
 
@@ -38,6 +38,22 @@ def main() -> int:
         print("[경고] 수집된 뉴스가 없습니다. 종료합니다.")
         return 1
 
+    # 1-1) 뉴스 세트 지문 비교 — 신규 뉴스가 임계값 미만이면 스킵
+    min_new = cfg.analyzer.min_new_news
+    try:
+        prev_titles = set(get_latest_news_titles(cfg.db))
+        curr_titles = {a["title"] for a in news_articles}
+        new_titles = curr_titles - prev_titles
+        new_count = len(new_titles)
+        print(f"[지문] 수집 {len(curr_titles)}건 중 신규 {new_count}건 "
+              f"(이전 세션 {len(prev_titles)}건과 비교)")
+
+        if new_count < min_new and prev_titles:
+            print(f"[스킵] 신규 뉴스 {new_count}건 < 임계값 {min_new}건 — 분석 생략")
+            return 0
+    except Exception as e:
+        print(f"[지문] 비교 실패 (무시하고 분석 진행): {e}")
+
     # 2) 멀티스테이지 분석
     print("\n[분석] Claude Code SDK 멀티스테이지 파이프라인 시작...")
     result = run_full_analysis(
@@ -55,8 +71,8 @@ def main() -> int:
     themes = result.get("themes", [])
     print(f"\n[분석] 전체 완료 — 이슈 {len(issues)}건, 테마 {len(themes)}건")
 
-    # 3) 뉴스 제목 한글 번역
-    news_articles = translate_news(news_articles)
+    # 3) 뉴스 제목 한글 번역 (Haiku 모델로 비용 절감)
+    news_articles = translate_news(news_articles, model=cfg.analyzer.model_translate)
 
     # 4) DB 저장
     try:

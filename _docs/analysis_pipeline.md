@@ -1,6 +1,6 @@
 # Claude Code SDK 기반 멀티스테이지 분석 파이프라인
 
-> 작성일: 2026-04-11
+> 최종 갱신: 2026-04-15
 > 대상 코드: [analyzer/](../analyzer/), [shared/config.py](../shared/config.py)
 
 매일 RSS 뉴스를 수집하고 `claude-agent-sdk`의 `query()` 호출로 **2단계 분석**을 수행한 뒤, 결과를 PostgreSQL에 저장하는 배치 파이프라인이다. 과금은 Claude Code 구독 사용량에 포함되며, 별도 API 토큰 과금이 없다.
@@ -35,7 +35,7 @@
 
 - `feedparser`로 [shared/config.py](../shared/config.py) `NewsConfig.feeds`의 카테고리별 RSS 피드를 순회
 - 카테고리: `global`, `finance`, `technology`, `commodities`, `korea`
-- 각 피드에서 `max_articles_per_feed`(기본 15)개 엔트리 추출
+- 각 피드에서 `max_articles_per_feed`(기본 5)개 엔트리 추출
 - HTML 태그 단순 제거 후 `요약[:500]`만 보존
 - 카테고리 라벨 헤더(`### [경제·금융·시장] (N건)`)와 bullet 목록으로 마크다운화
 - 반환값은 `---` 구분자로 조인된 단일 문자열 → Stage 1 프롬프트의 `{news_text}` 슬롯으로 투입
@@ -53,7 +53,7 @@ async for message in query(
     prompt=prompt,
     options=ClaudeAgentOptions(
         system_prompt=system_prompt,
-        max_turns=max_turns,   # 기본 6
+        max_turns=max_turns,   # AnalyzerConfig 기본값 2
     ),
 ):
     if isinstance(message, AssistantMessage):
@@ -123,12 +123,12 @@ data_sources, issues[], themes[]
 [analyzer/analyzer.py:95-114](../analyzer/analyzer.py#L95-L114)
 
 - `AnalyzerConfig.enable_stock_analysis` 가 `False` 면 전체 건너뜀
-- Stage 1 결과에서 **상위 `top_themes`개 테마**(기본 3개)의 `proposals` 순회
+- Stage 1 결과에서 **상위 `top_themes`개 테마**(기본 2개)의 `proposals` 순회
 - 조건을 모두 만족하는 제안만 대상:
   - `asset_type == "stock"`
   - `action` ∈ {buy, sell}
   - `ticker` 존재
-- 최대 `top_themes * top_stocks_per_theme`개(기본 3×2 = 6개)까지 누적
+- 최대 `top_themes * top_stocks_per_theme`개(기본 2×2 = 4개)까지 누적
 - 대상이 0개면 Stage 2 생략
 
 ### 시스템 프롬프트 역할
@@ -169,10 +169,11 @@ target_price_low, target_price_high, recommendation, report_markdown
 
 | 필드 | 기본값 | 의미 |
 |------|--------|------|
-| `max_turns` | 6 | Claude SDK 최대 턴 수 (두 Stage 공통) |
-| `top_themes` | 3 | Stage 2 대상 상위 테마 수 |
-| `top_stocks_per_theme` | 2 | 테마당 심층분석 종목 수 |
-| `enable_stock_analysis` | True | Stage 2 활성화 스위치 |
+| `max_turns` | 2 | Claude SDK 최대 턴 수 (두 Stage 공통, 환경변수 `MAX_TURNS`) |
+| `top_themes` | 2 | Stage 2 대상 상위 테마 수 (환경변수 `TOP_THEMES`) |
+| `top_stocks_per_theme` | 2 | 테마당 심층분석 종목 수 (환경변수 `TOP_STOCKS_PER_THEME`) |
+| `enable_stock_analysis` | True | Stage 2 활성화 스위치 (환경변수 `ENABLE_STOCK_ANALYSIS`) |
+| `enable_stock_data` | True | yfinance 주가 데이터 조회 스위치 (환경변수 `ENABLE_STOCK_DATA`) |
 
 ---
 

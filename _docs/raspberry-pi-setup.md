@@ -2,7 +2,7 @@
 
 > 대상: Raspberry Pi 4 (2GB 이상) + Raspberry Pi OS (64-bit, Bookworm 권장)
 > 프로젝트: [investment-advisor](https://github.com/YawnsDuzin/investment-advisor)
-> 작성일: 2026-04-12
+> 최종 갱신: 2026-04-15
 
 본 문서는 라즈베리파이 4에 본 프로젝트를 **처음부터** 설치·배포·자동 실행·외부 공개까지 끝내기 위한 단계별 체크리스트다. 명령어는 복사 붙여넣기로 사용할 수 있도록 블록 단위로 제공하며, 각 단계마다 **확인 방법**과 **실패 시 트러블슈팅**을 함께 기재한다.
 
@@ -244,10 +244,11 @@ psql -h localhost -U postgres -d investment_advisor -c "SELECT version();"
 | `DB_NAME` | `investment_advisor` | 위 4.3에서 생성한 이름과 일치 |
 | `DB_USER` | `postgres` | |
 | `DB_PASSWORD` | `your_password_here` | **반드시 변경** |
-| `MAX_TURNS` | `6` | Stage 1·2 공통 Claude SDK 턴 수 |
-| `TOP_THEMES` | `3` | Stage 2 심층분석 상위 테마 수 |
+| `MAX_TURNS` | `2` | Stage 1·2 공통 Claude SDK 턴 수 |
+| `TOP_THEMES` | `2` | Stage 2 심층분석 상위 테마 수 |
 | `TOP_STOCKS_PER_THEME` | `2` | 테마당 심층분석 종목 수 |
 | `ENABLE_STOCK_ANALYSIS` | `true` | `false` 설정 시 Stage 2 비활성화 |
+| `ENABLE_STOCK_DATA` | `true` | `false` 설정 시 yfinance 주가 데이터 조회 비활성화 |
 
 ---
 
@@ -364,7 +365,7 @@ curl -s http://localhost:8000/docs | head -c 200
 
 목표:
 - **API 서버**는 상시 기동, 장애 시 자동 재시작
-- **분석 배치**는 매일 07:00 (KST) 1회 실행
+- **분석 배치**는 매일 03:00 (KST) 1회 실행
 
 아래 예시는 사용자 이름을 `dzp`, 프로젝트 경로를 `/home/dzp/dzp-main/program/investment-advisor` 로 가정한다. 자신의 환경에 맞게 **`User`, `WorkingDirectory`, `EnvironmentFile`, `ExecStart`** 경로를 수정한다.
 

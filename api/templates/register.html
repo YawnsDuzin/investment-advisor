@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>회원가입 — Investment Advisor</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <style>
+        body { justify-content: center; align-items: center; }
+        .auth-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 40px;
+            width: 100%;
+            max-width: 400px;
+        }
+        .auth-card h1 {
+            font-size: 24px;
+            margin-bottom: 8px;
+            text-align: center;
+        }
+        .auth-card p.subtitle {
+            color: var(--text-muted);
+            font-size: 14px;
+            text-align: center;
+            margin-bottom: 24px;
+        }
+        .auth-card label {
+            display: block;
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+        }
+        .auth-card input[type="email"],
+        .auth-card input[type="password"],
+        .auth-card input[type="text"] {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--bg);
+            color: var(--text);
+            font-size: 14px;
+            margin-bottom: 16px;
+            outline: none;
+        }
+        .auth-card input:focus {
+            border-color: var(--accent);
+        }
+        .auth-card button {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            background: var(--accent);
+            color: #fff;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 8px;
+        }
+        .auth-card button:hover {
+            background: var(--accent-hover);
+        }
+        .auth-card .error {
+            background: rgba(248, 113, 113, 0.15);
+            color: var(--red);
+            padding: 10px 12px;
+            border-radius: 8px;
+            font-size: 13px;
+            margin-bottom: 16px;
+        }
+        .auth-card .footer-link {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+    </style>
+</head>
+<body>
+    <div class="auth-card">
+        <h1>Investment Advisor</h1>
+        <p class="subtitle">회원가입</p>
+
+        {% if error %}
+        <div class="error">{{ error }}</div>
+        {% endif %}
+
+        <form method="post" action="/auth/register">
+            <label for="email">이메일</label>
+            <input type="email" id="email" name="email" required autofocus placeholder="name@example.com">
+
+            <label for="nickname">닉네임</label>
+            <input type="text" id="nickname" name="nickname" required placeholder="표시될 이름">
+
+            <label for="password">비밀번호</label>
+            <input type="password" id="password" name="password" required placeholder="8자 이상">
+
+            <button type="submit">가입하기</button>
+        </form>
+
+        <div class="footer-link">
+            이미 계정이 있으신가요? <a href="/auth/login">로그인</a>
+        </div>
+    </div>
+</body>
+</html>

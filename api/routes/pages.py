@@ -1,14 +1,17 @@
 """Jinja2 템플릿 기반 웹 페이지 라우트"""
 import re
 from datetime import date
-from fastapi import APIRouter, Request, Query
+from typing import Optional
+from fastapi import APIRouter, Request, Query, Depends
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 from markupsafe import Markup
-from shared.config import DatabaseConfig
+from shared.config import DatabaseConfig, AuthConfig
 from shared.db import get_connection
 from psycopg2.extras import RealDictCursor
 from api.routes.sessions import _serialize_row
+from api.auth.dependencies import get_current_user, _get_auth_cfg
+from api.auth.models import UserInDB
 
 router = APIRouter(tags=["페이지"])
 
@@ -61,11 +64,38 @@ def _get_cfg() -> DatabaseConfig:
     return DatabaseConfig()
 
 
+def _base_ctx(request: Request, active_page: str, user: Optional[UserInDB], auth_cfg: AuthConfig) -> dict:
+    """모든 템플릿에 공통으로 전달할 컨텍스트"""
+    ctx = {
+        "request": request,
+        "active_page": active_page,
+        "current_user": user,
+        "auth_enabled": auth_cfg.enabled,
+        "unread_notifications": 0,
+    }
+    if user and auth_cfg.enabled:
+        try:
+            conn = get_connection(_get_cfg())
+            try:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT COUNT(*) FROM user_notifications WHERE user_id = %s AND is_read = FALSE",
+                        (user.id,),
+                    )
+                    ctx["unread_notifications"] = cur.fetchone()[0]
+            finally:
+                conn.close()
+        except Exception:
+            pass
+    return ctx
+
+
 # ──────────────────────────────────────────────
 # Dashboard (Home) — 어제 대비 변화 + 투자 신호
 # ──────────────────────────────────────────────
 @router.get("/")
-def dashboard(request: Request):
+def dashboard(request: Request, user: Optional[UserInDB] = Depends(get_current_user), auth_cfg: AuthConfig = Depends(_get_auth_cfg)):
+    ctx = _base_ctx(request, "dashboard", user, auth_cfg)
     conn = get_connection(_get_cfg())
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -75,7 +105,7 @@ def dashboard(request: Request):
             if not session:
                 return templates.TemplateResponse(
                     request=request, name="dashboard.html",
-                    context={"active_page": "dashboard", "session": None},
+                    context={**ctx, "session": None},
                 )
 
             session_id = session["id"]
@@ -131,6 +161,12 @@ def dashboard(request: Request):
             """, (session_id,))
             raw_news = cur.fetchall()
 
+            # 워치리스트 (로그인 사용자)
+            watched_tickers = set()
+            if user:
+                cur.execute("SELECT ticker FROM user_watchlist WHERE user_id = %s", (user.id,))
+                watched_tickers = {r["ticker"] for r in cur.fetchall()}
+
     finally:
         conn.close()
 
@@ -147,7 +183,7 @@ def dashboard(request: Request):
         news_by_category[cat]["articles"].append(_serialize_row(row))
 
     return templates.TemplateResponse(request=request, name="dashboard.html", context={
-        "active_page": "dashboard",
+        **ctx,
         "session": _serialize_row(session),
         "themes": [_serialize_row(t) for t in themes],
         "issue_count": issue_count,
@@ -157,6 +193,7 @@ def dashboard(request: Request):
         "active_tracking": active_tracking,
         "disappeared_themes": disappeared_themes,
         "news_by_category": news_by_category,
+        "watched_tickers": watched_tickers,
     })
 
 
@@ -164,7 +201,8 @@ def dashboard(request: Request):
 # Sessions
 # ──────────────────────────────────────────────
 @router.get("/pages/sessions")
-def sessions_page(request: Request, limit: int = Query(default=30, ge=1, le=100)):
+def sessions_page(request: Request, limit: int = Query(default=30, ge=1, le=100), user: Optional[UserInDB] = Depends(get_current_user), auth_cfg: AuthConfig = Depends(_get_auth_cfg)):
+    ctx = _base_ctx(request, "sessions", user, auth_cfg)
     conn = get_connection(_get_cfg())
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -182,7 +220,7 @@ def sessions_page(request: Request, limit: int = Query(default=30, ge=1, le=100)
         conn.close()
 
     return templates.TemplateResponse(request=request, name="sessions.html", context={
-        "active_page": "sessions",
+        **ctx,
         "sessions": [_serialize_row(s) for s in sessions],
     })
 
@@ -206,7 +244,7 @@ def session_by_date_page(analysis_date: str):
 
 
 @router.get("/pages/sessions/{session_id}")
-def session_detail_page(request: Request, session_id: int):
+def session_detail_page(request: Request, session_id: int, user: Optional[UserInDB] = Depends(get_current_user), auth_cfg: AuthConfig = Depends(_get_auth_cfg)):
     conn = get_connection(_get_cfg())
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -262,8 +300,9 @@ def session_detail_page(request: Request, session_id: int):
     finally:
         conn.close()
 
+    ctx = _base_ctx(request, "sessions", user, auth_cfg)
     return templates.TemplateResponse(request=request, name="session_detail.html", context={
-        "active_page": "sessions",
+        **ctx,
         "session": _serialize_row(session),
         "issues": [_serialize_row(i) for i in issues],
         "themes": [_serialize_row(t) for t in themes],
@@ -275,8 +314,9 @@ def session_detail_page(request: Request, session_id: int):
 # Theme History (신규)
 # ──────────────────────────────────────────────
 @router.get("/pages/themes/history/{theme_key}")
-def theme_history_page(request: Request, theme_key: str):
+def theme_history_page(request: Request, theme_key: str, user: Optional[UserInDB] = Depends(get_current_user), auth_cfg: AuthConfig = Depends(_get_auth_cfg)):
     """특정 테마의 일자별 추이"""
+    ctx = _base_ctx(request, "themes", user, auth_cfg)
     conn = get_connection(_get_cfg())
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -285,7 +325,7 @@ def theme_history_page(request: Request, theme_key: str):
             tracking = cur.fetchone()
             if not tracking:
                 return templates.TemplateResponse(request=request, name="theme_history.html",
-                    context={"active_page": "themes", "tracking": None, "history": []})
+                    context={**ctx, "tracking": None, "history": []})
 
             # 일자별 테마 데이터 (이름이 유사한 것 모두)
             cur.execute("""
@@ -315,7 +355,7 @@ def theme_history_page(request: Request, theme_key: str):
         conn.close()
 
     return templates.TemplateResponse(request=request, name="theme_history.html", context={
-        "active_page": "themes",
+        **ctx,
         "tracking": _serialize_row(tracking),
         "history": [_serialize_row(h) for h in history],
     })
@@ -325,8 +365,9 @@ def theme_history_page(request: Request, theme_key: str):
 # Ticker History (신규)
 # ──────────────────────────────────────────────
 @router.get("/pages/proposals/history/{ticker}")
-def ticker_history_page(request: Request, ticker: str):
+def ticker_history_page(request: Request, ticker: str, user: Optional[UserInDB] = Depends(get_current_user), auth_cfg: AuthConfig = Depends(_get_auth_cfg)):
     """특정 종목의 일자별 추천 이력"""
+    ctx = _base_ctx(request, "proposals", user, auth_cfg)
     conn = get_connection(_get_cfg())
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -360,7 +401,7 @@ def ticker_history_page(request: Request, ticker: str):
             tr["latest_currency"] = currency
 
     return templates.TemplateResponse(request=request, name="ticker_history.html", context={
-        "active_page": "proposals",
+        **ctx,
         "ticker": ticker.upper(),
         "tracking_list": tracking_list,
         "history": history,
@@ -377,7 +418,10 @@ def themes_page(
     min_confidence: float = Query(default=0.0),
     q: str | None = Query(default=None),
     limit: int = Query(default=20, ge=1, le=100),
+    user: Optional[UserInDB] = Depends(get_current_user),
+    auth_cfg: AuthConfig = Depends(_get_auth_cfg),
 ):
+    ctx = _base_ctx(request, "themes", user, auth_cfg)
     conn = get_connection(_get_cfg())
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -417,7 +461,7 @@ def themes_page(
         conn.close()
 
     return templates.TemplateResponse(request=request, name="themes.html", context={
-        "active_page": "themes",
+        **ctx,
         "themes": [_serialize_row(t) for t in themes],
         "tracking_map": tracking_map,
         "horizon": horizon,
@@ -444,6 +488,8 @@ def proposals_page(
     time_horizon: str | None = Query(default=None, description="투자기간"),
     sort: str | None = Query(default=None, description="정렬 기준"),
     limit: int = Query(default=50, ge=1, le=200),
+    user: Optional[UserInDB] = Depends(get_current_user),
+    auth_cfg: AuthConfig = Depends(_get_auth_cfg),
 ):
     # 날짜 기본값: 오늘
     today = date.today().isoformat()
@@ -528,13 +574,32 @@ def proposals_page(
             for row in cur.fetchall():
                 key = f"{row['ticker']}_{row['theme_key']}"
                 prop_tracking[key] = _serialize_row(row)
+
+            # 워치리스트 + 메모 (로그인 사용자)
+            watched_tickers = set()
+            user_memos = {}
+            if user:
+                cur.execute("SELECT ticker FROM user_watchlist WHERE user_id = %s", (user.id,))
+                watched_tickers = {r["ticker"] for r in cur.fetchall()}
+
+                proposal_ids = [p["id"] for p in proposals]
+                if proposal_ids:
+                    cur.execute(
+                        "SELECT proposal_id, content FROM user_proposal_memos "
+                        "WHERE user_id = %s AND proposal_id = ANY(%s)",
+                        (user.id, proposal_ids),
+                    )
+                    user_memos = {r["proposal_id"]: r["content"] for r in cur.fetchall()}
     finally:
         conn.close()
 
+    ctx = _base_ctx(request, "proposals", user, auth_cfg)
     return templates.TemplateResponse(request=request, name="proposals.html", context={
-        "active_page": "proposals",
+        **ctx,
         "proposals": [_serialize_row(p) for p in proposals],
         "prop_tracking": prop_tracking,
+        "watched_tickers": watched_tickers,
+        "user_memos": user_memos,
         "action": action,
         "asset_type": asset_type,
         "conviction": conviction,
@@ -554,11 +619,110 @@ def proposals_page(
 
 
 # ──────────────────────────────────────────────
+# Watchlist (관심 종목)
+# ──────────────────────────────────────────────
+@router.get("/pages/watchlist")
+def watchlist_page(request: Request, user: Optional[UserInDB] = Depends(get_current_user), auth_cfg: AuthConfig = Depends(_get_auth_cfg)):
+    """관심 종목 워치리스트 — 로그인 사용자만"""
+    if not auth_cfg.enabled or user is None:
+        return RedirectResponse("/auth/login?next=/pages/watchlist", status_code=302)
+
+    ctx = _base_ctx(request, "watchlist", user, auth_cfg)
+    conn = get_connection(_get_cfg())
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                "SELECT * FROM user_watchlist WHERE user_id = %s ORDER BY created_at DESC",
+                (user.id,),
+            )
+            watchlist = [_serialize_row(r) for r in cur.fetchall()]
+
+            for item in watchlist:
+                cur.execute("""
+                    SELECT p.action, p.conviction, p.current_price, p.currency,
+                           p.upside_pct, p.target_allocation, t.theme_name, s.analysis_date
+                    FROM investment_proposals p
+                    JOIN investment_themes t ON p.theme_id = t.id
+                    JOIN analysis_sessions s ON t.session_id = s.id
+                    WHERE UPPER(p.ticker) = UPPER(%s)
+                    ORDER BY s.analysis_date DESC LIMIT 1
+                """, (item["ticker"],))
+                latest = cur.fetchone()
+                item["latest"] = _serialize_row(latest) if latest else None
+
+            cur.execute(
+                "SELECT * FROM user_subscriptions WHERE user_id = %s ORDER BY created_at DESC",
+                (user.id,),
+            )
+            subscriptions = [_serialize_row(r) for r in cur.fetchall()]
+    finally:
+        conn.close()
+
+    return templates.TemplateResponse(request=request, name="watchlist.html", context={
+        **ctx,
+        "watchlist": watchlist,
+        "subscriptions": subscriptions,
+    })
+
+
+# ──────────────────────────────────────────────
+# Notifications (알림)
+# ──────────────────────────────────────────────
+@router.get("/pages/notifications")
+def notifications_page(request: Request, user: Optional[UserInDB] = Depends(get_current_user), auth_cfg: AuthConfig = Depends(_get_auth_cfg)):
+    """알림 목록 — 로그인 사용자만"""
+    if not auth_cfg.enabled or user is None:
+        return RedirectResponse("/auth/login?next=/pages/notifications", status_code=302)
+
+    ctx = _base_ctx(request, "notifications", user, auth_cfg)
+    conn = get_connection(_get_cfg())
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                "SELECT * FROM user_notifications WHERE user_id = %s ORDER BY created_at DESC LIMIT 100",
+                (user.id,),
+            )
+            notifications = [_serialize_row(r) for r in cur.fetchall()]
+            unread_count = sum(1 for n in notifications if not n.get("is_read"))
+    finally:
+        conn.close()
+
+    return templates.TemplateResponse(request=request, name="notifications.html", context={
+        **ctx,
+        "notifications": notifications,
+        "unread_count": unread_count,
+    })
+
+
+# ──────────────────────────────────────────────
 # Theme Chat
-# ────────────────────────────��─────────────────
+# ──────────────────────────────────────────────
+# ──────────────────────────────────────────────
+# Profile (비밀번호 변경)
+# ──────────────────────────────────────────────
+@router.get("/pages/profile")
+def profile_page(request: Request, user: Optional[UserInDB] = Depends(get_current_user), auth_cfg: AuthConfig = Depends(_get_auth_cfg)):
+    """프로필 페이지 — 로그인 사용자만"""
+    if not auth_cfg.enabled or user is None:
+        return RedirectResponse("/auth/login?next=/pages/profile", status_code=302)
+    ctx = _base_ctx(request, "profile", user, auth_cfg)
+    return templates.TemplateResponse(request=request, name="profile.html", context={
+        **ctx,
+        "error": "",
+        "success": "",
+    })
+
+
 @router.get("/pages/chat")
-def chat_list_page(request: Request, theme_id: int | None = Query(default=None)):
-    """채팅 세션 목록"""
+def chat_list_page(request: Request, theme_id: int | None = Query(default=None), user: Optional[UserInDB] = Depends(get_current_user), auth_cfg: AuthConfig = Depends(_get_auth_cfg)):
+    """채팅 세션 목록 — Moderator 이상, 본인 세션만 (Admin은 전체)"""
+    if auth_cfg.enabled:
+        if user is None:
+            return RedirectResponse("/auth/login?next=/pages/chat", status_code=302)
+        if user.role not in ("admin", "moderator"):
+            from fastapi import HTTPException
+            raise HTTPException(status_code=403, detail="채팅 기능은 Moderator 이상 권한이 필요합니다")
+    ctx = _base_ctx(request, "chat", user, auth_cfg)
     conn = get_connection(_get_cfg())
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -571,7 +735,7 @@ def chat_list_page(request: Request, theme_id: int | None = Query(default=None))
             """)
             themes = cur.fetchall()
 
-            # 채팅 세션 목록
+            # 채팅 세션 목록 — 본인 세션만 (Admin은 전체)
             query = """
                 SELECT cs.*, t.theme_name, s.analysis_date AS theme_date,
                        (SELECT COUNT(*) FROM theme_chat_messages m
@@ -580,10 +744,20 @@ def chat_list_page(request: Request, theme_id: int | None = Query(default=None))
                 JOIN investment_themes t ON cs.theme_id = t.id
                 JOIN analysis_sessions s ON t.session_id = s.id
             """
+            conditions = []
             params = []
+
+            # Admin이 아니면 본인 세션만
+            if user and user.role != "admin":
+                conditions.append("cs.user_id = %s")
+                params.append(user.id)
+
             if theme_id is not None:
-                query += " WHERE cs.theme_id = %s"
+                conditions.append("cs.theme_id = %s")
                 params.append(theme_id)
+
+            if conditions:
+                query += " WHERE " + " AND ".join(conditions)
             query += " ORDER BY cs.updated_at DESC"
             cur.execute(query, params)
             chat_sessions = cur.fetchall()
@@ -591,7 +765,7 @@ def chat_list_page(request: Request, theme_id: int | None = Query(default=None))
         conn.close()
 
     return templates.TemplateResponse(request=request, name="chat_list.html", context={
-        "active_page": "chat",
+        **ctx,
         "themes": [_serialize_row(t) for t in themes],
         "chat_sessions": [_serialize_row(s) for s in chat_sessions],
         "selected_theme_id": theme_id,
@@ -599,8 +773,14 @@ def chat_list_page(request: Request, theme_id: int | None = Query(default=None))
 
 
 @router.get("/pages/chat/new/{theme_id}")
-def chat_new_redirect(request: Request, theme_id: int):
-    """새 채팅 세션 생성 → 채팅방으로 리다이렉트"""
+def chat_new_redirect(request: Request, theme_id: int, user: Optional[UserInDB] = Depends(get_current_user), auth_cfg: AuthConfig = Depends(_get_auth_cfg)):
+    """새 채팅 세션 생성 → 채팅방으로 리다이렉트 (Moderator 이상)"""
+    if auth_cfg.enabled:
+        if user is None:
+            return RedirectResponse(f"/auth/login?next=/pages/chat/new/{theme_id}", status_code=302)
+        if user.role not in ("admin", "moderator"):
+            from fastapi import HTTPException
+            raise HTTPException(status_code=403, detail="채팅 기능은 Moderator 이상 권한이 필요합니다")
     cfg = _get_cfg()
     conn = get_connection(cfg)
     try:
@@ -611,10 +791,11 @@ def chat_new_redirect(request: Request, theme_id: int):
             if not theme:
                 return RedirectResponse(url="/pages/chat", status_code=302)
 
+            user_id = user.id if user else None
             cur.execute(
-                """INSERT INTO theme_chat_sessions (theme_id, title)
-                   VALUES (%s, %s) RETURNING id""",
-                (theme_id, f"{theme['theme_name']} 채팅")
+                """INSERT INTO theme_chat_sessions (theme_id, title, user_id)
+                   VALUES (%s, %s, %s) RETURNING id""",
+                (theme_id, f"{theme['theme_name']} 채팅", user_id)
             )
             new_id = cur.fetchone()["id"]
         conn.commit()
@@ -625,8 +806,14 @@ def chat_new_redirect(request: Request, theme_id: int):
 
 
 @router.get("/pages/chat/{chat_session_id}")
-def chat_room_page(request: Request, chat_session_id: int):
-    """채팅 대화 화면"""
+def chat_room_page(request: Request, chat_session_id: int, user: Optional[UserInDB] = Depends(get_current_user), auth_cfg: AuthConfig = Depends(_get_auth_cfg)):
+    """채팅 대화 화면 — Moderator 이상, 본인 세션만 (Admin은 전체)"""
+    if auth_cfg.enabled:
+        if user is None:
+            return RedirectResponse(f"/auth/login?next=/pages/chat/{chat_session_id}", status_code=302)
+        if user.role not in ("admin", "moderator"):
+            from fastapi import HTTPException
+            raise HTTPException(status_code=403, detail="채팅 기능은 Moderator 이상 권한이 필요합니다")
     conn = get_connection(_get_cfg())
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -644,6 +831,10 @@ def chat_room_page(request: Request, chat_session_id: int):
             if not session:
                 return RedirectResponse(url="/pages/chat", status_code=302)
 
+            # 소유권 검증 (Admin은 모든 세션 접근 가능)
+            if auth_cfg.enabled and user and user.role != "admin" and session.get("user_id") != user.id:
+                return RedirectResponse(url="/pages/chat", status_code=302)
+
             # 메시지 이력
             cur.execute("""
                 SELECT id, role, content, created_at
@@ -655,8 +846,9 @@ def chat_room_page(request: Request, chat_session_id: int):
     finally:
         conn.close()
 
+    ctx = _base_ctx(request, "chat", user, auth_cfg)
     return templates.TemplateResponse(request=request, name="chat_room.html", context={
-        "active_page": "chat",
+        **ctx,
         "session": _serialize_row(session),
         "messages": [_serialize_row(m) for m in messages],
     })

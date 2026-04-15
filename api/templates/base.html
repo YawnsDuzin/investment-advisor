@@ -24,23 +24,121 @@
             <li><a href="/pages/sessions" class="{% if active_page == 'sessions' %}active{% endif %}" onclick="document.body.classList.remove('sidebar-open')">Sessions</a></li>
             <li><a href="/pages/themes" class="{% if active_page == 'themes' %}active{% endif %}" onclick="document.body.classList.remove('sidebar-open')">Themes</a></li>
             <li><a href="/pages/proposals" class="{% if active_page == 'proposals' %}active{% endif %}" onclick="document.body.classList.remove('sidebar-open')">Stocks</a></li>
+            {% if not auth_enabled or (current_user and current_user.role in ('admin', 'moderator')) %}
             <li><a href="/pages/chat" class="{% if active_page == 'chat' %}active{% endif %}" onclick="document.body.classList.remove('sidebar-open')">Theme Chat</a></li>
+            {% endif %}
         </ul>
         <div class="sidebar-footer">
+            {% if not auth_enabled %}
             <a href="/admin" style="display:block;padding:8px 0;{% if active_page == 'admin' %}color:var(--accent);font-weight:600;{% endif %}">Admin</a>
-            <a href="/docs" target="_blank">API Docs</a>
+            <a href="/docs" target="_blank" style="display:block;padding:4px 0;">API Docs</a>
+            {% endif %}
         </div>
     </nav>
 
     <main class="content">
         <header class="content-header">
             <h2>{% block page_title %}{% endblock %}</h2>
-            {% block header_actions %}{% endblock %}
+            <div class="header-right">
+                {% block header_actions %}{% endblock %}
+
+                {% if auth_enabled %}
+                    {% if current_user %}
+                    <!-- 알림 아이콘 -->
+                    <a href="/pages/notifications" class="header-noti" title="알림">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                        {% if unread_notifications %}<span class="header-noti-badge">{{ unread_notifications }}</span>{% endif %}
+                    </a>
+
+                    <!-- 유저 드롭다운 -->
+                    <div class="user-dropdown">
+                        <button class="user-dropdown-trigger" onclick="this.parentElement.classList.toggle('open')">
+                            <span class="user-avatar">{{ current_user.nickname[:1]|upper }}</span>
+                            <span class="user-dropdown-name">{{ current_user.nickname }}</span>
+                            <svg class="user-dropdown-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                        </button>
+                        <div class="user-dropdown-menu">
+                            <div class="user-dropdown-header">
+                                <div class="user-dropdown-header-name">{{ current_user.nickname }}</div>
+                                <div class="user-dropdown-header-email">{{ current_user.role }}</div>
+                            </div>
+                            <div class="user-dropdown-divider"></div>
+                            <a href="/pages/watchlist" class="user-dropdown-item">관심 종목</a>
+                            <a href="/pages/notifications" class="user-dropdown-item">
+                                알림{% if unread_notifications %} <span class="user-dropdown-badge">{{ unread_notifications }}</span>{% endif %}
+                            </a>
+                            <a href="/pages/profile" class="user-dropdown-item">프로필</a>
+                            {% if current_user.role in ('admin', 'moderator') %}
+                            <div class="user-dropdown-divider"></div>
+                            <a href="/admin/users" class="user-dropdown-item">사용자 관리</a>
+                            {% endif %}
+                            {% if current_user.role == 'admin' %}
+                            <a href="/admin" class="user-dropdown-item">Admin</a>
+                            <a href="/docs" target="_blank" class="user-dropdown-item">API Docs</a>
+                            {% endif %}
+                            <div class="user-dropdown-divider"></div>
+                            <form action="/auth/logout" method="post" style="margin:0;">
+                                <button type="submit" class="user-dropdown-item user-dropdown-logout">로그아웃</button>
+                            </form>
+                        </div>
+                    </div>
+                    {% else %}
+                    <a href="/auth/login" class="btn" style="font-size:13px;padding:6px 16px;">로그인</a>
+                    {% endif %}
+                {% endif %}
+            </div>
         </header>
         <div class="content-body">
             {% block content %}{% endblock %}
         </div>
     </main>
+
+    <script>
+    // 유저 드롭다운 외부 클릭 시 닫기
+    document.addEventListener('click', function(e) {
+        var dd = document.querySelector('.user-dropdown');
+        if (dd && !dd.contains(e.target)) dd.classList.remove('open');
+    });
+    </script>
+
+    {% if auth_enabled %}
+    <script>
+    // 401 감지 → Access Token 자동 갱신 인터셉터
+    (function() {
+        const _originalFetch = window.fetch;
+        let _refreshing = null;  // 동시 갱신 요청 방지
+
+        window.fetch = async function(url, options) {
+            const res = await _originalFetch(url, options);
+            if (res.status !== 401 || url === '/auth/refresh') return res;
+
+            // 401 발생 → 토큰 갱신 시도
+            if (!_refreshing) {
+                _refreshing = _originalFetch('/auth/refresh', {
+                    method: 'POST',
+                    headers: { 'x-requested-with': 'XMLHttpRequest' },
+                }).then(r => {
+                    _refreshing = null;
+                    return r;
+                }).catch(err => {
+                    _refreshing = null;
+                    throw err;
+                });
+            }
+
+            const refreshRes = await _refreshing;
+            if (!refreshRes.ok) {
+                // 갱신 실패 → 로그인 페이지로 이동
+                window.location.href = '/auth/login?next=' + encodeURIComponent(window.location.pathname);
+                return res;
+            }
+
+            // 갱신 성공 → 원래 요청 재시도
+            return _originalFetch(url, options);
+        };
+    })();
+    </script>
+    {% endif %}
 
     {% block scripts %}{% endblock %}
 </body>

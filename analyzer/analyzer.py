@@ -12,7 +12,7 @@ from analyzer.prompts import (
     STAGE1_SYSTEM, STAGE1_PROMPT,
     STAGE2_SYSTEM, STAGE2_PROMPT,
 )
-from analyzer.stock_data import fetch_multiple_stocks, format_stock_data_text, fetch_momentum_batch
+from analyzer.stock_data import fetch_multiple_stocks, fetch_stock_data, format_stock_data_text, fetch_momentum_batch
 from shared.config import AnalyzerConfig, DatabaseConfig
 from shared.db import get_recent_recommendations
 
@@ -33,14 +33,23 @@ def _parse_json_response(full_response: str) -> dict:
         return {"error": str(e)}
 
 
-async def _query_claude(prompt: str, system_prompt: str, max_turns: int) -> str:
-    """Claude SDK 쿼리 공통 함수"""
+async def _query_claude(
+    prompt: str, system_prompt: str, max_turns: int,
+    model: str | None = None,
+) -> str:
+    """Claude SDK 쿼리 공통 함수
+
+    Args:
+        model: 사용할 모델 (None이면 기본 모델 사용)
+               예: "claude-haiku-4-5-20251001", "claude-sonnet-4-6"
+    """
     full_response = ""
     async for message in query(
         prompt=prompt,
         options=ClaudeAgentOptions(
             system_prompt=system_prompt,
             max_turns=max_turns,
+            model=model,
         ),
     ):
         if isinstance(message, AssistantMessage):
@@ -79,6 +88,7 @@ def _format_recent_recommendations(recent_recs: list[dict]) -> str:
 async def stage1_discover_themes(
     news_text: str, date: str, max_turns: int = 6,
     recent_recs: list[dict] | None = None,
+    model: str | None = None,
 ) -> dict:
     """Stage 1: 뉴스 기반 이슈 분석 + 테마 발굴 + 시나리오/매크로 분석 + 투자 제안"""
     recent_section = _format_recent_recommendations(recent_recs or [])
@@ -86,7 +96,7 @@ async def stage1_discover_themes(
         news_text=news_text, date=date,
         recent_recommendations_section=recent_section,
     )
-    response = await _query_claude(prompt, STAGE1_SYSTEM, max_turns)
+    response = await _query_claude(prompt, STAGE1_SYSTEM, max_turns, model=model)
     return _parse_json_response(response)
 
 
@@ -96,6 +106,7 @@ async def stage2_analyze_stock(
     ticker: str, asset_name: str, market: str,
     theme_context: str, date: str, max_turns: int = 6,
     stock_data_text: str = "",
+    model: str | None = None,
 ) -> dict:
     """Stage 2: 개별 종목 심층분석 (펀더멘털·산업·모멘텀·퀀트·리스크)"""
     # 주가 데이터가 있으면 프롬프트에 삽입
@@ -108,7 +119,7 @@ async def stage2_analyze_stock(
         market=market, theme_context=theme_context, date=date,
         stock_data_section=stock_data_section,
     )
-    response = await _query_claude(prompt, STAGE2_SYSTEM, max_turns)
+    response = await _query_claude(prompt, STAGE2_SYSTEM, max_turns, model=model)
     return _parse_json_response(response)
 
 
@@ -134,8 +145,11 @@ async def run_pipeline(
             print(f"[피드백] 추천 이력 조회 실패 (무시): {e}")
 
     # ── Stage 1 ──
-    print("[Stage 1] 이슈 분석 + 테마 발굴 중...")
-    result = await stage1_discover_themes(news_text, date, cfg.max_turns, recent_recs)
+    print(f"[Stage 1] 이슈 분석 + 테마 발굴 중... (모델: {cfg.model_analysis})")
+    result = await stage1_discover_themes(
+        news_text, date, cfg.max_turns, recent_recs,
+        model=cfg.model_analysis,
+    )
 
     if result.get("error"):
         return result
@@ -160,6 +174,7 @@ async def run_pipeline(
             ])
 
             run_count = 0
+            fallback_count = 0
             for p in all_proposals:
                 ticker = p["ticker"].strip().upper()
                 mdata = momentum_map.get(ticker)
@@ -167,12 +182,34 @@ async def run_pipeline(
                     p["price_momentum_check"] = mdata["momentum_tag"]
                     if mdata.get("current_price"):
                         p["current_price"] = mdata["current_price"]
+                        p["price_source"] = "yfinance_close"
                     if mdata["momentum_tag"] == "already_run":
                         run_count += 1
+                else:
+                    # 모멘텀 체크 실패 → fetch_stock_data로 현재가만 재시도
+                    sd = fetch_stock_data(ticker, p.get("market", ""))
+                    if sd and sd.get("price"):
+                        p["current_price"] = sd["price"]
+                        p["price_source"] = "yfinance_realtime"
+                        fallback_count += 1
+                    else:
+                        # yfinance 완전 실패 → AI 추정치 제거, null이 잘못된 값보다 나음
+                        p["current_price"] = None
+                        p["price_source"] = None
 
             if run_count:
                 print(f"[모멘텀 체크] {run_count}종목 급등 감지 (1개월 +20% 이상)")
+            if fallback_count:
+                print(f"[모멘텀 체크] {fallback_count}종목 개별 재조회로 가격 확보")
             print(f"[모멘텀 체크] 완료 — {len(momentum_map)}/{len(all_proposals)}종목 조회 성공")
+
+    # ── AI 추정 가격 제거: yfinance 미조회 종목의 current_price를 null로 ──
+    if not cfg.enable_stock_data:
+        for theme in themes:
+            for p in theme.get("proposals", []):
+                if p.get("ticker") and p.get("asset_type") == "stock":
+                    p["current_price"] = None
+                    p["price_source"] = None
 
     # ── Stage 2: 핵심 종목 심층분석 ──
     if not cfg.enable_stock_analysis:
@@ -233,6 +270,7 @@ async def run_pipeline(
                 market=market, theme_context=theme_name,
                 date=date, max_turns=cfg.max_turns,
                 stock_data_text=sd_text,
+                model=cfg.model_analysis,
             )
 
             if not stock_result.get("error"):
@@ -251,6 +289,7 @@ async def run_pipeline(
                     proposal["exit_condition"] = stock_result["exit_condition"]
                 if sd and sd.get("price"):
                     proposal["current_price"] = sd["price"]
+                    proposal["price_source"] = "yfinance_realtime"
                 print(f"  ✓ {asset_name} 심층분석 완료")
             else:
                 print(f"  ✗ {asset_name} 심층분석 실패: {stock_result['error']}")
@@ -268,12 +307,16 @@ async def run_pipeline(
 
 # ── 뉴스 제목 한글 번역 ─────────────────────────────
 
-async def _translate_news_titles(articles: list[dict]) -> list[dict]:
-    """뉴스 기사 제목을 한글로 일괄 번역 (Claude SDK 단일 호출)"""
+async def _translate_news_batch(
+    articles: list[dict], model: str = "claude-haiku-4-5-20251001",
+) -> list[dict]:
+    """뉴스 기사 제목+요약을 한글로 배치 번역 (Claude SDK, Haiku 기본)
+
+    30건씩 배치로 묶어 시스템 프롬프트 반복을 최소화합니다.
+    """
     if not articles:
         return articles
 
-    # 이미 한글인 제목은 번역 불필요 — 한글 포함 여부로 판별
     import re
     def _has_korean(text: str) -> bool:
         return bool(re.search(r'[\uac00-\ud7af]', text))
@@ -281,53 +324,86 @@ async def _translate_news_titles(articles: list[dict]) -> list[dict]:
     to_translate = []
     for i, a in enumerate(articles):
         title = a.get("title", "")
-        if _has_korean(title):
-            a["title_ko"] = title  # 이미 한글
-        else:
-            to_translate.append((i, title))
+        summary = a.get("summary", "")
+        title_is_ko = _has_korean(title)
+        summary_is_ko = _has_korean(summary) or not summary
+
+        if title_is_ko:
+            a["title_ko"] = title
+        if summary_is_ko:
+            a["summary_ko"] = summary
+
+        if not title_is_ko or not summary_is_ko:
+            to_translate.append((i, title, summary[:200], title_is_ko, summary_is_ko))
 
     if not to_translate:
         print("[번역] 모든 뉴스가 한글 — 번역 건너뜀")
         return articles
 
-    # 번역 대상 제목 목록 구성
-    title_lines = "\n".join(f"{idx}: {title}" for idx, title in to_translate)
+    # 30건씩 배치 번역 (시스템 프롬프트 1회로 토큰 절감)
+    BATCH_SIZE = 30
+    total_translated = 0
+    system_prompt = "뉴스 제목/요약 번역 전문가입니다. 간결하고 자연스러운 한국어로 번역합니다. JSON으로만 응답합니다."
 
-    prompt = f"""아래 뉴스 제목들을 한국어로 번역해주세요.
-각 줄은 "번호: 제목" 형식입니다. 같은 형식으로 번역 결과를 JSON으로 반환하세요.
+    for batch_start in range(0, len(to_translate), BATCH_SIZE):
+        batch = to_translate[batch_start:batch_start + BATCH_SIZE]
+        batch_num = batch_start // BATCH_SIZE + 1
+        total_batches = (len(to_translate) + BATCH_SIZE - 1) // BATCH_SIZE
+
+        # 번역 대상 구성 — 이미 한글인 필드는 제외
+        items_text = []
+        for idx, title, summary, title_is_ko, summary_is_ko in batch:
+            parts = []
+            if not title_is_ko:
+                parts.append(f"t: {title}")
+            if not summary_is_ko and summary:
+                parts.append(f"s: {summary}")
+            items_text.append(f"{idx}:\n" + "\n".join(parts))
+
+        prompt = f"""아래 뉴스의 제목(t)과 요약(s)을 한국어로 번역해주세요.
 
 ```
-{title_lines}
+{"---".join(items_text)}
 ```
 
 반드시 아래 JSON 형식으로만 응답:
-{{"translations": {{"번호": "한글 번역", ...}}}}"""
+{{"translations": {{{", ".join(f'"{idx}": {{"t": "제목 번역", "s": "요약 번역"}}' for idx, _, _, _, _ in batch)}}}}}
 
-    system_prompt = "뉴스 제목 번역 전문가입니다. 간결하고 자연스러운 한국어로 번역합니다. JSON으로만 응답합니다."
+한글인 필드는 원문 그대로 반환하세요."""
 
-    print(f"[번역] {len(to_translate)}건 뉴스 제목 한글 번역 중...")
-    try:
-        response = await _query_claude(prompt, system_prompt, max_turns=1)
-        parsed = _parse_json_response(response)
-        translations = parsed.get("translations", {})
+        print(f"[번역] 배치 {batch_num}/{total_batches} — {len(batch)}건 번역 중 ({model})...")
+        try:
+            response = await _query_claude(
+                prompt, system_prompt, max_turns=1, model=model,
+            )
+            parsed = _parse_json_response(response)
+            translations = parsed.get("translations", {})
 
-        translated_count = 0
-        for idx_str, ko_title in translations.items():
-            idx = int(idx_str)
-            if 0 <= idx < len(articles):
-                articles[idx]["title_ko"] = ko_title
-                translated_count += 1
+            for idx_str, tr in translations.items():
+                idx = int(idx_str)
+                if 0 <= idx < len(articles):
+                    if isinstance(tr, dict):
+                        if tr.get("t"):
+                            articles[idx]["title_ko"] = tr["t"]
+                        if tr.get("s"):
+                            articles[idx]["summary_ko"] = tr["s"]
+                    elif isinstance(tr, str):
+                        # 제목만 반환된 경우 (하위호환)
+                        articles[idx]["title_ko"] = tr
+                    total_translated += 1
 
-        print(f"[번역] {translated_count}/{len(to_translate)}건 번역 완료")
-    except Exception as e:
-        print(f"[번역] 번역 실패 (원문 유지): {e}")
+        except Exception as e:
+            print(f"[번역] 배치 {batch_num} 실패 (원문 유지): {e}")
 
+    print(f"[번역] 총 {total_translated}/{len(to_translate)}건 번역 완료")
     return articles
 
 
-def translate_news(articles: list[dict]) -> list[dict]:
-    """뉴스 제목 한글 번역 — 동기 래퍼"""
-    return anyio.run(_translate_news_titles, articles)
+def translate_news(
+    articles: list[dict], model: str = "claude-haiku-4-5-20251001",
+) -> list[dict]:
+    """뉴스 제목+요약 한글 번역 — 동기 래퍼"""
+    return anyio.run(_translate_news_batch, articles, model)
 
 
 # ── 동기 래퍼 (하위호환) ─────────────────────────────

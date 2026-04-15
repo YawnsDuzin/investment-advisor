@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+
+{% block title %}프로필 — Investment Advisor{% endblock %}
+
+{% block head %}
+<style>
+    .profile-section {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 32px;
+        max-width: 480px;
+    }
+    .profile-section h3 {
+        font-size: 18px;
+        margin-bottom: 20px;
+        padding-bottom: 12px;
+        border-bottom: 1px solid var(--border);
+    }
+    .profile-info {
+        margin-bottom: 32px;
+    }
+    .profile-info .info-row {
+        display: flex;
+        padding: 8px 0;
+        font-size: 14px;
+    }
+    .profile-info .info-label {
+        color: var(--text-muted);
+        width: 100px;
+        flex-shrink: 0;
+    }
+    .profile-info .info-value {
+        color: var(--text);
+    }
+    .pw-form label {
+        display: block;
+        font-size: 13px;
+        color: var(--text-muted);
+        margin-bottom: 4px;
+    }
+    .pw-form input[type="password"] {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--bg);
+        color: var(--text);
+        font-size: 14px;
+        margin-bottom: 16px;
+        outline: none;
+    }
+    .pw-form input:focus {
+        border-color: var(--accent);
+    }
+    .pw-form button {
+        padding: 10px 24px;
+        border: none;
+        border-radius: 8px;
+        background: var(--accent);
+        color: #fff;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+    }
+    .pw-form button:hover {
+        background: var(--accent-hover);
+    }
+    .msg-error {
+        background: rgba(248, 113, 113, 0.15);
+        color: var(--red);
+        padding: 10px 12px;
+        border-radius: 8px;
+        font-size: 13px;
+        margin-bottom: 16px;
+    }
+    .msg-success {
+        background: rgba(52, 211, 153, 0.15);
+        color: var(--green);
+        padding: 10px 12px;
+        border-radius: 8px;
+        font-size: 13px;
+        margin-bottom: 16px;
+    }
+</style>
+{% endblock %}
+
+{% block page_title %}프로필{% endblock %}
+
+{% block content %}
+<div class="profile-section">
+    <h3>내 정보</h3>
+    <div class="profile-info">
+        <div class="info-row">
+            <span class="info-label">닉네임</span>
+            <span class="info-value">{{ current_user.nickname }}</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">이메일</span>
+            <span class="info-value">{{ current_user.email }}</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">역할</span>
+            <span class="info-value">{{ current_user.role }}</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">가입일</span>
+            <span class="info-value">{{ current_user.created_at.strftime('%Y-%m-%d') }}</span>
+        </div>
+    </div>
+
+    <h3>비밀번호 변경</h3>
+
+    {% if error %}
+    <div class="msg-error">{{ error }}</div>
+    {% endif %}
+    {% if success %}
+    <div class="msg-success">{{ success }}</div>
+    {% endif %}
+
+    <form class="pw-form" method="post" action="/auth/change-password">
+        <label for="current_password">현재 비밀번호</label>
+        <input type="password" id="current_password" name="current_password" required placeholder="현재 비밀번호 입력">
+
+        <label for="new_password">새 비밀번호</label>
+        <input type="password" id="new_password" name="new_password" required placeholder="8자 이상">
+
+        <label for="new_password_confirm">새 비밀번호 확인</label>
+        <input type="password" id="new_password_confirm" name="new_password_confirm" required placeholder="새 비밀번호 재입력">
+
+        <button type="submit">비밀번호 변경</button>
+    </form>
+</div>
+{% endblock %}
