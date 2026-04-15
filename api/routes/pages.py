@@ -124,6 +124,11 @@ def dashboard(request: Request, user: Optional[UserInDB] = Depends(get_current_u
 
             buy_count = 0
             total_alloc = 0.0
+            high_conviction_count = 0
+            early_signal_count = 0
+            discovery_counts = {}  # discovery_type별 카운트
+            sector_counts = {}    # 섹터별 카운트
+            all_proposals = []
             for theme in themes:
                 cur.execute(
                     "SELECT * FROM investment_proposals WHERE theme_id = %s ORDER BY target_allocation DESC",
@@ -135,6 +140,24 @@ def dashboard(request: Request, user: Optional[UserInDB] = Depends(get_current_u
                     if p.get("action") == "buy":
                         buy_count += 1
                     total_alloc += float(p.get("target_allocation") or 0)
+                    # 추가 통계
+                    if p.get("conviction") == "high":
+                        high_conviction_count += 1
+                    dt = p.get("discovery_type") or "unknown"
+                    discovery_counts[dt] = discovery_counts.get(dt, 0) + 1
+                    if dt == "early_signal":
+                        early_signal_count += 1
+                    sec = p.get("sector")
+                    if sec:
+                        sector_counts[sec] = sector_counts.get(sec, 0) + 1
+                    all_proposals.append(p)
+
+            # 상위 섹터 (최대 5개)
+            top_sectors = sorted(sector_counts.items(), key=lambda x: -x[1])[:5]
+            # 평균 신뢰도
+            avg_confidence = 0.0
+            if themes:
+                avg_confidence = sum(float(t.get("confidence_score") or 0) for t in themes) / len(themes)
 
             # ── 추적 데이터 ──
             cur.execute("""
@@ -190,6 +213,11 @@ def dashboard(request: Request, user: Optional[UserInDB] = Depends(get_current_u
         "theme_count": len(themes),
         "buy_count": buy_count,
         "total_alloc": total_alloc,
+        "high_conviction_count": high_conviction_count,
+        "early_signal_count": early_signal_count,
+        "discovery_counts": discovery_counts,
+        "top_sectors": top_sectors,
+        "avg_confidence": avg_confidence,
         "active_tracking": active_tracking,
         "disappeared_themes": disappeared_themes,
         "news_by_category": news_by_category,

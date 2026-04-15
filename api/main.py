@@ -22,7 +22,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Investment Advisor API",
+    title="AlphaScope API",
     description="투자 테마 분석 결과 조회 API",
     version="1.0.0",
     lifespan=lifespan,
