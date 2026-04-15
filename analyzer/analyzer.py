@@ -62,25 +62,36 @@ async def _query_claude(
 # ── Stage 1: 이슈 분석 + 테마 발굴 ──────────────────
 
 def _format_recent_recommendations(recent_recs: list[dict]) -> str:
-    """최근 추천 이력을 프롬프트용 텍스트로 포맷팅"""
+    """최근 추천 이력을 프롬프트용 요약 텍스트로 포맷팅 (토큰 절약)"""
     if not recent_recs:
         return ""
+
+    # 티커별로 그룹핑하여 요약
+    ticker_map: dict[str, dict] = {}
+    for rec in recent_recs:
+        tk = rec['ticker']
+        if tk not in ticker_map:
+            ticker_map[tk] = {
+                'name': rec['asset_name'],
+                'themes': set(),
+                'count': 0,
+            }
+        ticker_map[tk]['themes'].add(rec['theme_name'])
+        ticker_map[tk]['count'] += rec['count']
 
     lines = [
         "\n---\n",
         "## 최근 추천 이력 (중복 방지 — 최근 7일)",
         "",
-        "아래 종목은 최근 이미 추천된 종목입니다.",
+        f"아래 {len(ticker_map)}개 종목은 최근 이미 추천되었습니다.",
         "**이 종목들은 신규 추천에서 제외**하고, 동일 밸류체인 내 아직 발굴되지 않은 2~3차 수혜주를 대신 찾으세요.",
         "단, 기존 포지션의 목표가 조정이나 청산 판단이 필요하면 별도 언급할 수 있습니다.",
         "",
+        "제외 종목 목록:",
     ]
-    for rec in recent_recs:
-        lines.append(
-            f"  - {rec['ticker']} ({rec['asset_name']}) — "
-            f"테마: {rec['theme_name']}, {rec['action']}/{rec['conviction']}, "
-            f"{rec['count']}회 추천 ({rec['first_date']}~{rec['last_date']})"
-        )
+    for tk, info in ticker_map.items():
+        themes_str = "/".join(sorted(info['themes']))
+        lines.append(f"  - {tk} ({info['name']}) [{themes_str}] {info['count']}회")
     lines.append("")
     return "\n".join(lines)
 
