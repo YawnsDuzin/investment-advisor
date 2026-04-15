@@ -14,6 +14,8 @@ from claude_agent_sdk import (
 
 from analyzer.prompts import (
     STAGE1_SYSTEM, STAGE1_PROMPT,
+    STAGE1A_SYSTEM, STAGE1A_PROMPT,
+    STAGE1B_SYSTEM, STAGE1B_PROMPT,
     STAGE2_SYSTEM, STAGE2_PROMPT,
 )
 from analyzer.stock_data import fetch_multiple_stocks, fetch_stock_data, format_stock_data_text, fetch_momentum_batch
@@ -40,40 +42,58 @@ def _parse_json_response(full_response: str) -> dict:
 async def _query_claude(
     prompt: str, system_prompt: str, max_turns: int,
     model: str | None = None,
+    max_retries: int = 2,
 ) -> str:
-    """Claude SDK 쿼리 공통 함수
+    """Claude SDK 쿼리 공통 함수 (재시도 지원)
 
     Args:
         model: 사용할 모델 (None이면 기본 모델 사용)
-               예: "claude-haiku-4-5-20251001", "claude-sonnet-4-6"
+        max_retries: 실패 시 최대 재시도 횟수 (기본 2회)
     """
-    full_response = ""
-    start_time = time.time()
-    msg_count = 0
-    print(f"  [SDK] 쿼리 시작 (max_turns={max_turns}, model={model or 'default'})")
+    last_error = None
+    for attempt in range(1, max_retries + 1):
+        full_response = ""
+        start_time = time.time()
+        msg_count = 0
+        retry_label = f" (재시도 {attempt}/{max_retries})" if attempt > 1 else ""
+        print(f"  [SDK] 쿼리 시작{retry_label} (max_turns={max_turns}, model={model or 'default'})")
 
-    async for message in query(
-        prompt=prompt,
-        options=ClaudeAgentOptions(
-            system_prompt=system_prompt,
-            max_turns=max_turns,
-            model=model,
-        ),
-    ):
-        elapsed = time.time() - start_time
-        if isinstance(message, AssistantMessage):
-            msg_count += 1
-            chunk_len = sum(len(b.text) for b in message.content if isinstance(b, TextBlock))
-            full_response += "".join(b.text for b in message.content if isinstance(b, TextBlock))
-            print(f"  [SDK] 응답 수신 #{msg_count} (+{chunk_len:,}자, 누적 {len(full_response):,}자, {elapsed:.0f}초)")
-        elif isinstance(message, ResultMessage):
-            print(f"  [SDK] 완료 — 턴 {message.num_turns}회, {elapsed:.0f}초 소요")
-        elif isinstance(message, SystemMessage):
-            print(f"  [SDK] 시스템: {message.subtype}")
+        try:
+            async for message in query(
+                prompt=prompt,
+                options=ClaudeAgentOptions(
+                    system_prompt=system_prompt,
+                    max_turns=max_turns,
+                    model=model,
+                ),
+            ):
+                elapsed = time.time() - start_time
+                if isinstance(message, AssistantMessage):
+                    msg_count += 1
+                    chunk_len = sum(len(b.text) for b in message.content if isinstance(b, TextBlock))
+                    full_response += "".join(b.text for b in message.content if isinstance(b, TextBlock))
+                    print(f"  [SDK] 응답 수신 #{msg_count} (+{chunk_len:,}자, 누적 {len(full_response):,}자, {elapsed:.0f}초)")
+                elif isinstance(message, ResultMessage):
+                    print(f"  [SDK] 완료 — 턴 {message.num_turns}회, {elapsed:.0f}초 소요")
+                elif isinstance(message, SystemMessage):
+                    print(f"  [SDK] 시스템: {message.subtype}")
 
-    total = time.time() - start_time
-    print(f"  [SDK] 쿼리 종료 (응답 {len(full_response):,}자, 총 {total:.0f}초)")
-    return full_response
+            total = time.time() - start_time
+            print(f"  [SDK] 쿼리 종료 (응답 {len(full_response):,}자, 총 {total:.0f}초)")
+            return full_response
+
+        except Exception as e:
+            elapsed = time.time() - start_time
+            last_error = e
+            print(f"  [SDK] 오류 발생 ({elapsed:.0f}초): {e}")
+            if attempt < max_retries:
+                wait = 10 * attempt
+                print(f"  [SDK] {wait}초 후 재시도...")
+                await asyncio.sleep(wait)
+            else:
+                print(f"  [SDK] 최대 재시도 횟수 초과 — 실패 확정")
+
+    raise last_error
 
 
 # ── Stage 1: 이슈 분석 + 테마 발굴 ──────────────────
@@ -118,7 +138,7 @@ async def stage1_discover_themes(
     recent_recs: list[dict] | None = None,
     model: str | None = None,
 ) -> dict:
-    """Stage 1: 뉴스 기반 이슈 분석 + 테마 발굴 + 시나리오/매크로 분석 + 투자 제안"""
+    """Stage 1 (통합): 뉴스 기반 이슈 분석 + 테마 발굴 + 투자 제안 — 단일 호출"""
     recent_section = _format_recent_recommendations(recent_recs or [])
     prompt = STAGE1_PROMPT.format(
         news_text=news_text, date=date,
@@ -126,6 +146,39 @@ async def stage1_discover_themes(
     )
     response = await _query_claude(prompt, STAGE1_SYSTEM, max_turns, model=model)
     return _parse_json_response(response)
+
+
+# ── Stage 1 분할: 1-A(이슈+테마) + 1-B(테마별 제안) ──
+
+async def stage1a_discover_themes(
+    news_text: str, date: str, max_turns: int = 6,
+    model: str | None = None,
+) -> dict:
+    """Stage 1-A: 뉴스 기반 이슈 분석 + 테마 발굴 (투자 제안 제외)"""
+    prompt = STAGE1A_PROMPT.format(news_text=news_text, date=date)
+    response = await _query_claude(prompt, STAGE1A_SYSTEM, max_turns, model=model)
+    return _parse_json_response(response)
+
+
+async def stage1b_generate_proposals(
+    theme: dict, date: str, max_turns: int = 6,
+    recent_recs: list[dict] | None = None,
+    model: str | None = None,
+) -> list[dict]:
+    """Stage 1-B: 개별 테마에 대한 투자 제안 생성 (10~15건)"""
+    recent_section = _format_recent_recommendations(recent_recs or [])
+    prompt = STAGE1B_PROMPT.format(
+        date=date,
+        theme_name=theme.get("theme_name", ""),
+        theme_description=theme.get("description", ""),
+        theme_type=theme.get("theme_type", ""),
+        time_horizon=theme.get("time_horizon", ""),
+        confidence_score=theme.get("confidence_score", ""),
+        recent_recommendations_section=recent_section,
+    )
+    response = await _query_claude(prompt, STAGE1B_SYSTEM, max_turns, model=model)
+    result = _parse_json_response(response)
+    return result.get("proposals", [])
 
 
 # ── Stage 2: 핵심 종목 심층분석 ──────────────────────
@@ -159,7 +212,8 @@ async def run_pipeline(
 ) -> dict:
     """멀티스테이지 분석 파이프라인 실행
 
-    Stage 1: 뉴스 → 이슈/테마/시나리오/매크로/제안
+    Stage 1-A: 뉴스 → 이슈/테마/시나리오/매크로 (제안 제외)
+    Stage 1-B: 테마별 투자 제안 생성 (순차 실행)
     Stage 2: 상위 테마의 핵심 종목 심층분석 (선택적)
     """
     # ── 최근 추천 이력 조회 (중복 방지용) ──
@@ -172,19 +226,39 @@ async def run_pipeline(
         except Exception as e:
             print(f"[피드백] 추천 이력 조회 실패 (무시): {e}")
 
-    # ── Stage 1 ──
-    print(f"[Stage 1] 이슈 분석 + 테마 발굴 중... (모델: {cfg.model_analysis})")
-    result = await stage1_discover_themes(
-        news_text, date, cfg.max_turns, recent_recs,
+    # ── Stage 1-A: 이슈 분석 + 테마 발굴 ──
+    print(f"[Stage 1-A] 이슈 분석 + 테마 발굴 중... (모델: {cfg.model_analysis})")
+    result = await stage1a_discover_themes(
+        news_text, date, cfg.max_turns,
         model=cfg.model_analysis,
     )
 
     if result.get("error"):
+        print(f"[Stage 1-A] 실패 — {result['error']}")
         return result
 
     themes = result.get("themes", [])
     issues = result.get("issues", [])
-    print(f"[Stage 1] 완료 — 이슈 {len(issues)}건, 테마 {len(themes)}건")
+    print(f"[Stage 1-A] 완료 — 이슈 {len(issues)}건, 테마 {len(themes)}건")
+
+    # ── Stage 1-B: 테마별 투자 제안 생성 ──
+    print(f"[Stage 1-B] 테마별 투자 제안 생성 시작 — {len(themes)}개 테마")
+    for i, theme in enumerate(themes):
+        theme_name = theme.get("theme_name", f"테마{i+1}")
+        print(f"[Stage 1-B] ({i+1}/{len(themes)}) '{theme_name}' 제안 생성 중...")
+        try:
+            proposals = await stage1b_generate_proposals(
+                theme, date, cfg.max_turns, recent_recs,
+                model=cfg.model_analysis,
+            )
+            theme["proposals"] = proposals
+            print(f"[Stage 1-B] ({i+1}/{len(themes)}) '{theme_name}' — {len(proposals)}건 제안 완료")
+        except Exception as e:
+            print(f"[Stage 1-B] ({i+1}/{len(themes)}) '{theme_name}' 제안 생성 실패: {e}")
+            theme["proposals"] = []
+
+    total_proposals = sum(len(t.get("proposals", [])) for t in themes)
+    print(f"[Stage 1-B] 완료 — 총 {total_proposals}건 제안 생성")
 
     # ── 모멘텀 체크: Stage 1 추천 종목의 1개월 수익률 조회 ──
     if cfg.enable_stock_data:

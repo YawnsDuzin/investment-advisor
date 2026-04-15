@@ -99,7 +99,7 @@ STAGE1_PROMPT = """## 분석 날짜: {date}
 - 매매 판단: buy / sell / hold / watch
 - 확신도: high / medium / low
 - **현재가**: null로 설정 (실시간 시세는 별도 시스템에서 자동 주입됨 — 추정 금지)
-- **목표가 범위** (상한/하한)
+- **목표가 범위** (상한/하단)
 - **상승여력 %**
 - **벤더 티어** (1 = 대형 리더 / 2 = 중견 핵심 부품·소재·장비 / 3 = 니치 전문기업) — 참고 분류용
 - **공급망 위치**: 해당 테마의 밸류체인에서 이 기업이 차지하는 역할 (예: "HBM 핵심 장비", "2차전지 양극재 원료")
@@ -213,6 +213,200 @@ STAGE1_PROMPT = """## 분석 날짜: {date}
           "currency": "KRW|USD|JPY|EUR"
         }}
       ]
+    }}
+  ]
+}}
+```"""
+
+
+# ── Stage 1-A: 이슈 분석 + 테마 발굴 (제안 제외) ─────
+
+STAGE1A_SYSTEM = STAGE1_SYSTEM
+
+STAGE1A_PROMPT = """## 분석 날짜: {date}
+
+## 오늘 수집된 글로벌 뉴스 (카테고리별 정리)
+
+{news_text}
+
+---
+
+## 분석 요청 — Stage 1-A: 이슈 분석 + 테마 발굴
+
+위 뉴스를 바탕으로 2단계 분석을 수행하세요.
+(투자 제안은 다음 단계에서 별도 생성합니다.)
+
+### 1단계: 글로벌 이슈 심층 분석 (8~15건)
+각 이슈에 대해:
+- 카테고리 분류 (geopolitical / macroeconomic / monetary_policy / sector / technology / commodity / regulatory)
+- 영향 지역 및 파급 범위 (글로벌/지역/국가별)
+- 중요도 (1~5) — 시장 영향력 기준
+- **단기 영향** (1개월 이내): 구체적 시장 반응 예상
+- **중기 영향** (1~6개월): 섹터·자산별 파급 경로
+- **장기 영향** (6개월 이상): 구조적 변화 가능성
+- **과거 유사 사례**: 비슷한 상황의 시장 반응 (있을 경우)
+
+### 2단계: 투자 테마 도출 (4~7개)
+각 테마에 대해:
+- 복수의 이슈에서 교차 검증된 테마만 선정
+- **테마 유형**: structural(구조적) / cyclical(순환적) 구분
+- **테마 유효성**: strong / medium / weak
+- 신뢰도 (0.00~1.00): 뉴스 일관성, 데이터 뒷받침, 시장 반영 정도 기준
+- 투자 시계 (short: ~1개월 / mid: 1~6개월 / long: 6개월+)
+- 핵심 모니터링 지표
+- **시나리오 분석**: Bull/Base/Bear 케이스 각각의 확률, 설명, 핵심 가정, 시장 영향
+- **매크로 변수 영향**: 유가, 금, 환율, 금리, 주요 지수에 대한 시나리오별 전망
+
+## 출력 형식
+
+반드시 아래 JSON 형식으로만 응답하세요 (proposals 필드 없음):
+
+```json
+{{
+  "analysis_date": "{date}",
+  "market_summary": "아래 형식으로 작성 (각 섹션은 빈 줄로 구분, 총 15~25줄):\n\n[시장 환경] 글로벌 매크로 환경 핵심 요약 (2~3문장)\n\n[핵심 이슈]\n★ 가장 중요한 이슈 제목: 1문장 설명\n★ 두번째 이슈 제목: 1문장 설명\n★ 세번째 이슈 제목: 1문장 설명\n\n[투자 시사점]\n▸ 테마명1: 핵심 포인트 1~2문장\n▸ 테마명2: 핵심 포인트 1~2문장\n▸ 테마명3: 핵심 포인트 1~2문장\n\n[주의 사항]\n⚠ 리스크1: 설명\n⚠ 리스크2: 설명",
+  "risk_temperature": "high|medium|low",
+  "data_sources": ["RSS뉴스"],
+  "issues": [
+    {{
+      "category": "geopolitical|macroeconomic|monetary_policy|sector|technology|commodity|regulatory",
+      "region": "영향 지역",
+      "title": "이슈 제목",
+      "summary": "이슈 핵심 요약 (2~3문장)",
+      "source": "뉴스 출처",
+      "importance": 1-5,
+      "impact_short": "단기(1개월) 시장 영향 분석",
+      "impact_mid": "중기(1~6개월) 파급 경로",
+      "impact_long": "장기(6개월+) 구조적 변화",
+      "historical_analogue": "과거 유사 사례와 당시 시장 반응 (없으면 null)"
+    }}
+  ],
+  "themes": [
+    {{
+      "theme_name": "테마명",
+      "description": "테마 설명 및 투자 논리 (3~5문장)",
+      "related_issue_indices": [0, 1],
+      "confidence_score": 0.00-1.00,
+      "time_horizon": "short|mid|long",
+      "theme_type": "structural|cyclical",
+      "theme_validity": "strong|medium|weak",
+      "key_indicators": ["모니터링할 핵심 지표"],
+      "scenarios": [
+        {{
+          "scenario_type": "bull",
+          "probability": 25,
+          "description": "낙관 시나리오 설명",
+          "key_assumptions": "핵심 가정",
+          "market_impact": "S&P500 +X%, KOSPI +X% 등 시장 영향"
+        }},
+        {{
+          "scenario_type": "base",
+          "probability": 50,
+          "description": "기본 시나리오 설명",
+          "key_assumptions": "핵심 가정",
+          "market_impact": "시장 영향"
+        }},
+        {{
+          "scenario_type": "bear",
+          "probability": 25,
+          "description": "비관 시나리오 설명",
+          "key_assumptions": "핵심 가정",
+          "market_impact": "시장 영향"
+        }}
+      ],
+      "macro_impacts": [
+        {{
+          "variable_name": "oil_wti|gold|usdkrw|us_10y_yield|sp500|kospi",
+          "base_case": "기본 시나리오 전망치",
+          "worse_case": "악화 시나리오 전망치",
+          "better_case": "호전 시나리오 전망치",
+          "unit": "$|₩|%|pt"
+        }}
+      ]
+    }}
+  ]
+}}
+```"""
+
+
+# ── Stage 1-B: 테마별 투자 제안 생성 ──────────────────
+
+STAGE1B_SYSTEM = SYSTEM_PROMPT_BASE + """
+
+추가 역할: 글로벌 매크로 전략팀의 종목 선정 전문가로서,
+주어진 투자 테마에 대해 밸류체인 전체를 조망하며 투자 제안을 생성합니다.
+중소형 얼리 시그널 종목 발굴에 특화되어 있습니다."""
+
+STAGE1B_PROMPT = """## 분석 날짜: {date}
+
+## 투자 테마 정보
+
+- **테마명**: {theme_name}
+- **테마 설명**: {theme_description}
+- **테마 유형**: {theme_type}
+- **투자 시계**: {time_horizon}
+- **신뢰도**: {confidence_score}
+{recent_recommendations_section}
+---
+
+## 분석 요청 — Stage 1-B: 투자 제안 생성
+
+위 테마에 대해 10~15건의 투자 제안을 생성하세요.
+
+**종목 선정 프로세스 — "남들보다 먼저 발굴":**
+밸류체인 전체(완성품 → 핵심 부품 → 소재·장비 → 원재료)를 조망한 뒤,
+**아래 비중 가이드라인을 반드시 준수**하세요.
+
+  - **얼리 시그널 종목 (60% 이상)**: 뉴스에 직접 언급되지 않은 2~3차 수혜주, 소재·장비·부품 전문기업.
+    시총 3,000억~2조 중소형주 우선. 아직 애널리스트 커버리지가 적고, 주가에 테마가 미반영된 종목.
+  - **컨트래리안/딥밸류 종목 (10~20%)**: 시장이 과도하게 비관하지만 펀더멘털 반전 시그널이 있는 종목.
+  - **컨센서스 종목 (20~30%)**: 대형 리더주는 벤치마크/참고용으로만 포함.
+
+각 제안에 대해:
+- 자산 유형: stock / etf / commodity / currency / bond / crypto
+- 구체적 종목/ETF (티커 포함), 시장(KRX/NYSE/NASDAQ 등)
+- 매매 판단: buy / sell / hold / watch
+- 확신도: high / medium / low
+- **현재가**: null로 설정 (실시간 시세는 별도 시스템에서 자동 주입됨 — 추정 금지)
+- **목표가 범위** (상한/하단)
+- **상승여력 %**
+- **벤더 티어** (1 = 대형 리더 / 2 = 중견 핵심 부품·소재·장비 / 3 = 니치 전문기업)
+- **공급망 위치**: 밸류체인 내 역할
+- **발굴 유형** (discovery_type): consensus / early_signal / contrarian / deep_value
+- **주가 반영도** (price_momentum_check): already_run / fair_priced / undervalued / unknown
+- 추천 근거 (5가지 관점: ①밸류에이션 ②실적모멘텀 ③수급/수주 ④테마연결성 ⑤경쟁우위, 3~5문장)
+- 리스크 요인 (1~2문장)
+- 목표 비중 (%)
+- **섹터**, **통화**
+
+## 출력 형식
+
+반드시 아래 JSON 형식으로만 응답하세요:
+
+```json
+{{
+  "theme_name": "{theme_name}",
+  "proposals": [
+    {{
+      "asset_type": "stock|etf|commodity|currency|bond|crypto",
+      "asset_name": "자산명",
+      "ticker": "티커",
+      "market": "KRX|NYSE|NASDAQ|etc",
+      "action": "buy|sell|hold|watch",
+      "conviction": "high|medium|low",
+      "current_price": null,
+      "target_price_low": 0,
+      "target_price_high": 0,
+      "upside_pct": null,
+      "vendor_tier": 1,
+      "supply_chain_position": "밸류체인 내 역할",
+      "discovery_type": "consensus|early_signal|contrarian|deep_value",
+      "price_momentum_check": "already_run|fair_priced|undervalued|unknown",
+      "rationale": "추천 근거 (3~5문장)",
+      "risk_factors": "핵심 리스크 (1~2문장)",
+      "target_allocation": 0.0,
+      "sector": "섹터 분류",
+      "currency": "KRW|USD|JPY|EUR"
     }}
   ]
 }}
