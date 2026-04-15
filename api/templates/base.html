@@ -18,6 +18,7 @@
     <nav class="sidebar">
         <div class="sidebar-header">
             <h1>AlphaScope</h1>
+            <button class="sidebar-close-btn" onclick="document.body.classList.remove('sidebar-open')" aria-label="닫기">&times;</button>
         </div>
         <ul class="nav-menu">
             <li><a href="/" class="{% if active_page == 'dashboard' %}active{% endif %}" onclick="document.body.classList.remove('sidebar-open')">Dashboard</a></li>
