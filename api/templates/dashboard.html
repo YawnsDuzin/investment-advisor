@@ -1,10 +1,10 @@
 {% extends "base.html" %}
-{% block title %}Dashboard — Investment Advisor{% endblock %}
+{% block title %}Dashboard — AlphaScope{% endblock %}
 {% block page_title %}Dashboard{% endblock %}
 
 {% block content %}
 {% if session %}
-<!-- 시장 요약 -->
+<!-- 시장 요약 (구조화) -->
 <div class="market-summary">
     <div class="label" style="display:flex;align-items:center;justify-content:space-between;">
         <span>Market Summary &middot; {{ session.analysis_date }}</span>
@@ -15,11 +15,45 @@
         </span>
         {% endif %}
     </div>
-    {{ session.market_summary or "(분석 요약 없음)" }}
+    <div class="summary-body">
+    {% if session.market_summary %}
+        {% set summary_text = session.market_summary %}
+        {# 구조화된 섹션 파싱: [섹션명] 패턴 감지 #}
+        {% set has_sections = '[시장 환경]' in summary_text or '[핵심 이슈]' in summary_text %}
+        {% if has_sections %}
+            {% for line in summary_text.split('\n') %}
+                {% set trimmed = line.strip() %}
+                {% if trimmed == '' %}
+                {% elif trimmed.startswith('[') and ']' in trimmed %}
+                    {% set section_title = trimmed.split(']')[0][1:] %}
+                    {% set section_content = trimmed.split(']', 1)[1].strip() %}
+                    <div class="summary-section">
+                        <div class="summary-section-title">{{ section_title }}</div>
+                        {% if section_content %}
+                        <div class="summary-section-content">{{ section_content }}</div>
+                        {% endif %}
+                    </div>
+                {% elif trimmed.startswith('★') %}
+                    <div class="summary-highlight summary-highlight-star">{{ trimmed }}</div>
+                {% elif trimmed.startswith('▸') %}
+                    <div class="summary-highlight summary-highlight-theme">{{ trimmed }}</div>
+                {% elif trimmed.startswith('⚠') %}
+                    <div class="summary-highlight summary-highlight-warn">{{ trimmed }}</div>
+                {% else %}
+                    <div class="summary-section-content">{{ trimmed }}</div>
+                {% endif %}
+            {% endfor %}
+        {% else %}
+            {{ summary_text }}
+        {% endif %}
+    {% else %}
+        (분석 요약 없음)
+    {% endif %}
+    </div>
 </div>
 
-<!-- 핵심 지표 -->
-<div class="stat-grid">
+<!-- 핵심 지표 (확장) -->
+<div class="stat-grid stat-grid-6">
     <div class="stat-card">
         <div class="stat-value">{{ issue_count }}</div>
         <div class="stat-label">글로벌 이슈</div>
@@ -27,15 +61,61 @@
     <div class="stat-card">
         <div class="stat-value">{{ theme_count }}</div>
         <div class="stat-label">투자 테마</div>
+        <div class="stat-sub">신뢰도 {{ "%.0f"|format(avg_confidence * 100) }}%</div>
     </div>
     <div class="stat-card">
         <div class="stat-value">{{ buy_count }}</div>
         <div class="stat-label">매수 제안</div>
     </div>
+    <div class="stat-card stat-card-accent">
+        <div class="stat-value">{{ high_conviction_count }}</div>
+        <div class="stat-label">높은 확신도</div>
+    </div>
+    <div class="stat-card stat-card-signal">
+        <div class="stat-value">{{ early_signal_count }}</div>
+        <div class="stat-label">얼리 시그널</div>
+    </div>
     <div class="stat-card">
         <div class="stat-value">{{ "%.1f"|format(total_alloc) }}%</div>
         <div class="stat-label">총 비중</div>
     </div>
+</div>
+
+<!-- 발굴 유형 분포 + 주요 섹터 -->
+<div class="summary-insights">
+    {% if discovery_counts %}
+    <div class="insight-card">
+        <div class="insight-title">발굴 유형 분포</div>
+        <div class="insight-bars">
+            {% set total_proposals = discovery_counts.values()|sum %}
+            {% for dt, cnt in discovery_counts.items() %}
+            <div class="insight-bar-row">
+                <span class="insight-bar-label">
+                    {% if dt == 'early_signal' %}얼리시그널
+                    {% elif dt == 'consensus' %}컨센서스
+                    {% elif dt == 'contrarian' %}컨트래리안
+                    {% elif dt == 'deep_value' %}딥밸류
+                    {% else %}{{ dt }}{% endif %}
+                </span>
+                <div class="insight-bar-track">
+                    <div class="insight-bar-fill insight-bar-{{ dt }}" style="width:{{ (cnt / total_proposals * 100)|int }}%"></div>
+                </div>
+                <span class="insight-bar-count">{{ cnt }}</span>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+    {% if top_sectors %}
+    <div class="insight-card">
+        <div class="insight-title">주요 섹터</div>
+        <div class="insight-tags">
+            {% for sec, cnt in top_sectors %}
+            <span class="insight-tag">{{ sec }} <span class="insight-tag-count">{{ cnt }}</span></span>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
 </div>
 
 <!-- 테마 요약 (간소화: 테마명 + 신뢰도 + 핵심 종목만) -->
@@ -74,6 +154,9 @@
             </span>
         </span>
     </div>
+    {% if theme.description %}
+    <div style="font-size:13px;color:var(--text-muted);line-height:1.6;margin-top:4px;margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ theme.description }}</div>
+    {% endif %}
     <!-- 핵심 종목 한줄 요약 -->
     {% if theme.proposals %}
     <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px;">
