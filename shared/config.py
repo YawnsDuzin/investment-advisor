@@ -81,7 +81,7 @@ def _env_bool(key: str, default: bool) -> bool:
 @dataclass
 class AnalyzerConfig:
     """멀티스테이지 분석 파이프라인 설정"""
-    max_turns: int = field(default_factory=lambda: int(os.getenv("MAX_TURNS", "2")))
+    max_turns: int = field(default_factory=lambda: int(os.getenv("MAX_TURNS", "1")))
     top_themes: int = field(default_factory=lambda: int(os.getenv("TOP_THEMES", "2")))
     top_stocks_per_theme: int = field(default_factory=lambda: int(os.getenv("TOP_STOCKS_PER_THEME", "2")))
     enable_stock_analysis: bool = field(default_factory=lambda: _env_bool("ENABLE_STOCK_ANALYSIS", True))
@@ -112,4 +112,4 @@ class AppConfig:
     news: NewsConfig = field(default_factory=NewsConfig)
     analyzer: AnalyzerConfig = field(default_factory=AnalyzerConfig)
     auth: AuthConfig = field(default_factory=AuthConfig)
-    max_turns: int = field(default_factory=lambda: int(os.getenv("MAX_TURNS", "2")))  # 하위호환
+    max_turns: int = field(default_factory=lambda: int(os.getenv("MAX_TURNS", "1")))  # 하위호환
