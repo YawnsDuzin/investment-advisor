@@ -5,8 +5,12 @@ Stage 2: 핵심 종목 심층분석 (펀더멘털·퀀트·센티먼트)
 """
 import json
 import asyncio
+import time
 import anyio
-from claude_agent_sdk import query, ClaudeAgentOptions, AssistantMessage, TextBlock
+from claude_agent_sdk import (
+    query, ClaudeAgentOptions,
+    AssistantMessage, TextBlock, ResultMessage, SystemMessage,
+)
 
 from analyzer.prompts import (
     STAGE1_SYSTEM, STAGE1_PROMPT,
@@ -44,6 +48,10 @@ async def _query_claude(
                예: "claude-haiku-4-5-20251001", "claude-sonnet-4-6"
     """
     full_response = ""
+    start_time = time.time()
+    msg_count = 0
+    print(f"  [SDK] 쿼리 시작 (max_turns={max_turns}, model={model or 'default'})")
+
     async for message in query(
         prompt=prompt,
         options=ClaudeAgentOptions(
@@ -52,10 +60,19 @@ async def _query_claude(
             model=model,
         ),
     ):
+        elapsed = time.time() - start_time
         if isinstance(message, AssistantMessage):
-            for block in message.content:
-                if isinstance(block, TextBlock):
-                    full_response += block.text
+            msg_count += 1
+            chunk_len = sum(len(b.text) for b in message.content if isinstance(b, TextBlock))
+            full_response += "".join(b.text for b in message.content if isinstance(b, TextBlock))
+            print(f"  [SDK] 응답 수신 #{msg_count} (+{chunk_len:,}자, 누적 {len(full_response):,}자, {elapsed:.0f}초)")
+        elif isinstance(message, ResultMessage):
+            print(f"  [SDK] 완료 — 턴 {message.num_turns}회, {elapsed:.0f}초 소요")
+        elif isinstance(message, SystemMessage):
+            print(f"  [SDK] 시스템: {message.subtype}")
+
+    total = time.time() - start_time
+    print(f"  [SDK] 쿼리 종료 (응답 {len(full_response):,}자, 총 {total:.0f}초)")
     return full_response
 
 
