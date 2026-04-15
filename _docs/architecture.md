@@ -1,6 +1,6 @@
 # Investment Advisor — 기술 아키텍처 문서
 
-> 최종 갱신: 2026-04-13 | DB 스키마 v8 | Python 3.10+
+> 최종 갱신: 2026-04-15 | DB 스키마 v8 | Python 3.10+
 
 ---
 
@@ -353,7 +353,7 @@ results = await asyncio.gather(*tasks, return_exceptions=True)
 |------|------|------|------|
 | `collect_news(cfg: NewsConfig)` | 뉴스 설정 | 마크다운 문자열 | 카테고리별 RSS 수집, HTML 태그 제거, 500자 요약 |
 
-- 피드별 최대 `max_articles_per_feed`(기본 10)건 수집
+- 피드별 최대 `max_articles_per_feed`(기본 5)건 수집
 - 파싱 오류 시 해당 피드 건너뜀 (stdout 로깅)
 
 #### `stock_data.py` — 주가 데이터 조회
@@ -441,7 +441,7 @@ def _serialize_row(row: dict) -> dict:
 
 | 메서드 | 경로 | 템플릿 | 설명 |
 |--------|------|--------|------|
-| GET | `/` | `dashboard.html` | 홈: 투자 신호, 시장 요약, 테마/제안 |
+| GET | `/` | `dashboard.html` | 홈: 시장 요약, 테마/제안, 뉴스(카테고리별) |
 | GET | `/pages/sessions` | `sessions.html` | 세션 목록 |
 | GET | `/pages/sessions/{id}` | `session_detail.html` | 세션 상세 |
 | GET | `/pages/themes` | `themes.html` | 테마 목록 (필터링) |
@@ -453,14 +453,10 @@ def _serialize_row(row: dict) -> dict:
 | GET | `/pages/chat/{id}` | `chat_room.html` | 채팅 대화 화면 |
 | GET | `/admin` | `admin.html` | 관리자 페이지 |
 
-**대시보드 투자 신호 로직** (`GET /`):
-```python
-# 신호 유형:
-# - new_buy: 오늘 새로 등장한 BUY 제안
-# - action_change: hold→buy, buy→sell 등 액션 변경
-# - confidence_up / confidence_down: 신뢰도 ±5% 이상 변화
-# - disappeared: 이전에 있던 테마가 사라짐
-```
+**대시보드 데이터** (`GET /`):
+- 최신 세션의 시장 요약, 테마(신뢰도순), 제안(BUY 카운트/총 배분)
+- 테마 추적 데이터 (`theme_tracking`): 연속 등장 streak, 소멸 테마
+- 뉴스 기사: `news_articles` 테이블에서 카테고리별 그룹핑 (`CATEGORY_LABELS` 매핑)
 
 #### 템플릿 구조
 

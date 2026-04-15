@@ -104,7 +104,7 @@ sudo systemctl enable --now investment-advisor-analyzer.timer    # 매일 03:00 
   - 최근 7일 추천 이력 피드백으로 중복 추천 방지
   - 컨센서스/얼리시그널/컨트래리안/딥밸류 분류 (`discovery_type`)
   - 주가 반영도 태깅 (`price_momentum_check`)
-- **모멘텀 체크**: Stage 1 추천 종목의 1개월 수익률 조회, 급등(+20%) 종목 필터링. 동시에 **모든 종목의 `current_price`를 yfinance 실시간 가격으로 설정**
+- **모멘텀 체크**: Stage 1 추천 종목의 1개월 수익률 조회, 급등(+20%) 종목 필터링. 동시에 **모든 종목의 `current_price`를 yfinance 가격으로 설정** (실패 시 개별 재조회, 그래도 실패 시 NULL). `price_source` 태깅으로 데이터 출처 추적
 - **주가 데이터**: Stage 2 대상 종목의 현재가/PER/PBR/시총 등을 yfinance로 실시간 조회 (ENABLE_STOCK_DATA로 on/off)
 - **Stage 2**: 실제 주가 데이터 + 5관점 심층분석 (펀더멘털·산업·모멘텀·퀀트·리스크)
   - 급등 종목보다 미반영 종목(early_signal/undervalued) 우선 선정
@@ -130,7 +130,7 @@ sudo systemctl enable --now investment-advisor-analyzer.timer    # 매일 03:00 
 
 ### shared/ — 공용 모듈
 - `config.py` — `.env` 파일 자동 로드, `DatabaseConfig`(환경변수 기반), `NewsConfig`, `AnalyzerConfig`, `AppConfig`
-- `db.py` — `schema_version` 기반 자동 마이그레이션(v1~v8), `save_analysis()` + tracking 갱신, `get_recent_recommendations()`, `get_connection()`
+- `db.py` — `schema_version` 기반 자동 마이그레이션(v1~v10), `save_analysis()` + `_validate_proposal()` 검증 + tracking 갱신, `get_recent_recommendations()`, `get_connection()`
 - `pg_setup.py` — PostgreSQL 설치 감지 및 자동 설치 (Linux apt, Windows winget/choco)
 
 ## DB Schema
@@ -156,6 +156,7 @@ proposal_tracking (독립, UPSERT로 갱신)
 - `stock_analyses.financial_summary`와 `factor_scores`는 JSONB 타입.
 - `theme_tracking.theme_key`는 테마명 정규화 키 (소문자, 공백·하이픈·가운뎃점 제거). `_normalize_theme_key()` 함수 사용.
 - `proposal_tracking`은 `(ticker, theme_key)` UNIQUE — 테마별 종목 추적.
+- `investment_proposals.price_source`는 가격 데이터 출처 (`yfinance_realtime` / `yfinance_close` / NULL). v10 추가.
 
 ## Key Conventions
 
@@ -168,6 +169,7 @@ proposal_tracking (독립, UPSERT로 갱신)
 - 새 마이그레이션 추가 시: `SCHEMA_VERSION` 증가, `_migrate_to_vN()` 함수 생성, `init_db()`에 `if current < N` 추가
 - 프론트엔드에서 새 필드 표시 시 `{% if field %}` 가드 필수 — 이전 버전 데이터에서 NULL일 수 있음
 - Stage 1의 `target_price_low/high`는 AI 추정치(학습 데이터 기반)로 실제 시세와 괴리가 클 수 있음. Stage 2 분석 종목만 신뢰할 수 있는 목표가를 가짐
-- DB 저장 시 `upside_pct`는 `(target_price_low - current_price) / current_price * 100`으로 재계산됨 (`shared/db.py`)
+- `current_price`는 반드시 yfinance 실시간 데이터만 사용 — AI 추정 가격은 `_validate_proposal()`에서 자동 제거 (v10)
+- DB 저장 시 `upside_pct`는 `(target_price_low - current_price) / current_price * 100`으로 재계산됨 (`shared/db.py`). 현재가 없으면 NULL
 - 가격 표시 시 `fmt_price` Jinja2 필터 사용 — 통화 기호(₩/$€¥£) + 천 단위 쉼표, KRW/JPY는 소수점 제거
 - 번호 목록(①②③) 표시 시 `nl_numbered` Jinja2 필터 사용 — 원문자 앞에 `<br>` 삽입

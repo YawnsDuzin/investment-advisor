@@ -5,7 +5,7 @@ from psycopg2.extras import execute_values, RealDictCursor
 from shared.config import DatabaseConfig
 
 # ── 스키마 버전 관리 ──────────────────────────────
-SCHEMA_VERSION = 8  # v1~v5: 분석 테이블, v6: 테마 채팅, v7: 뉴스 기사, v8: 뉴스 한글 번역
+SCHEMA_VERSION = 10  # v1~v5: 분석 테이블, v6: 테마 채팅, v7: 뉴스 기사, v8: 뉴스 한글 번역, v9: 요약 한글 번역, v10: price_source
 
 
 def _ensure_database(cfg: DatabaseConfig) -> None:
@@ -362,6 +362,38 @@ def _migrate_to_v8(cur) -> None:
     print("[DB] v8 마이그레이션 완료 — news_articles.title_ko 컬럼 추가")
 
 
+def _migrate_to_v9(cur) -> None:
+    """v9: 뉴스 기사 요약 한글 번역 컬럼 추가"""
+
+    cur.execute("""
+        ALTER TABLE news_articles
+        ADD COLUMN IF NOT EXISTS summary_ko TEXT;
+    """)
+
+    cur.execute("""
+        INSERT INTO schema_version (version) VALUES (9)
+        ON CONFLICT (version) DO NOTHING;
+    """)
+
+    print("[DB] v9 마이그레이션 완료 — news_articles.summary_ko 컬럼 추가")
+
+
+def _migrate_to_v10(cur) -> None:
+    """v10: 가격 데이터 출처 추적 컬럼 추가"""
+
+    cur.execute("""
+        ALTER TABLE investment_proposals
+        ADD COLUMN IF NOT EXISTS price_source VARCHAR(20);
+    """)
+
+    cur.execute("""
+        INSERT INTO schema_version (version) VALUES (10)
+        ON CONFLICT (version) DO NOTHING;
+    """)
+
+    print("[DB] v10 마이그레이션 완료 — investment_proposals.price_source 컬럼 추가")
+
+
 def init_db(cfg: DatabaseConfig) -> None:
     """PostgreSQL 설치 확인 → 데이터베이스 생성 → 스키마 마이그레이션"""
     from shared.pg_setup import ensure_postgresql
@@ -398,10 +430,69 @@ def init_db(cfg: DatabaseConfig) -> None:
             if current < 8:
                 _migrate_to_v8(cur)
 
+            if current < 9:
+                _migrate_to_v9(cur)
+
+            if current < 10:
+                _migrate_to_v10(cur)
+
         conn.commit()
         print("[DB] 테이블 초기화 완료")
     finally:
         conn.close()
+
+
+def _validate_proposal(proposal: dict) -> dict:
+    """투자 제안 저장 전 가격 데이터 검증 — 잘못된 값보다 NULL이 낫다"""
+
+    cur_price = proposal.get("current_price")
+    tgt_low = proposal.get("target_price_low")
+    tgt_high = proposal.get("target_price_high")
+
+    # 1) 가격 소스가 없으면(AI 추정치) current_price 제거
+    if proposal.get("price_source") is None and cur_price is not None:
+        proposal["current_price"] = None
+        cur_price = None
+
+    # 2) 현재가 비정상 값 필터 (0 이하)
+    if cur_price is not None:
+        try:
+            if float(cur_price) <= 0:
+                proposal["current_price"] = None
+                proposal["price_source"] = None
+                cur_price = None
+        except (ValueError, TypeError):
+            proposal["current_price"] = None
+            proposal["price_source"] = None
+            cur_price = None
+
+    # 3) 목표가 상한 < 하한이면 스왑
+    if tgt_low is not None and tgt_high is not None:
+        try:
+            tl, th = float(tgt_low), float(tgt_high)
+            if tl > th:
+                proposal["target_price_low"] = tgt_high
+                proposal["target_price_high"] = tgt_low
+                tgt_low, tgt_high = tgt_high, tgt_low
+        except (ValueError, TypeError):
+            pass
+
+    # 4) 현재가 없으면 upside 계산 불가 → null
+    if cur_price is None:
+        proposal["upside_pct"] = None
+
+    # 5) 목표가가 현재가의 50% 미만이면 AI 추정 목표가로 판단 → 무효화
+    if cur_price is not None and tgt_low is not None:
+        try:
+            cp, tl = float(cur_price), float(tgt_low)
+            if cp > 0 and tl < cp * 0.5:
+                proposal["target_price_low"] = None
+                proposal["target_price_high"] = None
+                proposal["upside_pct"] = None
+        except (ValueError, TypeError):
+            pass
+
+    return proposal
 
 
 def save_analysis(cfg: DatabaseConfig, analysis_date: str, result: dict) -> int:
@@ -492,6 +583,9 @@ def save_analysis(cfg: DatabaseConfig, analysis_date: str, result: dict) -> int:
 
                 # 4) 투자 제안 저장
                 for proposal in theme.get("proposals", []):
+                    # 가격 데이터 검증
+                    proposal = _validate_proposal(proposal)
+
                     # upside_pct를 현재가·목표저가 기반으로 재계산
                     cur_price = proposal.get("current_price")
                     tgt_low = proposal.get("target_price_low")
@@ -512,8 +606,8 @@ def save_analysis(cfg: DatabaseConfig, analysis_date: str, result: dict) -> int:
                             current_price, target_price_low, target_price_high,
                             upside_pct, sentiment_score, quant_score,
                             sector, currency, vendor_tier, supply_chain_position,
-                            discovery_type, price_momentum_check)
-                           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                            discovery_type, price_momentum_check, price_source)
+                           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                            RETURNING id""",
                         (theme_id, proposal.get("asset_type"),
                          proposal.get("asset_name"), proposal.get("ticker"),
@@ -527,7 +621,8 @@ def save_analysis(cfg: DatabaseConfig, analysis_date: str, result: dict) -> int:
                          proposal.get("sentiment_score"), proposal.get("quant_score"),
                          proposal.get("sector"), proposal.get("currency"),
                          proposal.get("vendor_tier"), proposal.get("supply_chain_position"),
-                         proposal.get("discovery_type"), proposal.get("price_momentum_check"))
+                         proposal.get("discovery_type"), proposal.get("price_momentum_check"),
+                         proposal.get("price_source"))
                     )
                     proposal_id = cur.fetchone()[0]
 
@@ -572,7 +667,7 @@ def save_news_articles(cfg: DatabaseConfig, session_id: int, articles: list[dict
 
     Args:
         articles: [{"category", "source", "title", "title_ko",
-                     "summary", "link", "published"}]
+                     "summary", "summary_ko", "link", "published"}]
     Returns:
         저장된 기사 수
     """
@@ -585,10 +680,11 @@ def save_news_articles(cfg: DatabaseConfig, session_id: int, articles: list[dict
             for a in articles:
                 cur.execute(
                     """INSERT INTO news_articles
-                       (session_id, category, source, title, title_ko, summary, link, published)
-                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
+                       (session_id, category, source, title, title_ko, summary, summary_ko, link, published)
+                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)""",
                     (session_id, a.get("category"), a.get("source"),
-                     a.get("title"), a.get("title_ko"), a.get("summary"),
+                     a.get("title"), a.get("title_ko"),
+                     a.get("summary"), a.get("summary_ko"),
                      a.get("link"), a.get("published"))
                 )
         conn.commit()
@@ -598,13 +694,13 @@ def save_news_articles(cfg: DatabaseConfig, session_id: int, articles: list[dict
 
 
 def get_untranslated_news(cfg: DatabaseConfig) -> list[dict]:
-    """title_ko가 NULL인 뉴스 기사 조회"""
+    """title_ko 또는 summary_ko가 NULL인 뉴스 기사 조회"""
     conn = get_connection(cfg)
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("""
-                SELECT id, title FROM news_articles
-                WHERE title_ko IS NULL
+                SELECT id, title, summary FROM news_articles
+                WHERE title_ko IS NULL OR summary_ko IS NULL
                 ORDER BY id
             """)
             return [dict(r) for r in cur.fetchall()]
@@ -613,7 +709,7 @@ def get_untranslated_news(cfg: DatabaseConfig) -> list[dict]:
 
 
 def update_news_title_ko(cfg: DatabaseConfig, updates: list[tuple[int, str]]) -> int:
-    """뉴스 기사 한글 번역 일괄 업데이트
+    """뉴스 기사 제목 한글 번역 일괄 업데이트
 
     Args:
         updates: [(article_id, title_ko), ...]
@@ -630,6 +726,32 @@ def update_news_title_ko(cfg: DatabaseConfig, updates: list[tuple[int, str]]) ->
                 cur.execute(
                     "UPDATE news_articles SET title_ko = %s WHERE id = %s",
                     (title_ko, article_id)
+                )
+        conn.commit()
+        return len(updates)
+    finally:
+        conn.close()
+
+
+def update_news_translation(cfg: DatabaseConfig,
+                            updates: list[tuple[int, str, str]]) -> int:
+    """뉴스 기사 제목+요약 한글 번역 일괄 업데이트
+
+    Args:
+        updates: [(article_id, title_ko, summary_ko), ...]
+    Returns:
+        업데이트된 건수
+    """
+    if not updates:
+        return 0
+
+    conn = get_connection(cfg)
+    try:
+        with conn.cursor() as cur:
+            for article_id, title_ko, summary_ko in updates:
+                cur.execute(
+                    "UPDATE news_articles SET title_ko = %s, summary_ko = %s WHERE id = %s",
+                    (title_ko, summary_ko, article_id)
                 )
         conn.commit()
         return len(updates)
@@ -669,6 +791,28 @@ def get_recent_recommendations(cfg: DatabaseConfig, days: int = 7) -> list[dict]
             return [dict(row) for row in cur.fetchall()]
     except Exception as e:
         print(f"[DB] 최근 추천 이력 조회 실패: {e}")
+        return []
+    finally:
+        conn.close()
+
+
+def get_latest_news_titles(cfg: DatabaseConfig) -> list[str]:
+    """최근 세션의 뉴스 제목 목록 조회 (뉴스 세트 지문 비교용)"""
+    conn = get_connection(cfg)
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT na.title
+                FROM news_articles na
+                JOIN analysis_sessions s ON na.session_id = s.id
+                WHERE s.analysis_date = (
+                    SELECT MAX(analysis_date) FROM analysis_sessions
+                )
+                ORDER BY na.title
+            """)
+            return [row[0] for row in cur.fetchall()]
+    except Exception as e:
+        print(f"[DB] 최근 뉴스 제목 조회 실패: {e}")
         return []
     finally:
         conn.close()

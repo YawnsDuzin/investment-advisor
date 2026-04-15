@@ -8,8 +8,8 @@ import time
 from fastapi import APIRouter, Request, Query
 from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
-from shared.config import DatabaseConfig
-from shared.db import get_untranslated_news, update_news_title_ko
+from shared.config import DatabaseConfig, AnalyzerConfig
+from shared.db import get_untranslated_news, update_news_title_ko, update_news_translation
 
 router = APIRouter(prefix="/admin", tags=["관리자"])
 
@@ -249,23 +249,31 @@ def translate_existing_news():
             import anyio
             from analyzer.analyzer import _query_claude, _parse_json_response
 
+            analyzer_cfg = AnalyzerConfig()
+            translate_model = analyzer_cfg.model_translate
+
             def _has_korean(text: str) -> bool:
                 return bool(re.search(r'[\uac00-\ud7af]', text))
 
             total = len(articles)
-            yield f"data: [시작] 미번역 뉴스 {total}건 번역을 시작합니다.\n\n"
+            yield f"data: [시작] 미번역 뉴스 {total}건 번역을 시작합니다 (모델: {translate_model}).\n\n"
 
             # 이미 한글인 것 먼저 처리
             korean_updates = []
             to_translate = []
             for a in articles:
-                if _has_korean(a["title"]):
-                    korean_updates.append((a["id"], a["title"]))
+                title = a.get("title", "")
+                summary = a.get("summary", "")
+                title_is_ko = _has_korean(title)
+                summary_is_ko = _has_korean(summary) or not summary
+
+                if title_is_ko and summary_is_ko:
+                    korean_updates.append((a["id"], title, summary))
                 else:
                     to_translate.append(a)
 
             if korean_updates:
-                update_news_title_ko(cfg, korean_updates)
+                update_news_translation(cfg, korean_updates)
                 yield f"data: [한글] 이미 한글인 뉴스 {len(korean_updates)}건 처리 완료\n\n"
 
             if not to_translate:
@@ -273,8 +281,8 @@ def translate_existing_news():
                 yield "event: done\ndata: finished\n\n"
                 return
 
-            # 50건씩 배치 번역
-            BATCH_SIZE = 50
+            # 30건씩 배치 번역 (제목+요약)
+            BATCH_SIZE = 30
             translated_total = 0
 
             for batch_start in range(0, len(to_translate), BATCH_SIZE):
@@ -282,39 +290,52 @@ def translate_existing_news():
                 batch_num = batch_start // BATCH_SIZE + 1
                 total_batches = (len(to_translate) + BATCH_SIZE - 1) // BATCH_SIZE
 
-                yield f"data: [번역] 배치 {batch_num}/{total_batches} — {len(batch)}건 번역 중...\n\n"
+                yield f"data: [번역] 배치 {batch_num}/{total_batches} — {len(batch)}건 제목+요약 번역 중...\n\n"
 
-                # 프롬프트 구성
-                title_lines = "\n".join(f"{a['id']}: {a['title']}" for a in batch)
-                prompt = f"""아래 뉴스 제목들을 한국어로 번역해주세요.
-각 줄은 "번호: 제목" 형식입니다. 같은 형식으로 번역 결과를 JSON으로 반환하세요.
+                # 프롬프트 구성 — 제목+요약 함께
+                items_text = []
+                for a in batch:
+                    summary_short = (a.get("summary") or "")[:200]
+                    items_text.append(f"{a['id']}:\nt: {a['title']}\ns: {summary_short}")
+
+                prompt = f"""아래 뉴스의 제목(t)과 요약(s)을 한국어로 번역해주세요.
 
 ```
-{title_lines}
+{"---".join(items_text)}
 ```
 
 반드시 아래 JSON 형식으로만 응답:
-{{"translations": {{"번호": "한글 번역", ...}}}}"""
+{{"translations": {{{", ".join(f'"{a["id"]}": {{"t": "제목 번역", "s": "요약 번역"}}' for a in batch)}}}}}
 
-                system_prompt = "뉴스 제목 번역 전문가입니다. 간결하고 자연스러운 한국어로 번역합니다. JSON으로만 응답합니다."
+이미 한글인 필드는 원문 그대로 반환하세요."""
+
+                system_prompt = "뉴스 제목/요약 번역 전문가입니다. 간결하고 자연스러운 한국어로 번역합니다. JSON으로만 응답합니다."
 
                 try:
                     response = anyio.run(
-                        _query_claude, prompt, system_prompt, 1
+                        _query_claude, prompt, system_prompt, 1,
+                        translate_model,
                     )
                     parsed = _parse_json_response(response)
                     translations = parsed.get("translations", {})
 
                     updates = []
-                    for id_str, ko_title in translations.items():
+                    for id_str, tr in translations.items():
                         try:
                             article_id = int(id_str)
-                            updates.append((article_id, ko_title))
+                            if isinstance(tr, dict):
+                                updates.append((
+                                    article_id,
+                                    tr.get("t", ""),
+                                    tr.get("s", ""),
+                                ))
+                            elif isinstance(tr, str):
+                                updates.append((article_id, tr, ""))
                         except ValueError:
                             continue
 
                     if updates:
-                        update_news_title_ko(cfg, updates)
+                        update_news_translation(cfg, updates)
                         translated_total += len(updates)
 
                     yield f"data: [번역] 배치 {batch_num} 완료 — {len(updates)}건 번역됨\n\n"
