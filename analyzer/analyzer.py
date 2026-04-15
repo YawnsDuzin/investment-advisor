@@ -149,6 +149,10 @@ async def _query_claude(
                     system_prompt=system_prompt,
                     max_turns=max_turns,
                     model=model,
+                    # CLI 오버헤드 최소화: 도구 사용 안 함, 프로젝트 설정 무시
+                    tools=[],
+                    permission_mode="plan",
+                    setting_sources=[],
                 ),
             ):
                 elapsed = time.time() - start_time
