@@ -769,8 +769,17 @@ tbody tr:hover { background: var(--bg-card-hover); }
 }
 
 .btn:hover { background: var(--bg-card-hover); color: var(--text); }
-.btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-.btn-primary:hover { background: var(--accent-hover); color: #fff; }
+.btn-primary {
+    background: rgba(79,140,255,0.12);
+    border-color: rgba(79,140,255,0.3);
+    color: var(--accent);
+    font-weight: 600;
+}
+.btn-primary:hover {
+    background: rgba(79,140,255,0.22);
+    border-color: rgba(79,140,255,0.5);
+    color: var(--accent-hover);
+}
 
 /* ===== Proposal Row ===== */
 .proposal-row {
@@ -1216,8 +1225,9 @@ tbody tr:hover { background: var(--bg-card-hover); }
 }
 
 .chat-bubble-user {
-    background: var(--accent);
-    color: #fff;
+    background: rgba(79,140,255,0.15);
+    border: 1px solid rgba(79,140,255,0.25);
+    color: var(--text);
     align-self: flex-end;
     border-bottom-right-radius: 4px;
 }
@@ -1294,18 +1304,18 @@ tbody tr:hover { background: var(--bg-card-hover); }
 
 .chat-input-bar .btn-send {
     padding: 12px 20px;
-    background: var(--accent);
-    color: #fff;
-    border: none;
+    background: rgba(79,140,255,0.15);
+    color: var(--accent);
+    border: 1px solid rgba(79,140,255,0.3);
     border-radius: 10px;
     font-size: 15px;
     font-weight: 600;
     cursor: pointer;
     white-space: nowrap;
-    transition: background 0.15s;
+    transition: all 0.15s;
 }
 
-.chat-input-bar .btn-send:hover { background: var(--accent-hover); }
+.chat-input-bar .btn-send:hover { background: rgba(79,140,255,0.25); border-color: rgba(79,140,255,0.5); }
 .chat-input-bar .btn-send:disabled {
     opacity: 0.5;
     cursor: not-allowed;

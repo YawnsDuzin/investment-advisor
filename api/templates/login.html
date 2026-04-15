@@ -51,17 +51,19 @@
         .auth-card button {
             width: 100%;
             padding: 12px;
-            border: none;
+            border: 1px solid rgba(79,140,255,0.3);
             border-radius: 8px;
-            background: var(--accent);
-            color: #fff;
+            background: rgba(79,140,255,0.12);
+            color: var(--accent);
             font-size: 15px;
             font-weight: 600;
             cursor: pointer;
             margin-top: 8px;
+            transition: all 0.15s;
         }
         .auth-card button:hover {
-            background: var(--accent-hover);
+            background: rgba(79,140,255,0.22);
+            border-color: rgba(79,140,255,0.5);
         }
         .auth-card .error {
             background: rgba(248, 113, 113, 0.15);
