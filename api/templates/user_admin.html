@@ -1,0 +1,188 @@
+{% extends "base.html" %}
+{% block title %}사용자 관리 — Investment Advisor{% endblock %}
+{% block page_title %}사용자 관리{% endblock %}
+
+{% block content %}
+<style>
+    .user-table { width: 100%; border-collapse: collapse; }
+    .user-table th, .user-table td {
+        padding: 10px 12px; text-align: left;
+        border-bottom: 1px solid var(--border);
+        font-size: 13px;
+    }
+    .user-table th { color: var(--text-muted); font-weight: 600; }
+    .user-table tr:hover { background: var(--bg-card-hover); }
+    .badge {
+        display: inline-block; padding: 2px 8px; border-radius: 4px;
+        font-size: 11px; font-weight: 600;
+    }
+    .badge-admin { background: rgba(147,130,255,0.2); color: var(--purple); }
+    .badge-moderator { background: rgba(251,191,36,0.2); color: var(--orange); }
+    .badge-user { background: rgba(79,140,255,0.15); color: var(--accent); }
+    .badge-active { background: rgba(52,211,153,0.2); color: var(--green); }
+    .badge-inactive { background: rgba(248,113,113,0.2); color: var(--red); }
+    .action-btn {
+        padding: 4px 10px; border: 1px solid var(--border); border-radius: 4px;
+        background: var(--bg); color: var(--text); cursor: pointer; font-size: 12px;
+        margin: 1px;
+    }
+    .action-btn:hover { background: var(--bg-card-hover); }
+    .action-btn.danger { border-color: var(--red); color: var(--red); }
+    .action-btn.danger:hover { background: rgba(248,113,113,0.1); }
+    .pagination { margin-top: 20px; text-align: center; }
+    .pagination a, .pagination span {
+        display: inline-block; padding: 6px 12px; margin: 0 2px;
+        border: 1px solid var(--border); border-radius: 4px;
+        font-size: 13px;
+    }
+    .pagination .current { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .stats { font-size: 12px; color: var(--text-muted); }
+    .result-msg {
+        padding: 10px; border-radius: 6px; margin-bottom: 12px;
+        font-size: 13px; display: none;
+    }
+    .result-msg.success { background: rgba(52,211,153,0.15); color: var(--green); display: block; }
+    .result-msg.error { background: rgba(248,113,113,0.15); color: var(--red); display: block; }
+</style>
+
+<div id="resultMsg" class="result-msg"></div>
+
+<p style="margin-bottom:16px;color:var(--text-muted);font-size:14px;">
+    전체 {{ total }}명 ({{ page }}/{{ total_pages }} 페이지)
+</p>
+
+<table class="user-table">
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>이메일</th>
+            <th>닉네임</th>
+            <th>역할</th>
+            <th>상태</th>
+            <th>채팅</th>
+            <th>가입일</th>
+            <th>최근 로그인</th>
+            <th>관리</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for u in users %}
+        <tr id="user-row-{{ u.id }}">
+            <td>{{ u.id }}</td>
+            <td>{{ u.email }}</td>
+            <td>{{ u.nickname }}</td>
+            <td>
+                <span class="badge badge-{{ u.role }}">{{ u.role }}</span>
+            </td>
+            <td>
+                {% if u.is_active %}
+                <span class="badge badge-active">활성</span>
+                {% else %}
+                <span class="badge badge-inactive">비활성</span>
+                {% endif %}
+            </td>
+            <td class="stats">
+                세션 {{ u.chat_session_count }} / 메시지 {{ u.chat_message_count }}
+            </td>
+            <td style="font-size:12px;">{{ u.created_at[:10] if u.created_at else '-' }}</td>
+            <td style="font-size:12px;">{{ u.last_login_at[:10] if u.last_login_at else '-' }}</td>
+            <td>
+                {% if current_user and u.id != current_user.id %}
+                    {# 역할 변경 #}
+                    <select onchange="changeRole({{ u.id }}, this.value)" style="padding:3px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:12px;">
+                        <option value="user" {% if u.role == 'user' %}selected{% endif %}>user</option>
+                        <option value="moderator" {% if u.role == 'moderator' %}selected{% endif %}>moderator</option>
+                        {% if current_user.role == 'admin' %}
+                        <option value="admin" {% if u.role == 'admin' %}selected{% endif %}>admin</option>
+                        {% endif %}
+                    </select>
+
+                    {# 활성화/비활성화 #}
+                    {% if u.is_active %}
+                    <button class="action-btn danger" onclick="changeStatus({{ u.id }}, false)">비활성화</button>
+                    {% else %}
+                    <button class="action-btn" onclick="changeStatus({{ u.id }}, true)">활성화</button>
+                    {% endif %}
+
+                    {# Admin 전용 #}
+                    {% if current_user.role == 'admin' %}
+                    <button class="action-btn" onclick="resetPassword({{ u.id }})">PW초기화</button>
+                    <button class="action-btn danger" onclick="deleteUser({{ u.id }}, '{{ u.email }}')">삭제</button>
+                    {% endif %}
+                {% else %}
+                    <span style="font-size:12px;color:var(--text-muted);">본인</span>
+                {% endif %}
+            </td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+
+{# 페이지네이션 #}
+{% if total_pages > 1 %}
+<div class="pagination">
+    {% if page > 1 %}
+    <a href="?page={{ page - 1 }}&limit={{ limit }}">이전</a>
+    {% endif %}
+    {% for p in range(1, total_pages + 1) %}
+        {% if p == page %}
+        <span class="current">{{ p }}</span>
+        {% else %}
+        <a href="?page={{ p }}&limit={{ limit }}">{{ p }}</a>
+        {% endif %}
+    {% endfor %}
+    {% if page < total_pages %}
+    <a href="?page={{ page + 1 }}&limit={{ limit }}">다음</a>
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function showMsg(text, isError) {
+    const el = document.getElementById('resultMsg');
+    el.textContent = text;
+    el.className = 'result-msg ' + (isError ? 'error' : 'success');
+    setTimeout(() => { el.style.display = 'none'; el.className = 'result-msg'; }, 5000);
+}
+
+async function changeRole(userId, role) {
+    try {
+        const r = await fetch(`/admin/users/${userId}/role?role=${role}`, { method: 'PATCH' });
+        const d = await r.json();
+        if (r.ok) { showMsg(d.message, false); setTimeout(() => location.reload(), 1000); }
+        else showMsg(d.detail || '오류 발생', true);
+    } catch(e) { showMsg('요청 실패', true); }
+}
+
+async function changeStatus(userId, isActive) {
+    try {
+        const r = await fetch(`/admin/users/${userId}/status?is_active=${isActive}`, { method: 'PATCH' });
+        const d = await r.json();
+        if (r.ok) { showMsg(d.message, false); setTimeout(() => location.reload(), 1000); }
+        else showMsg(d.detail || '오류 발생', true);
+    } catch(e) { showMsg('요청 실패', true); }
+}
+
+async function resetPassword(userId) {
+    if (!confirm('임시 비밀번호를 발급하시겠습니까?')) return;
+    try {
+        const r = await fetch(`/admin/users/${userId}/reset-password`, { method: 'POST' });
+        const d = await r.json();
+        if (r.ok) { showMsg(`임시 비밀번호: ${d.temp_password}`, false); }
+        else showMsg(d.detail || '오류 발생', true);
+    } catch(e) { showMsg('요청 실패', true); }
+}
+
+async function deleteUser(userId, email) {
+    if (!confirm(`정말 ${email} 계정을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`)) return;
+    try {
+        const r = await fetch(`/admin/users/${userId}`, { method: 'DELETE' });
+        const d = await r.json();
+        if (r.ok) { showMsg(d.message, false); document.getElementById(`user-row-${userId}`).remove(); }
+        else showMsg(d.detail || '오류 발생', true);
+    } catch(e) { showMsg('요청 실패', true); }
+}
+</script>
+{% endblock %}

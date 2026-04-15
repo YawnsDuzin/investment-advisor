@@ -20,6 +20,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Stock Data**: yfinance (실시간 주가/재무 데이터 조회)
 - **Async**: anyio (async/sync 브릿지)
 - **Runtime**: Python 3.10+, Node.js LTS (Claude Code CLI 의존)
+- **Auth**: JWT (python-jose) + bcrypt (passlib) — httpOnly 쿠키 기반, RBAC (Admin/Moderator/User)
 - **Deploy**: systemd (API 상시 기동 + 배치 타이머), Raspberry Pi 4 24/7 운영 가능
 
 ## Project Structure
@@ -28,9 +29,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 investment-advisor/
 ├── shared/              ← 공용: config(.env 로드), db(마이그레이션+저장), pg_setup(자동 설치)
 ├── analyzer/            ← 배치: main(엔트리) → news_collector(RSS) → stock_data(주가조회) → analyzer(2단계) → prompts
-├── api/                 ← 웹: main(FastAPI) → routes/(pages, sessions, themes, proposals, chat, admin)
+├── api/                 ← 웹: main(FastAPI) → routes/(pages, sessions, themes, proposals, chat, admin, auth, user_admin)
+│   ├── auth/            ← JWT 인증 모듈: dependencies, jwt_handler, password, models
 │   ├── chat_engine.py   ← Claude SDK 기반 테마 채팅 엔진
-│   ├── templates/       ← Jinja2 HTML (다크 테마)
+│   ├── templates/       ← Jinja2 HTML (다크 테마 + 로그인/회원가입/사용자관리)
 │   └── static/css/
 └── _docs/               ← 운영 문서 (분석 파이프라인, 라즈베리파이 매뉴얼)
     └── _prompts/        ← 작업 요청 프롬프트 기록 (날짜별)
@@ -84,6 +86,14 @@ sudo systemctl enable --now investment-advisor-analyzer.timer    # 매일 03:00 
 | `TOP_STOCKS_PER_THEME` | `2` | 각 테마당 심층분석할 종목 수 |
 | `ENABLE_STOCK_ANALYSIS` | `true` | Stage 2(종목 심층분석) 활성화 스위치 (true/false) |
 | `ENABLE_STOCK_DATA` | `true` | yfinance 실시간 주가 데이터 조회 스위치 (true/false) |
+| `AUTH_ENABLED` | `false` | 인증 시스템 활성화 스위치 (false면 기존 동작 유지) |
+| `JWT_SECRET_KEY` | `INSECURE_DEFAULT_...` | JWT 서명 키 (프로덕션 반드시 변경) |
+| `JWT_ALGORITHM` | `HS256` | JWT 알고리즘 |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | `60` | Access Token 만료 (분) |
+| `REFRESH_TOKEN_EXPIRE_DAYS` | `30` | Refresh Token 만료 (일) |
+| `ADMIN_EMAIL` | `admin@example.com` | 최초 Admin 이메일 |
+| `ADMIN_PASSWORD` | `changeme123` | 최초 Admin 비밀번호 (반드시 변경) |
+| `COOKIE_SECURE` | `false` | HTTPS 전용 쿠키 (프로덕션: true) |
 
 - `.env`는 `.gitignore`에 포함 — Git에 커밋되지 않음
 - `.env.example`은 Git에 포함 — 플레이스홀더 값으로 구성
@@ -122,14 +132,17 @@ sudo systemctl enable --now investment-advisor-analyzer.timer    # 매일 03:00 
 - `routes/sessions.py` — 세션 목록/상세/날짜별 조회. `_serialize_row()` 공유 유틸.
 - `routes/themes.py` — 테마 목록 (horizon, confidence, type, validity 필터), 키워드 검색. 시나리오·매크로·제안 중첩 반환.
 - `routes/proposals.py` — 제안 목록 (action, asset_type, conviction, sector 필터), 티커별 이력, 최신 포트폴리오 요약, `/{proposal_id}/stock-analysis` 엔드포인트.
-- `routes/chat.py` — 테마 채팅 세션 CRUD + 메시지 전송. Claude SDK로 테마 맥락 기반 대화.
-- `routes/admin.py` — 관리자 페이지. 분석 실행/중지, SSE 실시간 로그 스트리밍, 뉴스 한글 번역.
-- `routes/pages.py` — Jinja2 HTML 페이지 라우트. 대시보드, tracking 뱃지, 테마·종목 히스토리, 채팅, 관리자 페이지. 커스텀 Jinja2 필터(`nl_numbered`, `fmt_price`) 등록.
+- `routes/chat.py` — 테마 채팅 세션 CRUD + 메시지 전송. Claude SDK로 테마 맥락 기반 대화. 인증 필수(`get_current_user_required`).
+- `routes/admin.py` — 관리자 페이지. 분석 실행/중지, SSE 실시간 로그 스트리밍, 뉴스 한글 번역. Admin 역할 필수(`require_role("admin")`).
+- `routes/auth.py` — 회원가입/로그인/로그아웃/토큰 갱신. Form 기반 POST + httpOnly 쿠키.
+- `routes/user_admin.py` — 사용자 관리 CRUD (목록/역할변경/활성화/비밀번호초기화/삭제). Admin+Moderator 접근.
+- `routes/pages.py` — Jinja2 HTML 페이지 라우트. 대시보드, tracking 뱃지, 테마·종목 히스토리, 채팅, 관리자 페이지. `_base_ctx()`로 인증 컨텍스트 주입. 커스텀 Jinja2 필터(`nl_numbered`, `fmt_price`) 등록.
+- `auth/` — JWT 인증 모듈. `dependencies.py`(Depends 팩토리), `jwt_handler.py`(토큰 발급/검증), `password.py`(bcrypt), `models.py`(Pydantic 모델).
 - `chat_engine.py` — Claude Agent SDK 기반 테마 채팅 엔진. 테마 컨텍스트를 시스템 프롬프트에 주입하여 대화.
-- `templates/` — 다크 테마 UI. base, dashboard, sessions, session_detail, themes, proposals, theme_history, ticker_history, chat_list, chat_room, admin.
+- `templates/` — 다크 테마 UI. base, dashboard, sessions, session_detail, themes, proposals, theme_history, ticker_history, chat_list, chat_room, admin, login, register, user_admin.
 
 ### shared/ — 공용 모듈
-- `config.py` — `.env` 파일 자동 로드, `DatabaseConfig`(환경변수 기반), `NewsConfig`, `AnalyzerConfig`, `AppConfig`
+- `config.py` — `.env` 파일 자동 로드, `DatabaseConfig`(환경변수 기반), `NewsConfig`, `AnalyzerConfig`, `AuthConfig`, `AppConfig`
 - `db.py` — `schema_version` 기반 자동 마이그레이션(v1~v10), `save_analysis()` + `_validate_proposal()` 검증 + tracking 갱신, `get_recent_recommendations()`, `get_connection()`
 - `pg_setup.py` — PostgreSQL 설치 감지 및 자동 설치 (Linux apt, Windows winget/choco)
 
@@ -144,6 +157,9 @@ analysis_sessions → global_issues
                                       → macro_impacts
                                       → investment_proposals → stock_analyses
                   → news_articles (v7, 뉴스 원문 저장, v8에서 title_ko 한글 번역 추가)
+
+users → refresh_tokens (v11, CASCADE)
+     → theme_chat_sessions (v11, user_id FK, SET NULL)
 
 theme_chat_sessions → theme_chat_messages (v6, 테마 기반 채팅)
 

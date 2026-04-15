@@ -5,11 +5,14 @@ import subprocess
 import threading
 import queue
 import time
-from fastapi import APIRouter, Request, Query
+from typing import Optional
+from fastapi import APIRouter, Request, Query, Depends
 from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
-from shared.config import DatabaseConfig, AnalyzerConfig
+from shared.config import DatabaseConfig, AnalyzerConfig, AuthConfig
 from shared.db import get_untranslated_news, update_news_title_ko, update_news_translation
+from api.auth.dependencies import require_role, get_current_user, _get_auth_cfg
+from api.auth.models import UserInDB
 
 router = APIRouter(prefix="/admin", tags=["관리자"])
 
@@ -34,16 +37,26 @@ def _broadcast(msg: str | None):
 
 
 @router.get("")
-def admin_page(request: Request):
+def admin_page(request: Request, user: Optional[UserInDB] = Depends(get_current_user), auth_cfg: AuthConfig = Depends(_get_auth_cfg)):
     """관리자 페이지"""
+    from fastapi.responses import RedirectResponse
+    if auth_cfg.enabled:
+        if user is None:
+            return RedirectResponse("/auth/login?next=/admin", status_code=302)
+        if user.role != "admin":
+            from fastapi import HTTPException
+            raise HTTPException(status_code=403, detail="접근 권한이 없습니다")
     return templates.TemplateResponse(request=request, name="admin.html", context={
+        "request": request,
         "active_page": "admin",
         "is_running": _running,
+        "current_user": user,
+        "auth_enabled": auth_cfg.enabled,
     })
 
 
 @router.get("/status")
-def get_status():
+def get_status(_admin: Optional[UserInDB] = Depends(require_role("admin"))):
     """현재 분석 실행 상태 + 기존 로그"""
     return {
         "running": _running,
@@ -52,7 +65,7 @@ def get_status():
 
 
 @router.get("/logs")
-def get_logs(after: int = Query(default=0, ge=0)):
+def get_logs(after: int = Query(default=0, ge=0), _admin: Optional[UserInDB] = Depends(require_role("admin"))):
     """기존 로그 조회 (재접속 시 복원용)
 
     after: 이 인덱스 이후의 로그만 반환
@@ -65,7 +78,7 @@ def get_logs(after: int = Query(default=0, ge=0)):
 
 
 @router.post("/run")
-def run_analysis():
+def run_analysis(_admin: Optional[UserInDB] = Depends(require_role("admin"))):
     """분석 파이프라인 실행 (SSE 스트리밍)"""
     global _running, _process, _log_lines
 
@@ -152,7 +165,7 @@ def run_analysis():
 
 
 @router.get("/stream")
-def stream_existing():
+def stream_existing(_admin: Optional[UserInDB] = Depends(require_role("admin"))):
     """실행 중인 분석의 로그를 실시간 구독 (재접속용)"""
     if not _running:
         def not_running():
@@ -189,7 +202,7 @@ def stream_existing():
 
 
 @router.post("/stop")
-def stop_analysis():
+def stop_analysis(_admin: Optional[UserInDB] = Depends(require_role("admin"))):
     """실행 중인 분석 중단"""
     global _process, _running
     if _process and _process.returncode is None:
@@ -213,7 +226,7 @@ _translating = False
 
 
 @router.get("/translate-news/status")
-def translate_status():
+def translate_status(_admin: Optional[UserInDB] = Depends(require_role("admin"))):
     """미번역 뉴스 건수 조회"""
     cfg = DatabaseConfig()
     articles = get_untranslated_news(cfg)
@@ -221,7 +234,7 @@ def translate_status():
 
 
 @router.post("/translate-news")
-def translate_existing_news():
+def translate_existing_news(_admin: Optional[UserInDB] = Depends(require_role("admin"))):
     """기존 미번역 뉴스를 한글 번역 (SSE 스트리밍)"""
     global _translating
 

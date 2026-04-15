@@ -27,8 +27,30 @@
             <li><a href="/pages/chat" class="{% if active_page == 'chat' %}active{% endif %}" onclick="document.body.classList.remove('sidebar-open')">Theme Chat</a></li>
         </ul>
         <div class="sidebar-footer">
-            <a href="/admin" style="display:block;padding:8px 0;{% if active_page == 'admin' %}color:var(--accent);font-weight:600;{% endif %}">Admin</a>
-            <a href="/docs" target="_blank">API Docs</a>
+            {% if current_user %}
+                <div style="font-size:12px;color:var(--text-muted);padding:4px 0;">
+                    {{ current_user.nickname }} ({{ current_user.role }})
+                </div>
+                {% if current_user.role in ('admin', 'moderator') %}
+                <a href="/admin/users" style="display:block;padding:4px 0;">사용자 관리</a>
+                {% endif %}
+                {% if current_user.role == 'admin' %}
+                <a href="/admin" style="display:block;padding:4px 0;{% if active_page == 'admin' %}color:var(--accent);font-weight:600;{% endif %}">Admin</a>
+                {% endif %}
+                <a href="/docs" target="_blank" style="display:block;padding:4px 0;">API Docs</a>
+                <form action="/auth/logout" method="post" style="margin:0;">
+                    <button type="submit" style="background:none;border:none;color:var(--text-muted);cursor:pointer;padding:4px 0;font-size:13px;">로그아웃</button>
+                </form>
+            {% else %}
+                {% if not auth_enabled %}
+                <a href="/admin" style="display:block;padding:8px 0;{% if active_page == 'admin' %}color:var(--accent);font-weight:600;{% endif %}">Admin</a>
+                {% endif %}
+                <a href="/docs" target="_blank" style="display:block;padding:4px 0;">API Docs</a>
+                {% if auth_enabled %}
+                <a href="/auth/login" style="display:block;padding:4px 0;">로그인</a>
+                <a href="/auth/register" style="display:block;padding:4px 0;">회원가입</a>
+                {% endif %}
+            {% endif %}
         </div>
     </nav>
 

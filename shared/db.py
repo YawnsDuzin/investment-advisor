@@ -5,7 +5,7 @@ from psycopg2.extras import execute_values, RealDictCursor
 from shared.config import DatabaseConfig
 
 # ── 스키마 버전 관리 ──────────────────────────────
-SCHEMA_VERSION = 10  # v1~v5: 분석 테이블, v6: 테마 채팅, v7: 뉴스 기사, v8: 뉴스 한글 번역, v9: 요약 한글 번역, v10: price_source
+SCHEMA_VERSION = 11  # v1~v5: 분석 테이블, v6: 테마 채팅, v7: 뉴스 기사, v8: 뉴스 한글 번역, v9: 요약 한글 번역, v10: price_source, v11: JWT 인증
 
 
 def _ensure_database(cfg: DatabaseConfig) -> None:
@@ -394,6 +394,80 @@ def _migrate_to_v10(cur) -> None:
     print("[DB] v10 마이그레이션 완료 — investment_proposals.price_source 컬럼 추가")
 
 
+def _seed_admin_user(cur) -> None:
+    """최초 Admin 계정 시드 — 이미 존재하면 스킵"""
+    import os
+    from api.auth.password import hash_password
+
+    admin_email = os.getenv("ADMIN_EMAIL", "admin@example.com")
+    admin_password = os.getenv("ADMIN_PASSWORD", "changeme123")
+
+    cur.execute("SELECT 1 FROM users WHERE email = %s", (admin_email,))
+    if cur.fetchone():
+        return
+
+    pw_hash = hash_password(admin_password)
+    cur.execute(
+        "INSERT INTO users (email, password_hash, nickname, role) VALUES (%s, %s, %s, %s)",
+        (admin_email, pw_hash, "Admin", "admin"),
+    )
+    print(f"[DB] 최초 Admin 계정 생성: {admin_email}")
+    if admin_password == "changeme123":
+        print("[DB] ⚠ 기본 Admin 비밀번호 사용 중 — 프로덕션에서 반드시 변경하세요!")
+
+
+def _migrate_to_v11(cur) -> None:
+    """v11: JWT 인증 — users, refresh_tokens, chat_sessions.user_id"""
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id SERIAL PRIMARY KEY,
+            email VARCHAR(255) NOT NULL UNIQUE,
+            password_hash VARCHAR(255),
+            nickname VARCHAR(100) NOT NULL,
+            role VARCHAR(20) NOT NULL DEFAULT 'user'
+                CHECK (role IN ('admin', 'moderator', 'user')),
+            is_active BOOLEAN NOT NULL DEFAULT TRUE,
+            created_at TIMESTAMP DEFAULT NOW(),
+            last_login_at TIMESTAMP,
+            oauth_provider VARCHAR(50),
+            oauth_provider_id VARCHAR(255)
+        );
+    """)
+
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);")
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS refresh_tokens (
+            id SERIAL PRIMARY KEY,
+            user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            token_hash VARCHAR(255) NOT NULL UNIQUE,
+            expires_at TIMESTAMP NOT NULL,
+            created_at TIMESTAMP DEFAULT NOW(),
+            revoked_at TIMESTAMP
+        );
+    """)
+
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user
+            ON refresh_tokens(user_id, expires_at);
+    """)
+
+    cur.execute("""
+        ALTER TABLE theme_chat_sessions
+            ADD COLUMN IF NOT EXISTS user_id INT REFERENCES users(id) ON DELETE SET NULL;
+    """)
+
+    _seed_admin_user(cur)
+
+    cur.execute("""
+        INSERT INTO schema_version (version) VALUES (11)
+        ON CONFLICT (version) DO NOTHING;
+    """)
+
+    print("[DB] v11 마이그레이션 완료 — users + refresh_tokens 생성")
+
+
 def init_db(cfg: DatabaseConfig) -> None:
     """PostgreSQL 설치 확인 → 데이터베이스 생성 → 스키마 마이그레이션"""
     from shared.pg_setup import ensure_postgresql
@@ -435,6 +509,9 @@ def init_db(cfg: DatabaseConfig) -> None:
 
             if current < 10:
                 _migrate_to_v10(cur)
+
+            if current < 11:
+                _migrate_to_v11(cur)
 
         conn.commit()
         print("[DB] 테이블 초기화 완료")

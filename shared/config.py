@@ -94,8 +94,22 @@ class AnalyzerConfig:
 
 
 @dataclass
+class AuthConfig:
+    """JWT 인증 설정"""
+    enabled: bool = field(default_factory=lambda: _env_bool("AUTH_ENABLED", False))
+    jwt_secret_key: str = field(default_factory=lambda: os.getenv("JWT_SECRET_KEY", "INSECURE_DEFAULT_CHANGE_IN_PRODUCTION"))
+    jwt_algorithm: str = field(default_factory=lambda: os.getenv("JWT_ALGORITHM", "HS256"))
+    access_token_expire_minutes: int = field(default_factory=lambda: int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60")))
+    refresh_token_expire_days: int = field(default_factory=lambda: int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "30")))
+    admin_email: str = field(default_factory=lambda: os.getenv("ADMIN_EMAIL", "admin@example.com"))
+    admin_password: str = field(default_factory=lambda: os.getenv("ADMIN_PASSWORD", "changeme123"))
+    cookie_secure: bool = field(default_factory=lambda: _env_bool("COOKIE_SECURE", False))
+
+
+@dataclass
 class AppConfig:
     db: DatabaseConfig = field(default_factory=DatabaseConfig)
     news: NewsConfig = field(default_factory=NewsConfig)
     analyzer: AnalyzerConfig = field(default_factory=AnalyzerConfig)
+    auth: AuthConfig = field(default_factory=AuthConfig)
     max_turns: int = field(default_factory=lambda: int(os.getenv("MAX_TURNS", "2")))  # 하위호환

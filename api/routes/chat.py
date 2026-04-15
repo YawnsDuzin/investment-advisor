@@ -1,11 +1,14 @@
 """테마 채팅 API — 대화 세션 CRUD + 메시지 전송"""
-from fastapi import APIRouter, HTTPException
+from typing import Optional
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from shared.config import DatabaseConfig
 from shared.db import get_connection
 from psycopg2.extras import RealDictCursor
 from api.routes.sessions import _serialize_row
 from api.chat_engine import build_theme_context, query_theme_chat_sync
+from api.auth.dependencies import get_current_user_required
+from api.auth.models import UserInDB
 
 router = APIRouter(prefix="/chat", tags=["채팅"])
 
@@ -26,7 +29,7 @@ class ChatMessageRequest(BaseModel):
 
 
 @router.post("/sessions")
-def create_chat_session(body: CreateSessionRequest):
+def create_chat_session(body: CreateSessionRequest, user: Optional[UserInDB] = Depends(get_current_user_required)):
     """새 채팅 세션 생성"""
     cfg = _get_cfg()
     conn = get_connection(cfg)
@@ -39,10 +42,11 @@ def create_chat_session(body: CreateSessionRequest):
             if not theme:
                 raise HTTPException(status_code=404, detail="테마를 찾을 수 없습니다")
 
+            user_id = user.id if user else None
             cur.execute(
-                """INSERT INTO theme_chat_sessions (theme_id, title)
-                   VALUES (%s, %s) RETURNING id, theme_id, title, created_at, updated_at""",
-                (body.theme_id, f"{theme['theme_name']} 채팅")
+                """INSERT INTO theme_chat_sessions (theme_id, title, user_id)
+                   VALUES (%s, %s, %s) RETURNING id, theme_id, title, created_at, updated_at""",
+                (body.theme_id, f"{theme['theme_name']} 채팅", user_id)
             )
             session = cur.fetchone()
         conn.commit()
@@ -52,7 +56,7 @@ def create_chat_session(body: CreateSessionRequest):
 
 
 @router.get("/sessions")
-def list_chat_sessions(theme_id: int | None = None):
+def list_chat_sessions(theme_id: int | None = None, user: Optional[UserInDB] = Depends(get_current_user_required)):
     """채팅 세션 목록 조회 (theme_id 필터 선택적)"""
     cfg = _get_cfg()
     conn = get_connection(cfg)
@@ -110,7 +114,7 @@ def get_chat_session(session_id: int):
 
 
 @router.delete("/sessions/{session_id}")
-def delete_chat_session(session_id: int):
+def delete_chat_session(session_id: int, user: Optional[UserInDB] = Depends(get_current_user_required)):
     """채팅 세션 삭제"""
     cfg = _get_cfg()
     conn = get_connection(cfg)
@@ -130,7 +134,7 @@ def delete_chat_session(session_id: int):
 
 
 @router.post("/sessions/{session_id}/messages")
-def send_message(session_id: int, body: ChatMessageRequest):
+def send_message(session_id: int, body: ChatMessageRequest, user: Optional[UserInDB] = Depends(get_current_user_required)):
     """사용자 메시지 전송 → Claude 응답 생성 → 양쪽 DB 저장
 
     동기 함수 — FastAPI가 threadpool에서 실행.
