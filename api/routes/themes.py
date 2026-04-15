@@ -1,9 +1,12 @@
 """투자 테마 조회 API"""
-from fastapi import APIRouter, Query
+from typing import Optional
+from fastapi import APIRouter, Query, Depends
 from shared.config import DatabaseConfig
 from shared.db import get_connection
 from psycopg2.extras import RealDictCursor
 from api.routes.sessions import _serialize_row
+from api.auth.dependencies import get_current_user_required
+from api.auth.models import UserInDB
 
 router = APIRouter(prefix="/themes", tags=["테마"])
 
@@ -19,6 +22,7 @@ def list_themes(
     min_confidence: float = Query(default=0.0, ge=0.0, le=1.0),
     theme_type: str | None = Query(default=None, description="structural|cyclical"),
     validity: str | None = Query(default=None, description="strong|medium|weak"),
+    _user: Optional[UserInDB] = Depends(get_current_user_required),
 ):
     """투자 테마 목록 (최신순, 필터 가능)"""
     conn = get_connection(_get_cfg())
@@ -81,6 +85,7 @@ def list_themes(
 def search_themes(
     q: str = Query(description="테마명 또는 설명 검색어"),
     limit: int = Query(default=10, ge=1, le=50),
+    _user: Optional[UserInDB] = Depends(get_current_user_required),
 ):
     """테마 검색 (테마명/설명에서 키워드 검색)"""
     conn = get_connection(_get_cfg())

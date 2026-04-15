@@ -1,8 +1,11 @@
 """분석 세션 조회 API"""
-from fastapi import APIRouter, HTTPException, Query
+from typing import Optional
+from fastapi import APIRouter, HTTPException, Query, Depends
 from shared.config import DatabaseConfig
 from shared.db import get_connection
 from psycopg2.extras import RealDictCursor
+from api.auth.dependencies import get_current_user_required
+from api.auth.models import UserInDB
 
 router = APIRouter(prefix="/sessions", tags=["세션"])
 
@@ -12,7 +15,7 @@ def _get_cfg() -> DatabaseConfig:
 
 
 @router.get("")
-def list_sessions(limit: int = Query(default=30, ge=1, le=100)):
+def list_sessions(limit: int = Query(default=30, ge=1, le=100), _user: Optional[UserInDB] = Depends(get_current_user_required)):
     """분석 세션 목록 (최신순)"""
     conn = get_connection(_get_cfg())
     try:
@@ -34,7 +37,7 @@ def list_sessions(limit: int = Query(default=30, ge=1, le=100)):
 
 
 @router.get("/{session_id}")
-def get_session(session_id: int):
+def get_session(session_id: int, _user: Optional[UserInDB] = Depends(get_current_user_required)):
     """세션 상세 — 이슈, 테마, 시나리오, 매크로, 투자 제안 모두 포함"""
     conn = get_connection(_get_cfg())
     try:
@@ -108,7 +111,7 @@ def get_session(session_id: int):
 
 
 @router.get("/date/{analysis_date}")
-def get_session_by_date(analysis_date: str):
+def get_session_by_date(analysis_date: str, _user: Optional[UserInDB] = Depends(get_current_user_required)):
     """날짜로 세션 조회 (YYYY-MM-DD)"""
     conn = get_connection(_get_cfg())
     try:

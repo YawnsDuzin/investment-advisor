@@ -580,6 +580,22 @@ def proposals_page(
 # ──────────────────────────────────────────────
 # Theme Chat
 # ────────────────────────────��─────────────────
+# ──────────────────────────────────────────────
+# Profile (비밀번호 변경)
+# ──────────────────────────────────────────────
+@router.get("/pages/profile")
+def profile_page(request: Request, user: Optional[UserInDB] = Depends(get_current_user), auth_cfg: AuthConfig = Depends(_get_auth_cfg)):
+    """프로필 페이지 — 로그인 사용자만"""
+    if not auth_cfg.enabled or user is None:
+        return RedirectResponse("/auth/login?next=/pages/profile", status_code=302)
+    ctx = _base_ctx(request, "profile", user, auth_cfg)
+    return templates.TemplateResponse(request=request, name="profile.html", context={
+        **ctx,
+        "error": "",
+        "success": "",
+    })
+
+
 @router.get("/pages/chat")
 def chat_list_page(request: Request, theme_id: int | None = Query(default=None), user: Optional[UserInDB] = Depends(get_current_user), auth_cfg: AuthConfig = Depends(_get_auth_cfg)):
     """채팅 세션 목록 — Moderator 이상, 본인 세션만 (Admin은 전체)"""
