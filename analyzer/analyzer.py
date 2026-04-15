@@ -23,8 +23,78 @@ from shared.config import AnalyzerConfig, DatabaseConfig
 from shared.db import get_recent_recommendations
 
 
+def _try_fix_truncated_json(json_str: str) -> str | None:
+    """잘린 JSON 복구 시도 — 미종료 문자열/배열/객체를 닫아줌"""
+    s = json_str.rstrip()
+
+    # 미종료 문자열 닫기: 마지막 열린 따옴표 찾기
+    in_string = False
+    escape = False
+    last_quote_pos = -1
+    for i, ch in enumerate(s):
+        if escape:
+            escape = False
+            continue
+        if ch == '\\':
+            escape = True
+            continue
+        if ch == '"':
+            if not in_string:
+                in_string = True
+                last_quote_pos = i
+            else:
+                in_string = False
+
+    if in_string:
+        # 문자열 내부에서 잘림 → 따옴표로 닫기
+        s = s + '"'
+
+    # 마지막 불완전 key-value 쌍 제거 (예: "key": "val 에서 잘린 경우)
+    # 이미 따옴표를 닫았으므로, 남은 구조만 닫으면 됨
+
+    # 열린 브래킷 수 계산하여 닫기
+    stack = []
+    in_str = False
+    esc = False
+    for ch in s:
+        if esc:
+            esc = False
+            continue
+        if ch == '\\' and in_str:
+            esc = True
+            continue
+        if ch == '"':
+            in_str = not in_str
+            continue
+        if in_str:
+            continue
+        if ch in ('{', '['):
+            stack.append(ch)
+        elif ch == '}' and stack and stack[-1] == '{':
+            stack.pop()
+        elif ch == ']' and stack and stack[-1] == '[':
+            stack.pop()
+
+    # 마지막 trailing comma 제거
+    s = s.rstrip()
+    if s and s[-1] == ',':
+        s = s[:-1]
+
+    # 열린 브래킷 역순으로 닫기
+    for bracket in reversed(stack):
+        if bracket == '{':
+            # 마지막 trailing comma 제거 후 닫기
+            s = s.rstrip().rstrip(',')
+            s += '}'
+        elif bracket == '[':
+            s = s.rstrip().rstrip(',')
+            s += ']'
+
+    return s
+
+
 def _parse_json_response(full_response: str) -> dict:
-    """Claude 응답에서 JSON 추출 및 파싱"""
+    """Claude 응답에서 JSON 추출 및 파싱 (잘린 JSON 복구 지원)"""
     json_str = full_response.strip()
     if "```json" in json_str:
         json_str = json_str.split("```json")[1].split("```")[0].strip()
@@ -35,7 +105,21 @@ def _parse_json_response(full_response: str) -> dict:
         return json.loads(json_str)
     except json.JSONDecodeError as e:
         print(f"[분석] JSON 파싱 실패: {e}")
-        print(f"[분석] 원본 응답:\n{full_response[:500]}")
+        print(f"[분석] 잘린 JSON 복구 시도 중...")
+
+        fixed = _try_fix_truncated_json(json_str)
+        if fixed:
+            try:
+                result = json.loads(fixed)
+                themes_count = len(result.get("themes", []))
+                issues_count = len(result.get("issues", []))
+                proposals_count = len(result.get("proposals", []))
+                print(f"[분석] JSON 복구 성공 (이슈 {issues_count}건, 테마 {themes_count}건, 제안 {proposals_count}건)")
+                return result
+            except json.JSONDecodeError:
+                pass
+
+        print(f"[분석] JSON 복구 실패 — 원본 응답 앞부분:\n{full_response[:500]}")
         return {"error": str(e)}
 
 
