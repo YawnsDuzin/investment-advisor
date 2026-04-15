@@ -502,36 +502,37 @@ a:hover { color: var(--accent-hover); }
 .badge {
     display: inline-block;
     padding: 3px 12px;
-    border-radius: 12px;
+    border-radius: 9999px;
     font-size: 13px;
     font-weight: 600;
+    border: 1px solid transparent;
 }
 
-.badge-buy { background: rgba(52,211,153,0.15); color: var(--green); }
-.badge-sell { background: rgba(248,113,113,0.15); color: var(--red); }
-.badge-hold { background: rgba(251,191,36,0.15); color: var(--orange); }
-.badge-watch { background: rgba(139,143,163,0.15); color: var(--text-muted); }
+.badge-buy { background: rgba(52,211,153,0.15); color: var(--green); border-color: rgba(52,211,153,0.25); }
+.badge-sell { background: rgba(248,113,113,0.15); color: var(--red); border-color: rgba(248,113,113,0.25); }
+.badge-hold { background: rgba(251,191,36,0.15); color: var(--orange); border-color: rgba(251,191,36,0.25); }
+.badge-watch { background: rgba(139,143,163,0.15); color: var(--text-muted); border-color: rgba(139,143,163,0.2); }
 
-.badge-high { background: rgba(52,211,153,0.15); color: var(--green); }
-.badge-medium { background: rgba(251,191,36,0.15); color: var(--orange); }
-.badge-low { background: rgba(139,143,163,0.15); color: var(--text-muted); }
+.badge-high { background: rgba(52,211,153,0.15); color: var(--green); border-color: rgba(52,211,153,0.25); }
+.badge-medium { background: rgba(251,191,36,0.15); color: var(--orange); border-color: rgba(251,191,36,0.25); }
+.badge-low { background: rgba(139,143,163,0.15); color: var(--text-muted); border-color: rgba(139,143,163,0.2); }
 
-.badge-short { background: rgba(248,113,113,0.15); color: var(--red); }
-.badge-mid { background: rgba(251,191,36,0.15); color: var(--orange); }
-.badge-long { background: rgba(52,211,153,0.15); color: var(--green); }
+.badge-short { background: rgba(248,113,113,0.15); color: var(--red); border-color: rgba(248,113,113,0.25); }
+.badge-mid { background: rgba(251,191,36,0.15); color: var(--orange); border-color: rgba(251,191,36,0.25); }
+.badge-long { background: rgba(52,211,153,0.15); color: var(--green); border-color: rgba(52,211,153,0.25); }
 
-.badge-category { background: rgba(79,140,255,0.12); color: var(--accent); }
+.badge-category { background: rgba(79,140,255,0.12); color: var(--accent); border-color: rgba(79,140,255,0.2); }
 
 /* ===== Vendor Tier Badges ===== */
-.badge-tier1 { background: rgba(79,140,255,0.15); color: var(--accent); }
-.badge-tier2 { background: rgba(251,191,36,0.15); color: var(--orange); }
-.badge-tier3 { background: rgba(147,130,255,0.15); color: var(--purple); }
+.badge-tier1 { background: rgba(79,140,255,0.15); color: var(--accent); border-color: rgba(79,140,255,0.25); }
+.badge-tier2 { background: rgba(251,191,36,0.15); color: var(--orange); border-color: rgba(251,191,36,0.25); }
+.badge-tier3 { background: rgba(147,130,255,0.15); color: var(--purple); border-color: rgba(147,130,255,0.25); }
 
 /* ===== Theme Type / Validity Badges ===== */
-.badge-structural { background: rgba(147,130,255,0.15); color: var(--purple); }
-.badge-cyclical { background: rgba(56,189,248,0.15); color: #38bdf8; }
-.badge-strong { background: rgba(52,211,153,0.15); color: var(--green); }
-.badge-weak { background: rgba(248,113,113,0.15); color: var(--red); }
+.badge-structural { background: rgba(147,130,255,0.15); color: var(--purple); border-color: rgba(147,130,255,0.25); }
+.badge-cyclical { background: rgba(56,189,248,0.15); color: #38bdf8; border-color: rgba(56,189,248,0.25); }
+.badge-strong { background: rgba(52,211,153,0.15); color: var(--green); border-color: rgba(52,211,153,0.25); }
+.badge-weak { background: rgba(248,113,113,0.15); color: var(--red); border-color: rgba(248,113,113,0.25); }
 
 /* ===== Importance Stars ===== */
 .stars { color: var(--orange); font-size: 14px; letter-spacing: 1px; }
@@ -856,11 +857,12 @@ tbody tr:hover { background: var(--bg-card-hover); }
 .scenario-card .scenario-prob {
     font-size: 13px;
     padding: 2px 10px;
-    border-radius: 10px;
+    border-radius: 9999px;
+    border: 1px solid transparent;
 }
-.scenario-card-bull .scenario-prob { background: rgba(52,211,153,0.15); color: var(--green); }
-.scenario-card-base .scenario-prob { background: rgba(251,191,36,0.15); color: var(--orange); }
-.scenario-card-bear .scenario-prob { background: rgba(248,113,113,0.15); color: var(--red); }
+.scenario-card-bull .scenario-prob { background: rgba(52,211,153,0.15); color: var(--green); border-color: rgba(52,211,153,0.25); }
+.scenario-card-base .scenario-prob { background: rgba(251,191,36,0.15); color: var(--orange); border-color: rgba(251,191,36,0.25); }
+.scenario-card-bear .scenario-prob { background: rgba(248,113,113,0.15); color: var(--red); border-color: rgba(248,113,113,0.25); }
 
 .scenario-card .scenario-body { color: var(--text-muted); font-size: 14px; }
 .scenario-card .scenario-impact { margin-top: 8px; font-size: 13px; color: var(--text-muted); font-style: italic; }
@@ -922,12 +924,13 @@ tbody tr:hover { background: var(--bg-card-hover); }
 .upside-badge {
     font-size: 13px;
     padding: 2px 10px;
-    border-radius: 10px;
+    border-radius: 9999px;
     font-weight: 600;
+    border: 1px solid transparent;
 }
 
-.upside-positive { background: rgba(52,211,153,0.15); color: var(--green); }
-.upside-negative { background: rgba(248,113,113,0.15); color: var(--red); }
+.upside-positive { background: rgba(52,211,153,0.15); color: var(--green); border-color: rgba(52,211,153,0.25); }
+.upside-negative { background: rgba(248,113,113,0.15); color: var(--red); border-color: rgba(248,113,113,0.25); }
 
 .score-display {
     display: inline-flex;
@@ -935,8 +938,9 @@ tbody tr:hover { background: var(--bg-card-hover); }
     gap: 4px;
     font-size: 13px;
     padding: 3px 10px;
-    border-radius: 10px;
+    border-radius: 9999px;
     background: rgba(79,140,255,0.1);
+    border: 1px solid rgba(79,140,255,0.2);
     color: var(--accent);
     font-weight: 600;
 }
@@ -1004,23 +1008,27 @@ tbody tr:hover { background: var(--bg-card-hover); }
     gap: 4px;
     font-size: 12px;
     padding: 2px 10px;
-    border-radius: 10px;
+    border-radius: 9999px;
     font-weight: 600;
+    border: 1px solid transparent;
 }
 
 .tracking-badge-streak {
     background: rgba(79,140,255,0.12);
     color: var(--accent);
+    border-color: rgba(79,140,255,0.2);
 }
 
 .tracking-badge-new {
     background: rgba(52,211,153,0.15);
     color: var(--green);
+    border-color: rgba(52,211,153,0.25);
 }
 
 .tracking-badge-gone {
     background: rgba(248,113,113,0.12);
     color: var(--red);
+    border-color: rgba(248,113,113,0.2);
 }
 
 .confidence-change {
@@ -1509,19 +1517,22 @@ tbody tr:hover { background: var(--bg-card-hover); }
 .admin-status {
     display: inline-block;
     padding: 4px 14px;
-    border-radius: 12px;
+    border-radius: 9999px;
     font-size: 13px;
     font-weight: 600;
+    border: 1px solid transparent;
 }
 
 .admin-status-idle {
     background: rgba(139,143,163,0.15);
     color: var(--text-muted);
+    border-color: rgba(139,143,163,0.2);
 }
 
 .admin-status-running {
     background: rgba(79,140,255,0.15);
     color: var(--accent);
+    border-color: rgba(79,140,255,0.25);
     animation: adminPulse 1.5s ease-in-out infinite;
 }
 
