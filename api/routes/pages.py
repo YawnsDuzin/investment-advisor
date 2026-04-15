@@ -582,9 +582,13 @@ def proposals_page(
 # ────────────────────────────��─────────────────
 @router.get("/pages/chat")
 def chat_list_page(request: Request, theme_id: int | None = Query(default=None), user: Optional[UserInDB] = Depends(get_current_user), auth_cfg: AuthConfig = Depends(_get_auth_cfg)):
-    """채팅 세션 목록"""
-    if auth_cfg.enabled and user is None:
-        return RedirectResponse("/auth/login?next=/pages/chat", status_code=302)
+    """채팅 세션 목록 — Moderator 이상, 본인 세션만 (Admin은 전체)"""
+    if auth_cfg.enabled:
+        if user is None:
+            return RedirectResponse("/auth/login?next=/pages/chat", status_code=302)
+        if user.role not in ("admin", "moderator"):
+            from fastapi import HTTPException
+            raise HTTPException(status_code=403, detail="채팅 기능은 Moderator 이상 권한이 필요합니다")
     ctx = _base_ctx(request, "chat", user, auth_cfg)
     conn = get_connection(_get_cfg())
     try:
@@ -598,7 +602,7 @@ def chat_list_page(request: Request, theme_id: int | None = Query(default=None),
             """)
             themes = cur.fetchall()
 
-            # 채팅 세션 목록
+            # 채팅 세션 목록 — 본인 세션만 (Admin은 전체)
             query = """
                 SELECT cs.*, t.theme_name, s.analysis_date AS theme_date,
                        (SELECT COUNT(*) FROM theme_chat_messages m
@@ -607,10 +611,20 @@ def chat_list_page(request: Request, theme_id: int | None = Query(default=None),
                 JOIN investment_themes t ON cs.theme_id = t.id
                 JOIN analysis_sessions s ON t.session_id = s.id
             """
+            conditions = []
             params = []
+
+            # Admin이 아니면 본인 세션만
+            if user and user.role != "admin":
+                conditions.append("cs.user_id = %s")
+                params.append(user.id)
+
             if theme_id is not None:
-                query += " WHERE cs.theme_id = %s"
+                conditions.append("cs.theme_id = %s")
                 params.append(theme_id)
+
+            if conditions:
+                query += " WHERE " + " AND ".join(conditions)
             query += " ORDER BY cs.updated_at DESC"
             cur.execute(query, params)
             chat_sessions = cur.fetchall()
@@ -627,9 +641,13 @@ def chat_list_page(request: Request, theme_id: int | None = Query(default=None),
 
 @router.get("/pages/chat/new/{theme_id}")
 def chat_new_redirect(request: Request, theme_id: int, user: Optional[UserInDB] = Depends(get_current_user), auth_cfg: AuthConfig = Depends(_get_auth_cfg)):
-    """새 채팅 세션 생성 → 채팅방으로 리다이렉트"""
-    if auth_cfg.enabled and user is None:
-        return RedirectResponse(f"/auth/login?next=/pages/chat/new/{theme_id}", status_code=302)
+    """새 채팅 세션 생성 → 채팅방으로 리다이렉트 (Moderator 이상)"""
+    if auth_cfg.enabled:
+        if user is None:
+            return RedirectResponse(f"/auth/login?next=/pages/chat/new/{theme_id}", status_code=302)
+        if user.role not in ("admin", "moderator"):
+            from fastapi import HTTPException
+            raise HTTPException(status_code=403, detail="채팅 기능은 Moderator 이상 권한이 필요합니다")
     cfg = _get_cfg()
     conn = get_connection(cfg)
     try:
@@ -656,9 +674,13 @@ def chat_new_redirect(request: Request, theme_id: int, user: Optional[UserInDB] 
 
 @router.get("/pages/chat/{chat_session_id}")
 def chat_room_page(request: Request, chat_session_id: int, user: Optional[UserInDB] = Depends(get_current_user), auth_cfg: AuthConfig = Depends(_get_auth_cfg)):
-    """채팅 대화 화면"""
-    if auth_cfg.enabled and user is None:
-        return RedirectResponse(f"/auth/login?next=/pages/chat/{chat_session_id}", status_code=302)
+    """채팅 대화 화면 — Moderator 이상, 본인 세션만 (Admin은 전체)"""
+    if auth_cfg.enabled:
+        if user is None:
+            return RedirectResponse(f"/auth/login?next=/pages/chat/{chat_session_id}", status_code=302)
+        if user.role not in ("admin", "moderator"):
+            from fastapi import HTTPException
+            raise HTTPException(status_code=403, detail="채팅 기능은 Moderator 이상 권한이 필요합니다")
     conn = get_connection(_get_cfg())
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -674,6 +696,10 @@ def chat_room_page(request: Request, chat_session_id: int, user: Optional[UserIn
             """, (chat_session_id,))
             session = cur.fetchone()
             if not session:
+                return RedirectResponse(url="/pages/chat", status_code=302)
+
+            # 소유권 검증 (Admin은 모든 세션 접근 가능)
+            if auth_cfg.enabled and user and user.role != "admin" and session.get("user_id") != user.id:
                 return RedirectResponse(url="/pages/chat", status_code=302)
 
             # 메시지 이력

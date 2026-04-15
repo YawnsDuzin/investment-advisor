@@ -24,7 +24,9 @@
             <li><a href="/pages/sessions" class="{% if active_page == 'sessions' %}active{% endif %}" onclick="document.body.classList.remove('sidebar-open')">Sessions</a></li>
             <li><a href="/pages/themes" class="{% if active_page == 'themes' %}active{% endif %}" onclick="document.body.classList.remove('sidebar-open')">Themes</a></li>
             <li><a href="/pages/proposals" class="{% if active_page == 'proposals' %}active{% endif %}" onclick="document.body.classList.remove('sidebar-open')">Stocks</a></li>
+            {% if not auth_enabled or (current_user and current_user.role in ('admin', 'moderator')) %}
             <li><a href="/pages/chat" class="{% if active_page == 'chat' %}active{% endif %}" onclick="document.body.classList.remove('sidebar-open')">Theme Chat</a></li>
+            {% endif %}
         </ul>
         <div class="sidebar-footer">
             {% if current_user %}
@@ -36,16 +38,16 @@
                 {% endif %}
                 {% if current_user.role == 'admin' %}
                 <a href="/admin" style="display:block;padding:4px 0;{% if active_page == 'admin' %}color:var(--accent);font-weight:600;{% endif %}">Admin</a>
-                {% endif %}
                 <a href="/docs" target="_blank" style="display:block;padding:4px 0;">API Docs</a>
+                {% endif %}
                 <form action="/auth/logout" method="post" style="margin:0;">
                     <button type="submit" style="background:none;border:none;color:var(--text-muted);cursor:pointer;padding:4px 0;font-size:13px;">로그아웃</button>
                 </form>
             {% else %}
                 {% if not auth_enabled %}
                 <a href="/admin" style="display:block;padding:8px 0;{% if active_page == 'admin' %}color:var(--accent);font-weight:600;{% endif %}">Admin</a>
-                {% endif %}
                 <a href="/docs" target="_blank" style="display:block;padding:4px 0;">API Docs</a>
+                {% endif %}
                 {% if auth_enabled %}
                 <a href="/auth/login" style="display:block;padding:4px 0;">로그인</a>
                 <a href="/auth/register" style="display:block;padding:4px 0;">회원가입</a>
