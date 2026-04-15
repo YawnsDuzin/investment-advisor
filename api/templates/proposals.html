@@ -76,6 +76,7 @@
 <table class="screener-table">
     <thead>
         <tr>
+            {% if current_user %}<th style="width:36px;"></th>{% endif %}
             <th>Action</th>
             <th>종목</th>
             <th>티커</th>
@@ -94,6 +95,13 @@
     <tbody>
         {% for p in proposals %}
         <tr class="screener-row" data-idx="{{ loop.index0 }}">
+            {% if current_user %}
+            <td style="text-align:center;">
+                <span class="watchlist-toggle{% if p.ticker in watched_tickers %} watched{% endif %}" data-ticker="{{ p.ticker }}" data-name="{{ p.asset_name }}" onclick="event.stopPropagation(); toggleWatch(this);" title="관심 종목">
+                    {% if p.ticker in watched_tickers %}&#9733;{% else %}&#9734;{% endif %}
+                </span>
+            </td>
+            {% endif %}
             <td><span class="badge badge-{{ p.action }}">{{ p.action|upper }}</span></td>
             <td style="font-weight:600;">{{ p.asset_name }}</td>
             <td>
@@ -121,7 +129,7 @@
             <td style="font-size:12px;color:var(--text-muted);white-space:nowrap;">{{ p.analysis_date }}</td>
         </tr>
         <tr class="detail-row" data-idx="{{ loop.index0 }}" style="display:none;">
-            <td colspan="13" style="padding:0;">
+            <td colspan="{% if current_user %}14{% else %}13{% endif %}" style="padding:0;">
                 <div style="padding:14px 18px;background:rgba(79,140,255,0.04);border-left:3px solid var(--accent);font-size:14px;line-height:1.7;">
                     {# 메타 태그: 섹터, 발굴유형, 주가반영도, 공급망, 벤더티어, 센티먼트 #}
                     {% if p.sector or p.discovery_type or p.price_momentum_check or p.supply_chain_position or p.vendor_tier or (p.sentiment_score is not none and p.sentiment_score != None) %}
@@ -163,6 +171,20 @@
                         {% endif %}
                     </div>
                     {% endif %}
+
+                    {# 메모 영역 (로그인 사용자만) #}
+                    {% if current_user %}
+                    <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);">
+                        <strong style="color:var(--text-muted);font-size:12px;text-transform:uppercase;">내 메모</strong>
+                        <div style="margin-top:6px;display:flex;gap:8px;align-items:flex-start;">
+                            <textarea class="memo-input" id="memo-{{ p.id }}" rows="2" placeholder="이 제안에 대한 메모..." style="flex:1;background:var(--bg-primary);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text-primary);font-size:13px;resize:vertical;">{{ user_memos.get(p.id, '') }}</textarea>
+                            <button onclick="event.stopPropagation(); saveMemo({{ p.id }});" class="btn" style="font-size:12px;padding:6px 14px;white-space:nowrap;">저장</button>
+                            {% if user_memos.get(p.id) %}
+                            <button onclick="event.stopPropagation(); deleteMemo({{ p.id }});" class="btn" style="font-size:12px;padding:6px 10px;color:var(--red);background:none;">삭제</button>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endif %}
                 </div>
             </td>
         </tr>
@@ -198,5 +220,47 @@ document.querySelectorAll('.screener-row').forEach(function(row) {
         }
     });
 });
+
+// 워치리스트 토글
+async function toggleWatch(el) {
+    var ticker = el.dataset.ticker;
+    var isWatched = el.classList.contains('watched');
+    var method = isWatched ? 'DELETE' : 'POST';
+    var options = { method: method };
+    if (!isWatched) {
+        options.headers = { 'Content-Type': 'application/json' };
+        options.body = JSON.stringify({ asset_name: el.dataset.name });
+    }
+    var res = await fetch('/api/watchlist/' + ticker, options);
+    if (res.ok) {
+        el.classList.toggle('watched');
+        el.innerHTML = el.classList.contains('watched') ? '&#9733;' : '&#9734;';
+    }
+}
+
+// 메모 저장
+async function saveMemo(proposalId) {
+    var textarea = document.getElementById('memo-' + proposalId);
+    var content = textarea.value.trim();
+    if (!content) return;
+    var res = await fetch('/api/proposals/' + proposalId + '/memo', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: content }),
+    });
+    if (res.ok) {
+        textarea.style.borderColor = 'var(--green)';
+        setTimeout(function() { textarea.style.borderColor = ''; }, 1500);
+    }
+}
+
+// 메모 삭제
+async function deleteMemo(proposalId) {
+    var res = await fetch('/api/proposals/' + proposalId + '/memo', { method: 'DELETE' });
+    if (res.ok) {
+        var textarea = document.getElementById('memo-' + proposalId);
+        textarea.value = '';
+    }
+}
 </script>
 {% endblock %}

@@ -66,12 +66,28 @@ def _get_cfg() -> DatabaseConfig:
 
 def _base_ctx(request: Request, active_page: str, user: Optional[UserInDB], auth_cfg: AuthConfig) -> dict:
     """모든 템플릿에 공통으로 전달할 컨텍스트"""
-    return {
+    ctx = {
         "request": request,
         "active_page": active_page,
         "current_user": user,
         "auth_enabled": auth_cfg.enabled,
+        "unread_notifications": 0,
     }
+    if user and auth_cfg.enabled:
+        try:
+            conn = get_connection(_get_cfg())
+            try:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT COUNT(*) FROM user_notifications WHERE user_id = %s AND is_read = FALSE",
+                        (user.id,),
+                    )
+                    ctx["unread_notifications"] = cur.fetchone()[0]
+            finally:
+                conn.close()
+        except Exception:
+            pass
+    return ctx
 
 
 # ──────────────────────────────────────────────
@@ -145,6 +161,12 @@ def dashboard(request: Request, user: Optional[UserInDB] = Depends(get_current_u
             """, (session_id,))
             raw_news = cur.fetchall()
 
+            # 워치리스트 (로그인 사용자)
+            watched_tickers = set()
+            if user:
+                cur.execute("SELECT ticker FROM user_watchlist WHERE user_id = %s", (user.id,))
+                watched_tickers = {r["ticker"] for r in cur.fetchall()}
+
     finally:
         conn.close()
 
@@ -171,6 +193,7 @@ def dashboard(request: Request, user: Optional[UserInDB] = Depends(get_current_u
         "active_tracking": active_tracking,
         "disappeared_themes": disappeared_themes,
         "news_by_category": news_by_category,
+        "watched_tickers": watched_tickers,
     })
 
 
@@ -551,6 +574,22 @@ def proposals_page(
             for row in cur.fetchall():
                 key = f"{row['ticker']}_{row['theme_key']}"
                 prop_tracking[key] = _serialize_row(row)
+
+            # 워치리스트 + 메모 (로그인 사용자)
+            watched_tickers = set()
+            user_memos = {}
+            if user:
+                cur.execute("SELECT ticker FROM user_watchlist WHERE user_id = %s", (user.id,))
+                watched_tickers = {r["ticker"] for r in cur.fetchall()}
+
+                proposal_ids = [p["id"] for p in proposals]
+                if proposal_ids:
+                    cur.execute(
+                        "SELECT proposal_id, content FROM user_proposal_memos "
+                        "WHERE user_id = %s AND proposal_id = ANY(%s)",
+                        (user.id, proposal_ids),
+                    )
+                    user_memos = {r["proposal_id"]: r["content"] for r in cur.fetchall()}
     finally:
         conn.close()
 
@@ -559,6 +598,8 @@ def proposals_page(
         **ctx,
         "proposals": [_serialize_row(p) for p in proposals],
         "prop_tracking": prop_tracking,
+        "watched_tickers": watched_tickers,
+        "user_memos": user_memos,
         "action": action,
         "asset_type": asset_type,
         "conviction": conviction,
@@ -578,8 +619,84 @@ def proposals_page(
 
 
 # ──────────────────────────────────────────────
+# Watchlist (관심 종목)
+# ──────────────────────────────────────────────
+@router.get("/pages/watchlist")
+def watchlist_page(request: Request, user: Optional[UserInDB] = Depends(get_current_user), auth_cfg: AuthConfig = Depends(_get_auth_cfg)):
+    """관심 종목 워치리스트 — 로그인 사용자만"""
+    if not auth_cfg.enabled or user is None:
+        return RedirectResponse("/auth/login?next=/pages/watchlist", status_code=302)
+
+    ctx = _base_ctx(request, "watchlist", user, auth_cfg)
+    conn = get_connection(_get_cfg())
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                "SELECT * FROM user_watchlist WHERE user_id = %s ORDER BY created_at DESC",
+                (user.id,),
+            )
+            watchlist = [_serialize_row(r) for r in cur.fetchall()]
+
+            for item in watchlist:
+                cur.execute("""
+                    SELECT p.action, p.conviction, p.current_price, p.currency,
+                           p.upside_pct, p.target_allocation, t.theme_name, s.analysis_date
+                    FROM investment_proposals p
+                    JOIN investment_themes t ON p.theme_id = t.id
+                    JOIN analysis_sessions s ON t.session_id = s.id
+                    WHERE UPPER(p.ticker) = UPPER(%s)
+                    ORDER BY s.analysis_date DESC LIMIT 1
+                """, (item["ticker"],))
+                latest = cur.fetchone()
+                item["latest"] = _serialize_row(latest) if latest else None
+
+            cur.execute(
+                "SELECT * FROM user_subscriptions WHERE user_id = %s ORDER BY created_at DESC",
+                (user.id,),
+            )
+            subscriptions = [_serialize_row(r) for r in cur.fetchall()]
+    finally:
+        conn.close()
+
+    return templates.TemplateResponse(request=request, name="watchlist.html", context={
+        **ctx,
+        "watchlist": watchlist,
+        "subscriptions": subscriptions,
+    })
+
+
+# ──────────────────────────────────────────────
+# Notifications (알림)
+# ──────────────────────────────────────────────
+@router.get("/pages/notifications")
+def notifications_page(request: Request, user: Optional[UserInDB] = Depends(get_current_user), auth_cfg: AuthConfig = Depends(_get_auth_cfg)):
+    """알림 목록 — 로그인 사용자만"""
+    if not auth_cfg.enabled or user is None:
+        return RedirectResponse("/auth/login?next=/pages/notifications", status_code=302)
+
+    ctx = _base_ctx(request, "notifications", user, auth_cfg)
+    conn = get_connection(_get_cfg())
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                "SELECT * FROM user_notifications WHERE user_id = %s ORDER BY created_at DESC LIMIT 100",
+                (user.id,),
+            )
+            notifications = [_serialize_row(r) for r in cur.fetchall()]
+            unread_count = sum(1 for n in notifications if not n.get("is_read"))
+    finally:
+        conn.close()
+
+    return templates.TemplateResponse(request=request, name="notifications.html", context={
+        **ctx,
+        "notifications": notifications,
+        "unread_count": unread_count,
+    })
+
+
+# ──────────────────────────────────────────────
 # Theme Chat
-# ────────────────────────────��─────────────────
+# ──────────────────────────────────────────────
 # ──────────────────────────────────────────────
 # Profile (비밀번호 변경)
 # ──────────────────────────────────────────────

@@ -1,7 +1,12 @@
 {% extends "base.html" %}
 {% block title %}테마 추이 — Investment Advisor{% endblock %}
 {% block page_title %}테마 추이{% endblock %}
-{% block header_actions %}<a href="/pages/themes" class="btn">테마 목록</a>{% endblock %}
+{% block header_actions %}
+{% if current_user and tracking %}
+<button class="btn" id="subThemeBtn" onclick="toggleThemeSub('{{ tracking.theme_key }}', '{{ tracking.theme_name }}')" style="font-size:12px;padding:4px 12px;margin-right:8px;">구독</button>
+{% endif %}
+<a href="/pages/themes" class="btn">테마 목록</a>
+{% endblock %}
 
 {% block content %}
 {% if tracking %}
@@ -97,5 +102,25 @@
     <h3>테마를 찾을 수 없습니다</h3>
     <p>올바른 테마 키를 확인하세요.</p>
 </div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if current_user and tracking %}
+<script>
+async function toggleThemeSub(themeKey, themeName) {
+    var btn = document.getElementById('subThemeBtn');
+    var res = await fetch('/api/subscriptions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sub_type: 'theme', sub_key: themeKey, label: themeName }),
+    });
+    if (res.ok) {
+        btn.textContent = '구독 완료';
+        btn.disabled = true;
+        btn.style.opacity = '0.6';
+    }
+}
+</script>
 {% endif %}
 {% endblock %}

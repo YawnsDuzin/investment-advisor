@@ -1,0 +1,293 @@
+"""관심 종목 워치리스트 + 알림 구독 + 제안 메모 API"""
+from typing import Optional
+from fastapi import APIRouter, HTTPException, Depends, Body
+from pydantic import BaseModel
+from shared.config import DatabaseConfig, AuthConfig
+from shared.db import get_connection
+from psycopg2.extras import RealDictCursor
+from api.routes.sessions import _serialize_row
+from api.auth.dependencies import get_current_user_required
+from api.auth.models import UserInDB
+
+router = APIRouter(tags=["개인화"])
+
+
+def _get_cfg() -> DatabaseConfig:
+    return DatabaseConfig()
+
+
+def _require_user(user: Optional[UserInDB] = Depends(get_current_user_required)) -> UserInDB:
+    """인증 필수 + AUTH_ENABLED=false일 때 차단"""
+    if user is None:
+        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
+    return user
+
+
+# ── 워치리스트 ────────────────────────────────────
+
+
+@router.get("/api/watchlist")
+def list_watchlist(
+    user: UserInDB = Depends(_require_user),
+    cfg: DatabaseConfig = Depends(_get_cfg),
+):
+    conn = get_connection(cfg)
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                "SELECT id, ticker, asset_name, memo, created_at "
+                "FROM user_watchlist WHERE user_id = %s ORDER BY created_at DESC",
+                (user.id,),
+            )
+            rows = [_serialize_row(r) for r in cur.fetchall()]
+    finally:
+        conn.close()
+    return rows
+
+
+@router.post("/api/watchlist/{ticker}")
+def add_watchlist(
+    ticker: str,
+    asset_name: str = Body(default=None, embed=True),
+    memo: str = Body(default=None, embed=True),
+    user: UserInDB = Depends(_require_user),
+    cfg: DatabaseConfig = Depends(_get_cfg),
+):
+    ticker = ticker.upper().strip()
+    conn = get_connection(cfg)
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                "INSERT INTO user_watchlist (user_id, ticker, asset_name, memo) "
+                "VALUES (%s, %s, %s, %s) "
+                "ON CONFLICT (user_id, ticker) DO UPDATE SET asset_name = EXCLUDED.asset_name, memo = EXCLUDED.memo "
+                "RETURNING id, ticker, asset_name, memo, created_at",
+                (user.id, ticker, asset_name, memo),
+            )
+            row = cur.fetchone()
+        conn.commit()
+    finally:
+        conn.close()
+    return _serialize_row(row)
+
+
+@router.delete("/api/watchlist/{ticker}")
+def remove_watchlist(
+    ticker: str,
+    user: UserInDB = Depends(_require_user),
+    cfg: DatabaseConfig = Depends(_get_cfg),
+):
+    ticker = ticker.upper().strip()
+    conn = get_connection(cfg)
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "DELETE FROM user_watchlist WHERE user_id = %s AND ticker = %s",
+                (user.id, ticker),
+            )
+            if cur.rowcount == 0:
+                raise HTTPException(status_code=404, detail="워치리스트에 없는 종목입니다")
+        conn.commit()
+    finally:
+        conn.close()
+    return {"ok": True}
+
+
+# ── 알림 구독 ─────────────────────────────────────
+
+
+class SubscriptionCreate(BaseModel):
+    sub_type: str  # 'ticker' | 'theme'
+    sub_key: str
+    label: str | None = None
+
+
+@router.get("/api/subscriptions")
+def list_subscriptions(
+    user: UserInDB = Depends(_require_user),
+    cfg: DatabaseConfig = Depends(_get_cfg),
+):
+    conn = get_connection(cfg)
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                "SELECT id, sub_type, sub_key, label, created_at "
+                "FROM user_subscriptions WHERE user_id = %s ORDER BY created_at DESC",
+                (user.id,),
+            )
+            rows = [_serialize_row(r) for r in cur.fetchall()]
+    finally:
+        conn.close()
+    return rows
+
+
+@router.post("/api/subscriptions")
+def add_subscription(
+    body: SubscriptionCreate,
+    user: UserInDB = Depends(_require_user),
+    cfg: DatabaseConfig = Depends(_get_cfg),
+):
+    if body.sub_type not in ("ticker", "theme"):
+        raise HTTPException(status_code=400, detail="sub_type은 'ticker' 또는 'theme'이어야 합니다")
+    sub_key = body.sub_key.strip()
+    if not sub_key:
+        raise HTTPException(status_code=400, detail="sub_key가 비어있습니다")
+
+    conn = get_connection(cfg)
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                "INSERT INTO user_subscriptions (user_id, sub_type, sub_key, label) "
+                "VALUES (%s, %s, %s, %s) "
+                "ON CONFLICT (user_id, sub_type, sub_key) DO NOTHING "
+                "RETURNING id, sub_type, sub_key, label, created_at",
+                (user.id, body.sub_type, sub_key, body.label),
+            )
+            row = cur.fetchone()
+            if not row:
+                return {"detail": "이미 구독 중입니다"}
+        conn.commit()
+    finally:
+        conn.close()
+    return _serialize_row(row)
+
+
+@router.delete("/api/subscriptions/{sub_id}")
+def remove_subscription(
+    sub_id: int,
+    user: UserInDB = Depends(_require_user),
+    cfg: DatabaseConfig = Depends(_get_cfg),
+):
+    conn = get_connection(cfg)
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "DELETE FROM user_subscriptions WHERE id = %s AND user_id = %s",
+                (sub_id, user.id),
+            )
+            if cur.rowcount == 0:
+                raise HTTPException(status_code=404, detail="구독을 찾을 수 없습니다")
+        conn.commit()
+    finally:
+        conn.close()
+    return {"ok": True}
+
+
+# ── 알림 ──────────────────────────────────────────
+
+
+@router.get("/api/notifications")
+def list_notifications(
+    unread_only: bool = False,
+    user: UserInDB = Depends(_require_user),
+    cfg: DatabaseConfig = Depends(_get_cfg),
+):
+    conn = get_connection(cfg)
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            q = "SELECT id, title, detail, link, is_read, created_at FROM user_notifications WHERE user_id = %s"
+            params = [user.id]
+            if unread_only:
+                q += " AND is_read = FALSE"
+            q += " ORDER BY created_at DESC LIMIT 50"
+            cur.execute(q, params)
+            rows = [_serialize_row(r) for r in cur.fetchall()]
+    finally:
+        conn.close()
+    return rows
+
+
+@router.post("/api/notifications/{noti_id}/read")
+def mark_notification_read(
+    noti_id: int,
+    user: UserInDB = Depends(_require_user),
+    cfg: DatabaseConfig = Depends(_get_cfg),
+):
+    conn = get_connection(cfg)
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE user_notifications SET is_read = TRUE WHERE id = %s AND user_id = %s",
+                (noti_id, user.id),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+    return {"ok": True}
+
+
+@router.post("/api/notifications/read-all")
+def mark_all_read(
+    user: UserInDB = Depends(_require_user),
+    cfg: DatabaseConfig = Depends(_get_cfg),
+):
+    conn = get_connection(cfg)
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE user_notifications SET is_read = TRUE WHERE user_id = %s AND is_read = FALSE",
+                (user.id,),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+    return {"ok": True}
+
+
+# ── 제안 메모 ─────────────────────────────────────
+
+
+class MemoBody(BaseModel):
+    content: str
+
+
+@router.put("/api/proposals/{proposal_id}/memo")
+def save_memo(
+    proposal_id: int,
+    body: MemoBody,
+    user: UserInDB = Depends(_require_user),
+    cfg: DatabaseConfig = Depends(_get_cfg),
+):
+    content = body.content.strip()
+    if not content:
+        raise HTTPException(status_code=400, detail="메모 내용이 비어있습니다")
+
+    conn = get_connection(cfg)
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # proposal 존재 확인
+            cur.execute("SELECT 1 FROM investment_proposals WHERE id = %s", (proposal_id,))
+            if not cur.fetchone():
+                raise HTTPException(status_code=404, detail="제안을 찾을 수 없습니다")
+
+            cur.execute(
+                "INSERT INTO user_proposal_memos (user_id, proposal_id, content) "
+                "VALUES (%s, %s, %s) "
+                "ON CONFLICT (user_id, proposal_id) DO UPDATE SET content = EXCLUDED.content, updated_at = NOW() "
+                "RETURNING id, proposal_id, content, created_at, updated_at",
+                (user.id, proposal_id, content),
+            )
+            row = cur.fetchone()
+        conn.commit()
+    finally:
+        conn.close()
+    return _serialize_row(row)
+
+
+@router.delete("/api/proposals/{proposal_id}/memo")
+def delete_memo(
+    proposal_id: int,
+    user: UserInDB = Depends(_require_user),
+    cfg: DatabaseConfig = Depends(_get_cfg),
+):
+    conn = get_connection(cfg)
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "DELETE FROM user_proposal_memos WHERE user_id = %s AND proposal_id = %s",
+                (user.id, proposal_id),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+    return {"ok": True}

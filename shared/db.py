@@ -5,7 +5,7 @@ from psycopg2.extras import execute_values, RealDictCursor
 from shared.config import DatabaseConfig
 
 # ── 스키마 버전 관리 ──────────────────────────────
-SCHEMA_VERSION = 11  # v1~v5: 분석 테이블, v6: 테마 채팅, v7: 뉴스 기사, v8: 뉴스 한글 번역, v9: 요약 한글 번역, v10: price_source, v11: JWT 인증
+SCHEMA_VERSION = 12  # v1~v5: 분석 테이블, v6: 테마 채팅, v7: 뉴스 기사, v8: 뉴스 한글 번역, v9: 요약 한글 번역, v10: price_source, v11: JWT 인증, v12: 개인화(워치리스트/구독/알림/메모)
 
 
 def _ensure_database(cfg: DatabaseConfig) -> None:
@@ -468,6 +468,75 @@ def _migrate_to_v11(cur) -> None:
     print("[DB] v11 마이그레이션 완료 — users + refresh_tokens 생성")
 
 
+def _migrate_to_v12(cur) -> None:
+    """v12: 개인화 — 워치리스트, 알림 구독, 알림 이력, 제안 메모"""
+
+    # 관심 종목 워치리스트
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS user_watchlist (
+            id SERIAL PRIMARY KEY,
+            user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            ticker VARCHAR(20) NOT NULL,
+            asset_name VARCHAR(200),
+            memo TEXT,
+            created_at TIMESTAMP DEFAULT NOW(),
+            UNIQUE(user_id, ticker)
+        );
+    """)
+
+    # 테마/종목 알림 구독
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS user_subscriptions (
+            id SERIAL PRIMARY KEY,
+            user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            sub_type VARCHAR(10) NOT NULL CHECK (sub_type IN ('ticker', 'theme')),
+            sub_key VARCHAR(200) NOT NULL,
+            label VARCHAR(200),
+            created_at TIMESTAMP DEFAULT NOW(),
+            UNIQUE(user_id, sub_type, sub_key)
+        );
+    """)
+
+    # 알림 이력
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS user_notifications (
+            id SERIAL PRIMARY KEY,
+            user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            sub_id INT REFERENCES user_subscriptions(id) ON DELETE SET NULL,
+            session_id INT REFERENCES analysis_sessions(id) ON DELETE CASCADE,
+            title VARCHAR(300) NOT NULL,
+            detail TEXT,
+            link VARCHAR(500),
+            is_read BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMP DEFAULT NOW()
+        );
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_user_notifications_unread
+            ON user_notifications(user_id, is_read) WHERE is_read = FALSE;
+    """)
+
+    # 제안 메모
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS user_proposal_memos (
+            id SERIAL PRIMARY KEY,
+            user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            proposal_id INT NOT NULL REFERENCES investment_proposals(id) ON DELETE CASCADE,
+            content TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW(),
+            UNIQUE(user_id, proposal_id)
+        );
+    """)
+
+    cur.execute("""
+        INSERT INTO schema_version (version) VALUES (12)
+        ON CONFLICT (version) DO NOTHING;
+    """)
+
+    print("[DB] v12 마이그레이션 완료 — 워치리스트/구독/알림/메모 테이블 생성")
+
+
 def init_db(cfg: DatabaseConfig) -> None:
     """PostgreSQL 설치 확인 → 데이터베이스 생성 → 스키마 마이그레이션"""
     from shared.pg_setup import ensure_postgresql
@@ -512,6 +581,9 @@ def init_db(cfg: DatabaseConfig) -> None:
 
             if current < 11:
                 _migrate_to_v11(cur)
+
+            if current < 12:
+                _migrate_to_v12(cur)
 
         conn.commit()
         print("[DB] 테이블 초기화 완료")
@@ -732,6 +804,9 @@ def save_analysis(cfg: DatabaseConfig, analysis_date: str, result: dict) -> int:
             # 5) 추적 데이터 갱신
             _update_tracking(cur, analysis_date, themes, session_id)
 
+            # 6) 구독 알림 생성
+            _generate_notifications(cur, session_id, themes)
+
         conn.commit()
         print(f"[DB] 세션 #{session_id} 저장 완료 — 이슈 {len(issues)}건, 테마 {len(themes)}건")
         return session_id
@@ -893,6 +968,61 @@ def get_latest_news_titles(cfg: DatabaseConfig) -> list[str]:
         return []
     finally:
         conn.close()
+
+
+def _generate_notifications(cur, session_id: int, themes: list) -> None:
+    """구독 매칭 알림 생성 — 분석 저장 시 호출"""
+    # user_subscriptions 테이블이 없으면 스킵 (v12 미적용 환경)
+    cur.execute(
+        "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'user_subscriptions')"
+    )
+    if not cur.fetchone()[0]:
+        return
+
+    # 이번 분석에 등장한 ticker, theme_key 수집
+    tickers = set()
+    theme_keys = {}  # key -> theme_name
+    for theme in themes:
+        tk = _normalize_theme_key(theme.get("theme_name", ""))
+        if tk:
+            theme_keys[tk] = theme["theme_name"]
+        for p in theme.get("proposals", []):
+            t = (p.get("ticker") or "").upper().strip()
+            if t:
+                tickers.add(t)
+
+    if not tickers and not theme_keys:
+        return
+
+    # 매칭 구독 조회
+    cur.execute(
+        "SELECT id, user_id, sub_type, sub_key, label FROM user_subscriptions"
+    )
+    subs = cur.fetchall()
+
+    noti_count = 0
+    for sub in subs:
+        title = None
+        link = None
+        if sub["sub_type"] == "ticker" and sub["sub_key"].upper() in tickers:
+            label = sub["label"] or sub["sub_key"]
+            title = f"구독 종목 '{label}'이(가) 분석에 등장했습니다"
+            link = f"/pages/proposals/history/{sub['sub_key']}"
+        elif sub["sub_type"] == "theme" and sub["sub_key"] in theme_keys:
+            label = sub["label"] or theme_keys[sub["sub_key"]]
+            title = f"구독 테마 '{label}'이(가) 분석에 등장했습니다"
+            link = f"/pages/themes/history/{sub['sub_key']}"
+
+        if title:
+            cur.execute(
+                "INSERT INTO user_notifications (user_id, sub_id, session_id, title, link) "
+                "VALUES (%s, %s, %s, %s, %s)",
+                (sub["user_id"], sub["id"], session_id, title, link),
+            )
+            noti_count += 1
+
+    if noti_count:
+        print(f"[DB] 구독 알림 {noti_count}건 생성")
 
 
 def _normalize_theme_key(name: str) -> str:

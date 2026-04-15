@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}알림 — Investment Advisor{% endblock %}
+{% block page_title %}알림{% endblock %}
+{% block header_actions %}
+{% if notifications %}
+<button class="btn" onclick="markAllRead()" style="font-size:12px;padding:4px 12px;">모두 읽음</button>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+{% if notifications %}
+<div style="margin-bottom:12px;font-size:13px;color:var(--text-muted);">
+    총 {{ notifications|length }}건{% if unread_count %} (읽지 않음 {{ unread_count }}건){% endif %}
+</div>
+
+{% for n in notifications %}
+<div class="card" style="padding:14px 18px;{% if not n.is_read %}border-left:3px solid var(--accent);{% endif %}" id="noti-{{ n.id }}">
+    <div style="display:flex;align-items:center;justify-content:space-between;">
+        <div>
+            {% if n.link %}
+            <a href="{{ n.link }}" style="font-weight:{% if not n.is_read %}600{% else %}normal{% endif %};text-decoration:none;color:inherit;" onclick="markRead({{ n.id }})">{{ n.title }}</a>
+            {% else %}
+            <span style="font-weight:{% if not n.is_read %}600{% else %}normal{% endif %};">{{ n.title }}</span>
+            {% endif %}
+            {% if n.detail %}
+            <div style="font-size:13px;color:var(--text-muted);margin-top:4px;">{{ n.detail }}</div>
+            {% endif %}
+        </div>
+        <span style="font-size:12px;color:var(--text-muted);white-space:nowrap;margin-left:16px;">{{ n.created_at[:16] if n.created_at else '' }}</span>
+    </div>
+</div>
+{% endfor %}
+
+{% else %}
+<div class="empty-state">
+    <h3>알림 없음</h3>
+    <p>관심 종목이나 테마를 구독하면, 분석에 등장할 때 알림을 받을 수 있습니다.</p>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function markRead(notiId) {
+    await fetch('/api/notifications/' + notiId + '/read', { method: 'POST' });
+}
+
+async function markAllRead() {
+    var res = await fetch('/api/notifications/read-all', { method: 'POST' });
+    if (res.ok) {
+        document.querySelectorAll('[id^="noti-"]').forEach(function(el) {
+            el.style.borderLeft = '';
+        });
+        location.reload();
+    }
+}
+</script>
+{% endblock %}
