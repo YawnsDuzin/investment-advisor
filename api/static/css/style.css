@@ -521,7 +521,7 @@ a:hover { color: var(--accent-hover); }
 .badge-mid { background: rgba(251,191,36,0.15); color: var(--orange); border-color: rgba(251,191,36,0.25); }
 .badge-long { background: rgba(52,211,153,0.15); color: var(--green); border-color: rgba(52,211,153,0.25); }
 
-.badge-category { background: rgba(79,140,255,0.12); color: var(--accent); border-color: rgba(79,140,255,0.2); }
+.badge-category { background: rgba(155,160,180,0.12); color: var(--text-muted); border-color: rgba(155,160,180,0.2); }
 
 /* ===== Vendor Tier Badges ===== */
 .badge-tier1 { background: rgba(79,140,255,0.15); color: var(--accent); border-color: rgba(79,140,255,0.25); }
@@ -813,13 +813,16 @@ tbody tr:hover { background: var(--bg-card-hover); }
     align-items: center;
     gap: 6px;
     font-size: 14px;
-    font-weight: 600;
+    font-weight: 700;
     padding: 5px 14px;
-    border-radius: 16px;
+    border-radius: 9999px;
+    border: 1px solid transparent;
+    flex-shrink: 0;
+    white-space: nowrap;
 }
-.risk-temp-high { background: rgba(248,113,113,0.15); color: var(--red); }
-.risk-temp-medium { background: rgba(251,191,36,0.15); color: var(--orange); }
-.risk-temp-low { background: rgba(52,211,153,0.15); color: var(--green); }
+.risk-temp-high { background: rgba(248,113,113,0.18); color: var(--red); border-color: rgba(248,113,113,0.35); }
+.risk-temp-medium { background: rgba(251,191,36,0.18); color: var(--orange); border-color: rgba(251,191,36,0.35); }
+.risk-temp-low { background: rgba(52,211,153,0.18); color: var(--green); border-color: rgba(52,211,153,0.35); }
 .risk-temp-dot { width: 8px; height: 8px; border-radius: 50%; }
 .risk-temp-high .risk-temp-dot { background: var(--red); }
 .risk-temp-medium .risk-temp-dot { background: var(--orange); }
@@ -1108,6 +1111,34 @@ tbody tr:hover { background: var(--bg-card-hover); }
     z-index: 999;
 }
 
+/* ===== Session Card Top ===== */
+.session-card-top {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.session-card-row1 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.session-card-date {
+    font-weight: 700;
+    font-size: 16px;
+}
+
+.session-card-row2 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+    flex-wrap: nowrap;
+}
+
 /* ===== Responsive ===== */
 @media (max-width: 768px) {
     /* 사이드바: 숨김 → 슬라이드 오버레이 */
@@ -1130,16 +1161,30 @@ tbody tr:hover { background: var(--bg-card-hover); }
         padding: 14px 16px;
         padding-left: 62px; /* 햄버거 버튼 공간 확보 */
     }
-    .content-header h2 { font-size: 18px; }
+    .content-header h2 { font-size: 16px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .header-right { flex-shrink: 0; flex-wrap: nowrap; }
+    .header-right .btn { white-space: nowrap; font-size: 12px; padding: 5px 10px; }
     .content-body { padding: 14px 12px; }
     .user-dropdown-name { display: none; }
     .user-dropdown-menu { right: -8px; }
 
+    /* risk-temp 뱃지 축소 → 날짜 우측에 표시 */
+    .risk-temp { font-size: 11px; padding: 3px 10px; gap: 4px; }
+    .risk-temp-dot { width: 6px; height: 6px; }
+
+    /* 세션 카드: 모바일에서 날짜+HIGH / 뱃지+버튼 2줄 */
+    .session-card-top { flex-wrap: wrap; }
+    .session-card-row1 { flex-basis: 100%; }
+    .session-card-row2 { width: 100%; justify-content: flex-start; }
+    .session-card-row2 .btn { margin-left: auto; }
+
     /* 그리드 축소 */
-    .stat-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
-    .stat-grid-6 { grid-template-columns: repeat(3, 1fr); }
-    .stat-card { padding: 14px; }
-    .stat-value { font-size: 26px; }
+    .stat-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+    .stat-grid-6 { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .stat-card { padding: 10px 8px; }
+    .stat-value { font-size: 22px; }
+    .stat-label { font-size: 11px; }
+    .stat-sub { font-size: 10px; }
     .scenario-grid { grid-template-columns: 1fr; }
     .impact-timeline { grid-template-columns: 1fr; }
 
