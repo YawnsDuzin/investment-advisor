@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import theme_header, indicator_tags %}
 {% block title %}Dashboard — AlphaScope{% endblock %}
 {% block page_title %}Dashboard{% endblock %}
 
@@ -118,7 +119,7 @@
     {% endif %}
 </div>
 
-<!-- 테마 요약 (간소화: 테마명 + 신뢰도 + 핵심 종목만) -->
+<!-- 투자 테마 (Dashboard: 요약 — 테마 설명 + 종목 태그) -->
 <div class="section-title">투자 테마
     <a href="/pages/sessions/{{ session.id }}" class="btn btn-primary" style="float:right;font-size:12px;padding:4px 12px;">상세 보기</a>
 </div>
@@ -127,50 +128,24 @@
 {% for t in active_tracking %}
     {% if t.theme_name == theme.theme_name %}{% set tk = t %}{% endif %}
 {% endfor %}
-<div class="card" style="padding:18px;">
-    <div class="card-header" style="margin-bottom:8px;">
-        <span style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-            {% if tk and tk.theme_key %}
-            <a href="/pages/themes/history/{{ tk.theme_key }}" class="card-title" style="font-size:16px;text-decoration:none;color:inherit;">{{ theme.theme_name }}</a>
-            {% else %}
-            <span class="card-title" style="font-size:16px;">{{ theme.theme_name }}</span>
-            {% endif %}
-            {% if tk %}
-                {% if tk.appearances == 1 %}
-                <span class="tracking-badge tracking-badge-new">신규</span>
-                {% elif tk.streak_days >= 2 %}
-                <span class="tracking-badge tracking-badge-streak">{{ tk.streak_days }}일 연속</span>
-                {% endif %}
-            {% endif %}
-        </span>
-        <span style="display:flex;align-items:center;gap:6px;">
-            {% if theme.theme_type %}
-            <span class="badge badge-{{ theme.theme_type }}" style="font-size:12px;">{{ theme.theme_type }}</span>
-            {% endif %}
-            <span class="badge badge-{{ theme.time_horizon }}" style="font-size:12px;">{{ theme.time_horizon }}</span>
-            <span style="font-size:13px;">
-                <span class="confidence-bar"><span class="confidence-bar-fill" style="width:{{ (theme.confidence_score|float * 100)|int }}%"></span></span>
-                {{ "%.0f"|format(theme.confidence_score|float * 100) }}%
-            </span>
-        </span>
-    </div>
-    {% if theme.description %}
-    <div style="font-size:13px;color:var(--text-muted);line-height:1.6;margin-top:4px;margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ theme.description }}</div>
-    {% endif %}
-    <!-- 핵심 종목 한줄 요약 -->
+<div class="card">
+    {{ theme_header(theme, tk if tk else none) }}
+    <div class="detail-text">{{ theme.description }}</div>
+    {{ indicator_tags(theme.key_indicators) }}
+
+    {# Dashboard: 종목은 태그로 간결하게 (전체 표시). 상세 분석은 Sessions/Stocks에서 #}
     {% if theme.proposals %}
-    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px;">
-        {% for p in theme.proposals[:5] %}
-        <a href="/pages/proposals/history/{{ p.ticker }}" style="font-size:13px;padding:3px 10px;border-radius:8px;background:{% if p.ticker in watched_tickers %}rgba(251,191,36,0.12){% else %}rgba(79,140,255,0.08){% endif %};border:1px solid {% if p.ticker in watched_tickers %}rgba(251,191,36,0.4){% else %}var(--border){% endif %};text-decoration:none;color:inherit;">
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px;">
+        {% for p in theme.proposals %}
+        <a href="/pages/proposals/history/{{ p.ticker }}" style="font-size:13px;padding:3px 10px;border-radius:8px;background:{% if p.ticker in watched_tickers %}rgba(251,191,36,0.12){% else %}rgba(79,140,255,0.08){% endif %};border:1px solid {% if p.ticker in watched_tickers %}rgba(251,191,36,0.4){% else %}var(--border){% endif %};text-decoration:none;color:inherit;display:inline-flex;align-items:center;gap:4px;">
             {% if p.ticker in watched_tickers %}<span style="font-size:11px;" title="관심 종목">&#9733;</span>{% endif %}
             <span class="badge badge-{{ p.action }}" style="font-size:11px;padding:1px 6px;">{{ p.action|upper }}</span>
-            {{ p.asset_name }}
-            <span style="color:var(--text-muted);">{{ p.ticker }}</span>
+            <span style="font-weight:600;">{{ p.ticker }}</span>
+            <span style="color:var(--text-muted);">{{ p.asset_name }}</span>
+            {% if p.conviction == 'high' %}<span style="color:var(--green);font-size:11px;">&#9679;</span>{% endif %}
+            {% if p.target_allocation %}<span style="color:var(--text-muted);font-size:11px;">{{ p.target_allocation }}%</span>{% endif %}
         </a>
         {% endfor %}
-        {% if theme.proposals|length > 5 %}
-        <span style="font-size:13px;color:var(--text-muted);padding:3px 10px;">+{{ theme.proposals|length - 5 }}건</span>
-        {% endif %}
     </div>
     {% endif %}
 </div>

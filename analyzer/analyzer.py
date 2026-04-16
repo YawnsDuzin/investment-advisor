@@ -18,7 +18,7 @@ from analyzer.prompts import (
     STAGE1B_SYSTEM, STAGE1B_PROMPT,
     STAGE2_SYSTEM, STAGE2_PROMPT,
 )
-from analyzer.stock_data import fetch_multiple_stocks, fetch_stock_data, format_stock_data_text, fetch_momentum_batch
+from analyzer.stock_data import fetch_multiple_stocks, fetch_stock_data, format_stock_data_text, fetch_momentum_batch, validate_krx_tickers
 from shared.config import AnalyzerConfig, DatabaseConfig
 from shared.db import get_recent_recommendations, get_existing_theme_keys
 
@@ -102,7 +102,9 @@ def _parse_json_response(full_response: str) -> dict:
         json_str = json_str.split("```")[1].split("```")[0].strip()
 
     try:
-        return json.loads(json_str)
+        result = json.loads(json_str)
+        result["_truncated"] = False
+        return result
     except json.JSONDecodeError as e:
         print(f"[분석] JSON 파싱 실패: {e}")
         print(f"[분석] 잘린 JSON 복구 시도 중...")
@@ -115,6 +117,7 @@ def _parse_json_response(full_response: str) -> dict:
                 issues_count = len(result.get("issues", []))
                 proposals_count = len(result.get("proposals", []))
                 print(f"[분석] JSON 복구 성공 (이슈 {issues_count}건, 테마 {themes_count}건, 제안 {proposals_count}건)")
+                result["_truncated"] = True
                 return result
             except json.JSONDecodeError:
                 pass
@@ -326,9 +329,11 @@ async def run_pipeline(
     """멀티스테이지 분석 파이프라인 실행
 
     Stage 1-A: 뉴스 → 이슈/테마/시나리오/매크로 (제안 제외)
-    Stage 1-B: 테마별 투자 제안 생성 (순차 실행)
-    Stage 2: 상위 테마의 핵심 종목 심층분석 (선택적)
+    Stage 1-B: 테마별 투자 제안 생성 (병렬, 동시 2개 제한)
+    Stage 2: 상위 테마의 핵심 종목 심층분석 (병렬, 동시 2개 제한)
     """
+    # SDK 동시 호출 수 제한 — 과도한 병렬 실행 시 CLI 프로세스 충돌 방지
+    _sdk_semaphore = asyncio.Semaphore(2)
     # ── 최근 추천 이력 조회 (중복 방지용) ──
     recent_recs = []
     existing_keys = []
@@ -346,7 +351,7 @@ async def run_pipeline(
         except Exception as e:
             print(f"[피드백] theme_key 조회 실패 (무시): {e}")
 
-    # ── Stage 1-A: 이슈 분석 + 테마 발굴 ──
+    # ── Stage 1-A: 이슈 분석 + 테마 발굴 (잘림 시 1회 재시도) ──
     print(f"[Stage 1-A] 이슈 분석 + 테마 발굴 중... (모델: {cfg.model_analysis})")
     result = await stage1a_discover_themes(
         news_text, date, cfg.max_turns,
@@ -358,6 +363,21 @@ async def run_pipeline(
         print(f"[Stage 1-A] 실패 — {result['error']}")
         return result
 
+    # 잘린 응답으로 테마가 너무 적으면 1회 재시도
+    if result.get("_truncated") and len(result.get("themes", [])) < 3:
+        print(f"[Stage 1-A] 잘린 응답으로 테마 {len(result.get('themes', []))}건만 복구됨 — 재시도...")
+        await asyncio.sleep(5)
+        retry_result = await stage1a_discover_themes(
+            news_text, date, cfg.max_turns,
+            existing_keys=existing_keys,
+            model=cfg.model_analysis,
+        )
+        if not retry_result.get("error") and len(retry_result.get("themes", [])) > len(result.get("themes", [])):
+            result = retry_result
+            print(f"[Stage 1-A] 재시도 성공 — 테마 {len(result.get('themes', []))}건 복구")
+        else:
+            print(f"[Stage 1-A] 재시도 결과 개선 없음 — 기존 결과 사용")
+
     themes = result.get("themes", [])
     issues = result.get("issues", [])
     print(f"[Stage 1-A] 완료 — 이슈 {len(issues)}건, 테마 {len(themes)}건")
@@ -366,18 +386,19 @@ async def run_pipeline(
     print(f"[Stage 1-B] 테마별 투자 제안 생성 시작 — {len(themes)}개 테마 (병렬 실행)")
 
     async def _generate_proposals_for_theme(i: int, theme: dict) -> None:
-        theme_name = theme.get("theme_name", f"테마{i+1}")
-        print(f"[Stage 1-B] ({i+1}/{len(themes)}) '{theme_name}' 제안 생성 중...")
-        try:
-            proposals = await stage1b_generate_proposals(
-                theme, date, cfg.max_turns, recent_recs,
-                model=cfg.model_analysis,
-            )
-            theme["proposals"] = proposals
-            print(f"[Stage 1-B] ({i+1}/{len(themes)}) '{theme_name}' — {len(proposals)}건 제안 완료")
-        except Exception as e:
-            print(f"[Stage 1-B] ({i+1}/{len(themes)}) '{theme_name}' 제안 생성 실패: {e}")
-            theme["proposals"] = []
+        async with _sdk_semaphore:
+            theme_name = theme.get("theme_name", f"테마{i+1}")
+            print(f"[Stage 1-B] ({i+1}/{len(themes)}) '{theme_name}' 제안 생성 중...")
+            try:
+                proposals = await stage1b_generate_proposals(
+                    theme, date, cfg.max_turns, recent_recs,
+                    model=cfg.model_analysis,
+                )
+                theme["proposals"] = proposals
+                print(f"[Stage 1-B] ({i+1}/{len(themes)}) '{theme_name}' — {len(proposals)}건 제안 완료")
+            except Exception as e:
+                print(f"[Stage 1-B] ({i+1}/{len(themes)}) '{theme_name}' 제안 생성 실패: {e}")
+                theme["proposals"] = []
 
     await asyncio.gather(*[
         _generate_proposals_for_theme(i, theme)
@@ -386,6 +407,27 @@ async def run_pipeline(
 
     total_proposals = sum(len(t.get("proposals", [])) for t in themes)
     print(f"[Stage 1-B] 완료 — 총 {total_proposals}건 제안 생성")
+
+    # ── KRX 티커 검증/교정 (Stage 1-B 이후, 모멘텀 체크 전) ──
+    all_stock_proposals = [
+        p for theme in themes
+        for p in theme.get("proposals", [])
+        if p.get("ticker") and p.get("asset_type") == "stock"
+    ]
+    if all_stock_proposals:
+        try:
+            vresult = validate_krx_tickers(all_stock_proposals)
+            if vresult["corrected"]:
+                print(f"[티커 검증] KRX 티커 {vresult['corrected']}건 교정:")
+                for d in vresult["details"]:
+                    if "미등록" not in d:
+                        print(f"  → {d}")
+            if vresult["invalid"]:
+                print(f"[티커 검증] KRX 미등록 {vresult['invalid']}건 (확인 필요)")
+            if not vresult["corrected"] and not vresult["invalid"]:
+                print(f"[티커 검증] KRX 종목 전체 정상")
+        except Exception as e:
+            print(f"[티커 검증] 검증 실패 (무시): {e}")
 
     # ── 모멘텀 체크: Stage 1 추천 종목의 기간별 수익률 조회 ──
     if cfg.enable_stock_data:
@@ -495,46 +537,67 @@ async def run_pipeline(
     print(f"[Stage 2] 종목 심층분석 시작 — {len(stock_targets)}종목 (병렬 실행)")
 
     # 병렬 분석 태스크 생성
+    # Stage 2 핵심 필드 — 이 필드가 없으면 심층분석이 잘린 것으로 판단
+    _STAGE2_REQUIRED_FIELDS = ("factor_scores", "sentiment_score", "recommendation")
+
     async def _analyze_one(proposal: dict, theme_name: str) -> None:
-        ticker = proposal["ticker"]
-        asset_name = proposal.get("asset_name", ticker)
-        market = proposal.get("market", "")
-        print(f"  → {asset_name} ({ticker}) 분석 중...")
+        async with _sdk_semaphore:
+            ticker = proposal["ticker"]
+            asset_name = proposal.get("asset_name", ticker)
+            market = proposal.get("market", "")
+            print(f"  → {asset_name} ({ticker}) 분석 중...")
 
-        try:
-            sd = stock_data_map.get(ticker.upper())
-            sd_text = format_stock_data_text(sd) if sd else ""
+            try:
+                sd = stock_data_map.get(ticker.upper())
+                sd_text = format_stock_data_text(sd) if sd else ""
 
-            stock_result = await stage2_analyze_stock(
-                ticker=ticker, asset_name=asset_name,
-                market=market, theme_context=theme_name,
-                date=date, max_turns=cfg.max_turns,
-                stock_data_text=sd_text,
-                model=cfg.model_analysis,
-            )
+                max_attempts = 2  # 잘린 응답 시 1회 재시도
+                stock_result = None
+                for attempt in range(1, max_attempts + 1):
+                    stock_result = await stage2_analyze_stock(
+                        ticker=ticker, asset_name=asset_name,
+                        market=market, theme_context=theme_name,
+                        date=date, max_turns=cfg.max_turns,
+                        stock_data_text=sd_text,
+                        model=cfg.model_analysis,
+                    )
 
-            if not stock_result.get("error"):
-                proposal["stock_analysis"] = stock_result
-                if stock_result.get("sentiment_score") is not None:
-                    proposal["sentiment_score"] = stock_result["sentiment_score"]
-                if stock_result.get("factor_scores", {}).get("composite") is not None:
-                    proposal["quant_score"] = stock_result["factor_scores"]["composite"]
-                if stock_result.get("target_price_low") is not None:
-                    proposal["target_price_low"] = stock_result["target_price_low"]
-                if stock_result.get("target_price_high") is not None:
-                    proposal["target_price_high"] = stock_result["target_price_high"]
-                if stock_result.get("entry_condition"):
-                    proposal["entry_condition"] = stock_result["entry_condition"]
-                if stock_result.get("exit_condition"):
-                    proposal["exit_condition"] = stock_result["exit_condition"]
-                if sd and sd.get("price"):
-                    proposal["current_price"] = sd["price"]
-                    proposal["price_source"] = "yfinance_realtime"
-                print(f"  ✓ {asset_name} 심층분석 완료")
-            else:
-                print(f"  ✗ {asset_name} 심층분석 실패: {stock_result['error']}")
-        except Exception as e:
-            print(f"  ✗ {asset_name} 심층분석 오류: {e}")
+                    if stock_result.get("error"):
+                        break  # 완전 실패 — 재시도 무의미
+
+                    # 잘린 JSON 복구 후 핵심 필드 누락 감지
+                    if stock_result.get("_truncated"):
+                        missing = [f for f in _STAGE2_REQUIRED_FIELDS if not stock_result.get(f)]
+                        if missing and attempt < max_attempts:
+                            print(f"  ⚠ {asset_name} 심층분석 잘림 (누락: {', '.join(missing)}) — 재시도 {attempt+1}/{max_attempts}")
+                            await asyncio.sleep(5)
+                            continue
+                        elif missing:
+                            print(f"  ⚠ {asset_name} 심층분석 잘림 — 핵심 필드 누락: {', '.join(missing)} (재시도 소진)")
+                    break  # 정상 응답이면 루프 종료
+
+                if not stock_result.get("error"):
+                    proposal["stock_analysis"] = stock_result
+                    if stock_result.get("sentiment_score") is not None:
+                        proposal["sentiment_score"] = stock_result["sentiment_score"]
+                    if stock_result.get("factor_scores", {}).get("composite") is not None:
+                        proposal["quant_score"] = stock_result["factor_scores"]["composite"]
+                    if stock_result.get("target_price_low") is not None:
+                        proposal["target_price_low"] = stock_result["target_price_low"]
+                    if stock_result.get("target_price_high") is not None:
+                        proposal["target_price_high"] = stock_result["target_price_high"]
+                    if stock_result.get("entry_condition"):
+                        proposal["entry_condition"] = stock_result["entry_condition"]
+                    if stock_result.get("exit_condition"):
+                        proposal["exit_condition"] = stock_result["exit_condition"]
+                    if sd and sd.get("price"):
+                        proposal["current_price"] = sd["price"]
+                        proposal["price_source"] = "yfinance_realtime"
+                    print(f"  ✓ {asset_name} 심층분석 완료")
+                else:
+                    print(f"  ✗ {asset_name} 심층분석 실패: {stock_result['error']}")
+            except Exception as e:
+                print(f"  ✗ {asset_name} 심층분석 오류: {e}")
 
     await asyncio.gather(*[
         _analyze_one(proposal, theme_name)

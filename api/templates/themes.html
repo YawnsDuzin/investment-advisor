@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import proposal_card_compact, theme_header, indicator_tags %}
+{% from "_macros.html" import theme_header, indicator_tags, scenario_grid, macro_impact_table %}
 {% block title %}Themes — AlphaScope{% endblock %}
 {% block page_title %}투자 테마{% endblock %}
 
@@ -29,12 +29,14 @@
     {{ theme_header(theme, tk if tk else none) }}
     <div class="detail-text">{{ theme.description }}</div>
     {{ indicator_tags(theme.key_indicators) }}
+    {{ scenario_grid(theme.scenarios) }}
+    {{ macro_impact_table(theme.macro_impacts) }}
 
-    {# 테마 페이지: 종목 태그만 간결하게 표시 (상세는 Proposals 페이지에서) #}
+    {# Themes: 종목은 태그로 간결하게 (상세는 Stocks 페이지에서) #}
     {% if theme.proposals %}
     <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px;">
         {% for p in theme.proposals %}
-        <a href="/pages/proposals/history/{{ p.ticker }}" class="proposal-tag" style="text-decoration:none;color:inherit;font-size:13px;padding:4px 10px;border-radius:8px;background:rgba(79,140,255,0.08);border:1px solid var(--border);display:inline-flex;align-items:center;gap:4px;">
+        <a href="/pages/proposals/history/{{ p.ticker }}" style="text-decoration:none;color:inherit;font-size:13px;padding:4px 10px;border-radius:8px;background:rgba(79,140,255,0.08);border:1px solid var(--border);display:inline-flex;align-items:center;gap:4px;">
             <span class="badge badge-{{ p.action }}" style="font-size:11px;padding:1px 6px;">{{ p.action|upper }}</span>
             <span style="font-weight:600;">{{ p.ticker }}</span>
             <span style="color:var(--text-muted);">{{ p.asset_name }}</span>
