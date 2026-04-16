@@ -239,8 +239,8 @@
                     <span>{{ article.published }}</span>
                     {% endif %}
                 </div>
-                {% if article.summary %}
-                <div class="news-item-summary">{{ article.summary[:200] }}{% if article.summary|length > 200 %}...{% endif %}</div>
+                {% if article.summary_ko or article.summary %}
+                <div class="news-item-summary">{{ article.summary_ko or article.summary }}</div>
                 {% endif %}
             </div>
             {% endfor %}
@@ -260,10 +260,6 @@
 
 {% block scripts %}
 <script>
-// 첫 번째 카테고리 자동 열기
-document.addEventListener('DOMContentLoaded', function() {
-    const first = document.querySelector('.news-category-card');
-    if (first) first.classList.add('open');
-});
+// 뉴스 카테고리: 기본 모두 접힘 (클릭으로 개별 펼침)
 </script>
 {% endblock %}

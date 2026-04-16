@@ -31,7 +31,7 @@
         </ul>
         <div class="sidebar-footer">
             {% if not auth_enabled %}
-            <a href="/admin" style="display:block;padding:8px 0;{% if active_page == 'admin' %}color:var(--accent);font-weight:600;{% endif %}">Admin</a>
+            <a href="/admin" style="display:block;padding:8px 0;{% if active_page == 'admin' %}color:var(--accent);font-weight:600;{% endif %}">관리자 메뉴</a>
             <a href="/docs" target="_blank" style="display:block;padding:4px 0;">API Docs</a>
             {% endif %}
         </div>
@@ -74,7 +74,7 @@
                             <a href="/admin/users" class="user-dropdown-item">사용자 관리</a>
                             {% endif %}
                             {% if current_user.role == 'admin' %}
-                            <a href="/admin" class="user-dropdown-item">Admin</a>
+                            <a href="/admin" class="user-dropdown-item">관리자 메뉴</a>
                             <a href="/docs" target="_blank" class="user-dropdown-item">API Docs</a>
                             {% endif %}
                             <div class="user-dropdown-divider"></div>

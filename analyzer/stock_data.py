@@ -1,8 +1,24 @@
-"""실시간 주가/재무 데이터 조회 모듈 — yfinance 기반"""
+"""실시간 주가/재무 데이터 조회 모듈 — yfinance + pykrx(한국 주식 크로스체크)"""
+from datetime import datetime, timedelta
+
 try:
     import yfinance as yf
 except ImportError:
     yf = None
+
+try:
+    from pykrx import stock as pykrx_stock
+except ImportError:
+    pykrx_stock = None
+
+
+# ── 한국 시장 판별 ──────────────────────────────────
+
+_KRX_MARKETS = {"KRX", "KOSPI", "KSE", "KOSDAQ", "KQ"}
+
+
+def _is_korean_market(market: str) -> bool:
+    return (market or "").strip().upper() in _KRX_MARKETS
 
 
 def _normalize_ticker(ticker: str, market: str) -> str:
@@ -28,22 +44,18 @@ def _normalize_ticker(ticker: str, market: str) -> str:
             return f"{ticker}.KQ"
         return ticker
     elif market in ("HKEX", "HKG", "HKSE"):
-        # 홍콩: 숫자 티커에 .HK 접미사 (예: 1211 → 1211.HK)
         if ticker.isdigit():
             return f"{ticker}.HK"
         return ticker
     elif market in ("TSE", "JPX", "TYO"):
-        # 일본: 숫자 티커에 .T 접미사 (예: 6758 → 6758.T)
         if ticker.isdigit():
             return f"{ticker}.T"
         return ticker
     elif market in ("TWSE", "TPE"):
-        # 대만: 숫자 티커에 .TW 접미사 (예: 2330 → 2330.TW)
         if ticker.isdigit():
             return f"{ticker}.TW"
         return ticker
     elif market in ("SSE", "SZSE", "SHA", "SHE"):
-        # 중국: 상해 .SS, 심천 .SZ
         if ticker.isdigit():
             suffix = ".SS" if market in ("SSE", "SHA") else ".SZ"
             return f"{ticker}{suffix}"
@@ -69,24 +81,195 @@ def _format_number(value, currency: str = "") -> str:
     return f"{currency}{value:,.0f}"
 
 
+# ── pykrx 헬퍼 ──────────────────────────────────────
+
+def _pykrx_fetch_price(ticker: str) -> dict | None:
+    """pykrx로 한국 주식 현재가 + 밸류에이션 조회 (폴백/크로스체크용)"""
+    if pykrx_stock is None:
+        return None
+
+    raw_ticker = ticker.strip().upper()
+    today = datetime.now()
+    # 최근 거래일 찾기 (주말/공휴일 대비 5일 범위)
+    start = (today - timedelta(days=7)).strftime("%Y%m%d")
+    end = today.strftime("%Y%m%d")
+
+    try:
+        ohlcv = pykrx_stock.get_market_ohlcv(start, end, raw_ticker)
+        if ohlcv.empty:
+            return None
+
+        last = ohlcv.iloc[-1]
+        price = float(last["종가"])
+        if price <= 0:
+            return None
+
+        # 밸류에이션 조회
+        last_date = ohlcv.index[-1].strftime("%Y%m%d")
+        fund = pykrx_stock.get_market_fundamental(last_date, last_date, raw_ticker)
+        per = pbr = div_yield = None
+        if not fund.empty:
+            f = fund.iloc[-1]
+            per = float(f.get("PER", 0)) or None
+            pbr = float(f.get("PBR", 0)) or None
+            div_yield = float(f.get("DIV", 0)) or None
+
+        return {
+            "price": price,
+            "per": per,
+            "pbr": pbr,
+            "dividend_yield_pct": div_yield,
+            "source": "pykrx",
+        }
+    except Exception as e:
+        print(f"  [pykrx] {raw_ticker} 조회 실패: {e}")
+        return None
+
+
+def _pykrx_fetch_history(ticker: str, days: int = 365) -> "list[tuple[str, float]]":
+    """pykrx로 한국 주식 일별 종가 이력 조회
+
+    Returns:
+        [(date_str, close_price), ...] 오래된 순 정렬. 실패 시 빈 리스트.
+    """
+    if pykrx_stock is None:
+        return []
+
+    raw_ticker = ticker.strip().upper()
+    today = datetime.now()
+    start = (today - timedelta(days=days + 10)).strftime("%Y%m%d")
+    end = today.strftime("%Y%m%d")
+
+    try:
+        ohlcv = pykrx_stock.get_market_ohlcv(start, end, raw_ticker)
+        if ohlcv.empty:
+            return []
+        return [
+            (idx.strftime("%Y-%m-%d"), float(row["종가"]))
+            for idx, row in ohlcv.iterrows()
+            if float(row["종가"]) > 0
+        ]
+    except Exception:
+        return []
+
+
+# ── 기간별 수익률 계산 ────────────────────────────────
+
+def _calc_period_returns(history: "list[tuple[str, float]]") -> dict:
+    """일별 종가 리스트에서 1m/3m/6m/1y 수익률 계산
+
+    Args:
+        history: [(date_str, close), ...] 오래된 순 정렬
+
+    Returns:
+        {"return_1m_pct": float|None, "return_3m_pct": ..., "return_6m_pct": ..., "return_1y_pct": ...}
+    """
+    if len(history) < 2:
+        return {"return_1m_pct": None, "return_3m_pct": None,
+                "return_6m_pct": None, "return_1y_pct": None}
+
+    price_now = history[-1][1]
+    # 거래일 기준 근사치: 1m≈22일, 3m≈66일, 6m≈132일, 1y≈전체
+    periods = {
+        "return_1m_pct": 22,
+        "return_3m_pct": 66,
+        "return_6m_pct": 132,
+        "return_1y_pct": len(history) - 1,
+    }
+
+    result = {}
+    for key, offset in periods.items():
+        idx = max(0, len(history) - 1 - offset)
+        price_past = history[idx][1]
+        if price_past > 0:
+            result[key] = round((price_now - price_past) / price_past * 100, 2)
+        else:
+            result[key] = None
+
+    return result
+
+
+def _momentum_tag_from_returns(returns: dict) -> str:
+    """기간별 수익률에서 모멘텀 태그 결정"""
+    r1m = returns.get("return_1m_pct")
+    r3m = returns.get("return_3m_pct")
+
+    if r1m is None:
+        return "unknown"
+
+    if r1m >= 20 or (r3m is not None and r3m >= 40):
+        return "already_run"
+    elif r1m <= -10:
+        return "undervalued"
+    else:
+        return "fair_priced"
+
+
+# ── 종목 데이터 조회 ─────────────────────────────────
+
 def fetch_stock_data(ticker: str, market: str) -> dict | None:
-    """단일 종목의 주가/재무 데이터 조회
+    """단일 종목의 주가/재무 데이터 조회 (한국 주식은 pykrx 크로스체크)
 
     Returns:
         dict with keys: ticker, price, change_pct, high_52w, low_52w,
-        volume_avg, market_cap, per, pbr, eps, dividend_yield, currency
+        volume_avg, market_cap, per, pbr, eps, dividend_yield, currency,
+        + price_source
         실패 시 None
     """
-    if yf is None:
-        print("  [주가] yfinance 미설치 — 건너뜀")
-        return None
+    is_krx = _is_korean_market(market)
+    result = None
 
+    # 1차: yfinance 시도
+    if yf is not None:
+        result = _fetch_stock_data_yfinance(ticker, market)
+
+    # 2차: 한국 주식이면 pykrx 크로스체크/폴백
+    if is_krx:
+        pykrx_data = _pykrx_fetch_price(ticker)
+        if pykrx_data:
+            if result is None:
+                # yfinance 실패 → pykrx 폴백
+                print(f"  [주가] {ticker} yfinance 실패 → pykrx 폴백")
+                result = {
+                    "ticker": ticker,
+                    "yf_ticker": _normalize_ticker(ticker, market),
+                    "price": pykrx_data["price"],
+                    "change_pct": None,
+                    "high_52w": None, "low_52w": None,
+                    "volume_avg": None, "market_cap": None,
+                    "per": pykrx_data.get("per"),
+                    "pbr": pykrx_data.get("pbr"),
+                    "eps": None,
+                    "dividend_yield": None,
+                    "currency": "KRW",
+                    "sector": "", "industry": "",
+                    "short_name": ticker,
+                    "price_source": "pykrx",
+                }
+            elif result["price"] and pykrx_data["price"]:
+                # 크로스체크: 3% 이상 괴리 시 pykrx 가격 우선
+                diff_pct = abs(result["price"] - pykrx_data["price"]) / pykrx_data["price"] * 100
+                if diff_pct > 3:
+                    print(f"  [주가] {ticker} 가격 괴리 {diff_pct:.1f}%: "
+                          f"yfinance={result['price']:,.0f} vs pykrx={pykrx_data['price']:,.0f} → pykrx 채택")
+                    result["price"] = pykrx_data["price"]
+                    result["price_source"] = "pykrx_crosscheck"
+                # PER/PBR 보완 (yfinance에서 누락된 경우)
+                if not result.get("per") and pykrx_data.get("per"):
+                    result["per"] = pykrx_data["per"]
+                if not result.get("pbr") and pykrx_data.get("pbr"):
+                    result["pbr"] = pykrx_data["pbr"]
+
+    return result
+
+
+def _fetch_stock_data_yfinance(ticker: str, market: str) -> dict | None:
+    """yfinance로 단일 종목 데이터 조회 (내부 함수)"""
     yf_ticker = _normalize_ticker(ticker, market)
     try:
         stock = yf.Ticker(yf_ticker)
         info = stock.info
 
-        # yfinance가 유효한 데이터를 반환했는지 확인
         if not info or info.get("regularMarketPrice") is None:
             print(f"  [주가] {yf_ticker} 데이터 없음")
             return None
@@ -114,6 +297,7 @@ def fetch_stock_data(ticker: str, market: str) -> dict | None:
             "sector": info.get("sector", ""),
             "industry": info.get("industry", ""),
             "short_name": info.get("shortName", ""),
+            "price_source": "yfinance",
         }
 
     except Exception as e:
@@ -121,55 +305,75 @@ def fetch_stock_data(ticker: str, market: str) -> dict | None:
         return None
 
 
+# ── 모멘텀 체크 (기간별 수익률 포함) ──────────────────
+
 def fetch_momentum_check(ticker: str, market: str) -> dict | None:
-    """종목의 1개월 수익률 조회 — 급등 종목 필터링용 (경량)
+    """종목의 기간별 수익률 조회 — 1m/3m/6m/1y + 모멘텀 태깅
+
+    한국 주식: pykrx 우선, 실패 시 yfinance 폴백
+    해외 주식: yfinance 사용
 
     Returns:
-        {"ticker": "...", "return_1m_pct": float, "momentum_tag": "already_run|fair_priced|undervalued|unknown"}
+        {"ticker", "current_price", "momentum_tag",
+         "return_1m_pct", "return_3m_pct", "return_6m_pct", "return_1y_pct"}
         실패 시 None
     """
+    is_krx = _is_korean_market(market)
+    history = []
+
+    # 한국 주식: pykrx 우선
+    if is_krx:
+        history = _pykrx_fetch_history(ticker, days=400)
+        if history:
+            returns = _calc_period_returns(history)
+            return {
+                "ticker": ticker,
+                "current_price": round(history[-1][1], 2),
+                "momentum_tag": _momentum_tag_from_returns(returns),
+                "price_source": "pykrx",
+                **returns,
+            }
+
+    # 해외 주식 또는 pykrx 실패 → yfinance
     if yf is None:
         return None
 
     yf_ticker = _normalize_ticker(ticker, market)
     try:
         stock = yf.Ticker(yf_ticker)
-        hist = stock.history(period="1mo")
+        hist = stock.history(period="1y")
         if hist.empty or len(hist) < 2:
             return None
 
-        price_start = hist["Close"].iloc[0]
-        price_end = hist["Close"].iloc[-1]
-        if price_start <= 0:
+        # yfinance DataFrame → [(date_str, close)] 리스트 변환
+        history = [
+            (idx.strftime("%Y-%m-%d"), float(row["Close"]))
+            for idx, row in hist.iterrows()
+            if float(row["Close"]) > 0
+        ]
+        if len(history) < 2:
             return None
 
-        return_1m = round((price_end - price_start) / price_start * 100, 2)
-
-        if return_1m >= 20:
-            tag = "already_run"
-        elif return_1m <= -10:
-            tag = "undervalued"
-        else:
-            tag = "fair_priced"
-
+        returns = _calc_period_returns(history)
         return {
             "ticker": ticker,
-            "return_1m_pct": return_1m,
-            "momentum_tag": tag,
-            "current_price": round(float(price_end), 2),
+            "current_price": round(history[-1][1], 2),
+            "momentum_tag": _momentum_tag_from_returns(returns),
+            "price_source": "yfinance_close",
+            **returns,
         }
     except Exception:
         return None
 
 
 def fetch_momentum_batch(stocks: list[dict]) -> dict[str, dict]:
-    """복수 종목 1개월 수익률 병렬 조회
+    """복수 종목 기간별 수익률 병렬 조회
 
     Args:
         stocks: [{"ticker": "NVDA", "market": "NASDAQ"}, ...]
 
     Returns:
-        {ticker: {"return_1m_pct": float, "momentum_tag": str}}
+        {ticker: {"current_price", "momentum_tag", "return_1m_pct", ...}}
     """
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -241,7 +445,7 @@ def fetch_multiple_stocks(stocks: list[dict]) -> dict[str, dict]:
                 data = future.result()
                 if data:
                     results[ticker] = data
-                    price_str = f"{data['currency']}{data['price']:,.2f}" if data['price'] else "N/A"
+                    price_str = f"{data.get('currency', '')}{data['price']:,.2f}" if data.get('price') else "N/A"
                     print(f"  [주가] {ticker} → {price_str}")
             except Exception as e:
                 print(f"  [주가] {ticker} 조회 오류: {e}")
@@ -267,6 +471,17 @@ def format_stock_data_text(data: dict) -> str:
         change = data.get("change_pct")
         change_str = f" (전일 대비: {'+' if change > 0 else ''}{change}%)" if change is not None else ""
         lines.append(f"- 현재가: {c}{price:,.2f}{change_str}")
+
+    # 기간별 수익률
+    returns = []
+    for key, label in [("return_1m_pct", "1개월"), ("return_3m_pct", "3개월"),
+                       ("return_6m_pct", "6개월"), ("return_1y_pct", "1년")]:
+        val = data.get(key)
+        if val is not None:
+            sign = "+" if val > 0 else ""
+            returns.append(f"{label} {sign}{val:.1f}%")
+    if returns:
+        lines.append(f"- 기간 수익률: {' / '.join(returns)}")
 
     # 52주 고저
     high = data.get("high_52w")

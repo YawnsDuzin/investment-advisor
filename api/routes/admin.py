@@ -10,7 +10,7 @@ from fastapi import APIRouter, Request, Query, Depends
 from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from shared.config import DatabaseConfig, AnalyzerConfig, AuthConfig
-from shared.db import get_untranslated_news, update_news_title_ko, update_news_translation
+from shared.db import get_untranslated_news, update_news_title_ko, update_news_translation, get_connection
 from api.auth.dependencies import require_role, get_current_user, _get_auth_cfg
 from api.auth.models import UserInDB
 
@@ -366,3 +366,36 @@ def translate_existing_news(_admin: Optional[UserInDB] = Depends(require_role("a
             _translating = False
 
     return StreamingResponse(stream(), media_type="text/event-stream")
+
+
+# ── 전체 데이터 삭제 ──────────────────────────────
+
+@router.post("/reset-all-data")
+def reset_all_data(_admin: Optional[UserInDB] = Depends(require_role("admin"))):
+    """분석 데이터 전체 삭제 (CASCADE로 하위 테이블 포함)"""
+    cfg = DatabaseConfig()
+    conn = get_connection(cfg)
+    try:
+        with conn.cursor() as cur:
+            # CASCADE 관계에 의해 하위 테이블 자동 삭제
+            # analysis_sessions → global_issues, investment_themes → theme_scenarios,
+            #   macro_impacts, investment_proposals → stock_analyses, news_articles,
+            #   user_notifications
+            cur.execute("DELETE FROM analysis_sessions")
+            deleted_sessions = cur.rowcount
+
+            # 독립 추적 테이블
+            cur.execute("DELETE FROM theme_tracking")
+            cur.execute("DELETE FROM proposal_tracking")
+
+            # 개인화 데이터 (메모는 proposal FK로 이미 삭제됨)
+            cur.execute("DELETE FROM user_notifications")
+            cur.execute("DELETE FROM user_proposal_memos")
+
+        conn.commit()
+        return {"message": f"전체 데이터 삭제 완료 (세션 {deleted_sessions}건 및 관련 데이터)"}
+    except Exception as e:
+        conn.rollback()
+        return JSONResponse(status_code=500, content={"message": f"삭제 실패: {e}"})
+    finally:
+        conn.close()

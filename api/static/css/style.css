@@ -1515,7 +1515,7 @@ tbody tr:hover { background: var(--bg-card-hover); }
 .news-category-body {
     display: none;
     border-top: 1px solid var(--border);
-    max-height: 500px;
+    max-height: 800px;
     overflow-y: auto;
 }
 
