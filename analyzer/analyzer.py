@@ -20,7 +20,7 @@ from analyzer.prompts import (
 )
 from analyzer.stock_data import fetch_multiple_stocks, fetch_stock_data, format_stock_data_text, fetch_momentum_batch
 from shared.config import AnalyzerConfig, DatabaseConfig
-from shared.db import get_recent_recommendations
+from shared.db import get_recent_recommendations, get_existing_theme_keys
 
 
 def _try_fix_truncated_json(json_str: str) -> str | None:
@@ -221,16 +221,36 @@ def _format_recent_recommendations(recent_recs: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def _format_existing_theme_keys(existing_keys: list[dict]) -> str:
+    """기존 theme_key 목록을 프롬프트용 텍스트로 포맷팅"""
+    if not existing_keys:
+        return ""
+
+    lines = [
+        "",
+        "아래는 이전 분석에서 사용된 theme_key 목록입니다.",
+        "동일하거나 유사한 테마가 다시 등장하면 **반드시 동일한 theme_key를 재사용**하세요:",
+        "",
+    ]
+    for k in existing_keys:
+        lines.append(f"  - `{k['theme_key']}` ← {k['theme_name']} (최근: {k['last_seen_date']}, {k['appearances']}회)")
+    lines.append("")
+    return "\n".join(lines)
+
+
 async def stage1_discover_themes(
     news_text: str, date: str, max_turns: int = 6,
     recent_recs: list[dict] | None = None,
+    existing_keys: list[dict] | None = None,
     model: str | None = None,
 ) -> dict:
     """Stage 1 (통합): 뉴스 기반 이슈 분석 + 테마 발굴 + 투자 제안 — 단일 호출"""
     recent_section = _format_recent_recommendations(recent_recs or [])
+    keys_section = _format_existing_theme_keys(existing_keys or [])
     prompt = STAGE1_PROMPT.format(
         news_text=news_text, date=date,
         recent_recommendations_section=recent_section,
+        existing_theme_keys_section=keys_section,
     )
     response = await _query_claude(prompt, STAGE1_SYSTEM, max_turns, model=model)
     return _parse_json_response(response)
@@ -240,10 +260,15 @@ async def stage1_discover_themes(
 
 async def stage1a_discover_themes(
     news_text: str, date: str, max_turns: int = 6,
+    existing_keys: list[dict] | None = None,
     model: str | None = None,
 ) -> dict:
     """Stage 1-A: 뉴스 기반 이슈 분석 + 테마 발굴 (투자 제안 제외)"""
-    prompt = STAGE1A_PROMPT.format(news_text=news_text, date=date)
+    keys_section = _format_existing_theme_keys(existing_keys or [])
+    prompt = STAGE1A_PROMPT.format(
+        news_text=news_text, date=date,
+        existing_theme_keys_section=keys_section,
+    )
     response = await _query_claude(prompt, STAGE1A_SYSTEM, max_turns, model=model)
     return _parse_json_response(response)
 
@@ -306,6 +331,7 @@ async def run_pipeline(
     """
     # ── 최근 추천 이력 조회 (중복 방지용) ──
     recent_recs = []
+    existing_keys = []
     if db_cfg:
         try:
             recent_recs = get_recent_recommendations(db_cfg, days=7)
@@ -313,11 +339,18 @@ async def run_pipeline(
                 print(f"[피드백] 최근 7일 추천 이력 {len(recent_recs)}건 로드 — 중복 방지 적용")
         except Exception as e:
             print(f"[피드백] 추천 이력 조회 실패 (무시): {e}")
+        try:
+            existing_keys = get_existing_theme_keys(db_cfg)
+            if existing_keys:
+                print(f"[피드백] 기존 theme_key {len(existing_keys)}건 로드 — AI 키 재사용 유도")
+        except Exception as e:
+            print(f"[피드백] theme_key 조회 실패 (무시): {e}")
 
     # ── Stage 1-A: 이슈 분석 + 테마 발굴 ──
     print(f"[Stage 1-A] 이슈 분석 + 테마 발굴 중... (모델: {cfg.model_analysis})")
     result = await stage1a_discover_themes(
         news_text, date, cfg.max_turns,
+        existing_keys=existing_keys,
         model=cfg.model_analysis,
     )
 
@@ -329,9 +362,10 @@ async def run_pipeline(
     issues = result.get("issues", [])
     print(f"[Stage 1-A] 완료 — 이슈 {len(issues)}건, 테마 {len(themes)}건")
 
-    # ── Stage 1-B: 테마별 투자 제안 생성 ──
-    print(f"[Stage 1-B] 테마별 투자 제안 생성 시작 — {len(themes)}개 테마")
-    for i, theme in enumerate(themes):
+    # ── Stage 1-B: 테마별 투자 제안 생성 (병렬) ──
+    print(f"[Stage 1-B] 테마별 투자 제안 생성 시작 — {len(themes)}개 테마 (병렬 실행)")
+
+    async def _generate_proposals_for_theme(i: int, theme: dict) -> None:
         theme_name = theme.get("theme_name", f"테마{i+1}")
         print(f"[Stage 1-B] ({i+1}/{len(themes)}) '{theme_name}' 제안 생성 중...")
         try:
@@ -345,10 +379,15 @@ async def run_pipeline(
             print(f"[Stage 1-B] ({i+1}/{len(themes)}) '{theme_name}' 제안 생성 실패: {e}")
             theme["proposals"] = []
 
+    await asyncio.gather(*[
+        _generate_proposals_for_theme(i, theme)
+        for i, theme in enumerate(themes)
+    ])
+
     total_proposals = sum(len(t.get("proposals", [])) for t in themes)
     print(f"[Stage 1-B] 완료 — 총 {total_proposals}건 제안 생성")
 
-    # ── 모멘텀 체크: Stage 1 추천 종목의 1개월 수익률 조회 ──
+    # ── 모멘텀 체크: Stage 1 추천 종목의 기간별 수익률 조회 ──
     if cfg.enable_stock_data:
         all_proposals = []
         for theme in themes:
@@ -357,7 +396,7 @@ async def run_pipeline(
                     all_proposals.append(p)
 
         if all_proposals:
-            print(f"[모멘텀 체크] {len(all_proposals)}종목 1개월 수익률 조회...")
+            print(f"[모멘텀 체크] {len(all_proposals)}종목 기간별 수익률 조회 (1m/3m/6m/1y)...")
             momentum_map = fetch_momentum_batch([
                 {"ticker": p["ticker"], "market": p.get("market", "")}
                 for p in all_proposals
@@ -372,7 +411,11 @@ async def run_pipeline(
                     p["price_momentum_check"] = mdata["momentum_tag"]
                     if mdata.get("current_price"):
                         p["current_price"] = mdata["current_price"]
-                        p["price_source"] = "yfinance_close"
+                        p["price_source"] = mdata.get("price_source", "yfinance_close")
+                    # 기간별 수익률 저장
+                    for key in ("return_1m_pct", "return_3m_pct", "return_6m_pct", "return_1y_pct"):
+                        if mdata.get(key) is not None:
+                            p[key] = mdata[key]
                     if mdata["momentum_tag"] == "already_run":
                         run_count += 1
                 else:
@@ -380,10 +423,10 @@ async def run_pipeline(
                     sd = fetch_stock_data(ticker, p.get("market", ""))
                     if sd and sd.get("price"):
                         p["current_price"] = sd["price"]
-                        p["price_source"] = "yfinance_realtime"
+                        p["price_source"] = sd.get("price_source", "yfinance_realtime")
                         fallback_count += 1
                     else:
-                        # yfinance 완전 실패 → AI 추정치 제거, null이 잘못된 값보다 나음
+                        # 완전 실패 → AI 추정치 제거, null이 잘못된 값보다 나음
                         p["current_price"] = None
                         p["price_source"] = None
 
@@ -438,6 +481,13 @@ async def run_pipeline(
             for p, _ in stock_targets
         ]
         stock_data_map = fetch_multiple_stocks(stock_list)
+        # 모멘텀 체크에서 확보한 기간별 수익률을 주가 데이터에 병합 (Stage 2 프롬프트용)
+        for proposal, _ in stock_targets:
+            tk = proposal["ticker"].strip().upper()
+            if tk in stock_data_map:
+                for key in ("return_1m_pct", "return_3m_pct", "return_6m_pct", "return_1y_pct"):
+                    if proposal.get(key) is not None:
+                        stock_data_map[tk][key] = proposal[key]
         print(f"[주가 데이터] {len(stock_data_map)}/{len(stock_targets)}종목 조회 완료")
     else:
         print("[주가 데이터] 비활성화 — Claude 추정치 사용")

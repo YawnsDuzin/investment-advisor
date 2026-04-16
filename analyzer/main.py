@@ -11,6 +11,7 @@
 """
 import sys
 from datetime import date
+from concurrent.futures import ThreadPoolExecutor
 
 from shared.config import AppConfig
 from shared.db import init_db, save_analysis, save_news_articles, get_latest_news_titles
@@ -54,7 +55,14 @@ def main() -> int:
     except Exception as e:
         print(f"[지문] 비교 실패 (무시하고 분석 진행): {e}")
 
-    # 2) 멀티스테이지 분석
+    # 2) 뉴스 번역을 백그라운드에서 먼저 시작 (분석과 병렬 실행)
+    executor = ThreadPoolExecutor(max_workers=1)
+    print("[번역] 뉴스 한글 번역 백그라운드 시작...")
+    translate_future = executor.submit(
+        translate_news, news_articles, cfg.analyzer.model_translate,
+    )
+
+    # 3) 멀티스테이지 분석
     print("\n[분석] Claude Code SDK 멀티스테이지 파이프라인 시작...")
     result = run_full_analysis(
         news_text=news_text,
@@ -65,16 +73,27 @@ def main() -> int:
 
     if result.get("error"):
         print(f"[에러] 분석 실패: {result['error']}")
+        # 번역 스레드 정리
+        try:
+            translate_future.result(timeout=1)
+        except Exception:
+            pass
+        executor.shutdown(wait=False)
         return 1
 
     issues = result.get("issues", [])
     themes = result.get("themes", [])
     print(f"\n[분석] 전체 완료 — 이슈 {len(issues)}건, 테마 {len(themes)}건")
 
-    # 3) 뉴스 제목 한글 번역 (Haiku 모델로 비용 절감)
-    news_articles = translate_news(news_articles, model=cfg.analyzer.model_translate)
+    # 4) 번역 결과 수집 (이미 완료되었을 가능성 높음)
+    try:
+        news_articles = translate_future.result(timeout=300)
+    except Exception as e:
+        print(f"[번역] 백그라운드 번역 실패 (원문 유지): {e}")
+    finally:
+        executor.shutdown(wait=False)
 
-    # 4) DB 저장
+    # 5) DB 저장
     try:
         session_id = save_analysis(cfg.db, str(date.today()), result)
         # 뉴스 기사 저장
@@ -84,7 +103,7 @@ def main() -> int:
         print(f"[에러] DB 저장 실패: {e}")
         return 1
 
-    # 4) 결과 요약 출력
+    # 6) 결과 요약 출력
     _print_summary(result, session_id)
     return 0
 

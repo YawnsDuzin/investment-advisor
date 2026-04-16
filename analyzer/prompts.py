@@ -71,6 +71,7 @@ STAGE1_PROMPT = """## 분석 날짜: {date}
 ### 2단계: 투자 테마 도출 (4~7개)
 각 테마에 대해:
 - 복수의 이슈에서 교차 검증된 테마만 선정
+- **theme_key** (영문 snake_case 고유 키): 아래 규칙 참조
 - **테마 유형**: structural(구조적) / cyclical(순환적) 구분
 - **테마 유효성**: strong / medium / weak
 - 신뢰도 (0.00~1.00): 뉴스 일관성, 데이터 뒷받침, 시장 반영 정도 기준
@@ -79,6 +80,12 @@ STAGE1_PROMPT = """## 분석 날짜: {date}
 - **시나리오 분석**: Bull/Base/Bear 케이스 각각의 확률, 설명, 핵심 가정, 시장 영향
 - **매크로 변수 영향**: 유가, 금, 환율, 금리, 주요 지수에 대한 시나리오별 전망
 
+#### theme_key 생성 규칙
+- 각 테마에 영문 snake_case 키를 부여하세요 (예: "secondary_battery_oversupply", "us_fed_rate_cut", "ai_semiconductor_demand")
+- 3~5단어, 소문자, 밑줄(_) 구분. 테마의 핵심 개념을 영어로 표현
+- **의미적으로 동일한 테마에는 반드시 동일한 키를 재사용하세요** — 한국어 테마명 표현이 달라도 같은 주제면 같은 키
+- 예: "2차전지 공급과잉 우려" / "배터리 과잉 생산 심화" → 모두 `secondary_battery_oversupply`
+{existing_theme_keys_section}
 ### 3단계: 투자 제안 (테마당 10~15건)
 
 **종목 선정 프로세스 — "남들보다 먼저 발굴":**
@@ -150,6 +157,7 @@ STAGE1_PROMPT = """## 분석 날짜: {date}
   ],
   "themes": [
     {{
+      "theme_key": "english_snake_case_key",
       "theme_name": "테마명",
       "description": "테마 설명 및 투자 논리 (3~5문장)",
       "related_issue_indices": [0, 1],
@@ -249,6 +257,7 @@ STAGE1A_PROMPT = """## 분석 날짜: {date}
 ### 2단계: 투자 테마 도출 (4~7개)
 각 테마에 대해:
 - 복수의 이슈에서 교차 검증된 테마만 선정
+- **theme_key** (영문 snake_case 고유 키): 아래 규칙 참조
 - **테마 유형**: structural(구조적) / cyclical(순환적) 구분
 - **테마 유효성**: strong / medium / weak
 - 신뢰도 (0.00~1.00): 뉴스 일관성, 데이터 뒷받침, 시장 반영 정도 기준
@@ -257,6 +266,12 @@ STAGE1A_PROMPT = """## 분석 날짜: {date}
 - **시나리오 분석**: Bull/Base/Bear 케이스 각각의 확률, 설명, 핵심 가정, 시장 영향
 - **매크로 변수 영향**: 유가, 금, 환율, 금리, 주요 지수에 대한 시나리오별 전망
 
+#### theme_key 생성 규칙
+- 각 테마에 영문 snake_case 키를 부여하세요 (예: "secondary_battery_oversupply", "us_fed_rate_cut", "ai_semiconductor_demand")
+- 3~5단어, 소문자, 밑줄(_) 구분. 테마의 핵심 개념을 영어로 표현
+- **의미적으로 동일한 테마에는 반드시 동일한 키를 재사용하세요** — 한국어 테마명 표현이 달라도 같은 주제면 같은 키
+- 예: "2차전지 공급과잉 우려" / "배터리 과잉 생산 심화" → 모두 `secondary_battery_oversupply`
+{existing_theme_keys_section}
 ## 출력 형식
 
 반드시 아래 JSON 형식으로만 응답하세요 (proposals 필드 없음):
@@ -283,6 +298,7 @@ STAGE1A_PROMPT = """## 분석 날짜: {date}
   ],
   "themes": [
     {{
+      "theme_key": "english_snake_case_key",
       "theme_name": "테마명",
       "description": "테마 설명 및 투자 논리 (3~5문장)",
       "related_issue_indices": [0, 1],

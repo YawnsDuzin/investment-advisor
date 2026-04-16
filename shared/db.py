@@ -5,7 +5,7 @@ from psycopg2.extras import execute_values, RealDictCursor
 from shared.config import DatabaseConfig
 
 # ── 스키마 버전 관리 ──────────────────────────────
-SCHEMA_VERSION = 12  # v1~v5: 분석 테이블, v6: 테마 채팅, v7: 뉴스 기사, v8: 뉴스 한글 번역, v9: 요약 한글 번역, v10: price_source, v11: JWT 인증, v12: 개인화(워치리스트/구독/알림/메모)
+SCHEMA_VERSION = 14  # v1~v5: 분석 테이블, v6: 테마 채팅, v7: 뉴스 기사, v8: 뉴스 한글 번역, v9: 요약 한글 번역, v10: price_source, v11: JWT 인증, v12: 개인화(워치리스트/구독/알림/메모), v13: AI theme_key, v14: 기간별 수익률
 
 
 def _ensure_database(cfg: DatabaseConfig) -> None:
@@ -537,6 +537,39 @@ def _migrate_to_v12(cur) -> None:
     print("[DB] v12 마이그레이션 완료 — 워치리스트/구독/알림/메모 테이블 생성")
 
 
+def _migrate_to_v13(cur) -> None:
+    """v13: investment_themes 테이블에 theme_key 컬럼 추가 (AI 생성 영문 키)"""
+    cur.execute("""
+        ALTER TABLE investment_themes
+        ADD COLUMN IF NOT EXISTS theme_key VARCHAR(200);
+    """)
+
+    cur.execute("""
+        INSERT INTO schema_version (version) VALUES (13)
+        ON CONFLICT (version) DO NOTHING;
+    """)
+
+    print("[DB] v13 마이그레이션 완료 — investment_themes.theme_key 컬럼 추가")
+
+
+def _migrate_to_v14(cur) -> None:
+    """v14: 기간별 수익률 컬럼 추가 (1m/3m/6m/1y)"""
+    cur.execute("""
+        ALTER TABLE investment_proposals
+            ADD COLUMN IF NOT EXISTS return_1m_pct NUMERIC(7,2),
+            ADD COLUMN IF NOT EXISTS return_3m_pct NUMERIC(7,2),
+            ADD COLUMN IF NOT EXISTS return_6m_pct NUMERIC(7,2),
+            ADD COLUMN IF NOT EXISTS return_1y_pct NUMERIC(7,2);
+    """)
+
+    cur.execute("""
+        INSERT INTO schema_version (version) VALUES (14)
+        ON CONFLICT (version) DO NOTHING;
+    """)
+
+    print("[DB] v14 마이그레이션 완료 — 기간별 수익률 컬럼 추가 (return_1m/3m/6m/1y_pct)")
+
+
 def init_db(cfg: DatabaseConfig) -> None:
     """PostgreSQL 설치 확인 → 데이터베이스 생성 → 스키마 마이그레이션"""
     from shared.pg_setup import ensure_postgresql
@@ -584,6 +617,12 @@ def init_db(cfg: DatabaseConfig) -> None:
 
             if current < 12:
                 _migrate_to_v12(cur)
+
+            if current < 13:
+                _migrate_to_v13(cur)
+
+            if current < 14:
+                _migrate_to_v14(cur)
 
         conn.commit()
         print("[DB] 테이블 초기화 완료")
@@ -695,11 +734,13 @@ def save_analysis(cfg: DatabaseConfig, analysis_date: str, result: dict) -> int:
                 ]
                 cur.execute(
                     """INSERT INTO investment_themes
-                       (session_id, theme_name, description, related_issue_ids,
+                       (session_id, theme_name, theme_key, description, related_issue_ids,
                         confidence_score, time_horizon, key_indicators,
                         theme_type, theme_validity)
-                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
-                    (session_id, theme.get("theme_name"), theme.get("description"),
+                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
+                    (session_id, theme.get("theme_name"),
+                     _resolve_theme_key(theme),
+                     theme.get("description"),
                      related_ids, theme.get("confidence_score"),
                      theme.get("time_horizon"), theme.get("key_indicators"),
                      theme.get("theme_type"), theme.get("theme_validity"))
@@ -755,8 +796,9 @@ def save_analysis(cfg: DatabaseConfig, analysis_date: str, result: dict) -> int:
                             current_price, target_price_low, target_price_high,
                             upside_pct, sentiment_score, quant_score,
                             sector, currency, vendor_tier, supply_chain_position,
-                            discovery_type, price_momentum_check, price_source)
-                           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                            discovery_type, price_momentum_check, price_source,
+                            return_1m_pct, return_3m_pct, return_6m_pct, return_1y_pct)
+                           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                            RETURNING id""",
                         (theme_id, proposal.get("asset_type"),
                          proposal.get("asset_name"), proposal.get("ticker"),
@@ -771,7 +813,9 @@ def save_analysis(cfg: DatabaseConfig, analysis_date: str, result: dict) -> int:
                          proposal.get("sector"), proposal.get("currency"),
                          proposal.get("vendor_tier"), proposal.get("supply_chain_position"),
                          proposal.get("discovery_type"), proposal.get("price_momentum_check"),
-                         proposal.get("price_source"))
+                         proposal.get("price_source"),
+                         proposal.get("return_1m_pct"), proposal.get("return_3m_pct"),
+                         proposal.get("return_6m_pct"), proposal.get("return_1y_pct"))
                     )
                     proposal_id = cur.fetchone()[0]
 
@@ -970,6 +1014,32 @@ def get_latest_news_titles(cfg: DatabaseConfig) -> list[str]:
         conn.close()
 
 
+def get_existing_theme_keys(cfg: DatabaseConfig) -> list[dict]:
+    """기존 theme_key 목록 조회 (AI 프롬프트 피드백용 — 키 재사용 유도)
+
+    Returns:
+        [{"theme_key": "secondary_battery_oversupply",
+          "theme_name": "2차전지 공급과잉",
+          "last_seen_date": "2026-04-15",
+          "appearances": 5}]
+    """
+    conn = get_connection(cfg)
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                SELECT theme_key, theme_name, last_seen_date::text, appearances
+                FROM theme_tracking
+                ORDER BY last_seen_date DESC
+                LIMIT 100
+            """)
+            return [dict(row) for row in cur.fetchall()]
+    except Exception as e:
+        print(f"[DB] 기존 theme_key 조회 실패: {e}")
+        return []
+    finally:
+        conn.close()
+
+
 def _generate_notifications(cur, session_id: int, themes: list) -> None:
     """구독 매칭 알림 생성 — 분석 저장 시 호출"""
     # user_subscriptions 테이블이 없으면 스킵 (v12 미적용 환경)
@@ -983,9 +1053,13 @@ def _generate_notifications(cur, session_id: int, themes: list) -> None:
     tickers = set()
     theme_keys = {}  # key -> theme_name
     for theme in themes:
-        tk = _normalize_theme_key(theme.get("theme_name", ""))
+        tk = _resolve_theme_key(theme)
         if tk:
-            theme_keys[tk] = theme["theme_name"]
+            theme_keys[tk] = theme.get("theme_name", "")
+        # 폴백: 한국어 정규화 키로도 매칭 (기존 구독 호환)
+        tk_legacy = _normalize_theme_key(theme.get("theme_name", ""))
+        if tk_legacy and tk_legacy != tk:
+            theme_keys[tk_legacy] = theme.get("theme_name", "")
         for p in theme.get("proposals", []):
             t = (p.get("ticker") or "").upper().strip()
             if t:
@@ -1026,11 +1100,20 @@ def _generate_notifications(cur, session_id: int, themes: list) -> None:
 
 
 def _normalize_theme_key(name: str) -> str:
-    """테마명 정규화 — 동일 테마 매칭용 키 생성"""
+    """테마명 정규화 — 동일 테마 매칭용 키 생성 (폴백용)"""
     import re
     key = name.strip().lower()
     key = re.sub(r'[·\-/\s]+', '', key)  # 공백, 하이픈, 가운뎃점 제거
     return key
+
+
+def _resolve_theme_key(theme: dict) -> str:
+    """AI 제공 theme_key 우선 사용, 유효하지 않으면 한국어 정규화 폴백"""
+    import re
+    raw_key = (theme.get("theme_key") or "").strip()
+    if raw_key and re.match(r'^[a-z][a-z0-9_]{2,60}$', raw_key):
+        return raw_key
+    return _normalize_theme_key(theme.get("theme_name", ""))
 
 
 def _update_tracking(cur, analysis_date: str, themes: list, session_id: int) -> None:
@@ -1048,7 +1131,7 @@ def _update_tracking(cur, analysis_date: str, themes: list, session_id: int) -> 
 
     for theme in themes:
         theme_name = theme.get("theme_name", "")
-        theme_key = _normalize_theme_key(theme_name)
+        theme_key = _resolve_theme_key(theme)
         if not theme_key:
             continue
         today_theme_keys.add(theme_key)

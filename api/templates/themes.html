@@ -23,7 +23,8 @@
 
 {% if themes %}
 {% for theme in themes %}
-{% set tk = tracking_map.get(theme.theme_name|lower|replace(' ','')|replace('-','')|replace('·',''), {}) %}
+{% set tk = tracking_map.get(theme.theme_key, {}) if theme.theme_key else {} %}
+{% if not tk %}{% set tk = tracking_map.get(theme.theme_name|lower|replace(' ','')|replace('-','')|replace('·',''), {}) %}{% endif %}
 <div class="card">
     {{ theme_header(theme, tk if tk else none) }}
     <div class="detail-text">{{ theme.description }}</div>

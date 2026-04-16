@@ -17,7 +17,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Template**: Jinja2 (다크 테마 UI)
 - **Database**: PostgreSQL + psycopg2 (스키마 자동 마이그레이션)
 - **News**: feedparser + httpx (RSS 수집)
-- **Stock Data**: yfinance (실시간 주가/재무 데이터 조회)
+- **Stock Data**: yfinance (해외 주가/재무 데이터) + pykrx (한국 주식 크로스체크/폴백)
 - **Async**: anyio (async/sync 브릿지)
 - **Runtime**: Python 3.10+, Node.js LTS (Claude Code CLI 의존)
 - **Auth**: JWT (python-jose) + bcrypt (passlib) — httpOnly 쿠키 기반, RBAC (Admin/Moderator/User)
@@ -114,7 +114,7 @@ sudo systemctl enable --now investment-advisor-analyzer.timer    # 매일 03:00 
   - 최근 7일 추천 이력 피드백으로 중복 추천 방지
   - 컨센서스/얼리시그널/컨트래리안/딥밸류 분류 (`discovery_type`)
   - 주가 반영도 태깅 (`price_momentum_check`)
-- **모멘텀 체크**: Stage 1 추천 종목의 1개월 수익률 조회, 급등(+20%) 종목 필터링. 동시에 **모든 종목의 `current_price`를 yfinance 가격으로 설정** (실패 시 개별 재조회, 그래도 실패 시 NULL). `price_source` 태깅으로 데이터 출처 추적
+- **모멘텀 체크**: Stage 1 추천 종목의 기간별 수익률(1m/3m/6m/1y) 조회. 한국 주식은 pykrx 우선, 해외는 yfinance 사용. 급등(1m +20% 또는 3m +40%) 종목 필터링. 동시에 **모든 종목의 `current_price`를 실시간 가격으로 설정** (한국: pykrx 크로스체크, 해외: yfinance. 실패 시 개별 재조회, 그래도 실패 시 NULL). `price_source` 태깅으로 데이터 출처 추적
 - **주가 데이터**: Stage 2 대상 종목의 현재가/PER/PBR/시총 등을 yfinance로 실시간 조회 (ENABLE_STOCK_DATA로 on/off)
 - **Stage 2**: 실제 주가 데이터 + 5관점 심층분석 (펀더멘털·산업·모멘텀·퀀트·리스크)
   - 급등 종목보다 미반영 종목(early_signal/undervalued) 우선 선정
@@ -126,7 +126,7 @@ sudo systemctl enable --now investment-advisor-analyzer.timer    # 매일 03:00 
 - `analyzer.py` — `stage1_discover_themes()`, `stage2_analyze_stock()`, `run_pipeline()`. 하위호환용 `run_analysis()` 유지
 - `prompts.py` — 스테이지별 시스템 프롬프트 및 JSON 출력 템플릿
 - `news_collector.py` — `feedparser`로 RSS 피드 수집, 카테고리별 마크다운 텍스트 생성
-- `stock_data.py` — `yfinance`로 실시간 주가/재무 데이터 조회, 1개월 모멘텀 체크(`current_price` 포함 반환), 프롬프트 삽입용 텍스트 포맷팅
+- `stock_data.py` — `yfinance` + `pykrx`(한국 주식 크로스체크/폴백)로 주가/재무 데이터 조회, 기간별 수익률(1m/3m/6m/1y) 모멘텀 체크(`current_price` 포함 반환), 프롬프트 삽입용 텍스트 포맷팅
 
 ### api/ — FastAPI 웹서비스 (상시 기동)
 - `routes/sessions.py` — 세션 목록/상세/날짜별 조회. `_serialize_row()` 공유 유틸.
@@ -178,7 +178,8 @@ proposal_tracking (독립, UPSERT로 갱신)
 - `stock_analyses.financial_summary`와 `factor_scores`는 JSONB 타입.
 - `theme_tracking.theme_key`는 테마명 정규화 키 (소문자, 공백·하이픈·가운뎃점 제거). `_normalize_theme_key()` 함수 사용.
 - `proposal_tracking`은 `(ticker, theme_key)` UNIQUE — 테마별 종목 추적.
-- `investment_proposals.price_source`는 가격 데이터 출처 (`yfinance_realtime` / `yfinance_close` / NULL). v10 추가.
+- `investment_proposals.price_source`는 가격 데이터 출처 (`yfinance_realtime` / `yfinance_close` / `pykrx` / `pykrx_crosscheck` / NULL). v10 추가.
+- `investment_proposals.return_1m/3m/6m/1y_pct`는 기간별 수익률(%). v14 추가. 한국 주식은 pykrx, 해외는 yfinance history 기반.
 - `user_watchlist`는 `(user_id, ticker)` UNIQUE — 사용자별 관심 종목.
 - `user_subscriptions`는 `(user_id, sub_type, sub_key)` UNIQUE — `sub_type`은 `'ticker'` 또는 `'theme'`.
 - `user_notifications`는 분석 저장(`save_analysis()`) 시 구독 매칭으로 자동 생성. `is_read` 인덱스로 읽지 않은 알림 빠른 조회.
@@ -195,7 +196,7 @@ proposal_tracking (독립, UPSERT로 갱신)
 - 새 마이그레이션 추가 시: `SCHEMA_VERSION` 증가, `_migrate_to_vN()` 함수 생성, `init_db()`에 `if current < N` 추가
 - 프론트엔드에서 새 필드 표시 시 `{% if field %}` 가드 필수 — 이전 버전 데이터에서 NULL일 수 있음
 - Stage 1의 `target_price_low/high`는 AI 추정치(학습 데이터 기반)로 실제 시세와 괴리가 클 수 있음. Stage 2 분석 종목만 신뢰할 수 있는 목표가를 가짐
-- `current_price`는 반드시 yfinance 실시간 데이터만 사용 — AI 추정 가격은 `_validate_proposal()`에서 자동 제거 (v10)
+- `current_price`는 반드시 실시간 데이터(yfinance/pykrx)만 사용 — AI 추정 가격은 `_validate_proposal()`에서 자동 제거 (v10)
 - DB 저장 시 `upside_pct`는 `(target_price_low - current_price) / current_price * 100`으로 재계산됨 (`shared/db.py`). 현재가 없으면 NULL
 - 가격 표시 시 `fmt_price` Jinja2 필터 사용 — 통화 기호(₩/$€¥£) + 천 단위 쉼표, KRW/JPY는 소수점 제거
 - 번호 목록(①②③) 표시 시 `nl_numbered` Jinja2 필터 사용 — 원문자 앞에 `<br>` 삽입

@@ -155,6 +155,22 @@
                     </div>
                     {% endif %}
 
+                    {# 기간별 수익률 #}
+                    {% if p.return_1m_pct is not none or p.return_3m_pct is not none or p.return_6m_pct is not none or p.return_1y_pct is not none %}
+                    <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px;padding:10px 14px;background:rgba(255,255,255,0.03);border-radius:8px;border:1px solid var(--border);">
+                        <span style="font-size:11px;color:var(--text-muted);align-self:center;margin-right:4px;">수익률</span>
+                        {% for key, label in [('return_1m_pct', '1개월'), ('return_3m_pct', '3개월'), ('return_6m_pct', '6개월'), ('return_1y_pct', '1년')] %}
+                        {% if p[key] is not none %}
+                        {% set val = p[key] | float %}
+                        {% set color = 'var(--red)' if val < 0 else 'var(--green)' %}
+                        <span style="font-size:13px;font-weight:600;padding:3px 10px;border-radius:6px;background:rgba({% if val < 0 %}239,68,68{% else %}52,211,153{% endif %},0.08);border:1px solid rgba({% if val < 0 %}239,68,68{% else %}52,211,153{% endif %},0.2);color:{{ color }};">
+                            {{ label }} {% if val > 0 %}+{% endif %}{{ "%.1f"|format(val) }}%
+                        </span>
+                        {% endif %}
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+
                     {% if p.rationale %}
                     <div style="margin-bottom:10px;"><strong style="color:var(--text-muted);font-size:12px;text-transform:uppercase;">근거</strong><br>{{ p.rationale|nl_numbered }}</div>
                     {% endif %}

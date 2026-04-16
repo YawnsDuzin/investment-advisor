@@ -1,6 +1,6 @@
 {% extends "base.html" %}
-{% block title %}Admin — AlphaScope{% endblock %}
-{% block page_title %}Admin{% endblock %}
+{% block title %}관리자 메뉴 — AlphaScope{% endblock %}
+{% block page_title %}관리자 메뉴{% endblock %}
 
 {% block content %}
 <!-- 실행 컨트롤 -->
@@ -34,6 +34,22 @@
             <span id="translateBadge" class="admin-status admin-status-idle">대기</span>
             <button id="btnTranslate" class="btn btn-primary" onclick="startTranslation()">번역 실행</button>
         </div>
+    </div>
+</div>
+
+<!-- 데이터 초기화 -->
+<div class="card" style="padding:20px;margin-top:12px;border:1px solid rgba(220,60,60,0.3);">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+        <div>
+            <div style="font-size:16px;font-weight:600;margin-bottom:4px;color:#e05555;">전체 데이터 삭제</div>
+            <div style="font-size:13px;color:var(--text-muted);">
+                모든 분석 세션, 테마, 제안, 뉴스, 추적 데이터를 삭제합니다. <strong>복구할 수 없습니다.</strong>
+            </div>
+        </div>
+        <button class="btn" onclick="resetAllData()"
+            style="background:#c0392b;color:#fff;border:none;padding:8px 18px;font-weight:600;cursor:pointer;border-radius:6px;">
+            전체 데이터 삭제
+        </button>
     </div>
 </div>
 
@@ -310,6 +326,23 @@ function startTranslation() {
 }
 
 loadTranslateStatus();
+
+// ── 전체 데이터 삭제 ──
+function resetAllData() {
+    if (!confirm('정말로 모든 분석 데이터를 삭제하시겠습니까?\n\n삭제 대상: 분석 세션, 이슈, 테마, 제안, 뉴스, 추적 데이터\n\n⚠️ 이 작업은 되돌릴 수 없습니다.')) return;
+    if (!confirm('마지막 확인입니다.\n\n전체 데이터가 영구 삭제됩니다. 계속하시겠습니까?')) return;
+
+    fetch('/admin/reset-all-data', { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+            appendLog('[초기화] ' + data.message);
+            alert(data.message);
+        })
+        .catch(err => {
+            appendLog('[오류] 데이터 삭제 실패: ' + err.message, 'error');
+            alert('삭제 실패: ' + err.message);
+        });
+}
 
 // 페이지 로드 시: 실행 중이면 기존 로그 복원 + 실시간 구독
 fetch('/admin/status').then(r => r.json()).then(data => {

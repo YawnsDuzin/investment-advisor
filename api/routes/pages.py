@@ -177,7 +177,7 @@ def dashboard(request: Request, user: Optional[UserInDB] = Depends(get_current_u
 
             # ── 뉴스 기사 (카테고리별 그룹핑) ──
             cur.execute("""
-                SELECT category, source, title, title_ko, summary, link, published
+                SELECT category, source, title, title_ko, summary, summary_ko, link, published
                 FROM news_articles
                 WHERE session_id = %s
                 ORDER BY category, id
