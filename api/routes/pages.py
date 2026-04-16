@@ -315,7 +315,15 @@ def session_detail_page(request: Request, session_id: int, user: Optional[UserIn
                     "SELECT * FROM investment_proposals WHERE theme_id = %s ORDER BY target_allocation DESC",
                     (theme["id"],)
                 )
-                theme["proposals"] = [_serialize_row(p) for p in cur.fetchall()]
+                proposals = cur.fetchall()
+                for p in proposals:
+                    cur.execute(
+                        "SELECT id FROM stock_analyses WHERE proposal_id = %s LIMIT 1",
+                        (p["id"],)
+                    )
+                    sa = cur.fetchone()
+                    p["has_stock_analysis"] = sa is not None
+                theme["proposals"] = [_serialize_row(p) for p in proposals]
 
             # 추적 데이터 연결
             cur.execute("""
@@ -474,6 +482,19 @@ def themes_page(
             themes = cur.fetchall()
 
             for theme in themes:
+                # 시나리오
+                cur.execute(
+                    "SELECT * FROM theme_scenarios WHERE theme_id = %s ORDER BY probability DESC",
+                    (theme["id"],)
+                )
+                theme["scenarios"] = [_serialize_row(s) for s in cur.fetchall()]
+                # 매크로 영향
+                cur.execute(
+                    "SELECT * FROM macro_impacts WHERE theme_id = %s",
+                    (theme["id"],)
+                )
+                theme["macro_impacts"] = [_serialize_row(m) for m in cur.fetchall()]
+                # 투자 제안
                 cur.execute(
                     "SELECT * FROM investment_proposals WHERE theme_id = %s ORDER BY target_allocation DESC",
                     (theme["id"],)

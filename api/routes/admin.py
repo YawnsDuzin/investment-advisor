@@ -6,7 +6,7 @@ import threading
 import queue
 import time
 from typing import Optional
-from fastapi import APIRouter, Request, Query, Depends
+from fastapi import APIRouter, Request, Query, Depends, Body
 from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from shared.config import DatabaseConfig, AnalyzerConfig, AuthConfig
@@ -399,3 +399,155 @@ def reset_all_data(_admin: Optional[UserInDB] = Depends(require_role("admin"))):
         return JSONResponse(status_code=500, content={"message": f"삭제 실패: {e}"})
     finally:
         conn.close()
+
+
+# ── 원격 DB → 로컬 DB 데이터 복사 ──────────────────
+
+# 복사 대상 테이블 (FK 의존 순서)
+_COPY_TABLES = [
+    "analysis_sessions",
+    "global_issues",
+    "investment_themes",
+    "theme_scenarios",
+    "macro_impacts",
+    "investment_proposals",
+    "stock_analyses",
+    "news_articles",
+    "theme_tracking",
+    "proposal_tracking",
+]
+
+
+@router.post("/copy-from-remote")
+def copy_from_remote(
+    host: str = Body(...),
+    port: int = Body(5432),
+    dbname: str = Body(...),
+    user: str = Body(...),
+    password: str = Body(...),
+    _admin: Optional[UserInDB] = Depends(require_role("admin")),
+):
+    """원격 DB에서 분석 데이터를 로컬 DB로 복사 (SSE 스트리밍)"""
+    import psycopg2
+    from psycopg2.extras import RealDictCursor
+
+    def stream():
+        local_cfg = DatabaseConfig()
+        remote_conn = None
+        local_conn = None
+
+        try:
+            # 1) 원격 DB 연결
+            yield "data: [연결] 원격 DB 연결 중...\n\n"
+            try:
+                remote_conn = psycopg2.connect(
+                    host=host, port=port, dbname=dbname,
+                    user=user, password=password,
+                    connect_timeout=10,
+                )
+                remote_conn.set_session(readonly=True)
+            except Exception as e:
+                yield f"data: [오류] 원격 DB 연결 실패: {e}\n\n"
+                yield "event: done\ndata: error\n\n"
+                return
+
+            yield "data: [연결] 원격 DB 연결 성공\n\n"
+
+            # 2) 로컬 DB 연결
+            local_conn = get_connection(local_cfg)
+
+            # 3) 로컬 데이터 삭제 (역순)
+            yield "data: [삭제] 로컬 데이터 초기화 중...\n\n"
+            with local_conn.cursor() as cur:
+                cur.execute("DELETE FROM analysis_sessions")  # CASCADE
+                cur.execute("DELETE FROM theme_tracking")
+                cur.execute("DELETE FROM proposal_tracking")
+            local_conn.commit()
+            yield "data: [삭제] 로컬 데이터 초기화 완료\n\n"
+
+            # 4) 테이블별 복사
+            total_rows = 0
+            for table in _COPY_TABLES:
+                try:
+                    with remote_conn.cursor(cursor_factory=RealDictCursor) as rcur:
+                        # 원격 테이블 존재 확인
+                        rcur.execute(
+                            "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = %s)",
+                            (table,),
+                        )
+                        if not rcur.fetchone()["exists"]:
+                            yield f"data: [건너뜀] {table} — 원격에 없음\n\n"
+                            continue
+
+                        rcur.execute(f"SELECT * FROM {table} ORDER BY id")
+                        rows = rcur.fetchall()
+
+                    if not rows:
+                        yield f"data: [건너뜀] {table} — 0건\n\n"
+                        continue
+
+                    # 컬럼 목록 (로컬 테이블 기준으로 필터)
+                    with local_conn.cursor() as lcur:
+                        lcur.execute(
+                            "SELECT column_name FROM information_schema.columns WHERE table_name = %s",
+                            (table,),
+                        )
+                        local_cols = {r[0] for r in lcur.fetchall()}
+
+                    # 원격·로컬 공통 컬럼만 사용
+                    remote_cols = list(rows[0].keys())
+                    common_cols = [c for c in remote_cols if c in local_cols]
+
+                    if not common_cols:
+                        yield f"data: [건너뜀] {table} — 공통 컬럼 없음\n\n"
+                        continue
+
+                    col_list = ", ".join(common_cols)
+                    placeholders = ", ".join(["%s"] * len(common_cols))
+
+                    with local_conn.cursor() as lcur:
+                        for row in rows:
+                            values = [row[c] for c in common_cols]
+                            lcur.execute(
+                                f"INSERT INTO {table} ({col_list}) VALUES ({placeholders}) "
+                                f"ON CONFLICT DO NOTHING",
+                                values,
+                            )
+
+                    local_conn.commit()
+                    total_rows += len(rows)
+                    yield f"data: [복사] {table} — {len(rows)}건 완료\n\n"
+
+                except Exception as e:
+                    local_conn.rollback()
+                    yield f"data: [오류] {table} 복사 실패: {e}\n\n"
+
+            # 5) 시퀀스 재설정 (삽입된 ID 이후로)
+            yield "data: [정리] 시퀀스 재설정 중...\n\n"
+            with local_conn.cursor() as cur:
+                for table in _COPY_TABLES:
+                    try:
+                        cur.execute(f"""
+                            SELECT setval(
+                                pg_get_serial_sequence('{table}', 'id'),
+                                COALESCE((SELECT MAX(id) FROM {table}), 1),
+                                true
+                            )
+                        """)
+                    except Exception:
+                        pass  # 시퀀스 없는 테이블은 무시
+            local_conn.commit()
+
+            yield f"data: [완료] 데이터 복사 완료 — 총 {total_rows}건 복사됨\n\n"
+            yield "event: done\ndata: finished\n\n"
+
+        except Exception as e:
+            yield f"data: [오류] {e}\n\n"
+            yield "event: done\ndata: error\n\n"
+        finally:
+            if remote_conn:
+                remote_conn.close()
+            if local_conn:
+                local_conn.close()
+
+    return StreamingResponse(stream(), media_type="text/event-stream")

@@ -153,6 +153,95 @@ def _pykrx_fetch_history(ticker: str, days: int = 365) -> "list[tuple[str, float
         return []
 
 
+# ── KRX 티커 검증/교정 ──────────────────────────────
+
+# 캐시: {종목명: 티커코드, ...} — 세션 중 1회 빌드
+_krx_name_to_ticker: dict[str, str] | None = None
+_krx_ticker_to_name: dict[str, str] | None = None
+
+
+def _build_krx_lookup() -> None:
+    """pykrx에서 KOSPI+KOSDAQ 전 종목의 이름↔티커 매핑 빌드"""
+    global _krx_name_to_ticker, _krx_ticker_to_name
+    if _krx_name_to_ticker is not None:
+        return
+    if pykrx_stock is None:
+        _krx_name_to_ticker = {}
+        _krx_ticker_to_name = {}
+        return
+
+    _krx_name_to_ticker = {}
+    _krx_ticker_to_name = {}
+    today = datetime.now().strftime("%Y%m%d")
+
+    for market in ("KOSPI", "KOSDAQ"):
+        try:
+            tickers = pykrx_stock.get_market_ticker_list(today, market=market)
+            for t in tickers:
+                name = pykrx_stock.get_market_ticker_name(t)
+                if name:
+                    _krx_name_to_ticker[name] = t
+                    _krx_ticker_to_name[t] = name
+        except Exception as e:
+            print(f"  [pykrx] {market} 종목 목록 조회 실패: {e}")
+
+
+def validate_krx_tickers(proposals: list[dict]) -> dict:
+    """KRX 종목의 티커↔이름 교차 검증 및 교정
+
+    Returns:
+        {"corrected": 교정 건수, "invalid": 검증 불가 건수, "details": [...]}
+    """
+    if pykrx_stock is None:
+        return {"corrected": 0, "invalid": 0, "details": []}
+
+    _build_krx_lookup()
+
+    corrected = 0
+    invalid = 0
+    details = []
+
+    for p in proposals:
+        ticker = (p.get("ticker") or "").strip().upper()
+        market = (p.get("market") or "").strip().upper()
+        asset_name = (p.get("asset_name") or "").strip()
+
+        # KRX 종목만 대상
+        if not _is_korean_market(market) or not ticker.isdigit():
+            continue
+
+        # 1) 티커로 실제 종목명 조회
+        actual_name = _krx_ticker_to_name.get(ticker)
+
+        if actual_name and actual_name == asset_name:
+            continue  # 정상
+
+        # 2) 종목명으로 올바른 티커 역조회
+        correct_ticker = _krx_name_to_ticker.get(asset_name)
+
+        if correct_ticker and correct_ticker != ticker:
+            # 교정 가능: 이름 기반으로 올바른 티커 발견
+            old_ticker = ticker
+            p["ticker"] = correct_ticker
+            corrected += 1
+            detail = f"{asset_name}: {old_ticker} → {correct_ticker}"
+            if actual_name:
+                detail += f" (기존 티커는 '{actual_name}')"
+            details.append(detail)
+        elif actual_name and actual_name != asset_name:
+            # 티커는 유효하지만 이름이 다름 → 이름을 교정
+            old_name = asset_name
+            p["asset_name"] = actual_name
+            corrected += 1
+            details.append(f"티커 {ticker}: 이름 '{old_name}' → '{actual_name}'")
+        elif not actual_name and not correct_ticker:
+            # 티커도 이름도 KRX에서 못 찾음
+            invalid += 1
+            details.append(f"{asset_name} ({ticker}): KRX 미등록")
+
+    return {"corrected": corrected, "invalid": invalid, "details": details}
+
+
 # ── 기간별 수익률 계산 ────────────────────────────────
 
 def _calc_period_returns(history: "list[tuple[str, float]]") -> dict:

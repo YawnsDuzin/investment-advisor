@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import proposal_card_compact, theme_header, scenario_grid, indicator_tags, macro_impact_table %}
+{% from "_macros.html" import theme_header, scenario_grid, indicator_tags, macro_impact_table %}
 {% block title %}세션 #{{ session.id }} — AlphaScope{% endblock %}
 {% block page_title %}세션 #{{ session.id }} &middot; {{ session.analysis_date }}{% endblock %}
 {% block header_actions %}<a href="/pages/sessions" class="btn">목록으로</a>{% endblock %}
@@ -68,9 +68,119 @@
 
     {% if theme.proposals %}
     <div style="margin-top:16px;">
-        {% for p in theme.proposals %}
-        {{ proposal_card_compact(p) }}
-        {% endfor %}
+        <div class="table-wrap">
+        <table class="screener-table" style="font-size:13px;">
+            <thead>
+                <tr>
+                    <th>Action</th>
+                    <th>종목</th>
+                    <th>티커</th>
+                    <th>확신도</th>
+                    <th>비중</th>
+                    <th>현재가</th>
+                    <th>목표가</th>
+                    <th>상승여력</th>
+                    <th>Q점수</th>
+                    <th>발굴유형</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in theme.proposals %}
+                <tr class="screener-row" data-idx="t{{ theme.id }}-{{ loop.index0 }}" style="cursor:pointer;">
+                    <td><span class="badge badge-{{ p.action }}">{{ p.action|upper }}</span></td>
+                    <td style="font-weight:600;">{{ p.asset_name }}</td>
+                    <td>
+                        <a href="/pages/proposals/history/{{ p.ticker }}" style="color:var(--accent);" onclick="event.stopPropagation();">{{ p.ticker }}</a>
+                        {% if p.market %}<span style="font-size:11px;color:var(--text-muted);">{{ p.market }}</span>{% endif %}
+                    </td>
+                    <td><span class="badge badge-{{ p.conviction }}">{{ p.conviction }}</span></td>
+                    <td>
+                        <span class="alloc-bar" style="width:40px;"><span class="alloc-bar-fill" style="width:{{ (p.target_allocation|float)|int }}%"></span></span>
+                        {{ p.target_allocation }}%
+                    </td>
+                    <td>{{ p.current_price|fmt_price(p.currency) }}</td>
+                    <td>{% if p.target_price_low and p.target_price_high %}{{ p.target_price_low|fmt_price(p.currency) }}~{{ p.target_price_high|fmt_price(p.currency) }}{% else %}-{% endif %}</td>
+                    <td>
+                        {% if p.upside_pct %}
+                        <span class="{% if p.upside_pct > 0 %}upside-positive{% else %}upside-negative{% endif %}">
+                            {% if p.upside_pct > 0 %}+{% endif %}{{ p.upside_pct }}%
+                        </span>
+                        {% else %}-{% endif %}
+                    </td>
+                    <td>{% if p.quant_score %}<span class="score-display">{{ p.quant_score }}/5</span>{% else %}-{% endif %}</td>
+                    <td>{% if p.discovery_type %}<span style="font-size:12px;padding:2px 8px;border-radius:5px;background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.2);color:var(--green);white-space:nowrap;">{{ p.discovery_type }}</span>{% else %}-{% endif %}</td>
+                </tr>
+                <tr class="detail-row" data-idx="t{{ theme.id }}-{{ loop.index0 }}" style="display:none;">
+                    <td colspan="10" style="padding:0;">
+                        <div style="padding:14px 18px;background:rgba(79,140,255,0.04);border-left:3px solid var(--accent);font-size:14px;line-height:1.7;">
+                            {# 메타 태그 #}
+                            {% if p.sector or p.discovery_type or p.price_momentum_check or p.supply_chain_position or p.vendor_tier or (p.sentiment_score is not none and p.sentiment_score != None) %}
+                            <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+                                {% if p.sector %}
+                                <span style="font-size:12px;padding:3px 10px;border-radius:6px;background:rgba(147,130,255,0.1);border:1px solid rgba(147,130,255,0.2);color:var(--purple);">{{ p.sector }}</span>
+                                {% endif %}
+                                {% if p.discovery_type %}
+                                <span style="font-size:12px;padding:3px 10px;border-radius:6px;background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.2);color:var(--green);">{{ p.discovery_type }}</span>
+                                {% endif %}
+                                {% if p.price_momentum_check %}
+                                <span style="font-size:12px;padding:3px 10px;border-radius:6px;background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.2);color:var(--orange);">모멘텀: {{ p.price_momentum_check }}</span>
+                                {% endif %}
+                                {% if p.supply_chain_position %}
+                                <span style="font-size:12px;padding:3px 10px;border-radius:6px;background:rgba(79,140,255,0.1);border:1px solid rgba(79,140,255,0.2);color:var(--accent);">공급망: {{ p.supply_chain_position }}</span>
+                                {% endif %}
+                                {% if p.vendor_tier %}
+                                <span class="badge badge-tier{{ p.vendor_tier }}" style="font-size:12px;">Tier {{ p.vendor_tier }}</span>
+                                {% endif %}
+                                {% if p.sentiment_score is not none and p.sentiment_score != None %}
+                                <span style="font-size:12px;padding:3px 10px;border-radius:6px;background:rgba(255,255,255,0.05);border:1px solid var(--border);">센티먼트 {{ p.sentiment_score }}</span>
+                                {% endif %}
+                            </div>
+                            {% endif %}
+
+                            {# 기간별 수익률 #}
+                            {% if p.return_1m_pct is not none or p.return_3m_pct is not none or p.return_6m_pct is not none or p.return_1y_pct is not none %}
+                            <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px;padding:10px 14px;background:rgba(255,255,255,0.03);border-radius:8px;border:1px solid var(--border);">
+                                <span style="font-size:11px;color:var(--text-muted);align-self:center;margin-right:4px;">수익률</span>
+                                {% for key, label in [('return_1m_pct', '1개월'), ('return_3m_pct', '3개월'), ('return_6m_pct', '6개월'), ('return_1y_pct', '1년')] %}
+                                {% if p[key] is not none %}
+                                {% set val = p[key] | float %}
+                                {% set color = 'var(--red)' if val < 0 else 'var(--green)' %}
+                                <span style="font-size:13px;font-weight:600;padding:3px 10px;border-radius:6px;background:rgba({% if val < 0 %}239,68,68{% else %}52,211,153{% endif %},0.08);border:1px solid rgba({% if val < 0 %}239,68,68{% else %}52,211,153{% endif %},0.2);color:{{ color }};">
+                                    {{ label }} {% if val > 0 %}+{% endif %}{{ "%.1f"|format(val) }}%
+                                </span>
+                                {% endif %}
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+
+                            {% if p.rationale %}
+                            <div style="margin-bottom:10px;"><strong style="color:var(--text-muted);font-size:12px;text-transform:uppercase;">근거</strong><br>{{ p.rationale|nl_numbered }}</div>
+                            {% endif %}
+                            {% if p.risk_factors %}
+                            <div style="margin-bottom:10px;"><strong style="color:var(--text-muted);font-size:12px;text-transform:uppercase;">리스크</strong><br>{{ p.risk_factors|nl_numbered }}</div>
+                            {% endif %}
+                            {% if p.entry_condition or p.exit_condition %}
+                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:4px;">
+                                {% if p.entry_condition %}
+                                <div><strong style="color:var(--green);font-size:12px;text-transform:uppercase;">진입 조건</strong><br>{{ p.entry_condition }}</div>
+                                {% endif %}
+                                {% if p.exit_condition %}
+                                <div><strong style="color:var(--red);font-size:12px;text-transform:uppercase;">청산 조건</strong><br>{{ p.exit_condition }}</div>
+                                {% endif %}
+                            </div>
+                            {% endif %}
+                            {% if p.has_stock_analysis %}
+                            <div style="margin-top:10px;">
+                                <a href="/proposals/{{ p.id }}/stock-analysis" target="_blank" class="stock-analysis-link">종목 심층분석 보기</a>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        </div>
     </div>
     {% endif %}
 
@@ -79,4 +189,19 @@
     </div>
 </div>
 {% endfor %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+// 제안 테이블 행 클릭 시 상세 행 토글
+document.querySelectorAll('.screener-row').forEach(function(row) {
+    row.addEventListener('click', function() {
+        var idx = row.getAttribute('data-idx');
+        var detail = document.querySelector('.detail-row[data-idx="' + idx + '"]');
+        var isOpen = detail.style.display !== 'none';
+        detail.style.display = isOpen ? 'none' : 'table-row';
+        row.classList.toggle('row-selected', !isOpen);
+    });
+});
+</script>
 {% endblock %}

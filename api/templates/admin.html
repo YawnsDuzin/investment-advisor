@@ -53,6 +53,42 @@
     </div>
 </div>
 
+<!-- 원격 DB 데이터 복사 -->
+<div class="card" style="padding:20px;margin-top:12px;">
+    <div style="margin-bottom:12px;">
+        <div style="font-size:16px;font-weight:600;margin-bottom:4px;">원격 DB 데이터 복사</div>
+        <div style="font-size:13px;color:var(--text-muted);">
+            다른 PostgreSQL DB의 분석 데이터를 로컬로 복사합니다. 기존 로컬 데이터는 삭제됩니다.
+        </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">
+        <div>
+            <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:2px;">호스트</label>
+            <input id="remoteHost" type="text" placeholder="예: 192.168.0.10" style="width:100%;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);box-sizing:border-box;">
+        </div>
+        <div>
+            <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:2px;">포트</label>
+            <input id="remotePort" type="number" value="5432" style="width:100%;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);box-sizing:border-box;">
+        </div>
+        <div>
+            <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:2px;">데이터베이스명</label>
+            <input id="remoteDbname" type="text" value="investment_advisor" style="width:100%;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);box-sizing:border-box;">
+        </div>
+        <div>
+            <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:2px;">사용자</label>
+            <input id="remoteUser" type="text" value="postgres" style="width:100%;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);box-sizing:border-box;">
+        </div>
+        <div style="grid-column:1/3;">
+            <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:2px;">비밀번호</label>
+            <input id="remotePassword" type="password" placeholder="비밀번호 입력" style="width:100%;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);box-sizing:border-box;">
+        </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;">
+        <span id="copyBadge" class="admin-status admin-status-idle">대기</span>
+        <button id="btnCopy" class="btn btn-primary" onclick="copyFromRemote()">데이터 복사</button>
+    </div>
+</div>
+
 <!-- 진행률 표시 -->
 <div id="progressSection" style="display:none;margin-bottom:18px;">
     <div class="admin-progress-bar">
@@ -342,6 +378,74 @@ function resetAllData() {
             appendLog('[오류] 데이터 삭제 실패: ' + err.message, 'error');
             alert('삭제 실패: ' + err.message);
         });
+}
+
+// ── 원격 DB 데이터 복사 ──
+const btnCopy = document.getElementById('btnCopy');
+const copyBadge = document.getElementById('copyBadge');
+
+function copyFromRemote() {
+    const host = document.getElementById('remoteHost').value.trim();
+    const port = parseInt(document.getElementById('remotePort').value) || 5432;
+    const dbname = document.getElementById('remoteDbname').value.trim();
+    const user = document.getElementById('remoteUser').value.trim();
+    const password = document.getElementById('remotePassword').value;
+
+    if (!host || !dbname || !user) {
+        alert('호스트, 데이터베이스명, 사용자는 필수 입력입니다.');
+        return;
+    }
+
+    if (!confirm('원격 DB의 데이터를 로컬로 복사합니다.\n\n⚠️ 기존 로컬 분석 데이터는 모두 삭제됩니다.\n\n계속하시겠습니까?')) return;
+
+    btnCopy.disabled = true;
+    copyBadge.className = 'admin-status admin-status-running';
+    copyBadge.textContent = '복사 중';
+
+    fetch('/admin/copy-from-remote', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ host, port, dbname, user, password }),
+    }).then(response => {
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        function read() {
+            reader.read().then(({ done, value }) => {
+                if (done) {
+                    copyBadge.className = 'admin-status admin-status-idle';
+                    copyBadge.textContent = '대기';
+                    btnCopy.disabled = false;
+                    return;
+                }
+
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop();
+
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        const text = line.substring(6);
+                        if (text) appendLog(text);
+                    } else if (line.startsWith('event: done')) {
+                        copyBadge.className = 'admin-status admin-status-idle';
+                        copyBadge.textContent = '대기';
+                        btnCopy.disabled = false;
+                    }
+                }
+
+                read();
+            });
+        }
+
+        read();
+    }).catch(err => {
+        appendLog('[오류] 데이터 복사 실패: ' + err.message, 'error');
+        copyBadge.className = 'admin-status admin-status-idle';
+        copyBadge.textContent = '대기';
+        btnCopy.disabled = false;
+    });
 }
 
 // 페이지 로드 시: 실행 중이면 기존 로그 복원 + 실시간 구독
