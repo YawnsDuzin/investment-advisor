@@ -5,7 +5,7 @@ from psycopg2.extras import execute_values, RealDictCursor
 from shared.config import DatabaseConfig
 
 # ── 스키마 버전 관리 ──────────────────────────────
-SCHEMA_VERSION = 16  # v1~v5: 분석 테이블, v6: 테마 채팅, v7: 뉴스 기사, v8: 뉴스 한글 번역, v9: 요약 한글 번역, v10: price_source, v11: JWT 인증, v12: 개인화(워치리스트/구독/알림/메모), v13: AI theme_key, v14: 기간별 수익률, v15: 일별 Top Picks, v16: 구독 티어(users.tier)
+SCHEMA_VERSION = 17  # v1~v5: 분석 테이블, v6: 테마 채팅, v7: 뉴스 기사, v8: 뉴스 한글 번역, v9: 요약 한글 번역, v10: price_source, v11: JWT 인증, v12: 개인화(워치리스트/구독/알림/메모), v13: AI theme_key, v14: 기간별 수익률, v15: 일별 Top Picks, v16: 구독 티어(users.tier), v17: 관리자 감사 로그(admin_audit_logs)
 
 
 def _ensure_database(cfg: DatabaseConfig) -> None:
@@ -621,6 +621,48 @@ def _migrate_to_v16(cur) -> None:
     print("[DB] v16 마이그레이션 완료 — users.tier/tier_expires_at 컬럼 추가")
 
 
+def _migrate_to_v17(cur) -> None:
+    """v17: 관리자 감사 로그 — admin_audit_logs 테이블
+
+    actor/target 이메일을 denormalize해 계정 삭제 후에도 이력 유지.
+    action 구분: tier_change / role_change / status_change / password_reset / user_delete.
+    """
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS admin_audit_logs (
+            id SERIAL PRIMARY KEY,
+            actor_id INT REFERENCES users(id) ON DELETE SET NULL,
+            actor_email VARCHAR(255),
+            target_user_id INT REFERENCES users(id) ON DELETE SET NULL,
+            target_email VARCHAR(255),
+            action VARCHAR(40) NOT NULL,
+            before_state JSONB,
+            after_state JSONB,
+            reason TEXT,
+            created_at TIMESTAMP DEFAULT NOW()
+        );
+    """)
+
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_admin_audit_logs_created
+            ON admin_audit_logs(created_at DESC);
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_admin_audit_logs_target
+            ON admin_audit_logs(target_user_id);
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_admin_audit_logs_action
+            ON admin_audit_logs(action);
+    """)
+
+    cur.execute("""
+        INSERT INTO schema_version (version) VALUES (17)
+        ON CONFLICT (version) DO NOTHING;
+    """)
+
+    print("[DB] v17 마이그레이션 완료 — admin_audit_logs 테이블 생성")
+
+
 def init_db(cfg: DatabaseConfig) -> None:
     """PostgreSQL 설치 확인 → 데이터베이스 생성 → 스키마 마이그레이션"""
     from shared.pg_setup import ensure_postgresql
@@ -680,6 +722,9 @@ def init_db(cfg: DatabaseConfig) -> None:
 
             if current < 16:
                 _migrate_to_v16(cur)
+
+            if current < 17:
+                _migrate_to_v17(cur)
 
         conn.commit()
         print("[DB] 테이블 초기화 완료")

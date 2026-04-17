@@ -9,6 +9,7 @@
         padding: 10px 12px; text-align: left;
         border-bottom: 1px solid var(--border);
         font-size: 13px;
+        vertical-align: top;
     }
     .user-table th { color: var(--text-muted); font-weight: 600; }
     .user-table tr:hover { background: var(--bg-card-hover); }
@@ -29,6 +30,22 @@
     .action-btn:hover { background: var(--bg-card-hover); }
     .action-btn.danger { border-color: var(--red); color: var(--red); }
     .action-btn.danger:hover { background: rgba(248,113,113,0.1); }
+    .action-btn.primary { border-color: var(--accent); color: var(--accent); }
+    .action-btn.primary:hover { background: rgba(79,140,255,0.1); }
+    .tier-controls {
+        display: flex; flex-wrap: wrap; gap: 4px; align-items: center;
+        margin-top: 4px; padding-top: 4px;
+        border-top: 1px dashed var(--border);
+    }
+    .tier-controls select, .tier-controls input {
+        padding: 3px 6px; border: 1px solid var(--border); border-radius: 4px;
+        background: var(--bg); color: var(--text); font-size: 12px;
+    }
+    .tier-controls label { font-size: 11px; color: var(--text-muted); }
+    .expiry-text {
+        display: block; font-size: 11px; color: var(--text-muted); margin-top: 2px;
+    }
+    .expiry-text.expired { color: var(--red); }
     .pagination { margin-top: 20px; text-align: center; }
     .pagination a, .pagination span {
         display: inline-block; padding: 6px 12px; margin: 0 2px;
@@ -43,13 +60,27 @@
     }
     .result-msg.success { background: rgba(52,211,153,0.15); color: var(--green); display: block; }
     .result-msg.error { background: rgba(248,113,113,0.15); color: var(--red); display: block; }
+    .topbar {
+        display: flex; justify-content: space-between; align-items: center;
+        margin-bottom: 14px;
+    }
+    .topbar-links a {
+        font-size: 13px; margin-left: 10px; color: var(--accent);
+    }
 </style>
 
 <div id="resultMsg" class="result-msg"></div>
 
-<p style="margin-bottom:16px;color:var(--text-muted);font-size:14px;">
-    전체 {{ total }}명 ({{ page }}/{{ total_pages }} 페이지)
-</p>
+<div class="topbar">
+    <p style="color:var(--text-muted);font-size:14px;margin:0;">
+        전체 {{ total }}명 ({{ page }}/{{ total_pages }} 페이지)
+    </p>
+    <div class="topbar-links">
+        {% if current_user and current_user.role == 'admin' %}
+        <a href="/admin/users/audit-logs">감사 로그 →</a>
+        {% endif %}
+    </div>
+</div>
 
 <table class="user-table">
     <thead>
@@ -59,9 +90,9 @@
             <th>닉네임</th>
             <th>역할</th>
             <th>상태</th>
+            <th>티어</th>
             <th>채팅</th>
             <th>가입일</th>
-            <th>최근 로그인</th>
             <th>관리</th>
         </tr>
     </thead>
@@ -81,11 +112,21 @@
                 <span class="badge badge-inactive">비활성</span>
                 {% endif %}
             </td>
+            <td>
+                {% set t = u.tier or 'free' %}
+                {% set label = tier_info[t].label_ko if tier_info and t in tier_info else t %}
+                {% set color = tier_info[t].badge_color if tier_info and t in tier_info else t %}
+                <span class="badge-plan badge-plan-{{ color }}">{{ label }}</span>
+                {% if u.tier_expires_at and t != 'free' %}
+                <span class="expiry-text">만료: {{ u.tier_expires_at[:10] }}</span>
+                {% elif t != 'free' %}
+                <span class="expiry-text">영구</span>
+                {% endif %}
+            </td>
             <td class="stats">
                 세션 {{ u.chat_session_count }} / 메시지 {{ u.chat_message_count }}
             </td>
             <td style="font-size:12px;">{{ u.created_at[:10] if u.created_at else '-' }}</td>
-            <td style="font-size:12px;">{{ u.last_login_at[:10] if u.last_login_at else '-' }}</td>
             <td>
                 {% if current_user and u.id != current_user.id %}
                     {# 역할 변경 #}
@@ -108,6 +149,20 @@
                     {% if current_user.role == 'admin' %}
                     <button class="action-btn" onclick="resetPassword({{ u.id }})">PW초기화</button>
                     <button class="action-btn danger" onclick="deleteUser({{ u.id }}, '{{ u.email }}')">삭제</button>
+
+                    <div class="tier-controls">
+                        <label for="tier-{{ u.id }}">티어</label>
+                        <select id="tier-{{ u.id }}">
+                            {% for vt in valid_tiers %}
+                            <option value="{{ vt }}" {% if u.tier == vt %}selected{% endif %}>{{ tier_info[vt].label_ko }}</option>
+                            {% endfor %}
+                        </select>
+                        <label for="tier-exp-{{ u.id }}">만료</label>
+                        <input type="date" id="tier-exp-{{ u.id }}"
+                               value="{{ u.tier_expires_at[:10] if u.tier_expires_at else '' }}"
+                               title="비워두면 영구 (free는 무시)">
+                        <button class="action-btn primary" onclick="changeTier({{ u.id }})">적용</button>
+                    </div>
                     {% endif %}
                 {% else %}
                     <span style="font-size:12px;color:var(--text-muted);">본인</span>
@@ -147,40 +202,76 @@ function showMsg(text, isError) {
     setTimeout(() => { el.style.display = 'none'; el.className = 'result-msg'; }, 5000);
 }
 
+async function promptReason(defaultText) {
+    // 감사 로그에 남길 사유. 취소 시 요청도 취소.
+    const input = prompt('사유를 입력하세요 (감사 로그용, 선택):', defaultText || '');
+    if (input === null) return { cancelled: true };
+    return { cancelled: false, value: input.trim() };
+}
+
+function qs(params) {
+    return new URLSearchParams(params).toString();
+}
+
 async function changeRole(userId, role) {
+    const r = await promptReason(`역할을 ${role}로 변경`);
+    if (r.cancelled) { location.reload(); return; }
     try {
-        const r = await fetch(`/admin/users/${userId}/role?role=${role}`, { method: 'PATCH' });
-        const d = await r.json();
-        if (r.ok) { showMsg(d.message, false); setTimeout(() => location.reload(), 1000); }
+        const resp = await fetch(`/admin/users/${userId}/role?` + qs({ role, reason: r.value }), { method: 'PATCH' });
+        const d = await resp.json();
+        if (resp.ok) { showMsg(d.message, false); setTimeout(() => location.reload(), 800); }
         else showMsg(d.detail || '오류 발생', true);
     } catch(e) { showMsg('요청 실패', true); }
 }
 
 async function changeStatus(userId, isActive) {
+    const r = await promptReason(isActive ? '계정 재활성화' : '계정 비활성화');
+    if (r.cancelled) return;
     try {
-        const r = await fetch(`/admin/users/${userId}/status?is_active=${isActive}`, { method: 'PATCH' });
-        const d = await r.json();
-        if (r.ok) { showMsg(d.message, false); setTimeout(() => location.reload(), 1000); }
+        const resp = await fetch(`/admin/users/${userId}/status?` + qs({ is_active: isActive, reason: r.value }), { method: 'PATCH' });
+        const d = await resp.json();
+        if (resp.ok) { showMsg(d.message, false); setTimeout(() => location.reload(), 800); }
+        else showMsg(d.detail || '오류 발생', true);
+    } catch(e) { showMsg('요청 실패', true); }
+}
+
+async function changeTier(userId) {
+    const tier = document.getElementById(`tier-${userId}`).value;
+    const expRaw = document.getElementById(`tier-exp-${userId}`).value;  // YYYY-MM-DD
+    const r = await promptReason(`티어 ${tier} 부여`);
+    if (r.cancelled) return;
+
+    const params = { tier, reason: r.value };
+    if (expRaw) params.expires_at = expRaw;
+
+    try {
+        const resp = await fetch(`/admin/users/${userId}/tier?` + qs(params), { method: 'PATCH' });
+        const d = await resp.json();
+        if (resp.ok) { showMsg(d.message, false); setTimeout(() => location.reload(), 800); }
         else showMsg(d.detail || '오류 발생', true);
     } catch(e) { showMsg('요청 실패', true); }
 }
 
 async function resetPassword(userId) {
     if (!confirm('임시 비밀번호를 발급하시겠습니까?')) return;
+    const r = await promptReason('비밀번호 초기화');
+    if (r.cancelled) return;
     try {
-        const r = await fetch(`/admin/users/${userId}/reset-password`, { method: 'POST' });
-        const d = await r.json();
-        if (r.ok) { showMsg(`임시 비밀번호: ${d.temp_password}`, false); }
+        const resp = await fetch(`/admin/users/${userId}/reset-password?` + qs({ reason: r.value }), { method: 'POST' });
+        const d = await resp.json();
+        if (resp.ok) { showMsg(`임시 비밀번호: ${d.temp_password}`, false); }
         else showMsg(d.detail || '오류 발생', true);
     } catch(e) { showMsg('요청 실패', true); }
 }
 
 async function deleteUser(userId, email) {
     if (!confirm(`정말 ${email} 계정을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`)) return;
+    const r = await promptReason('계정 삭제');
+    if (r.cancelled) return;
     try {
-        const r = await fetch(`/admin/users/${userId}`, { method: 'DELETE' });
-        const d = await r.json();
-        if (r.ok) { showMsg(d.message, false); document.getElementById(`user-row-${userId}`).remove(); }
+        const resp = await fetch(`/admin/users/${userId}?` + qs({ reason: r.value }), { method: 'DELETE' });
+        const d = await resp.json();
+        if (resp.ok) { showMsg(d.message, false); document.getElementById(`user-row-${userId}`).remove(); }
         else showMsg(d.detail || '오류 발생', true);
     } catch(e) { showMsg('요청 실패', true); }
 }

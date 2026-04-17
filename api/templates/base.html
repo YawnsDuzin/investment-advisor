@@ -103,6 +103,7 @@
                             <a href="/admin/users" class="user-dropdown-item">사용자 관리</a>
                             {% endif %}
                             {% if current_user.role == 'admin' %}
+                            <a href="/admin/users/audit-logs" class="user-dropdown-item">감사 로그</a>
                             <a href="/admin" class="user-dropdown-item">관리자 메뉴</a>
                             <a href="/docs" target="_blank" class="user-dropdown-item">API Docs</a>
                             {% endif %}
