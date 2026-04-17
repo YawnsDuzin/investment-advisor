@@ -171,6 +171,9 @@
         {% endif %}
     </span>
     <span style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        {% if theme.confidence_score is not none %}
+        {{ grade_badge(theme.confidence_score) }}
+        {% endif %}
         {% if theme.theme_type %}
         <span class="badge badge-{{ theme.theme_type }}">{{ theme.theme_type }}</span>
         {% endif %}
@@ -242,3 +245,32 @@
 </div>
 {% endif %}
 {% endmacro %}
+
+
+{# ── 신뢰도/확신도 기반 등급 배지 (S/A/B/C/D) ── #}
+{#
+ * 점수를 S/A/B/C/D 5단계로 환산하는 헬퍼 매크로.
+ * - score: 0.0 ~ 1.0 범위의 float (theme.confidence_score, proposal 등급 등)
+ * - S(≥0.85) A(≥0.70) B(≥0.55) C(≥0.40) D(그 외)
+ * 사용 예: {{ grade_badge(theme.confidence_score) }}
+#}
+{% macro grade_badge(score, label=None) -%}
+{%- if score is none -%}
+{%- set letter = '—' -%}
+{%- set level = 'none' -%}
+{%- else -%}
+{%- set s = score|float -%}
+{%- if s >= 0.85 -%}
+{%- set letter = 'S' -%}{% set level = 's' %}
+{%- elif s >= 0.70 -%}
+{%- set letter = 'A' -%}{% set level = 'a' %}
+{%- elif s >= 0.55 -%}
+{%- set letter = 'B' -%}{% set level = 'b' %}
+{%- elif s >= 0.40 -%}
+{%- set letter = 'C' -%}{% set level = 'c' %}
+{%- else -%}
+{%- set letter = 'D' -%}{% set level = 'd' %}
+{%- endif -%}
+{%- endif -%}
+<span class="grade-badge grade-badge-{{ level }}" title="신뢰도 {{ (score|float * 100)|round|int if score is not none else '' }}%">{{ letter }}{% if label %} <span class="grade-badge-label">{{ label }}</span>{% endif %}</span>
+{%- endmacro %}

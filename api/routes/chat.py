@@ -1,14 +1,19 @@
 """테마 채팅 API — 대화 세션 CRUD + 메시지 전송"""
 from typing import Optional
+from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from shared.config import DatabaseConfig
 from shared.db import get_connection
+from shared.tier_limits import get_chat_daily_limit, is_unlimited
 from psycopg2.extras import RealDictCursor
 from api.routes.sessions import _serialize_row
 from api.chat_engine import build_theme_context, query_theme_chat_sync
-from api.auth.dependencies import require_role
+from api.auth.dependencies import require_role, quota_exceeded_detail
 from api.auth.models import UserInDB
+
+# 서비스 운영 타임존 — 일일 한도는 KST 기준으로 리셋
+_KST = timezone(timedelta(hours=9))
 
 router = APIRouter(prefix="/chat", tags=["채팅"])
 
@@ -179,6 +184,39 @@ def send_message(session_id: int, body: ChatMessageRequest, user: Optional[UserI
             # 소유권 검증 (Admin은 모든 세션에 메시지 전송 가능)
             if user and user.role != "admin" and session.get("user_id") != user.id:
                 raise HTTPException(status_code=403, detail="본인의 채팅 세션에만 메시지를 보낼 수 있습니다")
+
+            # 일일 턴 한도 체크 (admin/moderator는 무제한, 일반 사용자는 티어 기반)
+            # 참고: 현재 세션 생성이 require_role("admin","moderator")로 막혀있어 일반 user는 이 경로까지 오지 못한다.
+            # 향후 session 생성을 tier 기반으로 완화하면 이 한도 체크가 실질 동작한다.
+            if user and user.role == "user":
+                tier = user.effective_tier()
+                daily_limit = get_chat_daily_limit(tier)
+                if not is_unlimited(daily_limit):
+                    # KST 기준 '오늘 자정' 이후 카운트 — 서버/DB 타임존에 무관하게 일관
+                    today_kst_start = datetime.now(_KST).replace(hour=0, minute=0, second=0, microsecond=0)
+                    cur.execute(
+                        """SELECT COUNT(*) AS c FROM theme_chat_messages m
+                           JOIN theme_chat_sessions s ON m.chat_session_id = s.id
+                           WHERE s.user_id = %s AND m.role = 'user'
+                             AND m.created_at >= %s""",
+                        (user.id, today_kst_start),
+                    )
+                    today_count = cur.fetchone()["c"]
+                    if today_count >= (daily_limit or 0):
+                        raise HTTPException(
+                            status_code=402,
+                            detail=quota_exceeded_detail(
+                                feature="chat",
+                                current_tier=tier,
+                                usage=today_count,
+                                limit=daily_limit,
+                                message=(
+                                    "오늘 채팅 턴 수를 모두 사용했습니다."
+                                    if daily_limit and daily_limit > 0
+                                    else "AI 채팅은 Pro 이상 플랜에서 이용 가능합니다."
+                                ),
+                            ),
+                        )
 
             theme_id = session["theme_id"]
 

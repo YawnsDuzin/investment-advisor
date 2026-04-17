@@ -1,9 +1,13 @@
 {% extends "base.html" %}
-{% from "_macros.html" import theme_header, indicator_tags %}
+{% from "_macros.html" import theme_header, indicator_tags, grade_badge %}
+{% from "partials/_ad_slot.html" import ad_slot %}
 {% block title %}Dashboard — AlphaScope{% endblock %}
 {% block page_title %}Dashboard{% endblock %}
 
 {% block content %}
+{# Free 사용자에게만 렌더 (tier 기준) #}
+{{ ad_slot('banner') }}
+
 {% if session %}
 <!-- 시장 요약 (구조화) -->
 <div class="market-summary">
@@ -81,6 +85,66 @@
         <div class="stat-label">총 비중</div>
     </div>
 </div>
+
+<!-- Track Record 위젯 — 기간 토글(1M/3M/6M/1Y) (UI-11) -->
+<div class="dash-tr-widget">
+    <div class="dash-tr-left">
+        <div class="dash-tr-icon" aria-hidden="true">📈</div>
+        <div class="dash-tr-text">
+            <div class="dash-tr-title">Track Record</div>
+            <div class="dash-tr-summary" id="dash-tr-summary">
+                AI 추천 종목의 기간별 승률·평균 수익률을 확인하세요.
+            </div>
+        </div>
+    </div>
+    <div class="dash-tr-right">
+        <div class="dash-tr-tabs" role="tablist" aria-label="기간 선택">
+            <button type="button" class="dash-tr-tab" data-period="1m" role="tab">1M</button>
+            <button type="button" class="dash-tr-tab active" data-period="3m" role="tab" aria-selected="true">3M</button>
+            <button type="button" class="dash-tr-tab" data-period="6m" role="tab">6M</button>
+            <button type="button" class="dash-tr-tab" data-period="1y" role="tab">1Y</button>
+        </div>
+        <a href="/pages/track-record" class="btn btn-primary" style="white-space:nowrap;">자세히 →</a>
+    </div>
+</div>
+<script>
+(function() {
+    var cache = null;
+    var labelByKey = { '1m': '1M', '3m': '3M', '6m': '6M', '1y': '1Y' };
+
+    function render(period) {
+        if (!cache) return;
+        var p = (cache.overview && cache.overview.periods && cache.overview.periods[period]) || {};
+        var el = document.getElementById('dash-tr-summary');
+        if (!el) return;
+        if (!p.win_rate_pct && !p.n) {
+            el.textContent = labelByKey[period] + ' 샘플 없음 · 과거 모멘텀 기준';
+            return;
+        }
+        var avg = (p.avg_return_pct != null) ?
+            (p.avg_return_pct >= 0 ? '+' : '') + p.avg_return_pct.toFixed(2) + '%' : '—';
+        el.textContent = labelByKey[period] + ' 승률 ' + (p.win_rate_pct != null ? p.win_rate_pct.toFixed(1) : '-') +
+            '% · 평균 ' + avg + ' (샘플 ' + (p.n || 0) + '건)';
+    }
+
+    document.querySelectorAll('.dash-tr-tab').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            document.querySelectorAll('.dash-tr-tab').forEach(function(b) {
+                b.classList.remove('active');
+                b.setAttribute('aria-selected', 'false');
+            });
+            btn.classList.add('active');
+            btn.setAttribute('aria-selected', 'true');
+            render(btn.getAttribute('data-period'));
+        });
+    });
+
+    fetch('/api/track-record/summary')
+        .then(function(r) { return r.ok ? r.json() : null; })
+        .then(function(data) { cache = data; render('3m'); })
+        .catch(function() { /* 조용히 무시 */ });
+})();
+</script>
 
 <!-- 발굴 유형 분포 + 주요 섹터 -->
 <div class="summary-insights">
@@ -265,6 +329,9 @@
 {% endif %}
 
 <!-- 투자 테마 (Dashboard: 요약 — 테마 설명 + 종목 태그) -->
+{# Free 한도: 앞의 themes_free_limit(기본 2)개까지만 완전 노출, 이후는 블러 + CTA (UI-11) #}
+{% set free_theme_limit = 2 %}
+{% set is_free = (tier or 'free') == 'free' %}
 <div class="section-title">투자 테마
     <a href="/pages/sessions/{{ session.id }}" class="btn btn-primary" style="float:right;font-size:12px;padding:4px 12px;">상세 보기</a>
 </div>
@@ -273,7 +340,15 @@
 {% for t in active_tracking %}
     {% if t.theme_name == theme.theme_name %}{% set tk = t %}{% endif %}
 {% endfor %}
-<div class="card">
+{% set locked = is_free and loop.index0 >= free_theme_limit %}
+<div class="card {% if locked %}card-locked{% endif %}" {% if locked %}aria-hidden="true"{% endif %}>
+    {% if locked %}
+    <div class="card-lock-overlay">
+        <div class="card-lock-icon" aria-hidden="true">🔒</div>
+        <div class="card-lock-title">Pro로 업그레이드하고 모든 테마 열람</div>
+        <a href="/pages/pricing" class="btn btn-primary" style="margin-top:10px;">업그레이드 →</a>
+    </div>
+    {% endif %}
     {{ theme_header(theme, tk if tk else none) }}
     <div class="detail-text">{{ theme.description }}</div>
     {{ indicator_tags(theme.key_indicators) }}

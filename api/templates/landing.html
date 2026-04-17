@@ -1,0 +1,242 @@
+{% extends "base.html" %}
+{% block title %}AlphaScope — AI 투자 분석 SaaS{% endblock %}
+{% block page_title %}AlphaScope{% endblock %}
+
+{% block head %}
+<style>
+    .lp-hero {
+        padding: 40px 24px 30px;
+        text-align: center;
+        background: linear-gradient(180deg, rgba(79,140,255,0.06), transparent 80%);
+        border-radius: 16px;
+        margin-bottom: 28px;
+    }
+    .lp-hero h2 {
+        font-size: 30px;
+        font-weight: 800;
+        margin: 0 0 10px;
+        background: linear-gradient(135deg, var(--accent), var(--purple));
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+        line-height: 1.3;
+    }
+    .lp-hero p {
+        font-size: 15px;
+        color: var(--text-muted);
+        max-width: 620px;
+        margin: 0 auto 18px;
+        line-height: 1.7;
+    }
+    .lp-cta-row {
+        display: flex;
+        justify-content: center;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+    .lp-cta-row .btn {
+        min-width: 140px;
+        padding: 12px 22px;
+        font-size: 14px;
+    }
+
+    .lp-section { margin: 32px 0; }
+    .lp-section-title {
+        font-size: 18px;
+        font-weight: 700;
+        margin-bottom: 14px;
+    }
+
+    .lp-features {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 14px;
+    }
+    .lp-feature {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 18px;
+    }
+    .lp-feature-icon { font-size: 26px; margin-bottom: 8px; }
+    .lp-feature-title {
+        font-weight: 700;
+        font-size: 14px;
+        margin-bottom: 4px;
+    }
+    .lp-feature-desc {
+        font-size: 12px;
+        color: var(--text-muted);
+        line-height: 1.6;
+    }
+
+    .lp-tr-preview {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 12px;
+    }
+    .lp-tr-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 14px;
+        text-align: center;
+    }
+    .lp-tr-card-label { font-size: 11px; color: var(--text-muted); font-weight: 600; letter-spacing: 1px; }
+    .lp-tr-card-value { font-size: 22px; font-weight: 700; margin: 6px 0 2px; }
+    .lp-tr-card-sub { font-size: 11px; color: var(--text-muted); }
+    .lp-tr-hint {
+        text-align: center;
+        font-size: 12px;
+        color: var(--text-muted);
+        margin-top: 12px;
+    }
+
+    .lp-pricing-teaser {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+    }
+    .lp-plan {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 16px;
+        text-align: center;
+    }
+    .lp-plan.highlight { border-color: rgba(79,140,255,0.55); }
+    .lp-plan-name { font-weight: 700; font-size: 15px; }
+    .lp-plan-price { font-size: 22px; font-weight: 700; margin: 8px 0 2px; }
+    .lp-plan-price small { font-size: 12px; color: var(--text-muted); font-weight: 500; }
+    .lp-plan-desc { font-size: 11px; color: var(--text-muted); }
+
+    @media (max-width: 768px) {
+        .lp-hero { padding: 28px 16px 20px; }
+        .lp-hero h2 { font-size: 22px; }
+        .lp-features,
+        .lp-tr-preview,
+        .lp-pricing-teaser { grid-template-columns: 1fr; }
+        .lp-tr-preview { grid-template-columns: repeat(2, 1fr); }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Hero -->
+<section class="lp-hero">
+    <h2>매일 아침, AI가 선별한 투자 인사이트</h2>
+    <p>
+        RSS 뉴스 자동 수집 → Claude 기반 멀티스테이지 분석 → 테마·종목·시나리오까지.<br>
+        한국과 해외 시장을 동시에 커버하는 AI 투자 분석 SaaS.
+    </p>
+    <div class="lp-cta-row">
+        <a href="/auth/register" class="btn btn-primary">무료로 시작하기</a>
+        <a href="/pages/pricing" class="btn">플랜 비교 →</a>
+        <a href="/pages/track-record" class="btn">성과 확인</a>
+    </div>
+</section>
+
+<!-- 핵심 기능 3가지 -->
+<section class="lp-section">
+    <div class="lp-section-title">🎯 AlphaScope가 제공하는 것</div>
+    <div class="lp-features">
+        <div class="lp-feature">
+            <div class="lp-feature-icon">🧠</div>
+            <div class="lp-feature-title">AI 멀티스테이지 분석</div>
+            <div class="lp-feature-desc">
+                뉴스 → 이슈 → 테마 → 시나리오 → 종목 심층분석까지 매일 자동 실행.
+                컨센서스·얼리시그널·컨트래리안·딥밸류 4분류 체계.
+            </div>
+        </div>
+        <div class="lp-feature">
+            <div class="lp-feature-icon">🌏</div>
+            <div class="lp-feature-title">한국 + 해외 동시 커버</div>
+            <div class="lp-feature-desc">
+                pykrx(한국) + yfinance(해외) 결합, 매크로 시나리오까지 한 화면.
+                원화·달러 가격 통일 포맷, 한국어 분석 리포트.
+            </div>
+        </div>
+        <div class="lp-feature">
+            <div class="lp-feature-icon">📊</div>
+            <div class="lp-feature-title">공개 트랙레코드</div>
+            <div class="lp-feature-desc">
+                AI 추천의 기간별 승률·평균 수익률을 공개합니다.
+                무료 사용자도 열람 가능 — 신뢰 자산이 우리의 첫 번째 가치입니다.
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- 트랙레코드 미리보기 -->
+<section class="lp-section">
+    <div class="lp-section-title">📈 최근 트랙레코드</div>
+    <div class="lp-tr-preview" id="lp-tr-preview">
+        <div class="lp-tr-card">
+            <div class="lp-tr-card-label">1M</div>
+            <div class="lp-tr-card-value" data-period="1m">—</div>
+            <div class="lp-tr-card-sub">승률</div>
+        </div>
+        <div class="lp-tr-card">
+            <div class="lp-tr-card-label">3M</div>
+            <div class="lp-tr-card-value" data-period="3m">—</div>
+            <div class="lp-tr-card-sub">승률</div>
+        </div>
+        <div class="lp-tr-card">
+            <div class="lp-tr-card-label">6M</div>
+            <div class="lp-tr-card-value" data-period="6m">—</div>
+            <div class="lp-tr-card-sub">승률</div>
+        </div>
+        <div class="lp-tr-card">
+            <div class="lp-tr-card-label">1Y</div>
+            <div class="lp-tr-card-value" data-period="1y">—</div>
+            <div class="lp-tr-card-sub">승률</div>
+        </div>
+    </div>
+    <div class="lp-tr-hint">
+        * 수익률은 추천 당일 기준의 과거 N개월 모멘텀 지표입니다.
+        <a href="/pages/track-record" style="color:var(--accent);">전체 트랙레코드 보기 →</a>
+    </div>
+</section>
+
+<!-- 요금제 티저 -->
+<section class="lp-section">
+    <div class="lp-section-title">💎 나에게 맞는 플랜</div>
+    <div class="lp-pricing-teaser">
+        <div class="lp-plan">
+            <div class="lp-plan-name">Free</div>
+            <div class="lp-plan-price">₩0 <small>/월</small></div>
+            <div class="lp-plan-desc">당일 요약 + 테마 2건 열람</div>
+        </div>
+        <div class="lp-plan highlight">
+            <div class="lp-plan-name">Pro</div>
+            <div class="lp-plan-price">₩9,900 <small>/월</small></div>
+            <div class="lp-plan-desc">전체 테마·제안 · 관심 종목 30개</div>
+        </div>
+        <div class="lp-plan">
+            <div class="lp-plan-name">Premium</div>
+            <div class="lp-plan-price">₩29,900 <small>/월</small></div>
+            <div class="lp-plan-desc">무제한 + API + 모닝 브리핑</div>
+        </div>
+    </div>
+    <div class="lp-cta-row" style="margin-top:18px;">
+        <a href="/pages/pricing" class="btn btn-primary">모든 플랜 비교 →</a>
+    </div>
+</section>
+
+<script>
+(function() {
+    fetch('/api/track-record/summary')
+        .then(function(r) { return r.ok ? r.json() : null; })
+        .then(function(data) {
+            if (!data || !data.overview || !data.overview.periods) return;
+            document.querySelectorAll('#lp-tr-preview [data-period]').forEach(function(el) {
+                var p = data.overview.periods[el.getAttribute('data-period')] || {};
+                if (p.win_rate_pct != null) {
+                    el.textContent = p.win_rate_pct.toFixed(1) + '%';
+                }
+            });
+        })
+        .catch(function() { /* 조용히 무시 */ });
+})();
+</script>
+{% endblock %}

@@ -106,6 +106,31 @@
             <span class="info-value">{{ current_user.role }}</span>
         </div>
         <div class="info-row">
+            <span class="info-label">플랜</span>
+            <span class="info-value">
+                <span class="badge-plan badge-plan-{{ tier_badge_color }}">{{ tier_label or 'Free' }}</span>
+                {% if current_user.tier_expires_at %}
+                <span style="font-size:11px;color:var(--text-muted);margin-left:8px;">
+                    만료 {{ current_user.tier_expires_at.strftime('%Y-%m-%d') }}
+                </span>
+                {% endif %}
+                <a href="/pages/pricing" style="margin-left:10px;font-size:12px;color:var(--accent);">플랜 비교 →</a>
+            </span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">사용량</span>
+            <span class="info-value" style="display:flex;gap:16px;flex-wrap:wrap;">
+                <span style="font-size:13px;">
+                    관심 종목 <strong>{{ watchlist_usage }}</strong>
+                    {% if watchlist_limit %} / {{ watchlist_limit }}{% else %} (무제한){% endif %}
+                </span>
+                <span style="font-size:13px;">
+                    알림 구독 <strong>{{ subscription_usage }}</strong>
+                    {% if subscription_limit %} / {{ subscription_limit }}{% else %} (무제한){% endif %}
+                </span>
+            </span>
+        </div>
+        <div class="info-row">
             <span class="info-label">가입일</span>
             <span class="info-value">{{ current_user.created_at.strftime('%Y-%m-%d') }}</span>
         </div>

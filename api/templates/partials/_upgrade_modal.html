@@ -1,0 +1,17 @@
+{# 공용 업그레이드 유도 모달 — base.html에서 include 후 fetch 인터셉터가 402 감지 시 호출 #}
+<div id="upgrade-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="upgrade-modal-title" aria-hidden="true">
+    <div class="modal-box">
+        <button type="button" class="modal-close" onclick="closeUpgradeModal()" aria-label="닫기">&times;</button>
+        <div class="modal-icon" aria-hidden="true">⭐</div>
+        <h2 id="upgrade-modal-title" class="modal-title">사용 한도를 초과했어요</h2>
+        <p class="modal-body" id="upgrade-modal-message">플랜을 업그레이드하면 더 많은 기능을 이용할 수 있습니다.</p>
+        <div class="modal-meta" id="upgrade-modal-meta" hidden>
+            <span>현재 플랜: <strong id="upgrade-modal-tier"></strong></span>
+            <span id="upgrade-modal-usage-wrap" hidden>사용량: <strong id="upgrade-modal-usage"></strong></span>
+        </div>
+        <div class="modal-actions">
+            <button type="button" class="btn" onclick="closeUpgradeModal()">나중에</button>
+            <a href="/pages/pricing" class="btn btn-primary">플랜 비교 →</a>
+        </div>
+    </div>
+</div>

@@ -5,7 +5,7 @@ from psycopg2.extras import execute_values, RealDictCursor
 from shared.config import DatabaseConfig
 
 # ── 스키마 버전 관리 ──────────────────────────────
-SCHEMA_VERSION = 15  # v1~v5: 분석 테이블, v6: 테마 채팅, v7: 뉴스 기사, v8: 뉴스 한글 번역, v9: 요약 한글 번역, v10: price_source, v11: JWT 인증, v12: 개인화(워치리스트/구독/알림/메모), v13: AI theme_key, v14: 기간별 수익률, v15: 일별 Top Picks
+SCHEMA_VERSION = 16  # v1~v5: 분석 테이블, v6: 테마 채팅, v7: 뉴스 기사, v8: 뉴스 한글 번역, v9: 요약 한글 번역, v10: price_source, v11: JWT 인증, v12: 개인화(워치리스트/구독/알림/메모), v13: AI theme_key, v14: 기간별 수익률, v15: 일별 Top Picks, v16: 구독 티어(users.tier)
 
 
 def _ensure_database(cfg: DatabaseConfig) -> None:
@@ -604,6 +604,23 @@ def _migrate_to_v15(cur) -> None:
     print("[DB] v15 마이그레이션 완료 — daily_top_picks 테이블 생성")
 
 
+def _migrate_to_v16(cur) -> None:
+    """v16: 구독 티어 — users.tier, users.tier_expires_at 컬럼 추가"""
+    cur.execute("""
+        ALTER TABLE users
+            ADD COLUMN IF NOT EXISTS tier VARCHAR(20) NOT NULL DEFAULT 'free'
+                CHECK (tier IN ('free', 'pro', 'premium')),
+            ADD COLUMN IF NOT EXISTS tier_expires_at TIMESTAMP;
+    """)
+
+    cur.execute("""
+        INSERT INTO schema_version (version) VALUES (16)
+        ON CONFLICT (version) DO NOTHING;
+    """)
+
+    print("[DB] v16 마이그레이션 완료 — users.tier/tier_expires_at 컬럼 추가")
+
+
 def init_db(cfg: DatabaseConfig) -> None:
     """PostgreSQL 설치 확인 → 데이터베이스 생성 → 스키마 마이그레이션"""
     from shared.pg_setup import ensure_postgresql
@@ -660,6 +677,9 @@ def init_db(cfg: DatabaseConfig) -> None:
 
             if current < 15:
                 _migrate_to_v15(cur)
+
+            if current < 16:
+                _migrate_to_v16(cur)
 
         conn.commit()
         print("[DB] 테이블 초기화 완료")

@@ -1,0 +1,30 @@
+{# 모바일 전용 하단 탭바 — PC에서는 CSS로 숨김 (@media max-width:768px에서만 display:flex) #}
+<nav class="bottom-tabbar" role="navigation" aria-label="주요 메뉴 (모바일)">
+    <a href="/" class="bottom-tab {% if active_page == 'dashboard' %}active{% endif %}">
+        <span class="bottom-tab-icon" aria-hidden="true">🏠</span>
+        <span class="bottom-tab-label">Today</span>
+    </a>
+    <a href="/pages/themes" class="bottom-tab {% if active_page == 'themes' %}active{% endif %}">
+        <span class="bottom-tab-icon" aria-hidden="true">💡</span>
+        <span class="bottom-tab-label">Themes</span>
+    </a>
+    <a href="/pages/proposals" class="bottom-tab {% if active_page == 'proposals' %}active{% endif %}">
+        <span class="bottom-tab-icon" aria-hidden="true">📊</span>
+        <span class="bottom-tab-label">Picks</span>
+    </a>
+    <a href="/pages/track-record" class="bottom-tab {% if active_page == 'track_record' %}active{% endif %}">
+        <span class="bottom-tab-icon" aria-hidden="true">📈</span>
+        <span class="bottom-tab-label">Record</span>
+    </a>
+    {% if current_user %}
+    <a href="/pages/watchlist" class="bottom-tab {% if active_page == 'watchlist' %}active{% endif %}">
+        <span class="bottom-tab-icon" aria-hidden="true">⭐</span>
+        <span class="bottom-tab-label">Watch</span>
+    </a>
+    {% else %}
+    <a href="/pages/pricing" class="bottom-tab {% if active_page == 'pricing' %}active{% endif %}">
+        <span class="bottom-tab-icon" aria-hidden="true">💎</span>
+        <span class="bottom-tab-label">Pricing</span>
+    </a>
+    {% endif %}
+</nav>
