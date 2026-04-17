@@ -184,14 +184,57 @@ def dashboard(request: Request, user: Optional[UserInDB] = Depends(get_current_u
             """, (session_id,))
             raw_news = cur.fetchall()
 
-            # 워치리스트 (로그인 사용자)
+            # 워치리스트 + 알림 구독 (로그인 사용자)
             watched_tickers = set()
+            subscribed_tickers = set()
+            subscribed_theme_keys = set()
             if user:
                 cur.execute("SELECT ticker FROM user_watchlist WHERE user_id = %s", (user.id,))
                 watched_tickers = {r["ticker"] for r in cur.fetchall()}
 
+                cur.execute(
+                    "SELECT sub_type, sub_key FROM user_subscriptions WHERE user_id = %s",
+                    (user.id,),
+                )
+                for r in cur.fetchall():
+                    if r["sub_type"] == "ticker":
+                        subscribed_tickers.add((r["sub_key"] or "").upper())
+                    elif r["sub_type"] == "theme":
+                        subscribed_theme_keys.add(r["sub_key"])
+
+            # ── Top Picks 조회 (v15) ──
+            cur.execute("""
+                SELECT dtp.rank, dtp.proposal_id, dtp.score_rule, dtp.score_final,
+                       dtp.score_breakdown, dtp.rationale_text, dtp.key_risk, dtp.source,
+                       p.ticker, p.asset_name, p.sector, p.currency, p.action,
+                       p.conviction, p.discovery_type, p.price_momentum_check,
+                       p.current_price, p.target_price_low, p.target_price_high,
+                       p.upside_pct, p.price_source, p.target_allocation,
+                       p.return_1m_pct, p.return_3m_pct, p.return_6m_pct, p.return_1y_pct,
+                       p.rationale AS proposal_rationale, p.market,
+                       t.theme_name, t.theme_key, t.confidence_score AS theme_confidence,
+                       EXISTS(SELECT 1 FROM stock_analyses sa WHERE sa.proposal_id = p.id) AS has_stock_analysis
+                FROM daily_top_picks dtp
+                JOIN investment_proposals p ON p.id = dtp.proposal_id
+                JOIN investment_themes t    ON t.id = p.theme_id
+                WHERE dtp.analysis_date = %s
+                ORDER BY dtp.rank
+            """, (today_date,))
+            top_picks_raw = cur.fetchall()
+
     finally:
         conn.close()
+
+    # Top Picks 직렬화 + 개인화 플래그 주입
+    top_picks = []
+    for row in top_picks_raw:
+        pk = _serialize_row(row)
+        tk = (pk.get("ticker") or "").upper()
+        pk["is_watched"] = tk in watched_tickers
+        pk["is_subscribed"] = (
+            tk in subscribed_tickers or pk.get("theme_key") in subscribed_theme_keys
+        )
+        top_picks.append(pk)
 
     # 뉴스를 카테고리별로 그룹핑
     from analyzer.news_collector import CATEGORY_LABELS
@@ -222,6 +265,7 @@ def dashboard(request: Request, user: Optional[UserInDB] = Depends(get_current_u
         "disappeared_themes": disappeared_themes,
         "news_by_category": news_by_category,
         "watched_tickers": watched_tickers,
+        "top_picks": top_picks,
     })
 
 

@@ -10,13 +10,19 @@
 3. 결과를 PostgreSQL에 저장
 """
 import sys
+import anyio
 from datetime import date
 from concurrent.futures import ThreadPoolExecutor
 
-from shared.config import AppConfig
-from shared.db import init_db, save_analysis, save_news_articles, get_latest_news_titles
+from shared.config import AppConfig, RecommendationConfig, DatabaseConfig
+from shared.db import (
+    init_db, save_analysis, save_news_articles, get_latest_news_titles,
+    get_connection, save_top_picks, update_top_picks_ai_rerank,
+)
+from psycopg2.extras import RealDictCursor
 from analyzer.news_collector import collect_news_structured
 from analyzer.analyzer import run_full_analysis, translate_news
+from analyzer.recommender import compute_rule_based_picks, ai_rerank_picks
 
 
 def main() -> int:
@@ -103,9 +109,143 @@ def main() -> int:
         print(f"[에러] DB 저장 실패: {e}")
         return 1
 
-    # 6) 결과 요약 출력
+    # 6) Stage 3: Top Picks 추천 엔진 (룰 기반 + 선택적 AI 재정렬)
+    try:
+        _run_top_picks_stage(
+            cfg.db, cfg.recommendation, cfg.analyzer.model_analysis,
+            session_id, str(date.today()), result,
+        )
+    except Exception as e:
+        print(f"[Stage 3] Top Picks 생성 중 오류 (분석 결과에는 영향 없음): {e}")
+
+    # 7) 결과 요약 출력
     _print_summary(result, session_id)
     return 0
+
+
+def _run_top_picks_stage(
+    db_cfg: DatabaseConfig, rec_cfg: RecommendationConfig, model: str,
+    session_id: int, analysis_date: str, result: dict,
+) -> None:
+    """Stage 3: 저장된 분석 결과로부터 Top Picks를 계산하여 영속화
+
+    순서: DB에서 proposal_id/theme_id/streak_days 로드 → 메모리 트리에 병합
+          → 룰 기반 스코어링 → daily_top_picks INSERT (source='rule')
+          → enable_ai_rerank=True면 AI 재정렬 후 UPDATE (source='ai_rerank')
+    """
+    themes = result.get("themes", [])
+    if not themes:
+        print("[Stage 3] 테마 없음 — Top Picks 건너뜀")
+        return
+
+    # DB에서 proposal_id, theme_id, streak_days 조회하여 메모리 트리에 병합
+    conn = get_connection(db_cfg)
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # 테마별 id + streak (theme_tracking은 theme_key 기반)
+            cur.execute(
+                "SELECT id, theme_name, theme_key FROM investment_themes WHERE session_id = %s",
+                (session_id,),
+            )
+            theme_rows = cur.fetchall()
+
+            theme_id_map: dict = {}
+            theme_keys = [t["theme_key"] for t in theme_rows if t.get("theme_key")]
+            streak_map: dict = {}
+            if theme_keys:
+                cur.execute(
+                    "SELECT theme_key, streak_days FROM theme_tracking "
+                    "WHERE theme_key = ANY(%s)",
+                    (theme_keys,),
+                )
+                streak_map = {r["theme_key"]: r["streak_days"] for r in cur.fetchall()}
+
+            # theme_name → {id, streak_days, confidence}
+            for tr in theme_rows:
+                theme_id_map[tr["theme_name"]] = {
+                    "id": tr["id"],
+                    "streak_days": streak_map.get(tr["theme_key"], 1),
+                }
+
+            # 각 테마의 proposal_id + has_stock_analysis
+            all_theme_ids = [tr["id"] for tr in theme_rows]
+            proposals_by_theme: dict = {}
+            stage2_ids: set = set()
+            if all_theme_ids:
+                cur.execute(
+                    """SELECT p.id, p.theme_id, p.ticker,
+                              EXISTS(SELECT 1 FROM stock_analyses sa
+                                     WHERE sa.proposal_id = p.id) AS has_stage2
+                       FROM investment_proposals p
+                       WHERE p.theme_id = ANY(%s)""",
+                    (all_theme_ids,),
+                )
+                for row in cur.fetchall():
+                    proposals_by_theme.setdefault(row["theme_id"], {})[
+                        (row["ticker"] or "").upper()
+                    ] = row["id"]
+                    if row["has_stage2"]:
+                        stage2_ids.add(row["id"])
+    finally:
+        conn.close()
+
+    # 메모리 트리의 각 proposal에 _proposal_id 주입
+    for theme in themes:
+        tmeta = theme_id_map.get(theme.get("theme_name", ""))
+        if not tmeta:
+            continue
+        tid = tmeta["id"]
+        theme["_id"] = tid
+        ticker_map = proposals_by_theme.get(tid, {})
+        for p in theme.get("proposals", []):
+            tk = (p.get("ticker") or "").upper()
+            if tk and tk in ticker_map:
+                p["_proposal_id"] = ticker_map[tk]
+        # theme_confidence는 result에서 이미 있음, theme_id_map에 병합
+        tmeta["confidence"] = theme.get("confidence_score")
+
+    # 룰 기반 스코어링
+    picks = compute_rule_based_picks(
+        session_id, themes, rec_cfg, theme_id_map, stage2_ids,
+    )
+    if not picks:
+        print("[Stage 3] 룰 기반 후보 0건 — Top Picks 건너뜀")
+        return
+
+    # 표시 대상만 남겨 저장 (상위 top_n_display)
+    display_picks = picks[:rec_cfg.top_n_display]
+    # rank 재할당 (display 기준)
+    for i, pk in enumerate(display_picks, 1):
+        pk["rank"] = i
+
+    save_top_picks(db_cfg, session_id, analysis_date, display_picks, source="rule")
+    print(f"[Stage 3] 룰 기반 Top Picks {len(display_picks)}건 저장 완료")
+
+    # AI 재정렬 (선택적)
+    if not rec_cfg.enable_ai_rerank:
+        print("[Stage 3] AI 재정렬 비활성화 (REC_ENABLE_AI_RERANK=false) — 룰 결과만 사용")
+        return
+
+    print(f"[Stage 3] AI 재정렬 시작 — 후보 {len(picks)}건 → 상위 {rec_cfg.ai_rerank_top_n}개 선정")
+    try:
+        ai_results = anyio.run(
+            ai_rerank_picks,
+            picks,  # 전체 후보를 후보군으로 전달 (AI가 재선별 가능)
+            themes,
+            result.get("market_summary", ""),
+            result.get("risk_temperature", "medium"),
+            rec_cfg.ai_rerank_top_n,
+            rec_cfg.ai_rerank_max_turns,
+            model,
+        )
+    except Exception as e:
+        print(f"[Stage 3] AI 재정렬 실패 (룰 결과 유지): {e}")
+        return
+
+    if ai_results:
+        update_top_picks_ai_rerank(db_cfg, analysis_date, ai_results)
+    else:
+        print("[Stage 3] AI 재정렬 결과 없음 — 룰 결과 유지")
 
 
 def _print_summary(result: dict, session_id: int) -> None:

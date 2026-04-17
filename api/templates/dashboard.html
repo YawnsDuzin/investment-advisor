@@ -119,6 +119,151 @@
     {% endif %}
 </div>
 
+<!-- Top Picks — 오늘의 추천 종목 -->
+{% if top_picks %}
+<div class="section-title">
+    오늘의 Top Picks
+    {% set _is_ai = top_picks[0].source == 'ai_rerank' %}
+    <span style="margin-left:10px;font-size:12px;font-weight:500;padding:2px 8px;border-radius:8px;vertical-align:middle;
+                 {% if _is_ai %}background:rgba(168,85,247,0.12);color:#c084fc;border:1px solid rgba(168,85,247,0.35);{% else %}background:rgba(79,140,255,0.10);color:#7aa8ff;border:1px solid rgba(79,140,255,0.30);{% endif %}">
+        {% if _is_ai %}AI 재정렬{% else %}룰 기반{% endif %}
+    </span>
+    <span style="margin-left:6px;font-size:12px;color:var(--text-muted);font-weight:400;">
+        투자 제안 중 포트폴리오 관점에서 선별
+    </span>
+</div>
+<div class="top-picks-grid">
+    {% for pk in top_picks %}
+    <div class="top-pick-card{% if pk.is_watched %} top-pick-watched{% endif %}">
+        <div class="top-pick-header">
+            <div class="top-pick-rank-wrap">
+                <span class="top-pick-rank">#{{ pk.rank }}</span>
+                {% if pk.rank == 1 %}<span class="top-pick-trophy" title="Top Pick">&#128293;</span>{% endif %}
+            </div>
+            <div class="top-pick-badges">
+                {% if pk.has_stock_analysis %}
+                <span class="top-pick-badge top-pick-badge-stage2" title="Stage 2 심층분석 완료">&#11088; 심층</span>
+                {% endif %}
+                {% if pk.discovery_type == 'early_signal' %}
+                <span class="top-pick-badge top-pick-badge-early">&#127793; 얼리</span>
+                {% elif pk.discovery_type == 'deep_value' %}
+                <span class="top-pick-badge top-pick-badge-deepvalue">&#128176; 딥밸류</span>
+                {% elif pk.discovery_type == 'contrarian' %}
+                <span class="top-pick-badge top-pick-badge-contrarian">&#8635; 역발상</span>
+                {% endif %}
+                {% if pk.conviction == 'high' %}
+                <span class="top-pick-badge top-pick-badge-conviction">HIGH</span>
+                {% endif %}
+                {% if pk.is_watched %}
+                <span class="top-pick-badge top-pick-badge-watched" title="관심 종목">&#9733;</span>
+                {% endif %}
+                {% if pk.is_subscribed %}
+                <span class="top-pick-badge top-pick-badge-subscribed" title="구독 중">&#128276;</span>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="top-pick-title">
+            <a href="/pages/proposals/history/{{ pk.ticker }}" class="top-pick-name">{{ pk.asset_name }}</a>
+            <span class="top-pick-ticker">{{ pk.ticker }}{% if pk.market %} &middot; {{ pk.market }}{% endif %}</span>
+        </div>
+
+        {% if pk.sector %}
+        <div class="top-pick-sector">{{ pk.sector }}</div>
+        {% endif %}
+
+        <div class="top-pick-price-row">
+            {% if pk.current_price %}
+            <div class="top-pick-price-item">
+                <div class="top-pick-price-label">현재가</div>
+                <div class="top-pick-price-value">{{ pk.current_price|fmt_price(pk.currency) }}</div>
+            </div>
+            {% endif %}
+            {% if pk.target_price_low %}
+            <div class="top-pick-price-item">
+                <div class="top-pick-price-label">목표가</div>
+                <div class="top-pick-price-value">{{ pk.target_price_low|fmt_price(pk.currency) }}</div>
+            </div>
+            {% endif %}
+            {% if pk.upside_pct is not none and pk.upside_pct != 0 %}
+            <div class="top-pick-price-item">
+                <div class="top-pick-price-label">상승여력</div>
+                <div class="top-pick-price-value {% if pk.upside_pct > 0 %}top-pick-upside-pos{% else %}top-pick-upside-neg{% endif %}">
+                    {% if pk.upside_pct > 0 %}+{% endif %}{{ "%.1f"|format(pk.upside_pct|float) }}%
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="top-pick-theme">
+            <span class="top-pick-theme-label">테마</span>
+            {% if pk.theme_key %}
+            <a href="/pages/themes/history/{{ pk.theme_key }}" class="top-pick-theme-name">{{ pk.theme_name }}</a>
+            {% else %}
+            <span class="top-pick-theme-name">{{ pk.theme_name }}</span>
+            {% endif %}
+            {% if pk.theme_confidence %}
+            <span class="top-pick-theme-conf">신뢰도 {{ "%.0f"|format(pk.theme_confidence|float * 100) }}%</span>
+            {% endif %}
+        </div>
+
+        {% if pk.rationale_text %}
+        <div class="top-pick-rationale top-pick-rationale-ai">
+            <span class="top-pick-rationale-tag">AI</span>
+            {{ pk.rationale_text }}
+        </div>
+        {% elif pk.proposal_rationale %}
+        <div class="top-pick-rationale">
+            {{ pk.proposal_rationale.split('.')[0] }}{% if '.' in pk.proposal_rationale %}.{% endif %}
+        </div>
+        {% endif %}
+
+        {% if pk.key_risk %}
+        <div class="top-pick-risk">
+            <span class="top-pick-risk-label">리스크</span> {{ pk.key_risk }}
+        </div>
+        {% endif %}
+
+        <!-- 스코어 브레이크다운 (툴팁 클릭 토글) -->
+        <div class="top-pick-footer">
+            <span class="top-pick-score" title="스코어 기여 내역 보기"
+                  onclick="this.nextElementSibling.classList.toggle('open')">
+                점수 {{ "%.0f"|format(pk.score_final|float) }}
+                {% if pk.source == 'ai_rerank' and pk.score_rule != pk.score_final %}
+                <span class="top-pick-score-sub">(룰 {{ "%.0f"|format(pk.score_rule|float) }})</span>
+                {% endif %}
+                <span class="top-pick-score-toggle">&#9662;</span>
+            </span>
+            <div class="top-pick-breakdown">
+                {% if pk.score_breakdown %}
+                {% for key, val in pk.score_breakdown.items() %}
+                <div class="top-pick-breakdown-row">
+                    <span class="top-pick-breakdown-key">
+                        {% if key == 'conviction_high' %}고확신
+                        {% elif key == 'stage2_done' %}심층분석
+                        {% elif key == 'discovery_early' %}얼리/딥밸류
+                        {% elif key == 'action_buy' %}매수 제안
+                        {% elif key == 'upside_high' %}상승여력 상
+                        {% elif key == 'upside_mid' %}상승여력 중
+                        {% elif key == 'theme_confidence' %}테마 신뢰도
+                        {% elif key == 'theme_streak' %}테마 연속
+                        {% elif key == 'already_priced_penalty' %}급등 감점
+                        {% elif key == 'no_price_penalty' %}가격 결측
+                        {% else %}{{ key }}{% endif %}
+                    </span>
+                    <span class="top-pick-breakdown-val {% if val|float < 0 %}top-pick-breakdown-neg{% endif %}">
+                        {% if val|float > 0 %}+{% endif %}{{ val }}
+                    </span>
+                </div>
+                {% endfor %}
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
 <!-- 투자 테마 (Dashboard: 요약 — 테마 설명 + 종목 태그) -->
 <div class="section-title">투자 테마
     <a href="/pages/sessions/{{ session.id }}" class="btn btn-primary" style="float:right;font-size:12px;padding:4px 12px;">상세 보기</a>
