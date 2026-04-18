@@ -13,6 +13,25 @@ except ImportError:
     pykrx_stock = None
 
 
+# ── pykrx 사용 가능 여부 캐싱 ──────────────────────
+# pykrx 로그인 실패 시 세션 내 모든 후속 호출을 건너뛰어
+# 불필요한 로그인 시도 반복을 방지한다.
+_pykrx_available = True  # False로 전환되면 세션 내 pykrx 비활성화
+
+
+def _check_pykrx() -> bool:
+    """pykrx 사용 가능 여부 반환 (로그인 실패 시 비활성화)"""
+    return pykrx_stock is not None and _pykrx_available
+
+
+def _disable_pykrx(reason: str) -> None:
+    """pykrx를 세션 내 비활성화"""
+    global _pykrx_available
+    if _pykrx_available:
+        _pykrx_available = False
+        get_logger("pykrx").warning(f"pykrx 비활성화 (세션 내): {reason}")
+
+
 # ── 한국 시장 판별 ──────────────────────────────────
 
 _KRX_MARKETS = {"KRX", "KOSPI", "KSE", "KOSDAQ", "KQ"}

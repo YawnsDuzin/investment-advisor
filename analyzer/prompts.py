@@ -44,7 +44,7 @@ STAGE1_SYSTEM = SYSTEM_PROMPT_BASE + """
 
 추가 역할: 글로벌 매크로 전략팀의 테마 리서치 헤드로서,
 RSS 뉴스를 분석하여 투자 유효한 테마를 구조화합니다.
-각 이슈의 단기/중기/장기 영향과 과거 유사 사례를 반드시 포함하세요."""
+각 이슈의 단기/중기/장기 영향을 반드시 포함하세요. 과거 유사 사례는 명확한 경우만 간략히 언급합니다."""
 
 STAGE1_PROMPT = """## 분석 날짜: {date}
 
@@ -66,7 +66,7 @@ STAGE1_PROMPT = """## 분석 날짜: {date}
 - **단기 영향** (1개월 이내): 구체적 시장 반응 예상
 - **중기 영향** (1~6개월): 섹터·자산별 파급 경로
 - **장기 영향** (6개월 이상): 구조적 변화 가능성
-- **과거 유사 사례**: 비슷한 상황의 시장 반응 (있을 경우)
+- **과거 유사 사례** (선택): 명확한 사례가 있을 때만 1문장으로 간략히. 없으면 생략
 
 ### 2단계: 투자 테마 도출 (4~7개)
 각 테마에 대해:
@@ -78,7 +78,7 @@ STAGE1_PROMPT = """## 분석 날짜: {date}
 - 투자 시계 (short: ~1개월 / mid: 1~6개월 / long: 6개월+)
 - 핵심 모니터링 지표
 - **시나리오 분석**: Bull/Base/Bear 케이스 각각의 확률, 설명, 핵심 가정, 시장 영향
-- **매크로 변수 영향**: 유가, 금, 환율, 금리, 주요 지수에 대한 시나리오별 전망
+- **매���로 변수 영향**: 해당 테���에 직접 관련된 변수 2~3개만 선별하여 시나리오별 전망 (6개 전부 작성 불필요)
 
 #### theme_key 생성 규칙
 - 각 테마에 영문 snake_case 키를 부여하세요 (예: "secondary_battery_oversupply", "us_fed_rate_cut", "ai_semiconductor_demand")
@@ -138,7 +138,7 @@ STAGE1_PROMPT = """## 분석 날짜: {date}
 ```json
 {{
   "analysis_date": "{date}",
-  "market_summary": "아래 형식으로 작성 (각 섹션은 빈 줄로 구분, 총 15~25줄):\n\n[시장 환경] 글로벌 매크로 환경 핵심 요약 (2~3문장 — 금리·환율·원자재 등 핵심 변수와 시장 센티먼트)\n\n[핵심 이슈]\n★ 가장 중요한 이슈 제목: 1문장 설명\n★ 두번째 이슈 제목: 1문장 설명\n★ 세번째 이슈 제목: 1문장 설명\n\n[투자 시사점]\n▸ 테마명1: 핵심 포인트 1~2문장\n▸ 테마명2: 핵심 포인트 1~2문장\n▸ 테마명3: 핵심 포인트 1~2문장\n\n[주의 사항]\n⚠ 리스크1: 설명\n⚠ 리스크2: 설명",
+  "market_summary": "간결하게 작성 (총 10~15줄):\n\n[시장 환경] 핵심 요약 1~2문장\n\n[핵심 이슈]\n★ 이슈1: 1문장\n★ 이슈2: 1문장\n★ 이슈3: 1문장\n\n[투자 시사점] 테마별 핵심 포인트 각 1문장\n\n[주의] 리스크 1~2건",
   "risk_temperature": "high|medium|low",
   "data_sources": ["RSS뉴스"],
   "issues": [
@@ -152,7 +152,7 @@ STAGE1_PROMPT = """## 분석 날짜: {date}
       "impact_short": "단기(1개월) 시장 영향 분석",
       "impact_mid": "중기(1~6개월) 파급 경로",
       "impact_long": "장기(6개월+) 구조적 변화",
-      "historical_analogue": "과거 유사 사례와 당시 시장 반응 (없으면 null)"
+      "historical_analogue": "과거 유사 사례 1문장 (명확한 경우만, 없으면 null)"
     }}
   ],
   "themes": [
@@ -191,7 +191,7 @@ STAGE1_PROMPT = """## 분석 날짜: {date}
       ],
       "macro_impacts": [
         {{
-          "variable_name": "oil_wti|gold|usdkrw|us_10y_yield|sp500|kospi",
+          "variable_name": "해당 테마에 직접 관련된 변수만 (oil_wti|gold|usdkrw|us_10y_yield|sp500|kospi 중 선택)",
           "base_case": "기본 시나리오 전망치",
           "worse_case": "악화 시나리오 전망치",
           "better_case": "호전 시나리오 전망치",
@@ -252,7 +252,7 @@ STAGE1A_PROMPT = """## 분석 날짜: {date}
 - **단기 영향** (1개월 이내): 구체적 시장 반응 예상
 - **중기 영향** (1~6개월): 섹터·자산별 파급 경로
 - **장기 영향** (6개월 이상): 구조적 변화 가능성
-- **과거 유사 사례**: 비슷한 상황의 시장 반응 (있을 경우)
+- **과거 유사 사례** (선택): 명확한 사례가 있을 때만 1문장으로 간략히. 없으면 생략
 
 ### 2단계: 투자 테마 도출 (4~7개)
 각 테마에 대해:
@@ -264,7 +264,7 @@ STAGE1A_PROMPT = """## 분석 날짜: {date}
 - 투자 시계 (short: ~1개월 / mid: 1~6개월 / long: 6개월+)
 - 핵심 모니터링 지표
 - **시나리오 분석**: Bull/Base/Bear 케이스 각각의 확률, 설명, 핵심 가정, 시장 영향
-- **매크로 변수 영향**: 유가, 금, 환율, 금리, 주요 지수에 대한 시나리오별 전망
+- **매���로 변수 영향**: 해당 테���에 직접 관련된 변수 2~3개만 선별하여 시나리오별 전망 (6개 전부 작성 불필요)
 
 #### theme_key 생성 규칙
 - 각 테마에 영문 snake_case 키를 부여하세요 (예: "secondary_battery_oversupply", "us_fed_rate_cut", "ai_semiconductor_demand")
@@ -279,7 +279,7 @@ STAGE1A_PROMPT = """## 분석 날짜: {date}
 ```json
 {{
   "analysis_date": "{date}",
-  "market_summary": "아래 형식으로 작성 (각 섹션은 빈 줄로 구분, 총 15~25줄):\n\n[시장 환경] 글로벌 매크로 환경 핵심 요약 (2~3문장)\n\n[핵심 이슈]\n★ 가장 중요한 이슈 제목: 1문장 설명\n★ 두번째 이슈 제목: 1문장 설명\n★ 세번째 이슈 제목: 1문장 설명\n\n[투자 시사점]\n▸ 테마명1: 핵심 포인트 1~2문장\n▸ 테마명2: 핵심 포인트 1~2문장\n▸ 테마명3: 핵심 포인트 1~2문장\n\n[주의 사항]\n⚠ 리스크1: 설명\n⚠ 리스크2: 설명",
+  "market_summary": "간결하게 작성 (총 10~15줄):\n\n[시장 환경] 핵심 요약 1~2문장\n\n[핵심 이슈]\n★ 이슈1: 1문장\n★ 이슈2: 1문장\n★ 이슈3: 1문장\n\n[투자 시사점] 테마별 핵심 포인트 각 1문장\n\n[주의] 리스크 1~2건",
   "risk_temperature": "high|medium|low",
   "data_sources": ["RSS뉴스"],
   "issues": [
@@ -293,7 +293,7 @@ STAGE1A_PROMPT = """## 분석 날짜: {date}
       "impact_short": "단기(1개월) 시장 영향 분석",
       "impact_mid": "중기(1~6개월) 파급 경로",
       "impact_long": "장기(6개월+) 구조적 변화",
-      "historical_analogue": "과거 유사 사례와 당시 시장 반응 (없으면 null)"
+      "historical_analogue": "과거 유사 사례 1문장 (명확한 경우만, 없으면 null)"
     }}
   ],
   "themes": [
@@ -332,7 +332,7 @@ STAGE1A_PROMPT = """## 분석 날짜: {date}
       ],
       "macro_impacts": [
         {{
-          "variable_name": "oil_wti|gold|usdkrw|us_10y_yield|sp500|kospi",
+          "variable_name": "해당 테마에 직접 관련된 변수만 (oil_wti|gold|usdkrw|us_10y_yield|sp500|kospi 중 선택)",
           "base_case": "기본 시나리오 전망치",
           "worse_case": "악화 시나리오 전망치",
           "better_case": "호전 시나리오 전망치",

@@ -4,88 +4,90 @@
 
 {% block content %}
 <style>
-    .user-table { width: 100%; border-collapse: collapse; }
-    .user-table th, .user-table td {
-        padding: 10px 12px; text-align: left;
-        border-bottom: 1px solid var(--border);
-        font-size: 13px;
-        vertical-align: top;
+    /* 테이블 행 클릭 커서 */
+    .user-row { cursor: pointer; transition: background 0.12s; }
+    .user-row:hover { background: var(--bg-card-hover); }
+    .user-row.expanded { background: rgba(79,140,255,0.05); }
+    /* 관리 컬럼 화살표 */
+    .expand-arrow {
+        display: inline-block; width: 20px; text-align: center;
+        color: var(--text-muted); font-size: 12px; transition: transform 0.2s;
     }
-    .user-table th { color: var(--text-muted); font-weight: 600; }
-    .user-table tr:hover { background: var(--bg-card-hover); }
-    .badge {
-        display: inline-block; padding: 2px 8px; border-radius: 4px;
-        font-size: 11px; font-weight: 600;
-    }
-    .badge-admin { background: rgba(147,130,255,0.2); color: var(--purple); }
-    .badge-moderator { background: rgba(251,191,36,0.2); color: var(--orange); }
-    .badge-user { background: rgba(79,140,255,0.15); color: var(--accent); }
-    .badge-active { background: rgba(52,211,153,0.2); color: var(--green); }
-    .badge-inactive { background: rgba(248,113,113,0.2); color: var(--red); }
-    .action-btn {
-        padding: 4px 10px; border: 1px solid var(--border); border-radius: 4px;
-        background: var(--bg); color: var(--text); cursor: pointer; font-size: 12px;
-        margin: 1px;
-    }
-    .action-btn:hover { background: var(--bg-card-hover); }
-    .action-btn.danger { border-color: var(--red); color: var(--red); }
-    .action-btn.danger:hover { background: rgba(248,113,113,0.1); }
-    .action-btn.primary { border-color: var(--accent); color: var(--accent); }
-    .action-btn.primary:hover { background: rgba(79,140,255,0.1); }
-    .tier-controls {
-        display: flex; flex-wrap: wrap; gap: 4px; align-items: center;
-        margin-top: 4px; padding-top: 4px;
-        border-top: 1px dashed var(--border);
-    }
-    .tier-controls select, .tier-controls input {
-        padding: 3px 6px; border: 1px solid var(--border); border-radius: 4px;
-        background: var(--bg); color: var(--text); font-size: 12px;
-    }
-    .tier-controls label { font-size: 11px; color: var(--text-muted); }
-    .expiry-text {
-        display: block; font-size: 11px; color: var(--text-muted); margin-top: 2px;
-    }
+    .user-row.expanded .expand-arrow { transform: rotate(90deg); color: var(--accent); }
+    /* 유저 이메일 하이라이트 */
+    .user-email { font-weight: 500; }
+    .user-email-self { color: var(--text-muted); font-style: italic; }
+    /* 채팅 통계 */
+    .chat-stats { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
+    /* 티어 만료 서브라인 */
+    .expiry-text { display: block; font-size: 11px; color: var(--text-muted); margin-top: 2px; }
     .expiry-text.expired { color: var(--red); }
-    .pagination { margin-top: 20px; text-align: center; }
-    .pagination a, .pagination span {
-        display: inline-block; padding: 6px 12px; margin: 0 2px;
-        border: 1px solid var(--border); border-radius: 4px;
-        font-size: 13px;
+    /* 필터 카드 */
+    .filter-card { padding: 16px 20px; }
+    .filter-card .filters { margin-bottom: 0; }
+    /* 임시 비밀번호 표시 영역 */
+    .temp-pw-display {
+        display: flex; align-items: center; gap: 10px;
+        padding: 10px 14px; background: var(--bg); border: 1px solid var(--border);
+        border-radius: 8px; margin-top: 12px; font-family: 'Consolas', monospace;
     }
-    .pagination .current { background: rgba(79,140,255,0.15); color: var(--accent); border-color: rgba(79,140,255,0.3); font-weight: 600; }
-    .stats { font-size: 12px; color: var(--text-muted); }
-    .result-msg {
-        padding: 10px; border-radius: 6px; margin-bottom: 12px;
-        font-size: 13px; display: none;
-    }
-    .result-msg.success { background: rgba(52,211,153,0.15); color: var(--green); display: block; }
-    .result-msg.error { background: rgba(248,113,113,0.15); color: var(--red); display: block; }
-    .topbar {
-        display: flex; justify-content: space-between; align-items: center;
-        margin-bottom: 14px;
-    }
-    .topbar-links a {
-        font-size: 13px; margin-left: 10px; color: var(--accent);
-    }
+    .temp-pw-display code { font-size: 16px; font-weight: 700; color: var(--green); flex: 1; }
+    .temp-pw-display .btn { flex-shrink: 0; }
 </style>
 
-<div id="resultMsg" class="result-msg"></div>
+<!-- 결과 토스트 -->
+<div id="toastMsg" class="toast-msg"></div>
 
-<div class="topbar">
-    <p style="color:var(--text-muted);font-size:14px;margin:0;">
-        전체 {{ total }}명 ({{ page }}/{{ total_pages }} 페이지)
+<!-- 검색/필터 카드 -->
+<div class="card filter-card">
+    <form method="get" action="/admin/users" class="filters" id="filterForm">
+        <input type="text" name="q" class="filter-input" placeholder="이메일 또는 닉네임 검색..."
+               value="{{ q or '' }}" style="flex:1;min-width:180px;">
+        <select name="role" class="filter-select">
+            <option value="">전체 역할</option>
+            <option value="admin" {% if filter_role == 'admin' %}selected{% endif %}>Admin</option>
+            <option value="moderator" {% if filter_role == 'moderator' %}selected{% endif %}>Moderator</option>
+            <option value="user" {% if filter_role == 'user' %}selected{% endif %}>User</option>
+        </select>
+        <select name="status" class="filter-select">
+            <option value="">전체 상태</option>
+            <option value="active" {% if filter_status == 'active' %}selected{% endif %}>활성</option>
+            <option value="inactive" {% if filter_status == 'inactive' %}selected{% endif %}>비활성</option>
+        </select>
+        <select name="tier" class="filter-select">
+            <option value="">전체 티어</option>
+            {% for vt in valid_tiers %}
+            <option value="{{ vt }}" {% if filter_tier == vt %}selected{% endif %}>{{ tier_info[vt].label_ko }}</option>
+            {% endfor %}
+        </select>
+        <button type="submit" class="btn btn-primary">검색</button>
+        {% if q or filter_role or filter_status or filter_tier %}
+        <a href="/admin/users" class="btn">초기화</a>
+        {% endif %}
+    </form>
+</div>
+
+<!-- 상단 정보 바 -->
+<div style="display:flex;justify-content:space-between;align-items:center;margin:14px 0 10px;padding:0 2px;">
+    <p style="color:var(--text-muted);font-size:13px;margin:0;">
+        전체 {{ total }}명
+        {% if q or filter_role or filter_status or filter_tier %}
+        (필터 적용)
+        {% endif %}
+        · {{ page }}/{{ total_pages }} 페이지
     </p>
-    <div class="topbar-links">
+    <div>
         {% if current_user and current_user.role == 'admin' %}
-        <a href="/admin/users/audit-logs">감사 로그 →</a>
+        <a href="/admin/users/audit-logs" style="font-size:13px;">감사 로그 →</a>
         {% endif %}
     </div>
 </div>
 
-<table class="user-table">
+<!-- 사용자 테이블 -->
+<div class="table-wrap">
+<table class="screener-table table-stack-mobile">
     <thead>
         <tr>
-            <th>ID</th>
             <th>이메일</th>
             <th>닉네임</th>
             <th>역할</th>
@@ -93,26 +95,31 @@
             <th>티어</th>
             <th>채팅</th>
             <th>가입일</th>
-            <th>관리</th>
+            <th style="width:36px;"></th>
         </tr>
     </thead>
     <tbody>
     {% for u in users %}
-        <tr id="user-row-{{ u.id }}">
-            <td>{{ u.id }}</td>
-            <td>{{ u.email }}</td>
-            <td>{{ u.nickname }}</td>
-            <td>
-                <span class="badge badge-{{ u.role }}">{{ u.role }}</span>
+        {% set is_self = current_user and u.id == current_user.id %}
+        <tr class="user-row {% if is_self %}self-row{% endif %}"
+            id="user-row-{{ u.id }}"
+            onclick="toggleExpand({{ u.id }})">
+            <td data-label="이메일">
+                <span class="user-email {% if is_self %}user-email-self{% endif %}">{{ u.email }}</span>
+                {% if is_self %}<span class="badge badge-role-user" style="margin-left:6px;font-size:10px;">본인</span>{% endif %}
             </td>
-            <td>
+            <td data-label="닉네임">{{ u.nickname or '-' }}</td>
+            <td data-label="역할">
+                <span class="badge {% if u.role == 'admin' %}badge-admin{% elif u.role == 'moderator' %}badge-moderator{% else %}badge-role-user{% endif %}">{{ u.role }}</span>
+            </td>
+            <td data-label="상태">
                 {% if u.is_active %}
                 <span class="badge badge-active">활성</span>
                 {% else %}
                 <span class="badge badge-inactive">비활성</span>
                 {% endif %}
             </td>
-            <td>
+            <td data-label="티어">
                 {% set t = u.tier or 'free' %}
                 {% set label = tier_info[t].label_ko if tier_info and t in tier_info else t %}
                 {% set color = tier_info[t].badge_color if tier_info and t in tier_info else t %}
@@ -123,157 +130,295 @@
                 <span class="expiry-text">영구</span>
                 {% endif %}
             </td>
-            <td class="stats">
-                세션 {{ u.chat_session_count }} / 메시지 {{ u.chat_message_count }}
+            <td data-label="채팅">
+                <span class="chat-stats">{{ u.chat_session_count }}세션 / {{ u.chat_message_count }}메시지</span>
             </td>
-            <td style="font-size:12px;">{{ u.created_at[:10] if u.created_at else '-' }}</td>
-            <td>
-                {% if current_user and u.id != current_user.id %}
-                    {# 역할 변경 #}
-                    <select onchange="changeRole({{ u.id }}, this.value)" style="padding:3px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:12px;">
-                        <option value="user" {% if u.role == 'user' %}selected{% endif %}>user</option>
-                        <option value="moderator" {% if u.role == 'moderator' %}selected{% endif %}>moderator</option>
-                        {% if current_user.role == 'admin' %}
-                        <option value="admin" {% if u.role == 'admin' %}selected{% endif %}>admin</option>
-                        {% endif %}
-                    </select>
-
-                    {# 활성화/비활성화 #}
-                    {% if u.is_active %}
-                    <button class="action-btn danger" onclick="changeStatus({{ u.id }}, false)">비활성화</button>
-                    {% else %}
-                    <button class="action-btn" onclick="changeStatus({{ u.id }}, true)">활성화</button>
-                    {% endif %}
-
-                    {# Admin 전용 #}
-                    {% if current_user.role == 'admin' %}
-                    <button class="action-btn" onclick="resetPassword({{ u.id }})">PW초기화</button>
-                    <button class="action-btn danger" onclick="deleteUser({{ u.id }}, '{{ u.email }}')">삭제</button>
-
-                    <div class="tier-controls">
-                        <label for="tier-{{ u.id }}">티어</label>
-                        <select id="tier-{{ u.id }}">
-                            {% for vt in valid_tiers %}
-                            <option value="{{ vt }}" {% if u.tier == vt %}selected{% endif %}>{{ tier_info[vt].label_ko }}</option>
-                            {% endfor %}
-                        </select>
-                        <label for="tier-exp-{{ u.id }}">만료</label>
-                        <input type="date" id="tier-exp-{{ u.id }}"
-                               value="{{ u.tier_expires_at[:10] if u.tier_expires_at else '' }}"
-                               title="비워두면 영구 (free는 무시)">
-                        <button class="action-btn primary" onclick="changeTier({{ u.id }})">적용</button>
-                    </div>
-                    {% endif %}
-                {% else %}
-                    <span style="font-size:12px;color:var(--text-muted);">본인</span>
+            <td data-label="가입일" style="font-size:13px;">{{ u.created_at[:10] if u.created_at else '-' }}</td>
+            <td data-label="">
+                {% if not is_self %}
+                <span class="expand-arrow">▶</span>
                 {% endif %}
             </td>
         </tr>
+        <!-- 확장 패널 -->
+        {% if not is_self %}
+        <tr class="user-expand-row" id="expand-{{ u.id }}">
+            <td colspan="8" class="user-expand-cell" data-label="">
+                <div class="user-expand-inner">
+                    <!-- 역할/상태 관리 -->
+                    <div class="user-expand-section">
+                        <h4>역할 / 상태</h4>
+                        <div class="field-row">
+                            <span class="field-label">역할</span>
+                            <select id="role-{{ u.id }}" onchange="event.stopPropagation()">
+                                <option value="user" {% if u.role == 'user' %}selected{% endif %}>User</option>
+                                <option value="moderator" {% if u.role == 'moderator' %}selected{% endif %}>Moderator</option>
+                                {% if current_user and current_user.role == 'admin' %}
+                                <option value="admin" {% if u.role == 'admin' %}selected{% endif %}>Admin</option>
+                                {% endif %}
+                            </select>
+                            <button class="btn btn-sm btn-primary" onclick="event.stopPropagation();doChangeRole({{ u.id }})">적용</button>
+                        </div>
+                        <div class="field-row">
+                            <span class="field-label">상태</span>
+                            {% if u.is_active %}
+                            <button class="btn btn-sm btn-danger" onclick="event.stopPropagation();doChangeStatus({{ u.id }}, false)">비활성화</button>
+                            {% else %}
+                            <button class="btn btn-sm" onclick="event.stopPropagation();doChangeStatus({{ u.id }}, true)">활성화</button>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- 티어 관리 (Admin 전용) -->
+                    {% if current_user and current_user.role == 'admin' %}
+                    <div class="user-expand-section">
+                        <h4>티어 관리</h4>
+                        <div class="field-row">
+                            <span class="field-label">티어</span>
+                            <select id="tier-{{ u.id }}" onclick="event.stopPropagation()">
+                                {% for vt in valid_tiers %}
+                                <option value="{{ vt }}" {% if u.tier == vt %}selected{% endif %}>{{ tier_info[vt].label_ko }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="field-row">
+                            <span class="field-label">만료</span>
+                            <input type="date" id="tier-exp-{{ u.id }}"
+                                   value="{{ u.tier_expires_at[:10] if u.tier_expires_at else '' }}"
+                                   title="비워두면 영구 (free는 무시)"
+                                   onclick="event.stopPropagation()">
+                            <button class="btn btn-sm btn-primary" onclick="event.stopPropagation();doChangeTier({{ u.id }})">적용</button>
+                        </div>
+                    </div>
+
+                    <!-- 위험 작업 (Admin 전용) -->
+                    <div class="user-expand-section">
+                        <h4>계정 작업</h4>
+                        <div class="user-expand-actions">
+                            <button class="btn btn-sm" onclick="event.stopPropagation();doResetPassword({{ u.id }})">PW 초기화</button>
+                            <button class="btn btn-sm btn-danger-fill" onclick="event.stopPropagation();doDeleteUser({{ u.id }}, '{{ u.email }}')">계정 삭제</button>
+                        </div>
+                        <div id="temp-pw-{{ u.id }}"></div>
+                    </div>
+                    {% endif %}
+                </div>
+            </td>
+        </tr>
+        {% endif %}
     {% endfor %}
+    {% if not users %}
+    <tr><td colspan="8" style="text-align:center;padding:32px;color:var(--text-muted);font-size:14px;">검색 결과가 없습니다.</td></tr>
+    {% endif %}
     </tbody>
 </table>
+</div>
 
-{# 페이지네이션 #}
+<!-- 페이지네이션 -->
 {% if total_pages > 1 %}
 <div class="pagination">
     {% if page > 1 %}
-    <a href="?page={{ page - 1 }}&limit={{ limit }}">이전</a>
+    <a href="?{{ pagination_qs }}&page={{ page - 1 }}">← 이전</a>
     {% endif %}
-    {% for p in range(1, total_pages + 1) %}
+
+    {% set start_page = [1, page - 2] | max %}
+    {% set end_page = [total_pages, page + 2] | min %}
+
+    {% if start_page > 1 %}
+    <a href="?{{ pagination_qs }}&page=1">1</a>
+    {% if start_page > 2 %}<span class="ellipsis">…</span>{% endif %}
+    {% endif %}
+
+    {% for p in range(start_page, end_page + 1) %}
         {% if p == page %}
         <span class="current">{{ p }}</span>
         {% else %}
-        <a href="?page={{ p }}&limit={{ limit }}">{{ p }}</a>
+        <a href="?{{ pagination_qs }}&page={{ p }}">{{ p }}</a>
         {% endif %}
     {% endfor %}
+
+    {% if end_page < total_pages %}
+    {% if end_page < total_pages - 1 %}<span class="ellipsis">…</span>{% endif %}
+    <a href="?{{ pagination_qs }}&page={{ total_pages }}">{{ total_pages }}</a>
+    {% endif %}
+
     {% if page < total_pages %}
-    <a href="?page={{ page + 1 }}&limit={{ limit }}">다음</a>
+    <a href="?{{ pagination_qs }}&page={{ page + 1 }}">다음 →</a>
     {% endif %}
 </div>
 {% endif %}
+
+<!-- 확인 모달 -->
+<div class="modal-backdrop" id="confirmModal">
+    <div class="modal-box" style="max-width:420px;">
+        <div class="confirm-modal-body">
+            <span class="modal-icon" id="modalIcon"></span>
+            <div class="modal-title" id="modalTitle"></div>
+            <div class="modal-desc" id="modalDesc"></div>
+            <textarea class="modal-reason" id="modalReason" rows="2" placeholder="사유 입력 (감사 로그용, 선택)"></textarea>
+            <div class="modal-actions">
+                <button class="btn" onclick="closeModal()">취소</button>
+                <button class="btn" id="modalConfirmBtn" onclick="modalConfirmAction()">확인</button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-function showMsg(text, isError) {
-    const el = document.getElementById('resultMsg');
+/* ── 토스트 ── */
+function showToast(text, isError) {
+    const el = document.getElementById('toastMsg');
     el.textContent = text;
-    el.className = 'result-msg ' + (isError ? 'error' : 'success');
-    setTimeout(() => { el.style.display = 'none'; el.className = 'result-msg'; }, 5000);
+    el.className = 'toast-msg ' + (isError ? 'error' : 'success');
+    el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    setTimeout(() => { el.style.display = 'none'; el.className = 'toast-msg'; }, 6000);
 }
 
-async function promptReason(defaultText) {
-    // 감사 로그에 남길 사유. 취소 시 요청도 취소.
-    const input = prompt('사유를 입력하세요 (감사 로그용, 선택):', defaultText || '');
-    if (input === null) return { cancelled: true };
-    return { cancelled: false, value: input.trim() };
+/* ── 행 확장 토글 ── */
+function toggleExpand(userId) {
+    const row = document.getElementById('user-row-' + userId);
+    const expand = document.getElementById('expand-' + userId);
+    if (!expand) return;
+
+    const isOpen = expand.classList.contains('open');
+
+    // 다른 열린 패널 닫기
+    document.querySelectorAll('.user-expand-row.open').forEach(el => {
+        el.classList.remove('open');
+        const rid = el.id.replace('expand-', '');
+        document.getElementById('user-row-' + rid)?.classList.remove('expanded');
+    });
+
+    if (!isOpen) {
+        expand.classList.add('open');
+        row.classList.add('expanded');
+    }
 }
 
-function qs(params) {
-    return new URLSearchParams(params).toString();
+/* ── 확인 모달 ── */
+let _modalResolve = null;
+
+function openModal(icon, title, desc, btnText, btnClass) {
+    document.getElementById('modalIcon').textContent = icon;
+    document.getElementById('modalTitle').textContent = title;
+    document.getElementById('modalDesc').textContent = desc;
+    document.getElementById('modalReason').value = '';
+    const btn = document.getElementById('modalConfirmBtn');
+    btn.textContent = btnText || '확인';
+    btn.className = 'btn ' + (btnClass || 'btn-primary');
+    document.getElementById('confirmModal').classList.add('open');
+
+    return new Promise(resolve => { _modalResolve = resolve; });
 }
 
-async function changeRole(userId, role) {
-    const r = await promptReason(`역할을 ${role}로 변경`);
-    if (r.cancelled) { location.reload(); return; }
+function closeModal() {
+    document.getElementById('confirmModal').classList.remove('open');
+    if (_modalResolve) { _modalResolve(null); _modalResolve = null; }
+}
+
+function modalConfirmAction() {
+    const reason = document.getElementById('modalReason').value.trim();
+    document.getElementById('confirmModal').classList.remove('open');
+    if (_modalResolve) { _modalResolve(reason); _modalResolve = null; }
+}
+
+// 모달 바깥 클릭 닫기
+document.getElementById('confirmModal').addEventListener('click', function(e) {
+    if (e.target === this) closeModal();
+});
+
+function qs(params) { return new URLSearchParams(params).toString(); }
+
+/* ── 역할 변경 ── */
+async function doChangeRole(userId) {
+    const role = document.getElementById('role-' + userId).value;
+    const reason = await openModal('👤', '역할 변경', `역할을 "${role}"(으)로 변경합니다.`, '변경', 'btn-primary');
+    if (reason === null) return;
     try {
-        const resp = await fetch(`/admin/users/${userId}/role?` + qs({ role, reason: r.value }), { method: 'PATCH' });
+        const resp = await fetch(`/admin/users/${userId}/role?` + qs({ role, reason }), { method: 'PATCH' });
         const d = await resp.json();
-        if (resp.ok) { showMsg(d.message, false); setTimeout(() => location.reload(), 800); }
-        else showMsg(d.detail || '오류 발생', true);
-    } catch(e) { showMsg('요청 실패', true); }
+        if (resp.ok) { showToast(d.message, false); setTimeout(() => location.reload(), 800); }
+        else showToast(d.detail || '오류 발생', true);
+    } catch(e) { showToast('요청 실패', true); }
 }
 
-async function changeStatus(userId, isActive) {
-    const r = await promptReason(isActive ? '계정 재활성화' : '계정 비활성화');
-    if (r.cancelled) return;
+/* ── 상태 변경 ── */
+async function doChangeStatus(userId, isActive) {
+    const action = isActive ? '활성화' : '비활성화';
+    const icon = isActive ? '✅' : '⚠️';
+    const reason = await openModal(icon, `계정 ${action}`, `이 계정을 ${action}합니다.`, action, isActive ? 'btn-primary' : 'btn-danger');
+    if (reason === null) return;
     try {
-        const resp = await fetch(`/admin/users/${userId}/status?` + qs({ is_active: isActive, reason: r.value }), { method: 'PATCH' });
+        const resp = await fetch(`/admin/users/${userId}/status?` + qs({ is_active: isActive, reason }), { method: 'PATCH' });
         const d = await resp.json();
-        if (resp.ok) { showMsg(d.message, false); setTimeout(() => location.reload(), 800); }
-        else showMsg(d.detail || '오류 발생', true);
-    } catch(e) { showMsg('요청 실패', true); }
+        if (resp.ok) { showToast(d.message, false); setTimeout(() => location.reload(), 800); }
+        else showToast(d.detail || '오류 발생', true);
+    } catch(e) { showToast('요청 실패', true); }
 }
 
-async function changeTier(userId) {
-    const tier = document.getElementById(`tier-${userId}`).value;
-    const expRaw = document.getElementById(`tier-exp-${userId}`).value;  // YYYY-MM-DD
-    const r = await promptReason(`티어 ${tier} 부여`);
-    if (r.cancelled) return;
-
-    const params = { tier, reason: r.value };
+/* ── 티어 변경 ── */
+async function doChangeTier(userId) {
+    const tier = document.getElementById('tier-' + userId).value;
+    const expRaw = document.getElementById('tier-exp-' + userId).value;
+    const reason = await openModal('🏷️', '티어 변경', `티어를 "${tier}"(으)로 변경합니다.`, '변경', 'btn-primary');
+    if (reason === null) return;
+    const params = { tier, reason };
     if (expRaw) params.expires_at = expRaw;
-
     try {
         const resp = await fetch(`/admin/users/${userId}/tier?` + qs(params), { method: 'PATCH' });
         const d = await resp.json();
-        if (resp.ok) { showMsg(d.message, false); setTimeout(() => location.reload(), 800); }
-        else showMsg(d.detail || '오류 발생', true);
-    } catch(e) { showMsg('요청 실패', true); }
+        if (resp.ok) { showToast(d.message, false); setTimeout(() => location.reload(), 800); }
+        else showToast(d.detail || '오류 발생', true);
+    } catch(e) { showToast('요청 실패', true); }
 }
 
-async function resetPassword(userId) {
-    if (!confirm('임시 비밀번호를 발급하시겠습니까?')) return;
-    const r = await promptReason('비밀번호 초기화');
-    if (r.cancelled) return;
+/* ── PW 초기화 ── */
+async function doResetPassword(userId) {
+    const reason = await openModal('🔑', '비밀번호 초기화', '임시 비밀번호를 발급합니다. 기존 비밀번호는 더 이상 사용할 수 없습니다.', '발급', 'btn-danger');
+    if (reason === null) return;
     try {
-        const resp = await fetch(`/admin/users/${userId}/reset-password?` + qs({ reason: r.value }), { method: 'POST' });
+        const resp = await fetch(`/admin/users/${userId}/reset-password?` + qs({ reason }), { method: 'POST' });
         const d = await resp.json();
-        if (resp.ok) { showMsg(`임시 비밀번호: ${d.temp_password}`, false); }
-        else showMsg(d.detail || '오류 발생', true);
-    } catch(e) { showMsg('요청 실패', true); }
+        if (resp.ok) {
+            showToast('임시 비밀번호가 발급되었습니다', false);
+            // 확장 패널에 비밀번호 표시 + 복사 버튼 (DOM API로 XSS 방지)
+            const container = document.getElementById('temp-pw-' + userId);
+            container.textContent = '';
+            const wrapper = document.createElement('div');
+            wrapper.className = 'temp-pw-display';
+            const code = document.createElement('code');
+            code.textContent = d.temp_password;
+            const btn = document.createElement('button');
+            btn.className = 'btn btn-sm';
+            btn.textContent = '복사';
+            btn.onclick = (e) => {
+                e.stopPropagation();
+                navigator.clipboard.writeText(d.temp_password);
+                btn.textContent = '복사됨';
+                setTimeout(() => btn.textContent = '복사', 1500);
+            };
+            wrapper.append(code, btn);
+            container.appendChild(wrapper);
+        }
+        else showToast(d.detail || '오류 발생', true);
+    } catch(e) { showToast('요청 실패', true); }
 }
 
-async function deleteUser(userId, email) {
-    if (!confirm(`정말 ${email} 계정을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`)) return;
-    const r = await promptReason('계정 삭제');
-    if (r.cancelled) return;
+/* ── 계정 삭제 ── */
+async function doDeleteUser(userId, email) {
+    const reason = await openModal('🗑️', '계정 삭제', `"${email}" 계정을 영구 삭제합니다.\n이 작업은 되돌릴 수 없습니다.`, '삭제', 'btn-danger-fill');
+    if (reason === null) return;
     try {
-        const resp = await fetch(`/admin/users/${userId}?` + qs({ reason: r.value }), { method: 'DELETE' });
+        const resp = await fetch(`/admin/users/${userId}?` + qs({ reason }), { method: 'DELETE' });
         const d = await resp.json();
-        if (resp.ok) { showMsg(d.message, false); document.getElementById(`user-row-${userId}`).remove(); }
-        else showMsg(d.detail || '오류 발생', true);
-    } catch(e) { showMsg('요청 실패', true); }
+        if (resp.ok) {
+            showToast(d.message, false);
+            document.getElementById('user-row-' + userId)?.remove();
+            document.getElementById('expand-' + userId)?.remove();
+        }
+        else showToast(d.detail || '오류 발생', true);
+    } catch(e) { showToast('요청 실패', true); }
 }
 </script>
 {% endblock %}

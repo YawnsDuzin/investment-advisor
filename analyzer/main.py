@@ -14,8 +14,6 @@ import sys
 import traceback
 import anyio
 from datetime import date
-from concurrent.futures import ThreadPoolExecutor
-
 from shared.config import AppConfig, RecommendationConfig, DatabaseConfig
 from shared.db import (
     init_db, save_analysis, save_news_articles, get_latest_news_titles,
@@ -26,6 +24,7 @@ from psycopg2.extras import RealDictCursor
 from analyzer.news_collector import collect_news_structured
 from analyzer.analyzer import run_full_analysis, translate_news
 from analyzer.recommender import compute_rule_based_picks, ai_rerank_picks
+from analyzer.price_tracker import run_price_tracking
 
 
 def main() -> int:
@@ -93,12 +92,12 @@ def _run_analysis(cfg: AppConfig, today: str, run_id: int | None, log) -> int:
     except Exception as e:
         log.warning(f"[지문] 비교 실패 (무시하고 분석 진행): {e}")
 
-    # 2) 뉴스 번역을 백그라운드에서 시작 (분석과 병렬 실행)
-    executor = ThreadPoolExecutor(max_workers=1)
-    log.info("[번역] 뉴스 한글 번역 백그라운드 시작...")
-    translate_future = executor.submit(
-        translate_news, news_articles, cfg.analyzer.model_translate,
-    )
+    # 2) 뉴스 한글 번역 (분석 전 완료 — SDK 프로세스 경합 방지)
+    log.info("[번역] 뉴스 한글 번역 시작...")
+    try:
+        news_articles = translate_news(news_articles, cfg.analyzer.model_translate)
+    except Exception as e:
+        log.warning(f"[번역] 번역 실패 (원문 유지): {e}")
 
     # 3) 멀티스테이지 분석
     log.info("[분석] Claude Code SDK 멀티스테이지 파이프라인 시작...")
@@ -111,14 +110,12 @@ def _run_analysis(cfg: AppConfig, today: str, run_id: int | None, log) -> int:
         )
     except Exception as e:
         log.error(f"분석 파이프라인 예외: {e}", extra={"detail": traceback.format_exc()})
-        _cleanup_translator(executor, translate_future)
         finish_run(cfg.db, run_id, status="failure",
                    error_message=f"분석 파이프라인 예외: {e}")
         return 1
 
     if result.get("error"):
         log.error(f"분석 실패: {result['error']}")
-        _cleanup_translator(executor, translate_future)
         finish_run(cfg.db, run_id, status="failure",
                    error_message=result["error"])
         return 1
@@ -127,14 +124,6 @@ def _run_analysis(cfg: AppConfig, today: str, run_id: int | None, log) -> int:
     themes = result.get("themes", [])
     total_proposals = sum(len(t.get("proposals", [])) for t in themes)
     log.info(f"[분석] 전체 완료 — 이슈 {len(issues)}건, 테마 {len(themes)}건, 제안 {total_proposals}건")
-
-    # 4) 번역 결과 수집
-    try:
-        news_articles = translate_future.result(timeout=300)
-    except Exception as e:
-        log.warning(f"[번역] 백그라운드 번역 실패 (원문 유지): {e}")
-    finally:
-        executor.shutdown(wait=False)
 
     # 5) DB 저장
     session_id = None
@@ -157,7 +146,17 @@ def _run_analysis(cfg: AppConfig, today: str, run_id: int | None, log) -> int:
     except Exception as e:
         log.warning(f"[Stage 3] Top Picks 생성 중 오류 (분석 결과에는 영향 없음): {e}")
 
-    # 7) 결과 요약 출력
+    # 7) Stage 4: 추천 후 실제 수익률 추적 (가격 스냅샷 + post_return 갱신)
+    try:
+        tracker_result = run_price_tracking(cfg.db)
+        if tracker_result["tracked"] > 0:
+            log.info(f"[Stage 4] 가격추적 완료 — 대상 {tracker_result['tracked']}건, "
+                     f"스냅샷 {tracker_result['snapshots_saved']}건, "
+                     f"수익률갱신 {tracker_result['returns_updated']}건")
+    except Exception as e:
+        log.warning(f"[Stage 4] 가격추적 중 오류 (분석 결과에는 영향 없음): {e}")
+
+    # 8) 결과 요약 출력
     _print_summary(result, session_id)
 
     # 실행 완료 기록
@@ -165,18 +164,6 @@ def _run_analysis(cfg: AppConfig, today: str, run_id: int | None, log) -> int:
                f"제안 {total_proposals}건, 세션 #{session_id}")
     finish_run(cfg.db, run_id, status="success", summary=summary)
     return 0
-
-
-def _cleanup_translator(executor, translate_future) -> None:
-    """번역 스레드 정리"""
-    try:
-        translate_future.result(timeout=1)
-    except Exception:
-        pass
-    try:
-        executor.shutdown(wait=False)
-    except Exception:
-        pass
 
 
 def _run_top_picks_stage(

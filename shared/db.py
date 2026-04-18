@@ -5,7 +5,7 @@ from psycopg2.extras import execute_values, RealDictCursor
 from shared.config import DatabaseConfig
 
 # ── 스키마 버전 관리 ──────────────────────────────
-SCHEMA_VERSION = 18  # v1~v17 + v18: 범용 로그(app_runs/app_logs)
+SCHEMA_VERSION = 19  # v1~v18 + v19: 추천 후 실제 수익률 추적
 
 
 def _ensure_database(cfg: DatabaseConfig) -> None:
@@ -722,6 +722,63 @@ def _migrate_to_v18(cur) -> None:
     print("[DB] v18 마이그레이션 완료 — app_runs/app_logs 테이블 생성")
 
 
+def _migrate_to_v19(cur) -> None:
+    """v19: 추천 후 실제 수익률 추적 — entry_price, post_return, 가격 스냅샷
+
+    기존 return_*_pct(과거 모멘텀)와 별개로, 추천 이후 실제 성과를 측정한다.
+    entry_price: 추천 시점 확정 기준가 (current_price 복사)
+    post_return_*_pct: 추천 후 N개월 실제 수익률
+    proposal_price_snapshots: 일별 종가 스냅샷 (수익률 계산 원본)
+    """
+    # 1) entry_price + post_return 컬럼 추가
+    cur.execute("""
+        ALTER TABLE investment_proposals
+            ADD COLUMN IF NOT EXISTS entry_price NUMERIC(15,2),
+            ADD COLUMN IF NOT EXISTS post_return_1m_pct NUMERIC(7,2),
+            ADD COLUMN IF NOT EXISTS post_return_3m_pct NUMERIC(7,2),
+            ADD COLUMN IF NOT EXISTS post_return_6m_pct NUMERIC(7,2),
+            ADD COLUMN IF NOT EXISTS post_return_1y_pct NUMERIC(7,2);
+    """)
+
+    # 2) 기존 데이터 백필 — current_price → entry_price
+    cur.execute("""
+        UPDATE investment_proposals
+        SET entry_price = current_price
+        WHERE entry_price IS NULL AND current_price IS NOT NULL;
+    """)
+
+    # 3) 가격 스냅샷 테이블
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS proposal_price_snapshots (
+            id SERIAL PRIMARY KEY,
+            proposal_id INT NOT NULL REFERENCES investment_proposals(id) ON DELETE CASCADE,
+            snapshot_date DATE NOT NULL,
+            price NUMERIC(15,2) NOT NULL,
+            price_source VARCHAR(30),
+            created_at TIMESTAMP DEFAULT NOW(),
+            UNIQUE(proposal_id, snapshot_date)
+        );
+    """)
+
+    # 4) 인덱스
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_pps_proposal_date
+            ON proposal_price_snapshots(proposal_id, snapshot_date DESC);
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_proposals_entry_price
+            ON investment_proposals(entry_price)
+            WHERE entry_price IS NOT NULL;
+    """)
+
+    cur.execute("""
+        INSERT INTO schema_version (version) VALUES (19)
+        ON CONFLICT (version) DO NOTHING;
+    """)
+
+    print("[DB] v19 마이그레이션 완료 — 추천 후 실제 수익률 추적 (entry_price, post_return, 스냅샷)")
+
+
 def init_db(cfg: DatabaseConfig) -> None:
     """PostgreSQL 설치 확인 → 데이터베이스 생성 → 스키마 마이그레이션"""
     from shared.pg_setup import ensure_postgresql
@@ -787,6 +844,9 @@ def init_db(cfg: DatabaseConfig) -> None:
 
             if current < 18:
                 _migrate_to_v18(cur)
+
+            if current < 19:
+                _migrate_to_v19(cur)
 
         conn.commit()
         print("[DB] 테이블 초기화 완료")
@@ -961,8 +1021,9 @@ def save_analysis(cfg: DatabaseConfig, analysis_date: str, result: dict) -> int:
                             upside_pct, sentiment_score, quant_score,
                             sector, currency, vendor_tier, supply_chain_position,
                             discovery_type, price_momentum_check, price_source,
-                            return_1m_pct, return_3m_pct, return_6m_pct, return_1y_pct)
-                           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                            return_1m_pct, return_3m_pct, return_6m_pct, return_1y_pct,
+                            entry_price)
+                           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                            RETURNING id""",
                         (theme_id, proposal.get("asset_type"),
                          proposal.get("asset_name"), proposal.get("ticker"),
@@ -979,7 +1040,8 @@ def save_analysis(cfg: DatabaseConfig, analysis_date: str, result: dict) -> int:
                          proposal.get("discovery_type"), proposal.get("price_momentum_check"),
                          proposal.get("price_source"),
                          proposal.get("return_1m_pct"), proposal.get("return_3m_pct"),
-                         proposal.get("return_6m_pct"), proposal.get("return_1y_pct"))
+                         proposal.get("return_6m_pct"), proposal.get("return_1y_pct"),
+                         proposal.get("current_price"))
                     )
                     proposal_id = cur.fetchone()[0]
 
@@ -1232,7 +1294,7 @@ def _generate_notifications(cur, session_id: int, themes: list) -> None:
     if not tickers and not theme_keys:
         return
 
-    # 매칭 구독 조회
+    # 매칭 구독 조회 — 일반 커서이므로 컬럼 인덱스로 접근
     cur.execute(
         "SELECT id, user_id, sub_type, sub_key, label FROM user_subscriptions"
     )
@@ -1240,22 +1302,24 @@ def _generate_notifications(cur, session_id: int, themes: list) -> None:
 
     noti_count = 0
     for sub in subs:
+        # (id, user_id, sub_type, sub_key, label)
+        sub_id, user_id, sub_type, sub_key, label = sub
         title = None
         link = None
-        if sub["sub_type"] == "ticker" and sub["sub_key"].upper() in tickers:
-            label = sub["label"] or sub["sub_key"]
-            title = f"구독 종목 '{label}'이(가) 분석에 등장했습니다"
-            link = f"/pages/proposals/history/{sub['sub_key']}"
-        elif sub["sub_type"] == "theme" and sub["sub_key"] in theme_keys:
-            label = sub["label"] or theme_keys[sub["sub_key"]]
-            title = f"구독 테마 '{label}'이(가) 분석에 등장했습니다"
-            link = f"/pages/themes/history/{sub['sub_key']}"
+        if sub_type == "ticker" and sub_key.upper() in tickers:
+            display_label = label or sub_key
+            title = f"구독 종목 '{display_label}'이(가) 분석에 등장했습니다"
+            link = f"/pages/proposals/history/{sub_key}"
+        elif sub_type == "theme" and sub_key in theme_keys:
+            display_label = label or theme_keys[sub_key]
+            title = f"구독 테마 '{display_label}'이(가) 분석에 등장했습니다"
+            link = f"/pages/themes/history/{sub_key}"
 
         if title:
             cur.execute(
                 "INSERT INTO user_notifications (user_id, sub_id, session_id, title, link) "
                 "VALUES (%s, %s, %s, %s, %s)",
-                (sub["user_id"], sub["id"], session_id, title, link),
+                (user_id, sub_id, session_id, title, link),
             )
             noti_count += 1
 

@@ -129,12 +129,78 @@
 
     {% include "partials/_bottom_tabbar.html" %}
     {% include "partials/_upgrade_modal.html" %}
+    {% include "partials/_common_modal.html" %}
 
     <script>
     // 유저 드롭다운 외부 클릭 시 닫기
     document.addEventListener('click', function(e) {
         var dd = document.querySelector('.user-dropdown');
         if (dd && !dd.contains(e.target)) dd.classList.remove('open');
+    });
+
+    // ── 범용 모달 (alert/confirm 대체) ──
+    var _commonModalCallback = null;
+
+    function closeCommonModal() {
+        var modal = document.getElementById('common-modal');
+        if (!modal) return;
+        modal.classList.remove('open');
+        modal.setAttribute('aria-hidden', 'true');
+        _commonModalCallback = null;
+    }
+
+    /**
+     * alert() 대체. showModal('메시지') 또는 showModal('메시지', { icon, title })
+     */
+    function showModal(message, opts) {
+        opts = opts || {};
+        var modal = document.getElementById('common-modal');
+        if (!modal) { alert(message); return; }
+        document.getElementById('common-modal-icon').textContent = opts.icon || '!';
+        document.getElementById('common-modal-title').textContent = opts.title || '알림';
+        document.getElementById('common-modal-body').textContent = message;
+        document.getElementById('common-modal-actions').innerHTML =
+            '<button type="button" class="btn btn-primary" onclick="closeCommonModal()">확인</button>';
+        modal.classList.add('open');
+        modal.setAttribute('aria-hidden', 'false');
+    }
+
+    /**
+     * confirm() 대체. showConfirm('질문', callback) 또는 showConfirm('질문', callback, opts)
+     * opts: { icon, title, confirmText, cancelText, confirmClass }
+     */
+    function showConfirm(message, callback, opts) {
+        opts = opts || {};
+        var modal = document.getElementById('common-modal');
+        if (!modal) { if (confirm(message)) callback(); return; }
+        _commonModalCallback = callback;
+        document.getElementById('common-modal-icon').textContent = opts.icon || '!';
+        document.getElementById('common-modal-title').textContent = opts.title || '확인';
+        document.getElementById('common-modal-body').innerHTML = message.replace(/\n/g, '<br>');
+        var confirmCls = opts.confirmClass || 'btn-primary';
+        document.getElementById('common-modal-actions').innerHTML =
+            '<button type="button" class="btn" onclick="closeCommonModal()">' + (opts.cancelText || '취소') + '</button>' +
+            '<button type="button" class="btn ' + confirmCls + '" onclick="_confirmAndClose()">' + (opts.confirmText || '확인') + '</button>';
+        modal.classList.add('open');
+        modal.setAttribute('aria-hidden', 'false');
+    }
+
+    function _confirmAndClose() {
+        var cb = _commonModalCallback;
+        closeCommonModal();
+        if (cb) cb();
+    }
+
+    // 범용 모달 Esc/배경 클릭으로 닫기
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            var cm = document.getElementById('common-modal');
+            if (cm && cm.classList.contains('open')) { closeCommonModal(); return; }
+        }
+    });
+    document.addEventListener('click', function(e) {
+        var cm = document.getElementById('common-modal');
+        if (cm && e.target === cm) closeCommonModal();
     });
 
     // 업그레이드 모달 전역 핸들러

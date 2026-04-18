@@ -293,6 +293,7 @@ async def stage1a_discover_themes(
     news_text: str, date: str, max_turns: int = 6,
     existing_keys: list[dict] | None = None,
     model: str | None = None,
+    timeout_sec: int = 600,
 ) -> dict:
     """Stage 1-A: 뉴스 기반 이슈 분석 + 테마 발굴 (투자 제안 제외)"""
     keys_section = _format_existing_theme_keys(existing_keys or [])
@@ -300,7 +301,7 @@ async def stage1a_discover_themes(
         news_text=news_text, date=date,
         existing_theme_keys_section=keys_section,
     )
-    response = await _query_claude(prompt, STAGE1A_SYSTEM, max_turns, model=model)
+    response = await _query_claude(prompt, STAGE1A_SYSTEM, max_turns, model=model, timeout_sec=timeout_sec)
     return _parse_json_response(response)
 
 
@@ -308,6 +309,7 @@ async def stage1b_generate_proposals(
     theme: dict, date: str, max_turns: int = 6,
     recent_recs: list[dict] | None = None,
     model: str | None = None,
+    timeout_sec: int = 600,
 ) -> list[dict]:
     """Stage 1-B: 개별 테마에 대한 투자 제안 생성 (10~15건)"""
     recent_section = _format_recent_recommendations(recent_recs or [])
@@ -320,7 +322,7 @@ async def stage1b_generate_proposals(
         confidence_score=theme.get("confidence_score", ""),
         recent_recommendations_section=recent_section,
     )
-    response = await _query_claude(prompt, STAGE1B_SYSTEM, max_turns, model=model)
+    response = await _query_claude(prompt, STAGE1B_SYSTEM, max_turns, model=model, timeout_sec=timeout_sec)
     result = _parse_json_response(response)
     return result.get("proposals", [])
 
@@ -332,6 +334,7 @@ async def stage2_analyze_stock(
     theme_context: str, date: str, max_turns: int = 6,
     stock_data_text: str = "",
     model: str | None = None,
+    timeout_sec: int = 600,
 ) -> dict:
     """Stage 2: 개별 종목 심층분석 (펀더멘털·산업·모멘텀·퀀트·리스크)"""
     # 주가 데이터가 있으면 프롬프트에 삽입
@@ -344,7 +347,7 @@ async def stage2_analyze_stock(
         market=market, theme_context=theme_context, date=date,
         stock_data_section=stock_data_section,
     )
-    response = await _query_claude(prompt, STAGE2_SYSTEM, max_turns, model=model)
+    response = await _query_claude(prompt, STAGE2_SYSTEM, max_turns, model=model, timeout_sec=timeout_sec)
     return _parse_json_response(response)
 
 
@@ -381,11 +384,13 @@ async def run_pipeline(
             log.warning(f"theme_key 조회 실패 (무시): {e}")
 
     # ── Stage 1-A: 이슈 분석 + 테마 발굴 (잘림 시 1회 재시도) ──
-    log.info(f"[Stage 1-A] 이슈 분석 + 테마 발굴 중... (모델: {cfg.model_analysis})")
+    timeout = cfg.query_timeout
+    log.info(f"[Stage 1-A] 이슈 분석 + 테마 발굴 중... (모델: {cfg.model_analysis}, 타임아웃: {timeout}초)")
     result = await stage1a_discover_themes(
         news_text, date, cfg.max_turns,
         existing_keys=existing_keys,
         model=cfg.model_analysis,
+        timeout_sec=timeout,
     )
 
     if result.get("error"):
@@ -400,6 +405,7 @@ async def run_pipeline(
             news_text, date, cfg.max_turns,
             existing_keys=existing_keys,
             model=cfg.model_analysis,
+            timeout_sec=timeout,
         )
         if not retry_result.get("error") and len(retry_result.get("themes", [])) > len(result.get("themes", [])):
             result = retry_result
@@ -422,6 +428,7 @@ async def run_pipeline(
                 proposals = await stage1b_generate_proposals(
                     theme, date, cfg.max_turns, recent_recs,
                     model=cfg.model_analysis,
+                    timeout_sec=timeout,
                 )
                 theme["proposals"] = proposals
                 log.info(f"[Stage 1-B] ({i+1}/{len(themes)}) '{theme_name}' — {len(proposals)}건 제안 완료")
@@ -592,6 +599,7 @@ async def run_pipeline(
                         date=date, max_turns=cfg.max_turns,
                         stock_data_text=sd_text,
                         model=cfg.model_analysis,
+                        timeout_sec=timeout,
                     )
 
                     if stock_result.get("error"):

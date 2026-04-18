@@ -1960,6 +1960,41 @@ tbody tr:hover { background: var(--bg-card-hover); }
     max-width: 200px;
 }
 
+/* ----- 범용 모달 (compact) ----- */
+.common-modal-compact { max-width: 360px; padding: 28px 28px 22px; text-align: left; }
+.cm-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 14px;
+}
+.cm-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    background: rgba(79, 140, 255, 0.18);
+    color: var(--accent);
+    font-weight: 800;
+    font-size: 15px;
+    flex-shrink: 0;
+}
+.cm-title {
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--text);
+}
+.cm-message {
+    font-size: 14px;
+    color: var(--text-muted);
+    line-height: 1.6;
+    margin: 0 0 20px;
+}
+.common-modal-compact .modal-actions { justify-content: flex-end; }
+.common-modal-compact .modal-actions .btn { flex: 0 0 auto; min-width: 80px; }
+
 /* ----- 면책 배너 (footer) ----- */
 .global-disclaimer {
     display: flex;
@@ -2547,4 +2582,221 @@ tbody tr:hover { background: var(--bg-card-hover); }
     .detail-cta-btn { min-height: 44px; }
 }
 
+/* =====================================================================
+   사용자 관리 공용 컴포넌트 (User Admin)
+   ===================================================================== */
 
+/* ----- Role / Status Badges ----- */
+.badge-admin { background: rgba(147,130,255,0.15); color: var(--purple); border-color: rgba(147,130,255,0.25); }
+.badge-moderator { background: rgba(251,191,36,0.15); color: var(--orange); border-color: rgba(251,191,36,0.25); }
+.badge-role-user { background: rgba(79,140,255,0.15); color: var(--accent); border-color: rgba(79,140,255,0.25); }
+.badge-active { background: rgba(52,211,153,0.15); color: var(--green); border-color: rgba(52,211,153,0.25); }
+.badge-inactive { background: rgba(248,113,113,0.15); color: var(--red); border-color: rgba(248,113,113,0.25); }
+
+/* ----- Button Variants ----- */
+.btn-sm { padding: 5px 12px; font-size: 12px; border-radius: 6px; }
+.btn-danger {
+    background: rgba(248,113,113,0.08);
+    border-color: rgba(248,113,113,0.3);
+    color: var(--red);
+}
+.btn-danger:hover {
+    background: rgba(248,113,113,0.18);
+    border-color: rgba(248,113,113,0.5);
+}
+.btn-danger-fill {
+    background: rgba(248,113,113,0.2);
+    border-color: var(--red);
+    color: var(--red);
+    font-weight: 600;
+}
+.btn-danger-fill:hover {
+    background: rgba(248,113,113,0.35);
+}
+
+/* ----- Pagination ----- */
+.pagination { margin-top: 20px; text-align: center; }
+.pagination a, .pagination span {
+    display: inline-block;
+    padding: 8px 14px;
+    margin: 0 2px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 13px;
+    color: var(--text-muted);
+    transition: all 0.15s;
+}
+.pagination a:hover {
+    background: var(--bg-card-hover);
+    color: var(--text);
+    border-color: #3a3e4a;
+}
+.pagination .current {
+    background: rgba(79,140,255,0.15);
+    color: var(--accent);
+    border-color: rgba(79,140,255,0.3);
+    font-weight: 600;
+}
+.pagination .ellipsis {
+    border: none;
+    color: var(--text-muted);
+    padding: 8px 6px;
+}
+
+/* ----- Toast / Result Messages ----- */
+.toast-msg {
+    padding: 12px 16px;
+    border-radius: 8px;
+    margin-bottom: 14px;
+    font-size: 13px;
+    display: none;
+    border: 1px solid transparent;
+}
+.toast-msg.success {
+    background: rgba(52,211,153,0.12);
+    color: var(--green);
+    border-color: rgba(52,211,153,0.25);
+    display: block;
+}
+.toast-msg.error {
+    background: rgba(248,113,113,0.12);
+    color: var(--red);
+    border-color: rgba(248,113,113,0.25);
+    display: block;
+}
+
+/* ----- Confirm Modal (공용) ----- */
+.confirm-modal-body {
+    text-align: center;
+    padding: 8px 0;
+}
+.confirm-modal-body .modal-icon {
+    font-size: 48px;
+    margin-bottom: 12px;
+    display: block;
+}
+.confirm-modal-body .modal-title {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+.confirm-modal-body .modal-desc {
+    font-size: 14px;
+    color: var(--text-muted);
+    margin-bottom: 16px;
+    line-height: 1.6;
+}
+.confirm-modal-body .modal-reason {
+    width: 100%;
+    padding: 10px 14px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 14px;
+    margin-bottom: 16px;
+    resize: none;
+}
+.confirm-modal-body .modal-reason:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+.confirm-modal-body .modal-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+}
+.confirm-modal-body .modal-actions .btn {
+    min-width: 100px;
+}
+
+/* ----- User Admin: 확장 패널 ----- */
+.user-expand-row { display: none; }
+.user-expand-row.open { display: table-row; }
+.user-expand-cell {
+    padding: 0 14px 16px;
+    background: var(--bg-card);
+    border-bottom: 1px solid var(--border);
+}
+.user-expand-inner {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 16px;
+    padding: 16px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+}
+.user-expand-section h4 {
+    font-size: 12px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 10px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+}
+.user-expand-section .field-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    font-size: 13px;
+}
+.user-expand-section .field-label {
+    color: var(--text-muted);
+    min-width: 52px;
+    font-size: 12px;
+}
+.user-expand-section select,
+.user-expand-section input[type="date"] {
+    padding: 6px 10px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 13px;
+}
+.user-expand-section select:focus,
+.user-expand-section input[type="date"]:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+.user-expand-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 8px;
+}
+
+/* ----- User Admin: 모바일 반응형 ----- */
+@media (max-width: 768px) {
+    .user-expand-inner {
+        grid-template-columns: 1fr;
+        gap: 12px;
+        padding: 12px;
+    }
+    /* table-stack-mobile 내부 확장 셀: flex 대신 block */
+    .table-stack-mobile .user-expand-cell {
+        display: block;
+        padding: 0 8px 12px;
+    }
+    .table-stack-mobile .user-expand-cell::before { display: none; }
+    .user-expand-section select,
+    .user-expand-section input[type="date"] {
+        min-height: 44px;
+        width: 100%;
+    }
+    .user-expand-actions .btn {
+        min-height: 44px;
+        flex: 1;
+    }
+    .pagination a, .pagination span {
+        padding: 10px 14px;
+        min-width: 44px;
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+}

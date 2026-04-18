@@ -1,0 +1,18 @@
+{# 범용 alert / confirm 모달 — base.html에서 include #}
+{# 사용법:
+     showModal('결제 연동은 준비 중입니다.')
+     showModal('완료!', { icon: '!', title: '성공' })
+     showConfirm('정말 삭제하시겠습니까?', function() { ... })
+     showConfirm('삭제하시겠습니까?', callback, { icon: '!', confirmText: '삭제', confirmClass: 'btn-danger' })
+#}
+<div id="common-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-hidden="true">
+    <div class="modal-box common-modal-compact">
+        <button type="button" class="modal-close" onclick="closeCommonModal()" aria-label="닫기">&times;</button>
+        <div class="cm-header">
+            <span class="cm-badge" id="common-modal-icon">!</span>
+            <span class="cm-title" id="common-modal-title">알림</span>
+        </div>
+        <p class="cm-message" id="common-modal-body"></p>
+        <div class="modal-actions" id="common-modal-actions"></div>
+    </div>
+</div>

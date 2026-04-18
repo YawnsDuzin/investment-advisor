@@ -15,7 +15,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **AI**: Claude Code SDK (`claude-agent-sdk`) — 멀티스테이지 분석 파이프라인
 - **Backend**: FastAPI + Uvicorn (REST API + HTML 서빙)
 - **Template**: Jinja2 (다크 테마 UI)
-- **Database**: PostgreSQL + psycopg2 (스키마 자동 마이그레이션 v1~v18)
+- **Database**: PostgreSQL + psycopg2 (스키마 자동 마이그레이션 v1~v19)
 - **News**: feedparser + httpx (RSS 수집)
 - **Stock Data**: yfinance (해외 주가/재무 데이터) + pykrx (한국 주식 크로스체크/폴백)
 - **Async**: anyio (async/sync 브릿지)
@@ -28,7 +28,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```
 investment-advisor/
 ├── shared/              ← 공용: config(.env 로드), db(마이그레이션+저장), logger(DB 로그), pg_setup(자동 설치)
-├── analyzer/            ← 배치: main(엔트리) → news_collector(RSS) → stock_data(주가조회) → analyzer(2단계) → prompts
+├── analyzer/            ← 배치: main(엔트리) → news_collector(RSS) → stock_data(주가조회) → analyzer(2단계) → recommender(Top Picks) → price_tracker(수익률추적)
 ├── api/                 ← 웹: main(FastAPI) → routes/(pages, sessions, themes, proposals, chat, admin, auth, user_admin, watchlist, track_record)
 │   ├── auth/            ← JWT 인증 모듈: dependencies, jwt_handler, password, models
 │   ├── chat_engine.py   ← Claude SDK 기반 테마 채팅 엔진
@@ -81,11 +81,18 @@ sudo systemctl enable --now investment-advisor-analyzer.timer    # 매일 03:00 
 | `DB_NAME` | `investment_advisor` | 데이터베이스명 |
 | `DB_USER` | `postgres` | DB 사용자 |
 | `DB_PASSWORD` | `postgres` | DB 비밀번호 |
-| `MAX_TURNS` | `2` | Claude SDK 최대 턴 수 (Stage 1·2 공통) |
+| `MAX_TURNS` | `1` | Claude SDK 최대 턴 수 (Stage 1·2 공통) |
 | `TOP_THEMES` | `2` | Stage 2 심층분석 대상 상위 테마 수 |
 | `TOP_STOCKS_PER_THEME` | `2` | 각 테마당 심층분석할 종목 수 |
 | `ENABLE_STOCK_ANALYSIS` | `true` | Stage 2(종목 심층분석) 활성화 스위치 (true/false) |
 | `ENABLE_STOCK_DATA` | `true` | yfinance 실시간 주가 데이터 조회 스위치 (true/false) |
+| `MODEL_ANALYSIS` | `claude-sonnet-4-6` | 분석(Stage 1·2)에 사용할 모델 |
+| `MODEL_TRANSLATE` | `claude-haiku-4-5-20251001` | 번역에 사용할 모델 (Haiku로 비용 최소화) |
+| `QUERY_TIMEOUT` | `900` | Claude SDK 단일 쿼리 타임아웃 (초). 서버 부하 시 증가 필요 |
+| `MIN_NEW_NEWS` | `5` | 이전 세션 대비 신규 뉴스가 이 수 미만이면 분석 스킵 |
+| `MAX_ARTICLES_PER_FEED` | `5` | RSS 피드당 최대 수집 기사 수 |
+| `KRX_ID` | (없음) | data.krx.co.kr 로그인 ID (pykrx 1.2.7+ 필요) |
+| `KRX_PW` | (없음) | data.krx.co.kr 로그인 비밀번호 |
 | `AUTH_ENABLED` | `false` | 인증 시스템 활성화 스위치 (false면 기존 동작 유지) |
 | `JWT_SECRET_KEY` | `INSECURE_DEFAULT_...` | JWT 서명 키 (프로덕션 반드시 변경) |
 | `JWT_ALGORITHM` | `HS256` | JWT 알고리즘 |
@@ -106,8 +113,8 @@ sudo systemctl enable --now investment-advisor-analyzer.timer    # 매일 03:00 
 ### 데이터 흐름
 
 ```
-[RSS 뉴스 수집] → [Stage 1: 이슈/테마/시나리오/매크로/제안] → [주가 데이터 조회] → [Stage 2: 핵심 종목 심층분석] → [DB 저장 + tracking 갱신]
-                    claude_agent_sdk.query()                    yfinance             claude_agent_sdk.query()
+[RSS 뉴스 수집] → [번역] → [Stage 1: 이슈/테마/시나리오/매크로/제안] → [주가 데이터 조회] → [Stage 2: 핵심 종목 심층분석] → [DB 저장 + tracking 갱신] → [Stage 3: Top Picks] → [Stage 4: 가격추적]
+                  Haiku     claude_agent_sdk.query()              yfinance             claude_agent_sdk.query()                                                  recommender         price_tracker
 ```
 
 - **Stage 1**: 뉴스 → 8~15개 이슈(시계별 영향) → 4~7개 테마(시나리오·매크로) → 테마당 10~15개 투자 제안
@@ -127,6 +134,8 @@ sudo systemctl enable --now investment-advisor-analyzer.timer    # 매일 03:00 
 - `prompts.py` — 스테이지별 시스템 프롬프트 및 JSON 출력 템플릿
 - `news_collector.py` — `feedparser`로 RSS 피드 수집, 카테고리별 마크다운 텍스트 생성
 - `stock_data.py` — `yfinance` + `pykrx`(한국 주식 크로스체크/폴백)로 주가/재무 데이터 조회, 기간별 수익률(1m/3m/6m/1y) 모멘텀 체크(`current_price` 포함 반환), 프롬프트 삽입용 텍스트 포맷팅
+- `recommender.py` — Stage 3 Top Picks 추천 엔진. 룰 기반 스코어링(`compute_rule_based_picks()`) + 선택적 AI 재정렬(`ai_rerank_picks()`). `RecommendationConfig`로 가중치·다양성 제약 조절
+- `price_tracker.py` — Stage 4 추천 후 실제 수익률 추적. `entry_price` 확정 → 주기적 가격 스냅샷 → `post_return_*_pct` 갱신 (v19)
 
 ### api/ — FastAPI 웹서비스 (상시 기동)
 - `routes/sessions.py` — 세션 목록/상세/날짜별 조회. `_serialize_row()` 공유 유틸.
@@ -144,14 +153,14 @@ sudo systemctl enable --now investment-advisor-analyzer.timer    # 매일 03:00 
 - `templates/` — 다크 테마 UI. base(우측 상단 유저 드롭다운 + 알림 배지 + 401 자동 갱신 인터셉터), landing, pricing, dashboard, sessions, session_detail, themes, proposals, theme_history, ticker_history, track_record, watchlist, notifications, profile, chat_list, chat_room, admin, admin_audit_logs, login, register, user_admin.
 
 ### shared/ — 공용 모듈
-- `config.py` — `.env` 파일 자동 로드, `DatabaseConfig`(환경변수 기반), `NewsConfig`, `AnalyzerConfig`, `AuthConfig`, `AppConfig`
-- `db.py` — `schema_version` 기반 자동 마이그레이션(v1~v18), `save_analysis()` + `_validate_proposal()` 검증 + tracking 갱신 + 구독 알림 생성(`_generate_notifications()`), `get_recent_recommendations()`, `get_connection()`
+- `config.py` — `.env` 파일 자동 로드, `DatabaseConfig`, `NewsConfig`, `AnalyzerConfig`, `RecommendationConfig`(Top Picks 가중치·다양성), `AuthConfig`, `AppConfig`
+- `db.py` — `schema_version` 기반 자동 마이그레이션(v1~v19), `save_analysis()` + `_validate_proposal()` 검증 + tracking 갱신 + 구독 알림 생성(`_generate_notifications()`), `get_recent_recommendations()`, `get_connection()`
 - `logger.py` — 범용 DB 로그 시스템. `init_logger(db_cfg)` → `start_run()` / `finish_run()`으로 실행 단위 추적. `get_logger(source)`로 콘솔+DB 동시 로깅. `app_runs`/`app_logs` 테이블 사용 (v18)
 - `pg_setup.py` — PostgreSQL 설치 감지 및 자동 설치 (Linux apt, Windows winget/choco)
 
 ## DB Schema
 
-`schema_version` 테이블로 버전 관리. `init_db()` 호출 시 자동 마이그레이션 (현재 v18).
+`schema_version` 테이블로 버전 관리. `init_db()` 호출 시 자동 마이그레이션 (현재 v19).
 
 **테이블 관계 (CASCADE):**
 ```
@@ -194,6 +203,7 @@ app_runs → app_logs (v18, 범용 실행 로그)
 - `users.tier`(v16) — 구독 티어 (`free`/`pro`/`premium`), `tier_expires_at`로 만료 관리.
 - `admin_audit_logs`(v17) — 관리자 감사 로그. `action`: tier_change/role_change/status_change/password_reset/user_delete. actor/target 이메일 denormalize로 계정 삭제 후에도 이력 유지.
 - `app_runs`/`app_logs`(v18) — 범용 실행 로그. `run_type`별 실행 이력 + 상세 로그. `shared/logger.py`가 사용.
+- `investment_proposals.entry_price`/`post_return_*_pct`(v19) — 추천 후 실제 수익률 추적. `entry_price` 확정 → 주기적 가격 스냅샷(`post_return_snapshot` JSONB) → 1m/3m/6m/1y 실제 수익률 갱신. `price_tracker.py`가 사용.
 
 ## Key Conventions
 
