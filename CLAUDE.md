@@ -15,7 +15,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **AI**: Claude Code SDK (`claude-agent-sdk`) — 멀티스테이지 분석 파이프라인
 - **Backend**: FastAPI + Uvicorn (REST API + HTML 서빙)
 - **Template**: Jinja2 (다크 테마 UI)
-- **Database**: PostgreSQL + psycopg2 (스키마 자동 마이그레이션)
+- **Database**: PostgreSQL + psycopg2 (스키마 자동 마이그레이션 v1~v18)
 - **News**: feedparser + httpx (RSS 수집)
 - **Stock Data**: yfinance (해외 주가/재무 데이터) + pykrx (한국 주식 크로스체크/폴백)
 - **Async**: anyio (async/sync 브릿지)
@@ -27,9 +27,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```
 investment-advisor/
-├── shared/              ← 공용: config(.env 로드), db(마이그레이션+저장), pg_setup(자동 설치)
+├── shared/              ← 공용: config(.env 로드), db(마이그레이션+저장), logger(DB 로그), pg_setup(자동 설치)
 ├── analyzer/            ← 배치: main(엔트리) → news_collector(RSS) → stock_data(주가조회) → analyzer(2단계) → prompts
-├── api/                 ← 웹: main(FastAPI) → routes/(pages, sessions, themes, proposals, chat, admin, auth, user_admin, watchlist)
+├── api/                 ← 웹: main(FastAPI) → routes/(pages, sessions, themes, proposals, chat, admin, auth, user_admin, watchlist, track_record)
 │   ├── auth/            ← JWT 인증 모듈: dependencies, jwt_handler, password, models
 │   ├── chat_engine.py   ← Claude SDK 기반 테마 채팅 엔진
 │   ├── templates/       ← Jinja2 HTML (다크 테마 + 우측 상단 드롭다운 메뉴)
@@ -132,6 +132,7 @@ sudo systemctl enable --now investment-advisor-analyzer.timer    # 매일 03:00 
 - `routes/sessions.py` — 세션 목록/상세/날짜별 조회. `_serialize_row()` 공유 유틸.
 - `routes/themes.py` — 테마 목록 (horizon, confidence, type, validity 필터), 키워드 검색. 시나리오·매크로·제안 중첩 반환.
 - `routes/proposals.py` — 제안 목록 (action, asset_type, conviction, sector 필터), 티커별 이력, 최신 포트폴리오 요약, `/{proposal_id}/stock-analysis` 엔드포인트.
+- `routes/track_record.py` — 트랙레코드 API (`/api/track-record`). 과거 추천 성과 요약.
 - `routes/chat.py` — 테마 채팅 세션 CRUD + 메시지 전송. Claude SDK로 테마 맥락 기반 대화. 인증 필수(`get_current_user_required`).
 - `routes/admin.py` — 관리자 페이지. 분석 실행/중지, SSE 실시간 로그 스트리밍, 뉴스 한글 번역. Admin 역할 필수(`require_role("admin")`).
 - `routes/auth.py` — 회원가입/로그인/로그아웃/토큰 갱신/비밀번호 변경. Form 기반 POST + httpOnly 쿠키. AJAX 요청 시 JSON 응답 지원 (`X-Requested-With` 헤더 감지).
@@ -140,16 +141,17 @@ sudo systemctl enable --now investment-advisor-analyzer.timer    # 매일 03:00 
 - `routes/pages.py` — Jinja2 HTML 페이지 라우트. 대시보드, tracking 뱃지, 테마·종목 히스토리, 워치리스트, 알림, 프로필, 채팅, 관리자 페이지. `_base_ctx()`로 인증 컨텍스트 + 알림 수 주입. 커스텀 Jinja2 필터(`nl_numbered`, `fmt_price`) 등록.
 - `auth/` — JWT 인증 모듈. `dependencies.py`(Depends 팩토리), `jwt_handler.py`(토큰 발급/검증), `password.py`(bcrypt), `models.py`(Pydantic 모델).
 - `chat_engine.py` — Claude Agent SDK 기반 테마 채팅 엔진. 테마 컨텍스트를 시스템 프롬프트에 주입하여 대화.
-- `templates/` — 다크 테마 UI. base(우측 상단 유저 드롭다운 + 알림 배지 + 401 자동 갱신 인터셉터), dashboard, sessions, session_detail, themes, proposals, theme_history, ticker_history, watchlist, notifications, profile, chat_list, chat_room, admin, login, register, user_admin.
+- `templates/` — 다크 테마 UI. base(우측 상단 유저 드롭다운 + 알림 배지 + 401 자동 갱신 인터셉터), landing, pricing, dashboard, sessions, session_detail, themes, proposals, theme_history, ticker_history, track_record, watchlist, notifications, profile, chat_list, chat_room, admin, admin_audit_logs, login, register, user_admin.
 
 ### shared/ — 공용 모듈
 - `config.py` — `.env` 파일 자동 로드, `DatabaseConfig`(환경변수 기반), `NewsConfig`, `AnalyzerConfig`, `AuthConfig`, `AppConfig`
-- `db.py` — `schema_version` 기반 자동 마이그레이션(v1~v12), `save_analysis()` + `_validate_proposal()` 검증 + tracking 갱신 + 구독 알림 생성(`_generate_notifications()`), `get_recent_recommendations()`, `get_connection()`
+- `db.py` — `schema_version` 기반 자동 마이그레이션(v1~v18), `save_analysis()` + `_validate_proposal()` 검증 + tracking 갱신 + 구독 알림 생성(`_generate_notifications()`), `get_recent_recommendations()`, `get_connection()`
+- `logger.py` — 범용 DB 로그 시스템. `init_logger(db_cfg)` → `start_run()` / `finish_run()`으로 실행 단위 추적. `get_logger(source)`로 콘솔+DB 동시 로깅. `app_runs`/`app_logs` 테이블 사용 (v18)
 - `pg_setup.py` — PostgreSQL 설치 감지 및 자동 설치 (Linux apt, Windows winget/choco)
 
 ## DB Schema
 
-`schema_version` 테이블로 버전 관리. `init_db()` 호출 시 자동 마이그레이션.
+`schema_version` 테이블로 버전 관리. `init_db()` 호출 시 자동 마이그레이션 (현재 v18).
 
 **테이블 관계 (CASCADE):**
 ```
@@ -159,6 +161,7 @@ analysis_sessions → global_issues
                                       → investment_proposals → stock_analyses
                   → news_articles (v7, 뉴스 원문 저장, v8에서 title_ko 한글 번역 추가)
                   → user_notifications (v12, 구독 알림 이력)
+                  → daily_top_picks (v15, 일별 Top Picks 순위)
 
 users → refresh_tokens (v11, CASCADE)
      → theme_chat_sessions (v11, user_id FK, SET NULL)
@@ -166,11 +169,13 @@ users → refresh_tokens (v11, CASCADE)
      → user_subscriptions (v12, 테마/종목 알림 구독)
      → user_notifications (v12, 알림 이력)
      → user_proposal_memos (v12, 제안 메모)
+     → admin_audit_logs (v17, actor/target SET NULL, 이메일 denormalize)
 
 theme_chat_sessions → theme_chat_messages (v6, 테마 기반 채팅)
 
 theme_tracking (독립, UPSERT로 갱신)
 proposal_tracking (독립, UPSERT로 갱신)
+app_runs → app_logs (v18, 범용 실행 로그)
 ```
 
 - `analysis_sessions.analysis_date`는 UNIQUE — 하루 1세션. 같은 날짜 재실행 시 DELETE 후 재생성.
@@ -184,6 +189,11 @@ proposal_tracking (독립, UPSERT로 갱신)
 - `user_subscriptions`는 `(user_id, sub_type, sub_key)` UNIQUE — `sub_type`은 `'ticker'` 또는 `'theme'`.
 - `user_notifications`는 분석 저장(`save_analysis()`) 시 구독 매칭으로 자동 생성. `is_read` 인덱스로 읽지 않은 알림 빠른 조회.
 - `user_proposal_memos`는 `(user_id, proposal_id)` UNIQUE — UPSERT로 저장/수정.
+- `investment_themes.theme_key`(v13) — AI 생성 영문 키. 테마 히스토리 연결에 사용.
+- `daily_top_picks`는 `(analysis_date, rank)` UNIQUE — 룰 기반 스코어(`score_rule`) + AI 재정렬(`score_final`) + 근거/리스크 텍스트. v15 추가.
+- `users.tier`(v16) — 구독 티어 (`free`/`pro`/`premium`), `tier_expires_at`로 만료 관리.
+- `admin_audit_logs`(v17) — 관리자 감사 로그. `action`: tier_change/role_change/status_change/password_reset/user_delete. actor/target 이메일 denormalize로 계정 삭제 후에도 이력 유지.
+- `app_runs`/`app_logs`(v18) — 범용 실행 로그. `run_type`별 실행 이력 + 상세 로그. `shared/logger.py`가 사용.
 
 ## Key Conventions
 

@@ -858,13 +858,15 @@ def profile_page(request: Request, user: Optional[UserInDB] = Depends(get_curren
 
 @router.get("/pages/chat")
 def chat_list_page(request: Request, theme_id: int | None = Query(default=None), user: Optional[UserInDB] = Depends(get_current_user), auth_cfg: AuthConfig = Depends(_get_auth_cfg)):
-    """채팅 세션 목록 — Moderator 이상, 본인 세션만 (Admin은 전체)"""
+    """채팅 세션 목록 — 로그인 필수, Pro 이상 티어 (admin/moderator는 무조건 허용)"""
     if auth_cfg.enabled:
         if user is None:
             return RedirectResponse("/auth/login?next=/pages/chat", status_code=302)
         if user.role not in ("admin", "moderator"):
-            from fastapi import HTTPException
-            raise HTTPException(status_code=403, detail="채팅 기능은 Moderator 이상 권한이 필요합니다")
+            daily_limit = get_chat_daily_limit(user.effective_tier())
+            if daily_limit is not None and daily_limit <= 0:
+                from fastapi import HTTPException
+                raise HTTPException(status_code=402, detail="AI 채팅은 Pro 이상 플랜에서 이용 가능합니다.")
     ctx = _base_ctx(request, "chat", user, auth_cfg)
     conn = get_connection(_get_cfg())
     try:
@@ -917,13 +919,15 @@ def chat_list_page(request: Request, theme_id: int | None = Query(default=None),
 
 @router.get("/pages/chat/new/{theme_id}")
 def chat_new_redirect(request: Request, theme_id: int, user: Optional[UserInDB] = Depends(get_current_user), auth_cfg: AuthConfig = Depends(_get_auth_cfg)):
-    """새 채팅 세션 생성 → 채팅방으로 리다이렉트 (Moderator 이상)"""
+    """새 채팅 세션 생성 → 채팅방으로 리다이렉트 (Pro 이상 티어)"""
     if auth_cfg.enabled:
         if user is None:
             return RedirectResponse(f"/auth/login?next=/pages/chat/new/{theme_id}", status_code=302)
         if user.role not in ("admin", "moderator"):
-            from fastapi import HTTPException
-            raise HTTPException(status_code=403, detail="채팅 기능은 Moderator 이상 권한이 필요합니다")
+            daily_limit = get_chat_daily_limit(user.effective_tier())
+            if daily_limit is not None and daily_limit <= 0:
+                from fastapi import HTTPException
+                raise HTTPException(status_code=402, detail="AI 채팅은 Pro 이상 플랜에서 이용 가능합니다.")
     cfg = _get_cfg()
     conn = get_connection(cfg)
     try:
@@ -950,13 +954,15 @@ def chat_new_redirect(request: Request, theme_id: int, user: Optional[UserInDB] 
 
 @router.get("/pages/chat/{chat_session_id}")
 def chat_room_page(request: Request, chat_session_id: int, user: Optional[UserInDB] = Depends(get_current_user), auth_cfg: AuthConfig = Depends(_get_auth_cfg)):
-    """채팅 대화 화면 — Moderator 이상, 본인 세션만 (Admin은 전체)"""
+    """채팅 대화 화면 — 로그인 필수, Pro 이상 티어, 본인 세션만 (Admin은 전체)"""
     if auth_cfg.enabled:
         if user is None:
             return RedirectResponse(f"/auth/login?next=/pages/chat/{chat_session_id}", status_code=302)
         if user.role not in ("admin", "moderator"):
-            from fastapi import HTTPException
-            raise HTTPException(status_code=403, detail="채팅 기능은 Moderator 이상 권한이 필요합니다")
+            daily_limit = get_chat_daily_limit(user.effective_tier())
+            if daily_limit is not None and daily_limit <= 0:
+                from fastapi import HTTPException
+                raise HTTPException(status_code=402, detail="AI 채팅은 Pro 이상 플랜에서 이용 가능합니다.")
     conn = get_connection(_get_cfg())
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:

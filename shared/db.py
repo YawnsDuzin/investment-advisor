@@ -5,7 +5,7 @@ from psycopg2.extras import execute_values, RealDictCursor
 from shared.config import DatabaseConfig
 
 # ── 스키마 버전 관리 ──────────────────────────────
-SCHEMA_VERSION = 17  # v1~v5: 분석 테이블, v6: 테마 채팅, v7: 뉴스 기사, v8: 뉴스 한글 번역, v9: 요약 한글 번역, v10: price_source, v11: JWT 인증, v12: 개인화(워치리스트/구독/알림/메모), v13: AI theme_key, v14: 기간별 수익률, v15: 일별 Top Picks, v16: 구독 티어(users.tier), v17: 관리자 감사 로그(admin_audit_logs)
+SCHEMA_VERSION = 18  # v1~v17 + v18: 범용 로그(app_runs/app_logs)
 
 
 def _ensure_database(cfg: DatabaseConfig) -> None:
@@ -663,6 +663,65 @@ def _migrate_to_v17(cur) -> None:
     print("[DB] v17 마이그레이션 완료 — admin_audit_logs 테이블 생성")
 
 
+def _migrate_to_v18(cur) -> None:
+    """v18: 범용 로그 시스템 — app_runs(실행 이력) + app_logs(상세 로그)
+
+    analyzer, api, 관리 작업 등 모든 실행의 로그를 DB에 저장하여
+    웹 UI에서 조회하고 문제를 진단할 수 있다.
+    """
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS app_runs (
+            id SERIAL PRIMARY KEY,
+            run_type VARCHAR(50) NOT NULL,
+            status VARCHAR(20) NOT NULL DEFAULT 'running',
+            started_at TIMESTAMP DEFAULT NOW(),
+            finished_at TIMESTAMP,
+            duration_sec NUMERIC(10,2),
+            summary TEXT,
+            error_message TEXT,
+            meta JSONB,
+            session_id INT REFERENCES analysis_sessions(id) ON DELETE SET NULL
+        );
+    """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS app_logs (
+            id SERIAL PRIMARY KEY,
+            run_id INT REFERENCES app_runs(id) ON DELETE CASCADE,
+            level VARCHAR(10) NOT NULL DEFAULT 'INFO',
+            source VARCHAR(100),
+            message TEXT NOT NULL,
+            detail TEXT,
+            created_at TIMESTAMP DEFAULT NOW()
+        );
+    """)
+
+    # 인덱스
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_app_runs_type_started
+            ON app_runs(run_type, started_at DESC);
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_app_runs_status
+            ON app_runs(status);
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_app_logs_run_id
+            ON app_logs(run_id, created_at);
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_app_logs_level
+            ON app_logs(level);
+    """)
+
+    cur.execute("""
+        INSERT INTO schema_version (version) VALUES (18)
+        ON CONFLICT (version) DO NOTHING;
+    """)
+
+    print("[DB] v18 마이그레이션 완료 — app_runs/app_logs 테이블 생성")
+
+
 def init_db(cfg: DatabaseConfig) -> None:
     """PostgreSQL 설치 확인 → 데이터베이스 생성 → 스키마 마이그레이션"""
     from shared.pg_setup import ensure_postgresql
@@ -725,6 +784,9 @@ def init_db(cfg: DatabaseConfig) -> None:
 
             if current < 17:
                 _migrate_to_v17(cur)
+
+            if current < 18:
+                _migrate_to_v18(cur)
 
         conn.commit()
         print("[DB] 테이블 초기화 완료")

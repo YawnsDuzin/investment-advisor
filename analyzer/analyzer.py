@@ -7,10 +7,12 @@ import json
 import asyncio
 import time
 import anyio
+import traceback
 from claude_agent_sdk import (
     query, ClaudeAgentOptions,
     AssistantMessage, TextBlock, ResultMessage, SystemMessage,
 )
+from shared.logger import get_logger
 
 from analyzer.prompts import (
     STAGE1_SYSTEM, STAGE1_PROMPT,
@@ -95,6 +97,12 @@ def _try_fix_truncated_json(json_str: str) -> str | None:
 
 def _parse_json_response(full_response: str) -> dict:
     """Claude 응답에서 JSON 추출 및 파싱 (잘린 JSON 복구 지원)"""
+    log = get_logger("분석")
+
+    if not full_response or not full_response.strip():
+        log.error("빈 응답 수신 — JSON 파싱 불가")
+        return {"error": "빈 응답"}
+
     json_str = full_response.strip()
     if "```json" in json_str:
         json_str = json_str.split("```json")[1].split("```")[0].strip()
@@ -106,8 +114,8 @@ def _parse_json_response(full_response: str) -> dict:
         result["_truncated"] = False
         return result
     except json.JSONDecodeError as e:
-        print(f"[분석] JSON 파싱 실패: {e}")
-        print(f"[분석] 잘린 JSON 복구 시도 중...")
+        log.warning(f"JSON 파싱 실패: {e}")
+        log.info("잘린 JSON 복구 시도 중...")
 
         fixed = _try_fix_truncated_json(json_str)
         if fixed:
@@ -116,13 +124,13 @@ def _parse_json_response(full_response: str) -> dict:
                 themes_count = len(result.get("themes", []))
                 issues_count = len(result.get("issues", []))
                 proposals_count = len(result.get("proposals", []))
-                print(f"[분석] JSON 복구 성공 (이슈 {issues_count}건, 테마 {themes_count}건, 제안 {proposals_count}건)")
+                log.info(f"JSON 복구 성공 (이슈 {issues_count}건, 테마 {themes_count}건, 제안 {proposals_count}건)")
                 result["_truncated"] = True
                 return result
             except json.JSONDecodeError:
                 pass
 
-        print(f"[분석] JSON 복구 실패 — 원본 응답 앞부분:\n{full_response[:500]}")
+        log.error(f"JSON 복구 실패 — 원본 응답 앞부분:\n{full_response[:500]}")
         return {"error": str(e)}
 
 
@@ -130,59 +138,79 @@ async def _query_claude(
     prompt: str, system_prompt: str, max_turns: int,
     model: str | None = None,
     max_retries: int = 2,
+    timeout_sec: int = 600,
 ) -> str:
-    """Claude SDK 쿼리 공통 함수 (재시도 지원)
+    """Claude SDK 쿼리 공통 함수 (재시도 + 타임아웃 지원)
 
     Args:
         model: 사용할 모델 (None이면 기본 모델 사용)
         max_retries: 실패 시 최대 재시도 횟수 (기본 2회)
+        timeout_sec: 단일 쿼리 타임아웃 (기본 600초=10분)
     """
+    log = get_logger("SDK")
     last_error = None
     for attempt in range(1, max_retries + 1):
         full_response = ""
         start_time = time.time()
         msg_count = 0
         retry_label = f" (재시도 {attempt}/{max_retries})" if attempt > 1 else ""
-        print(f"  [SDK] 쿼리 시작{retry_label} (max_turns={max_turns}, model={model or 'default'})")
+        log.info(f"쿼리 시작{retry_label} (max_turns={max_turns}, model={model or 'default'}, timeout={timeout_sec}s)")
 
         try:
-            async for message in query(
-                prompt=prompt,
-                options=ClaudeAgentOptions(
-                    system_prompt=system_prompt,
-                    max_turns=max_turns,
-                    model=model,
-                    # CLI 오버헤드 최소화: 도구 사용 안 함, 프로젝트 설정 무시
-                    tools=[],
-                    permission_mode="plan",
-                    setting_sources=[],
-                ),
-            ):
-                elapsed = time.time() - start_time
-                if isinstance(message, AssistantMessage):
-                    msg_count += 1
-                    chunk_len = sum(len(b.text) for b in message.content if isinstance(b, TextBlock))
-                    full_response += "".join(b.text for b in message.content if isinstance(b, TextBlock))
-                    print(f"  [SDK] 응답 수신 #{msg_count} (+{chunk_len:,}자, 누적 {len(full_response):,}자, {elapsed:.0f}초)")
-                elif isinstance(message, ResultMessage):
-                    print(f"  [SDK] 완료 — 턴 {message.num_turns}회, {elapsed:.0f}초 소요")
-                elif isinstance(message, SystemMessage):
-                    print(f"  [SDK] 시스템: {message.subtype}")
+            async def _run_query():
+                nonlocal full_response, msg_count
+                async for message in query(
+                    prompt=prompt,
+                    options=ClaudeAgentOptions(
+                        system_prompt=system_prompt,
+                        max_turns=max_turns,
+                        model=model,
+                        tools=[],
+                        permission_mode="plan",
+                        setting_sources=[],
+                    ),
+                ):
+                    elapsed = time.time() - start_time
+                    if isinstance(message, AssistantMessage):
+                        msg_count += 1
+                        chunk_len = sum(len(b.text) for b in message.content if isinstance(b, TextBlock))
+                        full_response += "".join(b.text for b in message.content if isinstance(b, TextBlock))
+                        log.info(f"응답 수신 #{msg_count} (+{chunk_len:,}자, 누적 {len(full_response):,}자, {elapsed:.0f}초)")
+                    elif isinstance(message, ResultMessage):
+                        log.info(f"완료 — 턴 {message.num_turns}회, {elapsed:.0f}초 소요")
+                    elif isinstance(message, SystemMessage):
+                        log.info(f"시스템: {message.subtype}")
+
+            await asyncio.wait_for(_run_query(), timeout=timeout_sec)
 
             total = time.time() - start_time
-            print(f"  [SDK] 쿼리 종료 (응답 {len(full_response):,}자, 총 {total:.0f}초)")
+            log.info(f"쿼리 종료 (응답 {len(full_response):,}자, 총 {total:.0f}초)")
             return full_response
+
+        except asyncio.TimeoutError:
+            elapsed = time.time() - start_time
+            last_error = TimeoutError(f"SDK 쿼리 타임아웃 ({timeout_sec}초 초과, {elapsed:.0f}초 경과)")
+            log.error(f"타임아웃 발생 ({elapsed:.0f}초): {timeout_sec}초 초과")
+            if full_response:
+                log.warning(f"타임아웃 전 부분 응답 {len(full_response):,}자 수신됨 — 부분 응답 반환")
+                return full_response
+            if attempt < max_retries:
+                wait = 10 * attempt
+                log.info(f"{wait}초 후 재시도...")
+                await asyncio.sleep(wait)
+            else:
+                log.error("최대 재시도 횟수 초과 — 실패 확정")
 
         except Exception as e:
             elapsed = time.time() - start_time
             last_error = e
-            print(f"  [SDK] 오류 발생 ({elapsed:.0f}초): {e}")
+            log.error(f"오류 발생 ({elapsed:.0f}초): {e}", extra={"detail": traceback.format_exc()})
             if attempt < max_retries:
                 wait = 10 * attempt
-                print(f"  [SDK] {wait}초 후 재시도...")
+                log.info(f"{wait}초 후 재시도...")
                 await asyncio.sleep(wait)
             else:
-                print(f"  [SDK] 최대 재시도 횟수 초과 — 실패 확정")
+                log.error("최대 재시도 횟수 초과 — 실패 확정")
 
     raise last_error
 
@@ -332,6 +360,7 @@ async def run_pipeline(
     Stage 1-B: 테마별 투자 제안 생성 (병렬, 동시 2개 제한)
     Stage 2: 상위 테마의 핵심 종목 심층분석 (병렬, 동시 2개 제한)
     """
+    log = get_logger("파이프라인")
     # SDK 동시 호출 수 제한 — 과도한 병렬 실행 시 CLI 프로세스 충돌 방지
     _sdk_semaphore = asyncio.Semaphore(2)
     # ── 최근 추천 이력 조회 (중복 방지용) ──
@@ -341,18 +370,18 @@ async def run_pipeline(
         try:
             recent_recs = get_recent_recommendations(db_cfg, days=7)
             if recent_recs:
-                print(f"[피드백] 최근 7일 추천 이력 {len(recent_recs)}건 로드 — 중복 방지 적용")
+                log.info(f"최근 7일 추천 이력 {len(recent_recs)}건 로드 — 중복 방지 적용")
         except Exception as e:
-            print(f"[피드백] 추천 이력 조회 실패 (무시): {e}")
+            log.warning(f"추천 이력 조회 실패 (무시): {e}")
         try:
             existing_keys = get_existing_theme_keys(db_cfg)
             if existing_keys:
-                print(f"[피드백] 기존 theme_key {len(existing_keys)}건 로드 — AI 키 재사용 유도")
+                log.info(f"기존 theme_key {len(existing_keys)}건 로드 — AI 키 재사용 유도")
         except Exception as e:
-            print(f"[피드백] theme_key 조회 실패 (무시): {e}")
+            log.warning(f"theme_key 조회 실패 (무시): {e}")
 
     # ── Stage 1-A: 이슈 분석 + 테마 발굴 (잘림 시 1회 재시도) ──
-    print(f"[Stage 1-A] 이슈 분석 + 테마 발굴 중... (모델: {cfg.model_analysis})")
+    log.info(f"[Stage 1-A] 이슈 분석 + 테마 발굴 중... (모델: {cfg.model_analysis})")
     result = await stage1a_discover_themes(
         news_text, date, cfg.max_turns,
         existing_keys=existing_keys,
@@ -360,12 +389,12 @@ async def run_pipeline(
     )
 
     if result.get("error"):
-        print(f"[Stage 1-A] 실패 — {result['error']}")
+        log.error(f"[Stage 1-A] 실패 — {result['error']}")
         return result
 
     # 잘린 응답으로 테마가 너무 적으면 1회 재시도
     if result.get("_truncated") and len(result.get("themes", [])) < 3:
-        print(f"[Stage 1-A] 잘린 응답으로 테마 {len(result.get('themes', []))}건만 복구됨 — 재시도...")
+        log.warning(f"[Stage 1-A] 잘린 응답으로 테마 {len(result.get('themes', []))}건만 복구됨 — 재시도...")
         await asyncio.sleep(5)
         retry_result = await stage1a_discover_themes(
             news_text, date, cfg.max_turns,
@@ -374,30 +403,31 @@ async def run_pipeline(
         )
         if not retry_result.get("error") and len(retry_result.get("themes", [])) > len(result.get("themes", [])):
             result = retry_result
-            print(f"[Stage 1-A] 재시도 성공 — 테마 {len(result.get('themes', []))}건 복구")
+            log.info(f"[Stage 1-A] 재시도 성공 — 테마 {len(result.get('themes', []))}건 복구")
         else:
-            print(f"[Stage 1-A] 재시도 결과 개선 없음 — 기존 결과 사용")
+            log.warning("[Stage 1-A] 재시도 결과 개선 없음 — 기존 결과 사용")
 
     themes = result.get("themes", [])
     issues = result.get("issues", [])
-    print(f"[Stage 1-A] 완료 — 이슈 {len(issues)}건, 테마 {len(themes)}건")
+    log.info(f"[Stage 1-A] 완료 — 이슈 {len(issues)}건, 테마 {len(themes)}건")
 
     # ── Stage 1-B: 테마별 투자 제안 생성 (병렬) ──
-    print(f"[Stage 1-B] 테마별 투자 제안 생성 시작 — {len(themes)}개 테마 (병렬 실행)")
+    log.info(f"[Stage 1-B] 테마별 투자 제안 생성 시작 — {len(themes)}개 테마 (병렬 실행)")
 
     async def _generate_proposals_for_theme(i: int, theme: dict) -> None:
         async with _sdk_semaphore:
             theme_name = theme.get("theme_name", f"테마{i+1}")
-            print(f"[Stage 1-B] ({i+1}/{len(themes)}) '{theme_name}' 제안 생성 중...")
+            log.info(f"[Stage 1-B] ({i+1}/{len(themes)}) '{theme_name}' 제안 생성 중...")
             try:
                 proposals = await stage1b_generate_proposals(
                     theme, date, cfg.max_turns, recent_recs,
                     model=cfg.model_analysis,
                 )
                 theme["proposals"] = proposals
-                print(f"[Stage 1-B] ({i+1}/{len(themes)}) '{theme_name}' — {len(proposals)}건 제안 완료")
+                log.info(f"[Stage 1-B] ({i+1}/{len(themes)}) '{theme_name}' — {len(proposals)}건 제안 완료")
             except Exception as e:
-                print(f"[Stage 1-B] ({i+1}/{len(themes)}) '{theme_name}' 제안 생성 실패: {e}")
+                log.error(f"[Stage 1-B] ({i+1}/{len(themes)}) '{theme_name}' 제안 생성 실패: {e}",
+                          extra={"detail": traceback.format_exc()})
                 theme["proposals"] = []
 
     await asyncio.gather(*[
@@ -406,7 +436,7 @@ async def run_pipeline(
     ])
 
     total_proposals = sum(len(t.get("proposals", [])) for t in themes)
-    print(f"[Stage 1-B] 완료 — 총 {total_proposals}건 제안 생성")
+    log.info(f"[Stage 1-B] 완료 — 총 {total_proposals}건 제안 생성")
 
     # ── KRX 티커 검증/교정 (Stage 1-B 이후, 모멘텀 체크 전) ──
     all_stock_proposals = [
@@ -418,16 +448,16 @@ async def run_pipeline(
         try:
             vresult = validate_krx_tickers(all_stock_proposals)
             if vresult["corrected"]:
-                print(f"[티커 검증] KRX 티커 {vresult['corrected']}건 교정:")
+                log.info(f"[티커 검증] KRX 티커 {vresult['corrected']}건 교정:")
                 for d in vresult["details"]:
                     if "미등록" not in d:
-                        print(f"  → {d}")
+                        log.info(f"  → {d}")
             if vresult["invalid"]:
-                print(f"[티커 검증] KRX 미등록 {vresult['invalid']}건 (확인 필요)")
+                log.warning(f"[티커 검증] KRX 미등록 {vresult['invalid']}건 (확인 필요)")
             if not vresult["corrected"] and not vresult["invalid"]:
-                print(f"[티커 검증] KRX 종목 전체 정상")
+                log.info("[티커 검증] KRX 종목 전체 정상")
         except Exception as e:
-            print(f"[티커 검증] 검증 실패 (무시): {e}")
+            log.warning(f"[티커 검증] 검증 실패 (무시): {e}")
 
     # ── 모멘텀 체크: Stage 1 추천 종목의 기간별 수익률 조회 ──
     if cfg.enable_stock_data:
@@ -438,7 +468,7 @@ async def run_pipeline(
                     all_proposals.append(p)
 
         if all_proposals:
-            print(f"[모멘텀 체크] {len(all_proposals)}종목 기간별 수익률 조회 (1m/3m/6m/1y)...")
+            log.info(f"[모멘텀 체크] {len(all_proposals)}종목 기간별 수익률 조회 (1m/3m/6m/1y)...")
             momentum_map = fetch_momentum_batch([
                 {"ticker": p["ticker"], "market": p.get("market", "")}
                 for p in all_proposals
@@ -454,7 +484,6 @@ async def run_pipeline(
                     if mdata.get("current_price"):
                         p["current_price"] = mdata["current_price"]
                         p["price_source"] = mdata.get("price_source", "yfinance_close")
-                    # 기간별 수익률 저장
                     for key in ("return_1m_pct", "return_3m_pct", "return_6m_pct", "return_1y_pct"):
                         if mdata.get(key) is not None:
                             p[key] = mdata[key]
@@ -462,21 +491,25 @@ async def run_pipeline(
                         run_count += 1
                 else:
                     # 모멘텀 체크 실패 → fetch_stock_data로 현재가만 재시도
-                    sd = fetch_stock_data(ticker, p.get("market", ""))
-                    if sd and sd.get("price"):
-                        p["current_price"] = sd["price"]
-                        p["price_source"] = sd.get("price_source", "yfinance_realtime")
-                        fallback_count += 1
-                    else:
-                        # 완전 실패 → AI 추정치 제거, null이 잘못된 값보다 나음
+                    try:
+                        sd = fetch_stock_data(ticker, p.get("market", ""))
+                        if sd and sd.get("price"):
+                            p["current_price"] = sd["price"]
+                            p["price_source"] = sd.get("price_source", "yfinance_realtime")
+                            fallback_count += 1
+                        else:
+                            p["current_price"] = None
+                            p["price_source"] = None
+                    except Exception as e:
+                        log.warning(f"[모멘텀 체크] {ticker} 개별 재조회 실패: {e}")
                         p["current_price"] = None
                         p["price_source"] = None
 
             if run_count:
-                print(f"[모멘텀 체크] {run_count}종목 급등 감지 (1개월 +20% 이상)")
+                log.info(f"[모멘텀 체크] {run_count}종목 급등 감지 (1개월 +20% 이상)")
             if fallback_count:
-                print(f"[모멘텀 체크] {fallback_count}종목 개별 재조회로 가격 확보")
-            print(f"[모멘텀 체크] 완료 — {len(momentum_map)}/{len(all_proposals)}종목 조회 성공")
+                log.info(f"[모멘텀 체크] {fallback_count}종목 개별 재조회로 가격 확보")
+            log.info(f"[모멘텀 체크] 완료 — {len(momentum_map)}/{len(all_proposals)}종목 조회 성공")
 
     # ── AI 추정 가격 제거: yfinance 미조회 종목의 current_price를 null로 ──
     if not cfg.enable_stock_data:
@@ -488,11 +521,10 @@ async def run_pipeline(
 
     # ── Stage 2: 핵심 종목 심층분석 ──
     if not cfg.enable_stock_analysis:
-        print("[Stage 2] 종목 심층분석 비활성화 — 건너뜀")
+        log.info("[Stage 2] 종목 심층분석 비활성화 — 건너뜀")
         return result
 
     # 상위 테마에서 buy/sell 제안 중 stock 타입 종목 추출 (테마당 top_stocks_per_theme개)
-    # 급등 종목(already_run)보다 미반영 종목(early_signal/undervalued)을 우선 선정
     stock_targets = []
     for theme in themes[:cfg.top_themes]:
         candidates = [
@@ -501,7 +533,6 @@ async def run_pipeline(
                 and p.get("action") in ("buy", "sell")
                 and p.get("ticker"))
         ]
-        # 정렬: already_run 종목은 뒤로, early_signal/undervalued 우선
         priority = {"undervalued": 0, "early_signal": 0, "unknown": 1, "fair_priced": 1, "already_run": 2}
         candidates.sort(key=lambda p: (
             priority.get(p.get("price_momentum_check", "unknown"), 1),
@@ -511,33 +542,34 @@ async def run_pipeline(
             stock_targets.append((proposal, theme.get("theme_name", "")))
 
     if not stock_targets:
-        print("[Stage 2] 심층분석 대상 종목 없음 — 건너뜀")
+        log.info("[Stage 2] 심층분석 대상 종목 없음 — 건너뜀")
         return result
 
     # ── 주가 데이터 일괄 조회 ──
     stock_data_map: dict[str, dict] = {}
     if cfg.enable_stock_data:
-        print(f"[주가 데이터] {len(stock_targets)}종목 실시간 데이터 조회 시작...")
+        log.info(f"[주가 데이터] {len(stock_targets)}종목 실시간 데이터 조회 시작...")
         stock_list = [
             {"ticker": p["ticker"], "market": p.get("market", "")}
             for p, _ in stock_targets
         ]
-        stock_data_map = fetch_multiple_stocks(stock_list)
-        # 모멘텀 체크에서 확보한 기간별 수익률을 주가 데이터에 병합 (Stage 2 프롬프트용)
+        try:
+            stock_data_map = fetch_multiple_stocks(stock_list)
+        except Exception as e:
+            log.error(f"[주가 데이터] 일괄 조회 실패: {e}", extra={"detail": traceback.format_exc()})
+        # 모멘텀 체크에서 확보한 기간별 수익률을 주가 데이터에 병합
         for proposal, _ in stock_targets:
             tk = proposal["ticker"].strip().upper()
             if tk in stock_data_map:
                 for key in ("return_1m_pct", "return_3m_pct", "return_6m_pct", "return_1y_pct"):
                     if proposal.get(key) is not None:
                         stock_data_map[tk][key] = proposal[key]
-        print(f"[주가 데이터] {len(stock_data_map)}/{len(stock_targets)}종목 조회 완료")
+        log.info(f"[주가 데이터] {len(stock_data_map)}/{len(stock_targets)}종목 조회 완료")
     else:
-        print("[주가 데이터] 비활성화 — Claude 추정치 사용")
+        log.info("[주가 데이터] 비활성화 — Claude 추정치 사용")
 
-    print(f"[Stage 2] 종목 심층분석 시작 — {len(stock_targets)}종목 (병렬 실행)")
+    log.info(f"[Stage 2] 종목 심층분석 시작 — {len(stock_targets)}종목 (병렬 실행)")
 
-    # 병렬 분석 태스크 생성
-    # Stage 2 핵심 필드 — 이 필드가 없으면 심층분석이 잘린 것으로 판단
     _STAGE2_REQUIRED_FIELDS = ("factor_scores", "sentiment_score", "recommendation")
 
     async def _analyze_one(proposal: dict, theme_name: str) -> None:
@@ -545,13 +577,13 @@ async def run_pipeline(
             ticker = proposal["ticker"]
             asset_name = proposal.get("asset_name", ticker)
             market = proposal.get("market", "")
-            print(f"  → {asset_name} ({ticker}) 분석 중...")
+            log.info(f"  → {asset_name} ({ticker}) 분석 중...")
 
             try:
                 sd = stock_data_map.get(ticker.upper())
                 sd_text = format_stock_data_text(sd) if sd else ""
 
-                max_attempts = 2  # 잘린 응답 시 1회 재시도
+                max_attempts = 2
                 stock_result = None
                 for attempt in range(1, max_attempts + 1):
                     stock_result = await stage2_analyze_stock(
@@ -563,18 +595,17 @@ async def run_pipeline(
                     )
 
                     if stock_result.get("error"):
-                        break  # 완전 실패 — 재시도 무의미
+                        break
 
-                    # 잘린 JSON 복구 후 핵심 필드 누락 감지
                     if stock_result.get("_truncated"):
                         missing = [f for f in _STAGE2_REQUIRED_FIELDS if not stock_result.get(f)]
                         if missing and attempt < max_attempts:
-                            print(f"  ⚠ {asset_name} 심층분석 잘림 (누락: {', '.join(missing)}) — 재시도 {attempt+1}/{max_attempts}")
+                            log.warning(f"  {asset_name} 심층분석 잘림 (누락: {', '.join(missing)}) — 재시도 {attempt+1}/{max_attempts}")
                             await asyncio.sleep(5)
                             continue
                         elif missing:
-                            print(f"  ⚠ {asset_name} 심층분석 잘림 — 핵심 필드 누락: {', '.join(missing)} (재시도 소진)")
-                    break  # 정상 응답이면 루프 종료
+                            log.warning(f"  {asset_name} 심층분석 잘림 — 핵심 필드 누락: {', '.join(missing)} (재시도 소진)")
+                    break
 
                 if not stock_result.get("error"):
                     proposal["stock_analysis"] = stock_result
@@ -593,18 +624,18 @@ async def run_pipeline(
                     if sd and sd.get("price"):
                         proposal["current_price"] = sd["price"]
                         proposal["price_source"] = "yfinance_realtime"
-                    print(f"  ✓ {asset_name} 심층분석 완료")
+                    log.info(f"  {asset_name} 심층분석 완료")
                 else:
-                    print(f"  ✗ {asset_name} 심층분석 실패: {stock_result['error']}")
+                    log.error(f"  {asset_name} 심층분석 실패: {stock_result['error']}")
             except Exception as e:
-                print(f"  ✗ {asset_name} 심층분석 오류: {e}")
+                log.error(f"  {asset_name} 심층분석 오류: {e}", extra={"detail": traceback.format_exc()})
 
     await asyncio.gather(*[
         _analyze_one(proposal, theme_name)
         for proposal, theme_name in stock_targets
     ])
 
-    print(f"[Stage 2] 종목 심층분석 완료")
+    log.info("[Stage 2] 종목 심층분석 완료")
     return result
 
 
@@ -640,7 +671,7 @@ async def _translate_news_batch(
             to_translate.append((i, title, summary[:200], title_is_ko, summary_is_ko))
 
     if not to_translate:
-        print("[번역] 모든 뉴스가 한글 — 번역 건너뜀")
+        get_logger("번역").info("모든 뉴스가 한글 — 번역 건너뜀")
         return articles
 
     # 30건씩 배치 번역 (시스템 프롬프트 1회로 토큰 절감)
@@ -674,7 +705,7 @@ async def _translate_news_batch(
 
 한글인 필드는 원문 그대로 반환하세요."""
 
-        print(f"[번역] 배치 {batch_num}/{total_batches} — {len(batch)}건 번역 중 ({model})...")
+        get_logger("번역").info(f"배치 {batch_num}/{total_batches} — {len(batch)}건 번역 중 ({model})...")
         try:
             response = await _query_claude(
                 prompt, system_prompt, max_turns=1, model=model,
@@ -696,9 +727,9 @@ async def _translate_news_batch(
                     total_translated += 1
 
         except Exception as e:
-            print(f"[번역] 배치 {batch_num} 실패 (원문 유지): {e}")
+            get_logger("번역").warning(f"배치 {batch_num} 실패 (원문 유지): {e}")
 
-    print(f"[번역] 총 {total_translated}/{len(to_translate)}건 번역 완료")
+    get_logger("번역").info(f"총 {total_translated}/{len(to_translate)}건 번역 완료")
     return articles
 
 

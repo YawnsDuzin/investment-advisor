@@ -8,8 +8,10 @@
    - Stage 1: 이슈 분석 + 테마 발굴 (시나리오·매크로 포함)
    - Stage 2: 핵심 종목 심층분석 (펀더멘털·퀀트·센티먼트)
 3. 결과를 PostgreSQL에 저장
+4. 실행 로그를 app_runs/app_logs 테이블에 기록
 """
 import sys
+import traceback
 import anyio
 from datetime import date
 from concurrent.futures import ThreadPoolExecutor
@@ -19,6 +21,7 @@ from shared.db import (
     init_db, save_analysis, save_news_articles, get_latest_news_titles,
     get_connection, save_top_picks, update_top_picks_ai_rerank,
 )
+from shared.logger import init_logger, start_run, finish_run, get_logger
 from psycopg2.extras import RealDictCursor
 from analyzer.news_collector import collect_news_structured
 from analyzer.analyzer import run_full_analysis, translate_news
@@ -35,14 +38,41 @@ def main() -> int:
         print(f"[에러] DB 연결 실패: {e}")
         return 1
 
-    # 1) 뉴스 수집
-    print("=" * 60)
-    print(f"[시작] {date.today()} 투자 분석 (멀티스테이지)")
-    print("=" * 60)
+    # 로거 초기화 (DB 핸들러 포함)
+    init_logger(cfg.db)
+    log = get_logger("main")
 
-    news_text, news_articles = collect_news_structured(cfg.news)
+    # 실행(run) 시작 기록
+    today = str(date.today())
+    run_id = start_run(cfg.db, run_type="analyzer", meta={"date": today})
+
+    log.info("=" * 60)
+    log.info(f"[시작] {today} 투자 분석 (멀티스테이지)")
+    log.info("=" * 60)
+
+    try:
+        return _run_analysis(cfg, today, run_id, log)
+    except Exception as e:
+        log.error(f"분석 중 예상치 못한 오류: {e}", extra={"detail": traceback.format_exc()})
+        finish_run(cfg.db, run_id, status="failure",
+                   error_message=f"{type(e).__name__}: {e}")
+        return 1
+
+
+def _run_analysis(cfg: AppConfig, today: str, run_id: int | None, log) -> int:
+    """분석 파이프라인 실행 — 정상 흐름과 에러 처리를 분리"""
+
+    # 1) 뉴스 수집
+    try:
+        news_text, news_articles = collect_news_structured(cfg.news)
+    except Exception as e:
+        log.error(f"뉴스 수집 실패: {e}", extra={"detail": traceback.format_exc()})
+        finish_run(cfg.db, run_id, status="failure", error_message=f"뉴스 수집 실패: {e}")
+        return 1
+
     if not news_text:
-        print("[경고] 수집된 뉴스가 없습니다. 종료합니다.")
+        log.warning("수집된 뉴스가 없습니다. 종료합니다.")
+        finish_run(cfg.db, run_id, status="skipped", summary="수집된 뉴스 없음")
         return 1
 
     # 1-1) 뉴스 세트 지문 비교 — 신규 뉴스가 임계값 미만이면 스킵
@@ -52,97 +82,118 @@ def main() -> int:
         curr_titles = {a["title"] for a in news_articles}
         new_titles = curr_titles - prev_titles
         new_count = len(new_titles)
-        print(f"[지문] 수집 {len(curr_titles)}건 중 신규 {new_count}건 "
-              f"(이전 세션 {len(prev_titles)}건과 비교)")
+        log.info(f"[지문] 수집 {len(curr_titles)}건 중 신규 {new_count}건 "
+                 f"(이전 세션 {len(prev_titles)}건과 비교)")
 
         if new_count < min_new and prev_titles:
-            print(f"[스킵] 신규 뉴스 {new_count}건 < 임계값 {min_new}건 — 분석 생략")
+            log.info(f"[스킵] 신규 뉴스 {new_count}건 < 임계값 {min_new}건 — 분석 생략")
+            finish_run(cfg.db, run_id, status="skipped",
+                       summary=f"신규 뉴스 {new_count}건 < 임계값 {min_new}건")
             return 0
     except Exception as e:
-        print(f"[지문] 비교 실패 (무시하고 분석 진행): {e}")
+        log.warning(f"[지문] 비교 실패 (무시하고 분석 진행): {e}")
 
-    # 2) 뉴스 번역을 백그라운드에서 먼저 시작 (분석과 병렬 실행)
+    # 2) 뉴스 번역을 백그라운드에서 시작 (분석과 병렬 실행)
     executor = ThreadPoolExecutor(max_workers=1)
-    print("[번역] 뉴스 한글 번역 백그라운드 시작...")
+    log.info("[번역] 뉴스 한글 번역 백그라운드 시작...")
     translate_future = executor.submit(
         translate_news, news_articles, cfg.analyzer.model_translate,
     )
 
     # 3) 멀티스테이지 분석
-    print("\n[분석] Claude Code SDK 멀티스테이지 파이프라인 시작...")
-    result = run_full_analysis(
-        news_text=news_text,
-        date=str(date.today()),
-        cfg=cfg.analyzer,
-        db_cfg=cfg.db,
-    )
+    log.info("[분석] Claude Code SDK 멀티스테이지 파이프라인 시작...")
+    try:
+        result = run_full_analysis(
+            news_text=news_text,
+            date=today,
+            cfg=cfg.analyzer,
+            db_cfg=cfg.db,
+        )
+    except Exception as e:
+        log.error(f"분석 파이프라인 예외: {e}", extra={"detail": traceback.format_exc()})
+        _cleanup_translator(executor, translate_future)
+        finish_run(cfg.db, run_id, status="failure",
+                   error_message=f"분석 파이프라인 예외: {e}")
+        return 1
 
     if result.get("error"):
-        print(f"[에러] 분석 실패: {result['error']}")
-        # 번역 스레드 정리
-        try:
-            translate_future.result(timeout=1)
-        except Exception:
-            pass
-        executor.shutdown(wait=False)
+        log.error(f"분석 실패: {result['error']}")
+        _cleanup_translator(executor, translate_future)
+        finish_run(cfg.db, run_id, status="failure",
+                   error_message=result["error"])
         return 1
 
     issues = result.get("issues", [])
     themes = result.get("themes", [])
-    print(f"\n[분석] 전체 완료 — 이슈 {len(issues)}건, 테마 {len(themes)}건")
+    total_proposals = sum(len(t.get("proposals", [])) for t in themes)
+    log.info(f"[분석] 전체 완료 — 이슈 {len(issues)}건, 테마 {len(themes)}건, 제안 {total_proposals}건")
 
-    # 4) 번역 결과 수집 (이미 완료되었을 가능성 높음)
+    # 4) 번역 결과 수집
     try:
         news_articles = translate_future.result(timeout=300)
     except Exception as e:
-        print(f"[번역] 백그라운드 번역 실패 (원문 유지): {e}")
+        log.warning(f"[번역] 백그라운드 번역 실패 (원문 유지): {e}")
     finally:
         executor.shutdown(wait=False)
 
     # 5) DB 저장
+    session_id = None
     try:
-        session_id = save_analysis(cfg.db, str(date.today()), result)
-        # 뉴스 기사 저장
+        session_id = save_analysis(cfg.db, today, result)
         news_count = save_news_articles(cfg.db, session_id, news_articles)
-        print(f"[DB] 뉴스 기사 {news_count}건 저장 완료")
+        log.info(f"[DB] 뉴스 기사 {news_count}건 저장 완료")
     except Exception as e:
-        print(f"[에러] DB 저장 실패: {e}")
+        log.error(f"DB 저장 실패: {e}", extra={"detail": traceback.format_exc()})
+        finish_run(cfg.db, run_id, status="failure",
+                   error_message=f"DB 저장 실패: {e}")
         return 1
 
-    # 6) Stage 3: Top Picks 추천 엔진 (룰 기반 + 선택적 AI 재정렬)
+    # 6) Stage 3: Top Picks 추천 엔진
     try:
         _run_top_picks_stage(
             cfg.db, cfg.recommendation, cfg.analyzer.model_analysis,
-            session_id, str(date.today()), result,
+            session_id, today, result,
         )
     except Exception as e:
-        print(f"[Stage 3] Top Picks 생성 중 오류 (분석 결과에는 영향 없음): {e}")
+        log.warning(f"[Stage 3] Top Picks 생성 중 오류 (분석 결과에는 영향 없음): {e}")
 
     # 7) 결과 요약 출력
     _print_summary(result, session_id)
+
+    # 실행 완료 기록
+    summary = (f"이슈 {len(issues)}건, 테마 {len(themes)}건, "
+               f"제안 {total_proposals}건, 세션 #{session_id}")
+    finish_run(cfg.db, run_id, status="success", summary=summary)
     return 0
+
+
+def _cleanup_translator(executor, translate_future) -> None:
+    """번역 스레드 정리"""
+    try:
+        translate_future.result(timeout=1)
+    except Exception:
+        pass
+    try:
+        executor.shutdown(wait=False)
+    except Exception:
+        pass
 
 
 def _run_top_picks_stage(
     db_cfg: DatabaseConfig, rec_cfg: RecommendationConfig, model: str,
     session_id: int, analysis_date: str, result: dict,
 ) -> None:
-    """Stage 3: 저장된 분석 결과로부터 Top Picks를 계산하여 영속화
-
-    순서: DB에서 proposal_id/theme_id/streak_days 로드 → 메모리 트리에 병합
-          → 룰 기반 스코어링 → daily_top_picks INSERT (source='rule')
-          → enable_ai_rerank=True면 AI 재정렬 후 UPDATE (source='ai_rerank')
-    """
+    """Stage 3: 저장된 분석 결과로부터 Top Picks를 계산하여 영속화"""
+    log = get_logger("Stage3")
     themes = result.get("themes", [])
     if not themes:
-        print("[Stage 3] 테마 없음 — Top Picks 건너뜀")
+        log.info("테마 없음 — Top Picks 건너뜀")
         return
 
     # DB에서 proposal_id, theme_id, streak_days 조회하여 메모리 트리에 병합
     conn = get_connection(db_cfg)
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            # 테마별 id + streak (theme_tracking은 theme_key 기반)
             cur.execute(
                 "SELECT id, theme_name, theme_key FROM investment_themes WHERE session_id = %s",
                 (session_id,),
@@ -160,14 +211,12 @@ def _run_top_picks_stage(
                 )
                 streak_map = {r["theme_key"]: r["streak_days"] for r in cur.fetchall()}
 
-            # theme_name → {id, streak_days, confidence}
             for tr in theme_rows:
                 theme_id_map[tr["theme_name"]] = {
                     "id": tr["id"],
                     "streak_days": streak_map.get(tr["theme_key"], 1),
                 }
 
-            # 각 테마의 proposal_id + has_stock_analysis
             all_theme_ids = [tr["id"] for tr in theme_rows]
             proposals_by_theme: dict = {}
             stage2_ids: set = set()
@@ -201,7 +250,6 @@ def _run_top_picks_stage(
             tk = (p.get("ticker") or "").upper()
             if tk and tk in ticker_map:
                 p["_proposal_id"] = ticker_map[tk]
-        # theme_confidence는 result에서 이미 있음, theme_id_map에 병합
         tmeta["confidence"] = theme.get("confidence_score")
 
     # 룰 기반 스코어링
@@ -209,29 +257,26 @@ def _run_top_picks_stage(
         session_id, themes, rec_cfg, theme_id_map, stage2_ids,
     )
     if not picks:
-        print("[Stage 3] 룰 기반 후보 0건 — Top Picks 건너뜀")
+        log.info("룰 기반 후보 0건 — Top Picks 건너뜀")
         return
 
-    # 표시 대상만 남겨 저장 (상위 top_n_display)
     display_picks = picks[:rec_cfg.top_n_display]
-    # rank 재할당 (display 기준)
     for i, pk in enumerate(display_picks, 1):
         pk["rank"] = i
 
     save_top_picks(db_cfg, session_id, analysis_date, display_picks, source="rule")
-    print(f"[Stage 3] 룰 기반 Top Picks {len(display_picks)}건 저장 완료")
+    log.info(f"룰 기반 Top Picks {len(display_picks)}건 저장 완료")
 
     # AI 재정렬 (선택적)
     if not rec_cfg.enable_ai_rerank:
-        print("[Stage 3] AI 재정렬 비활성화 (REC_ENABLE_AI_RERANK=false) — 룰 결과만 사용")
+        log.info("AI 재정렬 비활성화 (REC_ENABLE_AI_RERANK=false) — 룰 결과만 사용")
         return
 
-    print(f"[Stage 3] AI 재정렬 시작 — 후보 {len(picks)}건 → 상위 {rec_cfg.ai_rerank_top_n}개 선정")
+    log.info(f"AI 재정렬 시작 — 후보 {len(picks)}건 → 상위 {rec_cfg.ai_rerank_top_n}개 선정")
     try:
         ai_results = anyio.run(
             ai_rerank_picks,
-            picks,  # 전체 후보를 후보군으로 전달 (AI가 재선별 가능)
-            themes,
+            picks, themes,
             result.get("market_summary", ""),
             result.get("risk_temperature", "medium"),
             rec_cfg.ai_rerank_top_n,
@@ -239,13 +284,13 @@ def _run_top_picks_stage(
             model,
         )
     except Exception as e:
-        print(f"[Stage 3] AI 재정렬 실패 (룰 결과 유지): {e}")
+        log.warning(f"AI 재정렬 실패 (룰 결과 유지): {e}")
         return
 
     if ai_results:
         update_top_picks_ai_rerank(db_cfg, analysis_date, ai_results)
     else:
-        print("[Stage 3] AI 재정렬 결과 없음 — 룰 결과 유지")
+        log.info("AI 재정렬 결과 없음 — 룰 결과 유지")
 
 
 def _print_summary(result: dict, session_id: int) -> None:
@@ -287,19 +332,16 @@ def _print_summary(result: dict, session_id: int) -> None:
         if indicators:
             print(f"  모니터링: {indicators}")
 
-        # 시나리오 출력
         for sc in theme.get("scenarios", []):
             print(f"  [{sc['scenario_type'].upper()} {sc.get('probability', '?')}%] "
                   f"{sc.get('description', '')[:100]}")
 
-        # 제안 출력
         for p in theme.get("proposals", []):
             conv = p.get("conviction", "?")
             alloc = p.get("target_allocation", 0)
             total_alloc += alloc
             line = (f"  - [{p['action'].upper()}] {p['asset_name']} ({p.get('ticker', '?')}) "
                     f"@ {p.get('market', '?')} — 비중 {alloc}%, 확신도: {conv}")
-            # 심층분석 결과가 있으면 표시
             if p.get("quant_score"):
                 line += f", 퀀트: {p['quant_score']}/5.0"
             if p.get("sentiment_score") is not None:

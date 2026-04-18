@@ -1,9 +1,11 @@
 """RSS 뉴스 수집 모듈 — 카테고리별 수집 및 구조화"""
 import time
+import socket
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 import feedparser
 from shared.config import NewsConfig
+from shared.logger import get_logger
 
 
 CATEGORY_LABELS = {
@@ -61,6 +63,11 @@ def collect_news_structured(cfg: NewsConfig) -> tuple[str, list[dict]]:
     skipped_old = 0
     skipped_dup = 0
 
+    log = get_logger("뉴스")
+    # feedparser용 소켓 타임아웃 (기본 무제한 → 30초 제한)
+    _orig_timeout = socket.getdefaulttimeout()
+    socket.setdefaulttimeout(30)
+
     for category, feed_urls in cfg.feeds.items():
         label = CATEGORY_LABELS.get(category, category)
         lines: list[str] = []
@@ -113,16 +120,21 @@ def collect_news_structured(cfg: NewsConfig) -> tuple[str, list[dict]]:
                     })
                     total += 1
 
+            except socket.timeout:
+                log.warning(f"{feed_url} 타임아웃 (30초 초과)")
             except Exception as e:
-                print(f"[뉴스] {feed_url} 수집 실패: {e}")
+                log.warning(f"{feed_url} 수집 실패: {e}")
 
         if lines:
             section = f"### [{label}] ({len(lines)}건)\n\n" + "\n\n".join(lines)
             sections.append(section)
 
-    print(f"[뉴스] 총 {total}건 수집 완료 (카테고리 {len(sections)}개)")
+    # 소켓 타임아웃 복원
+    socket.setdefaulttimeout(_orig_timeout)
+
+    log.info(f"총 {total}건 수집 완료 (카테고리 {len(sections)}개)")
     if skipped_old or skipped_dup:
-        print(f"[뉴스] 필터링: 24시간 초과 {skipped_old}건, 중복 {skipped_dup}건 제외")
+        log.info(f"필터링: 24시간 초과 {skipped_old}건, 중복 {skipped_dup}건 제외")
     news_text = "\n\n---\n\n".join(sections)
     return news_text, articles
 

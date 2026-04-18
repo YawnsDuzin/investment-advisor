@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}AlphaScope{% endblock %}</title>
+    <title>{% block title %}AlphaSignal{% endblock %}</title>
     <link rel="stylesheet" href="/static/css/style.css">
     {% block head %}{% endblock %}
 </head>
@@ -17,7 +17,7 @@
 
     <nav class="sidebar">
         <div class="sidebar-header">
-            <h1>AlphaScope</h1>
+            <a href="/"><img src="/static/img/logo.png" alt="AlphaSignal" class="sidebar-logo"></a>
             <button class="sidebar-close-btn" onclick="document.body.classList.remove('sidebar-open')" aria-label="닫기">&times;</button>
         </div>
         <ul class="nav-menu">
@@ -39,8 +39,8 @@
             <li class="nav-group-title">히스토리</li>
             <li><a href="/pages/sessions" class="{% if active_page == 'sessions' %}active{% endif %}" onclick="document.body.classList.remove('sidebar-open')">Sessions</a></li>
 
-            {# ── 커뮤니케이션 — Pro+ 전용 채팅 (Admin/Moderator 또는 AUTH 비활성 환경) ── #}
-            {% if not auth_enabled or (current_user and current_user.role in ('admin', 'moderator')) %}
+            {# ── 커뮤니케이션 — Pro+ 티어 또는 Admin/Moderator, AUTH 비활성 환경 ── #}
+            {% if not auth_enabled or (current_user and (current_user.role in ('admin', 'moderator') or current_user.effective_tier() in ('pro', 'premium'))) %}
             <li class="nav-group-title">커뮤니케이션</li>
             <li><a href="/pages/chat" class="{% if active_page == 'chat' %}active{% endif %}" onclick="document.body.classList.remove('sidebar-open')">Theme Chat</a></li>
             {% endif %}
