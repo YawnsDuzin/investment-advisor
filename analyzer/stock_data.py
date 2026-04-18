@@ -1,4 +1,5 @@
 """실시간 주가/재무 데이터 조회 모듈 — yfinance + pykrx(한국 주식 크로스체크)"""
+import threading
 from datetime import datetime, timedelta
 from shared.logger import get_logger
 
@@ -11,6 +12,54 @@ try:
     from pykrx import stock as pykrx_stock
 except ImportError:
     pykrx_stock = None
+
+
+# ── pykrx 사용 가능 여부 캐싱 ──────────────────────
+# pykrx 로그인 실패 시 세션 내 모든 후속 호출을 건너뛰어
+# 불필요한 로그인 시도 반복을 방지한다.
+_pykrx_available = True
+_pykrx_lock = threading.Lock()  # ThreadPoolExecutor race condition 방지
+
+# 로그인 실패 감지 패턴 (pykrx 1.2.7 auth.py 에러 메시지)
+_PYKRX_LOGIN_FAIL_PATTERNS = ("로그인", "자격 증명", "Expecting value", "login")
+
+
+def _check_pykrx() -> bool:
+    """pykrx 사용 가능 여부 반환 (로그인 실패 시 비활성화)"""
+    return pykrx_stock is not None and _pykrx_available
+
+
+def _disable_pykrx(reason: str) -> None:
+    """pykrx를 세션 내 비활성화 (thread-safe)"""
+    global _pykrx_available
+    with _pykrx_lock:
+        if _pykrx_available:
+            _pykrx_available = False
+            get_logger("pykrx").warning(f"pykrx 비활성화 (세션 내): {reason}")
+
+
+def _is_login_failure(error: Exception) -> bool:
+    """pykrx 로그인 실패 여부 판별"""
+    err_msg = str(error).lower()
+    return any(p in err_msg for p in _PYKRX_LOGIN_FAIL_PATTERNS)
+
+
+def _safe_pykrx_call(func, *args, **kwargs):
+    """pykrx 함수 안전 호출 래퍼 — 로그인 실패 시 자동 비활성화
+
+    Returns:
+        함수 반환값. 실패 시 None.
+    """
+    if not _check_pykrx():
+        return None
+    try:
+        return func(*args, **kwargs)
+    except Exception as e:
+        if _is_login_failure(e):
+            _disable_pykrx(f"인증 오류: {str(e)[:100]}")
+        else:
+            get_logger("pykrx").warning(f"{func.__name__} 실패: {e}")
+        return None
 
 
 # ── 한국 시장 판별 ──────────────────────────────────
@@ -86,12 +135,11 @@ def _format_number(value, currency: str = "") -> str:
 
 def _pykrx_fetch_price(ticker: str) -> dict | None:
     """pykrx로 한국 주식 현재가 + 밸류에이션 조회 (폴백/크로스체크용)"""
-    if pykrx_stock is None:
+    if not _check_pykrx():
         return None
 
     raw_ticker = ticker.strip().upper()
     today = datetime.now()
-    # 최근 거래일 찾기 (주말/공휴일 대비 5일 범위)
     start = (today - timedelta(days=7)).strftime("%Y%m%d")
     end = today.strftime("%Y%m%d")
 
@@ -105,7 +153,6 @@ def _pykrx_fetch_price(ticker: str) -> dict | None:
         if price <= 0:
             return None
 
-        # 밸류에이션 조회
         last_date = ohlcv.index[-1].strftime("%Y%m%d")
         fund = pykrx_stock.get_market_fundamental(last_date, last_date, raw_ticker)
         per = pbr = div_yield = None
@@ -123,7 +170,10 @@ def _pykrx_fetch_price(ticker: str) -> dict | None:
             "source": "pykrx",
         }
     except Exception as e:
-        get_logger("pykrx").warning(f"{raw_ticker} 조회 실패: {e}")
+        if _is_login_failure(e):
+            _disable_pykrx(f"가격 조회 중 인증 오류: {str(e)[:100]}")
+        else:
+            get_logger("pykrx").warning(f"{raw_ticker} 조회 실패: {e}")
         return None
 
 
@@ -133,7 +183,7 @@ def _pykrx_fetch_history(ticker: str, days: int = 365) -> "list[tuple[str, float
     Returns:
         [(date_str, close_price), ...] 오래된 순 정렬. 실패 시 빈 리스트.
     """
-    if pykrx_stock is None:
+    if not _check_pykrx():
         return []
 
     raw_ticker = ticker.strip().upper()
@@ -150,7 +200,9 @@ def _pykrx_fetch_history(ticker: str, days: int = 365) -> "list[tuple[str, float
             for idx, row in ohlcv.iterrows()
             if float(row["종가"]) > 0
         ]
-    except Exception:
+    except Exception as e:
+        if _is_login_failure(e):
+            _disable_pykrx(f"이력 조회 중 인증 오류: {str(e)[:100]}")
         return []
 
 
@@ -166,7 +218,7 @@ def _build_krx_lookup() -> None:
     global _krx_name_to_ticker, _krx_ticker_to_name
     if _krx_name_to_ticker is not None:
         return
-    if pykrx_stock is None:
+    if not _check_pykrx():
         _krx_name_to_ticker = {}
         _krx_ticker_to_name = {}
         return
@@ -176,15 +228,14 @@ def _build_krx_lookup() -> None:
     today = datetime.now().strftime("%Y%m%d")
 
     for market in ("KOSPI", "KOSDAQ"):
-        try:
-            tickers = pykrx_stock.get_market_ticker_list(today, market=market)
-            for t in tickers:
-                name = pykrx_stock.get_market_ticker_name(t)
-                if name:
-                    _krx_name_to_ticker[name] = t
-                    _krx_ticker_to_name[t] = name
-        except Exception as e:
-            get_logger("pykrx").warning(f"{market} 종목 목록 조회 실패: {e}")
+        tickers = _safe_pykrx_call(pykrx_stock.get_market_ticker_list, today, market=market)
+        if tickers is None:
+            continue
+        for t in tickers:
+            name = _safe_pykrx_call(pykrx_stock.get_market_ticker_name, t)
+            if name:
+                _krx_name_to_ticker[name] = t
+                _krx_ticker_to_name[t] = name
 
 
 def validate_krx_tickers(proposals: list[dict]) -> dict:
@@ -542,6 +593,169 @@ def fetch_multiple_stocks(stocks: list[dict]) -> dict[str, dict]:
                 log.warning(f"{ticker} 조회 오류: {e}")
 
     return results
+
+
+# ── 메모리 캐시 (종목 기초정보) ──────────────────────
+_fundamentals_cache: dict[str, tuple[float, dict]] = {}
+_FUNDAMENTALS_TTL = 3600  # 1시간
+
+
+def fetch_fundamentals(ticker: str, market: str = "") -> dict | None:
+    """종목 기초정보 온디맨드 조회 (yfinance .info 기반, 1시간 캐싱)
+
+    밸류에이션·수익성·재무건전성·성장성·현금흐름·기술지표를 한 번에 반환.
+    """
+    import time
+
+    cache_key = _normalize_ticker(ticker, market)
+
+    # 캐시 히트
+    cached = _fundamentals_cache.get(cache_key)
+    if cached and (time.time() - cached[0]) < _FUNDAMENTALS_TTL:
+        return cached[1]
+
+    is_krx = _is_korean_market(market)
+
+    # yfinance 조회
+    if yf is None:
+        return None
+
+    try:
+        stock = yf.Ticker(cache_key)
+        info = stock.info or {}
+    except Exception as e:
+        get_logger("기초정보").warning(f"{cache_key} yfinance 조회 실패: {e}")
+        return None
+
+    price = info.get("regularMarketPrice") or info.get("currentPrice")
+    if not price:
+        return None
+
+    prev_close = info.get("regularMarketPreviousClose") or info.get("previousClose")
+    change_pct = None
+    if price and prev_close and prev_close > 0:
+        change_pct = round((price - prev_close) / prev_close * 100, 2)
+
+    currency = info.get("currency", "")
+
+    def _pct(v):
+        """소수(0.15) → 퍼센트(15.0) 변환, None 안전"""
+        if v is None:
+            return None
+        return round(v * 100, 2)
+
+    def _round2(v):
+        if v is None:
+            return None
+        return round(v, 2)
+
+    result = {
+        # 기본 정보
+        "ticker": ticker,
+        "yf_ticker": cache_key,
+        "name": info.get("shortName") or info.get("longName") or ticker,
+        "sector": info.get("sector"),
+        "industry": info.get("industry"),
+        "currency": currency,
+        "exchange": info.get("exchange"),
+        "market": market,
+
+        # 가격
+        "price": price,
+        "change_pct": change_pct,
+        "high_52w": info.get("fiftyTwoWeekHigh"),
+        "low_52w": info.get("fiftyTwoWeekLow"),
+        "market_cap": info.get("marketCap"),
+        "volume_avg": info.get("averageDailyVolume10Day") or info.get("averageVolume"),
+
+        # 밸류에이션
+        "valuation": {
+            "trailing_pe": _round2(info.get("trailingPE")),
+            "forward_pe": _round2(info.get("forwardPE")),
+            "peg_ratio": _round2(info.get("pegRatio")),
+            "pb_ratio": _round2(info.get("priceToBook")),
+            "ps_ratio": _round2(info.get("priceToSalesTrailing12Months")),
+            "ev_ebitda": _round2(info.get("enterpriseToEbitda")),
+            "ev_revenue": _round2(info.get("enterpriseToRevenue")),
+            "eps_trailing": _round2(info.get("trailingEps")),
+            "eps_forward": _round2(info.get("forwardEps")),
+        },
+
+        # 수익성
+        "profitability": {
+            "roe": _pct(info.get("returnOnEquity")),
+            "roa": _pct(info.get("returnOnAssets")),
+            "gross_margin": _pct(info.get("grossMargins")),
+            "operating_margin": _pct(info.get("operatingMargins")),
+            "net_margin": _pct(info.get("profitMargins")),
+            "ebitda": info.get("ebitda"),
+        },
+
+        # 재무건전성
+        "health": {
+            "debt_to_equity": _round2(info.get("debtToEquity")),
+            "current_ratio": _round2(info.get("currentRatio")),
+            "quick_ratio": _round2(info.get("quickRatio")),
+            "total_debt": info.get("totalDebt"),
+            "total_cash": info.get("totalCash"),
+        },
+
+        # 성장성
+        "growth": {
+            "revenue_growth": _pct(info.get("revenueGrowth")),
+            "earnings_growth": _pct(info.get("earningsGrowth")),
+            "earnings_quarterly_growth": _pct(info.get("earningsQuarterlyGrowth")),
+        },
+
+        # 현금흐름
+        "cashflow": {
+            "operating_cashflow": info.get("operatingCashflow"),
+            "free_cashflow": info.get("freeCashflow"),
+        },
+
+        # 배당
+        "dividend": {
+            "dividend_rate": info.get("dividendRate"),
+            "dividend_yield": _pct(info.get("dividendYield")),
+            "payout_ratio": _pct(info.get("payoutRatio")),
+            "ex_dividend_date": info.get("exDividendDate"),
+        },
+
+        # 기술 지표
+        "technical": {
+            "beta": _round2(info.get("beta")),
+            "fifty_day_avg": _round2(info.get("fiftyDayAverage")),
+            "two_hundred_day_avg": _round2(info.get("twoHundredDayAverage")),
+        },
+
+        # 애널리스트
+        "analyst": {
+            "target_mean": _round2(info.get("targetMeanPrice")),
+            "target_low": _round2(info.get("targetLowPrice")),
+            "target_high": _round2(info.get("targetHighPrice")),
+            "recommendation": info.get("recommendationKey"),
+            "num_analysts": info.get("numberOfAnalystOpinions"),
+        },
+    }
+
+    # pykrx 크로스체크 (한국 주식)
+    if is_krx:
+        raw_ticker = ticker.replace(".KS", "").replace(".KQ", "").strip().upper()
+        pykrx_data = _pykrx_fetch_price(raw_ticker)
+        if pykrx_data:
+            if pykrx_data["price"] and result["price"]:
+                diff_pct = abs(result["price"] - pykrx_data["price"]) / pykrx_data["price"] * 100
+                if diff_pct > 3:
+                    result["price"] = pykrx_data["price"]
+                    result["price_source"] = "pykrx_crosscheck"
+            if not result["valuation"]["trailing_pe"] and pykrx_data.get("per"):
+                result["valuation"]["trailing_pe"] = pykrx_data["per"]
+            if not result["valuation"]["pb_ratio"] and pykrx_data.get("pbr"):
+                result["valuation"]["pb_ratio"] = pykrx_data["pbr"]
+
+    # 캐시 저장
+    _fundamentals_cache[cache_key] = (time.time(), result)
+    return result
 
 
 def format_stock_data_text(data: dict) -> str:

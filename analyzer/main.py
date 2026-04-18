@@ -14,8 +14,6 @@ import sys
 import traceback
 import anyio
 from datetime import date
-from concurrent.futures import ThreadPoolExecutor
-
 from shared.config import AppConfig, RecommendationConfig, DatabaseConfig
 from shared.db import (
     init_db, save_analysis, save_news_articles, get_latest_news_titles,
@@ -26,9 +24,13 @@ from psycopg2.extras import RealDictCursor
 from analyzer.news_collector import collect_news_structured
 from analyzer.analyzer import run_full_analysis, translate_news
 from analyzer.recommender import compute_rule_based_picks, ai_rerank_picks
+from analyzer.price_tracker import run_price_tracking
 
 
 def main() -> int:
+    # --fresh 옵션: 체크포인트 무시하고 처음부터 실행
+    force_fresh = "--fresh" in sys.argv
+
     cfg = AppConfig()
 
     # DB 초기화 (스키마 마이그레이션 포함)
@@ -44,14 +46,16 @@ def main() -> int:
 
     # 실행(run) 시작 기록
     today = str(date.today())
-    run_id = start_run(cfg.db, run_type="analyzer", meta={"date": today})
+    run_id = start_run(cfg.db, run_type="analyzer", meta={"date": today, "fresh": force_fresh})
 
     log.info("=" * 60)
     log.info(f"[시작] {today} 투자 분석 (멀티스테이지)")
+    if force_fresh:
+        log.info("[옵션] --fresh 모드: 체크포인트 무시, 처음부터 실행")
     log.info("=" * 60)
 
     try:
-        return _run_analysis(cfg, today, run_id, log)
+        return _run_analysis(cfg, today, run_id, log, force_fresh)
     except Exception as e:
         log.error(f"분석 중 예상치 못한 오류: {e}", extra={"detail": traceback.format_exc()})
         finish_run(cfg.db, run_id, status="failure",
@@ -59,8 +63,10 @@ def main() -> int:
         return 1
 
 
-def _run_analysis(cfg: AppConfig, today: str, run_id: int | None, log) -> int:
+def _run_analysis(cfg: AppConfig, today: str, run_id: int | None, log,
+                   force_fresh: bool = False) -> int:
     """분석 파이프라인 실행 — 정상 흐름과 에러 처리를 분리"""
+    from analyzer.checkpoint import CheckpointManager, compute_news_fingerprint
 
     # 1) 뉴스 수집
     try:
@@ -93,14 +99,25 @@ def _run_analysis(cfg: AppConfig, today: str, run_id: int | None, log) -> int:
     except Exception as e:
         log.warning(f"[지문] 비교 실패 (무시하고 분석 진행): {e}")
 
-    # 2) 뉴스 번역을 백그라운드에서 시작 (분석과 병렬 실행)
-    executor = ThreadPoolExecutor(max_workers=1)
-    log.info("[번역] 뉴스 한글 번역 백그라운드 시작...")
-    translate_future = executor.submit(
-        translate_news, news_articles, cfg.analyzer.model_translate,
+    # 1-2) 체크포인트 관리자 초기화 (뉴스 지문 기반)
+    news_fp = compute_news_fingerprint(news_articles)
+    checkpoint = CheckpointManager(
+        analysis_date=today,
+        news_fingerprint=news_fp,
+        force_fresh=force_fresh,
     )
+    last_stage = checkpoint.last_completed_stage()
+    if last_stage:
+        log.info(f"[체크포인트] 마지막 완료 Stage: {last_stage} — 이어서 작업")
 
-    # 3) 멀티스테이지 분석
+    # 2) 뉴스 한글 번역 (분석 전 완료 — SDK 프로세스 경합 방지)
+    log.info("[번역] 뉴스 한글 번역 시작...")
+    try:
+        news_articles = translate_news(news_articles, cfg.analyzer.model_translate)
+    except Exception as e:
+        log.warning(f"[번역] 번역 실패 (원문 유지): {e}")
+
+    # 3) 멀티스테이지 분석 (체크포인트 전달)
     log.info("[분석] Claude Code SDK 멀티스테이지 파이프라인 시작...")
     try:
         result = run_full_analysis(
@@ -108,17 +125,16 @@ def _run_analysis(cfg: AppConfig, today: str, run_id: int | None, log) -> int:
             date=today,
             cfg=cfg.analyzer,
             db_cfg=cfg.db,
+            checkpoint=checkpoint,
         )
     except Exception as e:
         log.error(f"분석 파이프라인 예외: {e}", extra={"detail": traceback.format_exc()})
-        _cleanup_translator(executor, translate_future)
         finish_run(cfg.db, run_id, status="failure",
                    error_message=f"분석 파이프라인 예외: {e}")
         return 1
 
     if result.get("error"):
         log.error(f"분석 실패: {result['error']}")
-        _cleanup_translator(executor, translate_future)
         finish_run(cfg.db, run_id, status="failure",
                    error_message=result["error"])
         return 1
@@ -128,22 +144,17 @@ def _run_analysis(cfg: AppConfig, today: str, run_id: int | None, log) -> int:
     total_proposals = sum(len(t.get("proposals", [])) for t in themes)
     log.info(f"[분석] 전체 완료 — 이슈 {len(issues)}건, 테마 {len(themes)}건, 제안 {total_proposals}건")
 
-    # 4) 번역 결과 수집
-    try:
-        news_articles = translate_future.result(timeout=300)
-    except Exception as e:
-        log.warning(f"[번역] 백그라운드 번역 실패 (원문 유지): {e}")
-    finally:
-        executor.shutdown(wait=False)
-
     # 5) DB 저장
     session_id = None
     try:
         session_id = save_analysis(cfg.db, today, result)
         news_count = save_news_articles(cfg.db, session_id, news_articles)
         log.info(f"[DB] 뉴스 기사 {news_count}건 저장 완료")
+        # DB 저장 성공 → 체크포인트 정리
+        checkpoint.clear()
     except Exception as e:
         log.error(f"DB 저장 실패: {e}", extra={"detail": traceback.format_exc()})
+        log.info("[체크포인트] DB 저장 실패 — 체크포인트 유지 (재실행 시 이어서 작업 가능)")
         finish_run(cfg.db, run_id, status="failure",
                    error_message=f"DB 저장 실패: {e}")
         return 1
@@ -157,7 +168,17 @@ def _run_analysis(cfg: AppConfig, today: str, run_id: int | None, log) -> int:
     except Exception as e:
         log.warning(f"[Stage 3] Top Picks 생성 중 오류 (분석 결과에는 영향 없음): {e}")
 
-    # 7) 결과 요약 출력
+    # 7) Stage 4: 추천 후 실제 수익률 추적 (가격 스냅샷 + post_return 갱신)
+    try:
+        tracker_result = run_price_tracking(cfg.db)
+        if tracker_result["tracked"] > 0:
+            log.info(f"[Stage 4] 가격추적 완료 — 대상 {tracker_result['tracked']}건, "
+                     f"스냅샷 {tracker_result['snapshots_saved']}건, "
+                     f"수익률갱신 {tracker_result['returns_updated']}건")
+    except Exception as e:
+        log.warning(f"[Stage 4] 가격추적 중 오류 (분석 결과에는 영향 없음): {e}")
+
+    # 8) 결과 요약 출력
     _print_summary(result, session_id)
 
     # 실행 완료 기록
@@ -165,18 +186,6 @@ def _run_analysis(cfg: AppConfig, today: str, run_id: int | None, log) -> int:
                f"제안 {total_proposals}건, 세션 #{session_id}")
     finish_run(cfg.db, run_id, status="success", summary=summary)
     return 0
-
-
-def _cleanup_translator(executor, translate_future) -> None:
-    """번역 스레드 정리"""
-    try:
-        translate_future.result(timeout=1)
-    except Exception:
-        pass
-    try:
-        executor.shutdown(wait=False)
-    except Exception:
-        pass
 
 
 def _run_top_picks_stage(

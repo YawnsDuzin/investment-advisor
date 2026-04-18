@@ -233,7 +233,62 @@ psql -h localhost -U postgres -d investment_advisor -c "SELECT version();"
 - 비밀번호 프롬프트에서 위에서 설정한 값을 입력한다.
 - 버전 문자열이 출력되면 성공.
 
-### 4.5 `.env` 파일 준비
+### 4.5 LAN에서 DB 접속 허용 (선택)
+
+기본 설치 상태의 PostgreSQL은 `localhost`(127.0.0.1)에서만 접속을 허용한다. 같은 네트워크(LAN) 내 다른 PC에서 pgAdmin/DBeaver 등으로 직접 접속하려면 **방화벽 + PostgreSQL 설정** 두 가지를 함께 열어줘야 한다.
+
+> **⚠ 보안 경고**: 5432 포트는 **공유기 포트포워딩으로 외부(WAN)에 절대 열지 말 것**. LAN 내부에서만 접근 가능하도록 유지한다. 외부에서 DB에 접근해야 한다면 SSH 터널(`ssh -L 5432:localhost:5432 user@rpi`)을 사용한다.
+
+**① UFW 방화벽 포트 개방**
+
+```bash
+sudo ufw allow 5432/tcp
+sudo ufw reload
+sudo ufw status verbose
+```
+
+특정 내부 대역으로만 제한하고 싶으면 (권장):
+```bash
+sudo ufw allow from 192.168.0.0/24 to any port 5432 proto tcp
+sudo ufw reload
+```
+
+**② PostgreSQL `listen_addresses` 수정**
+
+```bash
+sudo nano /etc/postgresql/*/main/postgresql.conf
+```
+- `#listen_addresses = 'localhost'` → `listen_addresses = '*'` (또는 `'192.168.0.50'` 등 특정 IP)
+
+**③ `pg_hba.conf` 에 호스트 규칙 추가**
+
+```bash
+sudo nano /etc/postgresql/*/main/pg_hba.conf
+```
+파일 끝에 LAN 대역 한 줄 추가:
+```
+# IPv4 LAN connections:
+host    all    all    192.168.0.0/24    scram-sha-256
+```
+
+**④ PostgreSQL 재기동 후 확인**
+
+```bash
+sudo systemctl restart postgresql
+sudo ss -tlnp | grep 5432        # 0.0.0.0:5432 또는 *:5432 로 listen 중인지 확인
+```
+
+다른 PC에서:
+```bash
+psql -h <라즈베리파이-LAN-IP> -U postgres -d investment_advisor -c "SELECT 1;"
+```
+
+**트러블슈팅**:
+- 연결 타임아웃 → `ufw status` 에 `5432/tcp ALLOW` 확인, `listen_addresses` 변경 후 재기동 여부 확인.
+- `FATAL: no pg_hba.conf entry` → 클라이언트 IP가 `pg_hba.conf` 의 CIDR 범위에 포함되는지 확인.
+- 공유기 포트포워딩에서 5432가 열려 있다면 **즉시 제거**한다 (본 섹션 8.1, 8.2 참고).
+
+### 4.6 `.env` 파일 준비
 
 `.env` 는 [6. 프로젝트 배포](#6-프로젝트-배포) 에서 `git clone` 후 작성한다. 기본 템플릿은 [.env.example](../.env.example) 를 참고한다.
 
@@ -480,11 +535,15 @@ sudo ufw default deny incoming
 sudo ufw default allow outgoing
 sudo ufw allow 22/tcp      # SSH
 sudo ufw allow 8000/tcp    # API (또는 80/443 리버스 프록시 시 해당 포트)
+# (선택) LAN 내부에서 PostgreSQL 직접 접속이 필요한 경우에만 열기. 4.5 참고.
+# sudo ufw allow 5432/tcp
 sudo ufw enable
 sudo ufw status verbose
+sudo ufw reload
 ```
 
 > 외부에 직접 8000 포트를 여는 대신 **Nginx 리버스 프록시(80/443)** 를 앞단에 두는 것을 권장한다. 그 경우 8000 은 외부에 열지 않는다.
+> PostgreSQL(5432)은 LAN 내부 접근이 필요한 경우에만 열고, **공유기 포트포워딩 대상에서 반드시 제외**한다 (아래 8.2의 보안 주의 참고).
 
 ### 8.2 공유기 포트포워딩 (일반 절차)
 

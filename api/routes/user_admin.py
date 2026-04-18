@@ -7,6 +7,7 @@ import json
 import secrets
 from datetime import datetime
 from typing import Any, Dict, Optional
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, Request, HTTPException, Depends, Query
 from fastapi.responses import RedirectResponse
@@ -89,6 +90,10 @@ def user_list_page(
     request: Request,
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=20, ge=1, le=100),
+    q: Optional[str] = Query(None, description="이메일/닉네임 검색"),
+    role: Optional[str] = Query(None, description="역할 필터"),
+    status: Optional[str] = Query(None, description="상태 필터 (active/inactive)"),
+    tier: Optional[str] = Query(None, description="티어 필터"),
     user: Optional[UserInDB] = Depends(get_current_user),
     auth_cfg: AuthConfig = Depends(_get_auth_cfg),
 ):
@@ -101,10 +106,29 @@ def user_list_page(
 
     db_cfg = _get_db_cfg()
     offset = (page - 1) * limit
+
+    # 동적 WHERE 절 구성
+    where_clauses: list[str] = []
+    params: list = []
+    if q and q.strip():
+        where_clauses.append("(u.email ILIKE %s OR u.nickname ILIKE %s)")
+        params.extend([f"%{q.strip()}%", f"%{q.strip()}%"])
+    if role and role in ("admin", "moderator", "user"):
+        where_clauses.append("u.role = %s")
+        params.append(role)
+    if status == "active":
+        where_clauses.append("u.is_active = true")
+    elif status == "inactive":
+        where_clauses.append("u.is_active = false")
+    if tier and tier in VALID_TIERS:
+        where_clauses.append("COALESCE(u.tier, 'free') = %s")
+        params.append(tier)
+    where_sql = (" WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+
     conn = get_connection(db_cfg)
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("""
+            cur.execute(f"""
                 SELECT
                     u.id, u.email, u.nickname, u.role, u.is_active,
                     u.tier, u.tier_expires_at,
@@ -114,16 +138,29 @@ def user_list_page(
                 FROM users u
                 LEFT JOIN theme_chat_sessions tcs ON tcs.user_id = u.id
                 LEFT JOIN theme_chat_messages tcm ON tcm.chat_session_id = tcs.id
+                {where_sql}
                 GROUP BY u.id
                 ORDER BY u.created_at DESC
                 LIMIT %s OFFSET %s
-            """, (limit, offset))
+            """, params + [limit, offset])
             users = [_serialize_row(r) for r in cur.fetchall()]
 
-            cur.execute("SELECT COUNT(*) AS cnt FROM users")
+            cur.execute(f"SELECT COUNT(*) AS cnt FROM users u {where_sql}", params)
             total = cur.fetchone()["cnt"]
     finally:
         conn.close()
+
+    # 페이지네이션 링크에 필터 파라미터 유지 (URL 인코딩)
+    qs_params: Dict[str, Any] = {"limit": limit}
+    if q:
+        qs_params["q"] = q
+    if role:
+        qs_params["role"] = role
+    if status:
+        qs_params["status"] = status
+    if tier:
+        qs_params["tier"] = tier
+    pagination_qs = urlencode(qs_params)
 
     return templates.TemplateResponse(request=request, name="user_admin.html", context={
         "request": request,
@@ -134,9 +171,14 @@ def user_list_page(
         "page": page,
         "limit": limit,
         "total": total,
-        "total_pages": (total + limit - 1) // limit,
+        "total_pages": max(1, (total + limit - 1) // limit),
         "valid_tiers": VALID_TIERS,
         "tier_info": TIER_INFO,
+        "q": q or "",
+        "filter_role": role or "",
+        "filter_status": status or "",
+        "filter_tier": tier or "",
+        "pagination_qs": pagination_qs,
     })
 
 

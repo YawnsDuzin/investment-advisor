@@ -15,7 +15,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **AI**: Claude Code SDK (`claude-agent-sdk`) — 멀티스테이지 분석 파이프라인
 - **Backend**: FastAPI + Uvicorn (REST API + HTML 서빙)
 - **Template**: Jinja2 (다크 테마 UI)
-- **Database**: PostgreSQL + psycopg2 (스키마 자동 마이그레이션 v1~v18)
+- **Database**: PostgreSQL + psycopg2 (스키마 자동 마이그레이션 v1~v22)
 - **News**: feedparser + httpx (RSS 수집)
 - **Stock Data**: yfinance (해외 주가/재무 데이터) + pykrx (한국 주식 크로스체크/폴백)
 - **Async**: anyio (async/sync 브릿지)
@@ -27,12 +27,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```
 investment-advisor/
-├── shared/              ← 공용: config(.env 로드), db(마이그레이션+저장), logger(DB 로그), pg_setup(자동 설치)
-├── analyzer/            ← 배치: main(엔트리) → news_collector(RSS) → stock_data(주가조회) → analyzer(2단계) → prompts
-├── api/                 ← 웹: main(FastAPI) → routes/(pages, sessions, themes, proposals, chat, admin, auth, user_admin, watchlist, track_record)
+├── shared/              ← 공용: config(.env 로드), db(마이그레이션+저장), logger(DB 로그), pg_setup(자동 설치), tier_limits(구독 티어 제한)
+├── analyzer/            ← 배치: main(엔트리) → news_collector(RSS) → stock_data(주가조회) → analyzer(2단계) → recommender(Top Picks) → price_tracker(수익률추적) → checkpoint(중단점복구) → krx_data(KRX수급/공매도)
+├── api/                 ← 웹: main(FastAPI) → routes/(pages, sessions, themes, proposals, stocks, chat, education, inquiry, admin, auth, user_admin, watchlist, track_record)
 │   ├── auth/            ← JWT 인증 모듈: dependencies, jwt_handler, password, models
 │   ├── chat_engine.py   ← Claude SDK 기반 테마 채팅 엔진
-│   ├── templates/       ← Jinja2 HTML (다크 테마 + 우측 상단 드롭다운 메뉴)
+│   ├── education_engine.py ← Claude SDK 기반 투자 교육 AI 튜터 엔진
+│   ├── templates/       ← Jinja2 HTML (다크 테마 + 우측 상단 드롭다운 메뉴) + _macros.html(공통 매크로)
 │   └── static/css/
 └── _docs/               ← 운영 문서 (분석 파이프라인, 라즈베리파이 매뉴얼)
     └── _prompts/        ← 작업 요청 프롬프트 기록 (날짜별)
@@ -69,6 +70,7 @@ sudo systemctl enable --now investment-advisor-analyzer.timer    # 매일 03:00 
 - PostgreSQL 필요 (Windows는 별도 설치). DB 접속 정보는 `.env` 파일로 관리.
 - Claude Code CLI 필요: `npm install -g @anthropic-ai/claude-code` → `claude login`
 - 라즈베리파이 배포 상세: `_docs/raspberry-pi-setup.md` (OS 설치부터 포트포워딩까지)
+- 라즈베리파이에서 LAN 내 DB 직접 접속이 필요하면 UFW에서 5432 포트를 열고 `postgresql.conf`/`pg_hba.conf` 를 수정한다 (`sudo ufw allow 5432/tcp && sudo ufw reload`). 절차·보안 주의는 `_docs/raspberry-pi-setup.md` 4.5절 참고. **5432는 공유기 포트포워딩 금지** — 외부 접근은 SSH 터널 사용.
 
 ## Environment Variables
 
@@ -81,11 +83,18 @@ sudo systemctl enable --now investment-advisor-analyzer.timer    # 매일 03:00 
 | `DB_NAME` | `investment_advisor` | 데이터베이스명 |
 | `DB_USER` | `postgres` | DB 사용자 |
 | `DB_PASSWORD` | `postgres` | DB 비밀번호 |
-| `MAX_TURNS` | `2` | Claude SDK 최대 턴 수 (Stage 1·2 공통) |
+| `MAX_TURNS` | `1` | Claude SDK 최대 턴 수 (Stage 1·2 공통) |
 | `TOP_THEMES` | `2` | Stage 2 심층분석 대상 상위 테마 수 |
 | `TOP_STOCKS_PER_THEME` | `2` | 각 테마당 심층분석할 종목 수 |
 | `ENABLE_STOCK_ANALYSIS` | `true` | Stage 2(종목 심층분석) 활성화 스위치 (true/false) |
 | `ENABLE_STOCK_DATA` | `true` | yfinance 실시간 주가 데이터 조회 스위치 (true/false) |
+| `MODEL_ANALYSIS` | `claude-sonnet-4-6` | 분석(Stage 1·2)에 사용할 모델 |
+| `MODEL_TRANSLATE` | `claude-haiku-4-5-20251001` | 번역에 사용할 모델 (Haiku로 비용 최소화) |
+| `QUERY_TIMEOUT` | `900` | Claude SDK 단일 쿼리 타임아웃 (초). 서버 부하 시 증가 필요 |
+| `MIN_NEW_NEWS` | `5` | 이전 세션 대비 신규 뉴스가 이 수 미만이면 분석 스킵 |
+| `MAX_ARTICLES_PER_FEED` | `5` | RSS 피드당 최대 수집 기사 수 |
+| `KRX_ID` | (없음) | data.krx.co.kr 로그인 ID (pykrx 1.2.7+ 필요) |
+| `KRX_PW` | (없음) | data.krx.co.kr 로그인 비밀번호 |
 | `AUTH_ENABLED` | `false` | 인증 시스템 활성화 스위치 (false면 기존 동작 유지) |
 | `JWT_SECRET_KEY` | `INSECURE_DEFAULT_...` | JWT 서명 키 (프로덕션 반드시 변경) |
 | `JWT_ALGORITHM` | `HS256` | JWT 알고리즘 |
@@ -106,8 +115,8 @@ sudo systemctl enable --now investment-advisor-analyzer.timer    # 매일 03:00 
 ### 데이터 흐름
 
 ```
-[RSS 뉴스 수집] → [Stage 1: 이슈/테마/시나리오/매크로/제안] → [주가 데이터 조회] → [Stage 2: 핵심 종목 심층분석] → [DB 저장 + tracking 갱신]
-                    claude_agent_sdk.query()                    yfinance             claude_agent_sdk.query()
+[RSS 뉴스 수집] → [번역] → [Stage 1: 이슈/테마/시나리오/매크로/제안] → [주가 데이터 조회] → [Stage 2: 핵심 종목 심층분석] → [KRX 확장 데이터] → [DB 저장 + tracking 갱신] → [Stage 3: Top Picks] → [Stage 4: 가격추적]
+                  Haiku     claude_agent_sdk.query()              yfinance             claude_agent_sdk.query()        krx_data(pykrx)                                           recommender         price_tracker
 ```
 
 - **Stage 1**: 뉴스 → 8~15개 이슈(시계별 영향) → 4~7개 테마(시나리오·매크로) → 테마당 10~15개 투자 제안
@@ -127,6 +136,10 @@ sudo systemctl enable --now investment-advisor-analyzer.timer    # 매일 03:00 
 - `prompts.py` — 스테이지별 시스템 프롬프트 및 JSON 출력 템플릿
 - `news_collector.py` — `feedparser`로 RSS 피드 수집, 카테고리별 마크다운 텍스트 생성
 - `stock_data.py` — `yfinance` + `pykrx`(한국 주식 크로스체크/폴백)로 주가/재무 데이터 조회, 기간별 수익률(1m/3m/6m/1y) 모멘텀 체크(`current_price` 포함 반환), 프롬프트 삽입용 텍스트 포맷팅
+- `recommender.py` — Stage 3 Top Picks 추천 엔진. 룰 기반 스코어링(`compute_rule_based_picks()`) + 선택적 AI 재정렬(`ai_rerank_picks()`). `RecommendationConfig`로 가중치·다양성 제약 조절
+- `price_tracker.py` — Stage 4 추천 후 실제 수익률 추적. `entry_price` 확정 → 주기적 가격 스냅샷 → `post_return_*_pct` 갱신 (v19)
+- `checkpoint.py` — 파이프라인 중단점 저장/복구. 스테이지별 결과를 JSON 파일로 저장하여 실패 시 마지막 성공 스테이지부터 재개. 뉴스 핑거프린트 검증
+- `krx_data.py` — KRX 확장 데이터 수집. pykrx로 투자자별 매매동향(외국인/기관), 공매도 잔고, 국채 금리 조회 (v20)
 
 ### api/ — FastAPI 웹서비스 (상시 기동)
 - `routes/sessions.py` — 세션 목록/상세/날짜별 조회. `_serialize_row()` 공유 유틸.
@@ -138,20 +151,25 @@ sudo systemctl enable --now investment-advisor-analyzer.timer    # 매일 03:00 
 - `routes/auth.py` — 회원가입/로그인/로그아웃/토큰 갱신/비밀번호 변경. Form 기반 POST + httpOnly 쿠키. AJAX 요청 시 JSON 응답 지원 (`X-Requested-With` 헤더 감지).
 - `routes/user_admin.py` — 사용자 관리 CRUD (목록/역할변경/활성화/비밀번호초기화/삭제). Admin+Moderator 접근.
 - `routes/watchlist.py` — 개인화 API. 관심 종목 워치리스트 CRUD, 알림 구독(테마/종목) CRUD, 알림 목록/읽음 처리, 제안 메모 저장/삭제. 인증 필수.
+- `routes/stocks.py` — 종목 기초정보 API. yfinance로 주가/재무 데이터 온디맨드 조회, 1시간 캐싱.
 - `routes/pages.py` — Jinja2 HTML 페이지 라우트. 대시보드, tracking 뱃지, 테마·종목 히스토리, 워치리스트, 알림, 프로필, 채팅, 관리자 페이지. `_base_ctx()`로 인증 컨텍스트 + 알림 수 주입. 커스텀 Jinja2 필터(`nl_numbered`, `fmt_price`) 등록.
 - `auth/` — JWT 인증 모듈. `dependencies.py`(Depends 팩토리), `jwt_handler.py`(토큰 발급/검증), `password.py`(bcrypt), `models.py`(Pydantic 모델).
+- `routes/education.py` — 투자 교육 API. 토픽 목록/상세, 교육 채팅 세션 CRUD, AI 튜터 메시지 전송. 티어별 일일 턴 제한(`EDU_CHAT_DAILY_TURNS`). 인증 필수.
+- `routes/inquiry.py` — 고객 문의 게시판. 문의 CRUD, 답변/댓글, 상태 관리(open→answered→closed). 카테고리: general/bug/feature. `is_private` 플래그로 비공개 문의 지원. Admin/Moderator만 답변·상태 변경 가능.
 - `chat_engine.py` — Claude Agent SDK 기반 테마 채팅 엔진. 테마 컨텍스트를 시스템 프롬프트에 주입하여 대화.
-- `templates/` — 다크 테마 UI. base(우측 상단 유저 드롭다운 + 알림 배지 + 401 자동 갱신 인터셉터), landing, pricing, dashboard, sessions, session_detail, themes, proposals, theme_history, ticker_history, track_record, watchlist, notifications, profile, chat_list, chat_room, admin, admin_audit_logs, login, register, user_admin.
+- `education_engine.py` — Claude SDK 기반 투자 교육 AI 튜터. 토픽별 커리큘럼을 시스템 프롬프트에 주입하여 대화형 학습 제공.
+- `templates/` — 다크 테마 UI. base(우측 상단 유저 드롭다운 + 알림 배지 + 401 자동 갱신 인터셉터), landing, pricing, dashboard, sessions, session_detail, themes, proposals, theme_history, ticker_history, track_record, watchlist, notifications, profile, chat_list, chat_room, education(topic/chat_list/chat_room), inquiry(list/detail/new), admin, admin_audit_logs, login, register, user_admin.
 
 ### shared/ — 공용 모듈
-- `config.py` — `.env` 파일 자동 로드, `DatabaseConfig`(환경변수 기반), `NewsConfig`, `AnalyzerConfig`, `AuthConfig`, `AppConfig`
-- `db.py` — `schema_version` 기반 자동 마이그레이션(v1~v18), `save_analysis()` + `_validate_proposal()` 검증 + tracking 갱신 + 구독 알림 생성(`_generate_notifications()`), `get_recent_recommendations()`, `get_connection()`
+- `config.py` — `.env` 파일 자동 로드, `DatabaseConfig`, `NewsConfig`, `AnalyzerConfig`, `RecommendationConfig`(Top Picks 가중치·다양성), `AuthConfig`, `AppConfig`
+- `db.py` — `schema_version` 기반 자동 마이그레이션(v1~v22), `save_analysis()` + `_validate_proposal()` 검증 + tracking 갱신 + 구독 알림 생성(`_generate_notifications()`), `get_recent_recommendations()`, `get_connection()`
 - `logger.py` — 범용 DB 로그 시스템. `init_logger(db_cfg)` → `start_run()` / `finish_run()`으로 실행 단위 추적. `get_logger(source)`로 콘솔+DB 동시 로깅. `app_runs`/`app_logs` 테이블 사용 (v18)
 - `pg_setup.py` — PostgreSQL 설치 감지 및 자동 설치 (Linux apt, Windows winget/choco)
+- `tier_limits.py` — 구독 티어별 기능 제한(워치리스트 수, 구독 수, 일일 분석 수, 교육 채팅 턴 수, 테마 열람 수). 프론트엔드·백엔드 공통 소스
 
 ## DB Schema
 
-`schema_version` 테이블로 버전 관리. `init_db()` 호출 시 자동 마이그레이션 (현재 v18).
+`schema_version` 테이블로 버전 관리. `init_db()` 호출 시 자동 마이그레이션 (현재 v22).
 
 **테이블 관계 (CASCADE):**
 ```
@@ -172,6 +190,11 @@ users → refresh_tokens (v11, CASCADE)
      → admin_audit_logs (v17, actor/target SET NULL, 이메일 denormalize)
 
 theme_chat_sessions → theme_chat_messages (v6, 테마 기반 채팅)
+
+education_topics → education_chat_sessions (v21, 투자 교육 토픽)
+                 → education_chat_messages (v21, 교육 채팅)
+
+inquiries → inquiry_replies (v22, 고객 문의/답변)
 
 theme_tracking (독립, UPSERT로 갱신)
 proposal_tracking (독립, UPSERT로 갱신)
@@ -194,6 +217,11 @@ app_runs → app_logs (v18, 범용 실행 로그)
 - `users.tier`(v16) — 구독 티어 (`free`/`pro`/`premium`), `tier_expires_at`로 만료 관리.
 - `admin_audit_logs`(v17) — 관리자 감사 로그. `action`: tier_change/role_change/status_change/password_reset/user_delete. actor/target 이메일 denormalize로 계정 삭제 후에도 이력 유지.
 - `app_runs`/`app_logs`(v18) — 범용 실행 로그. `run_type`별 실행 이력 + 상세 로그. `shared/logger.py`가 사용.
+- `investment_proposals.entry_price`/`post_return_*_pct`(v19) — 추천 후 실제 수익률 추적. `entry_price` 확정 → 주기적 가격 스냅샷(`post_return_snapshot` JSONB) → 1m/3m/6m/1y 실제 수익률 갱신. `price_tracker.py`가 사용.
+- `investment_proposals.foreign_net_buy_signal`/`squeeze_risk`/`index_membership`/`foreign_ownership_pct`(v20) — KRX 확장 데이터. 외국인 순매수 신호, 숏스퀴즈 위험도, 주요 지수 편입, 외국인 보유비율. `krx_data.py`가 수집.
+- `education_topics`(v21) — 투자 교육 커리큘럼. 5개 카테고리(basics/analysis/risk/macro/practical), slug/title/content/examples(JSONB)/difficulty(beginner/intermediate/advanced). 시드 데이터 12개 토픽 자동 삽입.
+- `education_chat_sessions`/`education_chat_messages`(v21) — 교육 AI 튜터 채팅. user_id + topic_id FK. KST 기준 일일 턴 제한 적용.
+- `inquiries`/`inquiry_replies`(v22) — 고객 문의 게시판. category(general/bug/feature), status(open/answered/closed), `is_private` 비공개 플래그. `user_email` denormalize. Admin/Moderator만 답변·상태 변경.
 
 ## Key Conventions
 
@@ -214,3 +242,7 @@ app_runs → app_logs (v18, 범용 실행 로그)
 - `_base_ctx()`는 모든 페이지에 `current_user`, `auth_enabled`, `unread_notifications`를 주입 — 알림 배지 표시에 사용
 - 401 자동 갱신: `base.html`의 fetch 인터셉터가 401 감지 → `POST /auth/refresh` (AJAX) → 성공 시 원래 요청 재시도, 실패 시 로그인 리다이렉트
 - 개인화 API(`/api/watchlist/*`, `/api/subscriptions/*`, `/api/notifications/*`, `/api/proposals/*/memo`)는 인증 필수. `AUTH_ENABLED=false`이면 접근 불가
+- `_macros.html`에 공통 Jinja2 매크로 정의: `proposal_card_compact`, `proposal_card_full`, `theme_header`, `scenario_grid`, `indicator_tags`, `macro_impact_table`, `grade_badge`, `krx_badges`, `external_links`. 새 매크로는 여기에 추가
+- 종목 외부 링크: `external_links(ticker, market, mode)` 매크로 사용. 한국(KRX) → 네이버증권/Yahoo/KRX, 해외 → Yahoo/Finviz/SeekingAlpha/SimplyWallSt. `mode='icon'`(인라인) 또는 `mode='full'`(블록)
+- 투자 교육은 Free 티어도 접근 가능(일 5턴). 테마 채팅은 Pro 이상만 가능. `tier_limits.py`의 `EDU_CHAT_DAILY_TURNS` vs `CHAT_DAILY_TURNS` 참고
+- 문의 게시판 프라이버시: Admin/Moderator는 전체 조회, 일반 유저는 공개 문의 + 본인의 비공개 문의만 조회

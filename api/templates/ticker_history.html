@@ -1,10 +1,13 @@
 {% extends "base.html" %}
+{% from "_macros.html" import external_links %}
 {% block title %}{{ ticker }} 이력 — AlphaSignal{% endblock %}
 {% block page_title %}{{ ticker }} 추천 이력{% endblock %}
 {% block header_actions %}
 {% if current_user %}
 <button class="btn" id="subTickerBtn" onclick="toggleTickerSub('{{ ticker }}')" style="font-size:12px;padding:4px 12px;margin-right:8px;">구독</button>
 {% endif %}
+<a href="/pages/stocks/{{ ticker }}" class="btn" style="font-size:12px;padding:4px 12px;margin-right:8px;background:var(--bg-card);border:1px solid var(--border);">기초정보</a>
+{% if history %}{{ external_links(ticker, history[0].market or '', 'full') }}{% else %}{{ external_links(ticker, '', 'full') }}{% endif %}
 <a href="/pages/proposals" class="btn">제안 목록</a>
 {% endblock %}
 

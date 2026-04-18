@@ -148,6 +148,19 @@ sudo -u postgres createdb investment_advisor -O pi
 
 > DB가 없으면 `shared/db.py`에서 자동 생성합니다.
 
+#### LAN에서 DB 접속 허용 (라즈베리파이, 선택)
+
+같은 네트워크의 다른 PC에서 pgAdmin/DBeaver 등으로 직접 접속하려면 방화벽 포트를 열어줍니다:
+
+```bash
+sudo ufw allow 5432/tcp
+sudo ufw reload
+```
+
+단, 방화벽만 연다고 외부 접속이 되지는 않습니다. PostgreSQL의 `listen_addresses`(`postgresql.conf`)와 `pg_hba.conf` 도 함께 수정해야 합니다. 전체 절차 및 보안 주의사항은 [`_docs/raspberry-pi-setup.md` 4.5절](_docs/raspberry-pi-setup.md#45-lan에서-db-접속-허용-선택) 을 참고하세요.
+
+> **⚠ 보안**: 5432 포트는 **공유기 포트포워딩 대상에서 반드시 제외**합니다. LAN 내부에서만 접근을 허용하고, 외부에서 DB가 필요하면 SSH 터널을 사용하세요.
+
 ### Claude Code CLI
 
 ```bash

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import external_links %}
 {% block title %}Proposals — AlphaSignal{% endblock %}
 {% block page_title %}종목 스크리너{% endblock %}
 
@@ -106,6 +107,8 @@
             <td style="font-weight:600;">{{ p.asset_name }}</td>
             <td>
                 <a href="/pages/proposals/history/{{ p.ticker }}" style="color:var(--accent);" onclick="event.stopPropagation();">{{ p.ticker }}</a>
+                <a href="/pages/stocks/{{ p.ticker }}{% if p.market %}?market={{ p.market }}{% endif %}" style="font-size:10px;color:var(--text-muted);margin-left:4px;border:1px solid var(--border);border-radius:3px;padding:1px 4px;" onclick="event.stopPropagation();" title="기초정보">info</a>
+                <span onclick="event.stopPropagation();">{{ external_links(p.ticker, p.market or '') }}</span>
                 {% if p.market %}<span style="font-size:11px;color:var(--text-muted);">{{ p.market }}</span>{% endif %}
             </td>
             <td><span class="badge badge-{{ p.conviction }}">{{ p.conviction }}</span></td>
@@ -146,22 +149,9 @@
                     </div>
                     {% endif %}
 
-                    {# 탭 네비게이션 — UI-12 #}
-                    <div class="detail-tabs" role="tablist">
-                        <button type="button" class="detail-tab active" data-tab="overview-{{ p.id }}" role="tab" aria-selected="true" onclick="event.stopPropagation();">개요</button>
-                        {% if p.return_1m_pct is not none or p.return_3m_pct is not none or p.return_6m_pct is not none or p.return_1y_pct is not none %}
-                        <button type="button" class="detail-tab" data-tab="returns-{{ p.id }}" role="tab" onclick="event.stopPropagation();">수익률</button>
-                        {% endif %}
-                        {% if p.rationale or p.risk_factors or p.entry_condition or p.exit_condition %}
-                        <button type="button" class="detail-tab" data-tab="analysis-{{ p.id }}" role="tab" onclick="event.stopPropagation();">분석</button>
-                        {% endif %}
-                        {% if current_user %}
-                        <button type="button" class="detail-tab" data-tab="memo-{{ p.id }}" role="tab" onclick="event.stopPropagation();">메모</button>
-                        {% endif %}
-                    </div>
-
-                    {# 탭 콘텐츠 #}
-                    <div class="detail-tab-content active" id="overview-{{ p.id }}" role="tabpanel">
+                    {# 전체 섹션 한번에 표시 — 탭 제거 #}
+                    <div class="detail-section" id="overview-{{ p.id }}">
+                        <div class="detail-section-title">개요</div>
                         {% if p.sector or p.discovery_type or p.price_momentum_check or p.supply_chain_position or p.vendor_tier or (p.sentiment_score is not none and p.sentiment_score != None) %}
                         <div class="detail-meta-tags">
                             {% if p.sector %}
@@ -182,6 +172,24 @@
                             {% if p.sentiment_score is not none and p.sentiment_score != None %}
                             <span class="meta-tag meta-tag-neutral">센티먼트 {{ p.sentiment_score }}</span>
                             {% endif %}
+                            {# KRX 확장 데이터 뱃지 #}
+                            {% if p.foreign_net_buy_signal == 'strong_buy' %}
+                            <span class="meta-tag" style="background:var(--success);color:#fff;">🏦 외인 강력매수</span>
+                            {% elif p.foreign_net_buy_signal == 'buy' %}
+                            <span class="meta-tag" style="background:#2d6a4f;color:#fff;">🏦 외인 순매수</span>
+                            {% elif p.foreign_net_buy_signal == 'sell' %}
+                            <span class="meta-tag" style="background:var(--danger);color:#fff;">🏦 외인 순매도</span>
+                            {% endif %}
+                            {% if p.squeeze_risk == 'high' %}
+                            <span class="meta-tag" style="background:#d00;color:#fff;">⚡ 숏스퀴즈 위험</span>
+                            {% elif p.squeeze_risk == 'medium' %}
+                            <span class="meta-tag" style="background:#e85d04;color:#fff;">📊 공매도 과열</span>
+                            {% endif %}
+                            {% if p.index_membership %}
+                            {% for idx in p.index_membership %}
+                            <span class="meta-tag meta-tag-neutral">📌 {{ idx }}</span>
+                            {% endfor %}
+                            {% endif %}
                         </div>
                         {% else %}
                         <div style="color:var(--text-muted);font-size:13px;">추가 메타 정보 없음</div>
@@ -189,7 +197,8 @@
                     </div>
 
                     {% if p.return_1m_pct is not none or p.return_3m_pct is not none or p.return_6m_pct is not none or p.return_1y_pct is not none %}
-                    <div class="detail-tab-content" id="returns-{{ p.id }}" role="tabpanel" hidden>
+                    <div class="detail-section" id="returns-{{ p.id }}">
+                        <div class="detail-section-title">수익률</div>
                         <div class="detail-return-grid">
                             {% for key, label in [('return_1m_pct', '1개월'), ('return_3m_pct', '3개월'), ('return_6m_pct', '6개월'), ('return_1y_pct', '1년')] %}
                             {% if p[key] is not none %}
@@ -201,14 +210,15 @@
                             {% endif %}
                             {% endfor %}
                         </div>
-                        <div style="margin-top:10px;font-size:11px;color:var(--text-muted);">
+                        <div style="margin-top:4px;font-size:10px;color:var(--text-muted);">
                             * 추천 당일 기준 과거 N개월 모멘텀 — 추천 이후 수익률이 아님
                         </div>
                     </div>
                     {% endif %}
 
                     {% if p.rationale or p.risk_factors or p.entry_condition or p.exit_condition %}
-                    <div class="detail-tab-content" id="analysis-{{ p.id }}" role="tabpanel" hidden>
+                    <div class="detail-section" id="analysis-{{ p.id }}">
+                        <div class="detail-section-title">분석</div>
                         {% if p.rationale %}
                         <div class="detail-block"><strong class="detail-label">근거</strong><div>{{ p.rationale|nl_numbered }}</div></div>
                         {% endif %}
@@ -229,13 +239,13 @@
                     {% endif %}
 
                     {% if current_user %}
-                    <div class="detail-tab-content" id="memo-{{ p.id }}" role="tabpanel" hidden>
-                        <strong class="detail-label">내 메모</strong>
-                        <div style="margin-top:6px;display:flex;gap:8px;align-items:flex-start;">
-                            <textarea class="memo-input" id="memo-{{ p.id }}" rows="3" placeholder="이 제안에 대한 메모..." style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:13px;resize:vertical;" onclick="event.stopPropagation();">{{ user_memos.get(p.id, '') }}</textarea>
-                            <button onclick="event.stopPropagation(); saveMemo({{ p.id }});" class="btn" style="font-size:12px;padding:6px 14px;white-space:nowrap;">저장</button>
+                    <div class="detail-section" id="memo-{{ p.id }}">
+                        <div class="detail-section-title">메모</div>
+                        <div style="display:flex;gap:6px;align-items:flex-start;">
+                            <textarea class="memo-input" id="memo-{{ p.id }}" rows="2" placeholder="이 제안에 대한 메모..." style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px 8px;color:var(--text);font-size:12px;resize:vertical;" onclick="event.stopPropagation();">{{ user_memos.get(p.id, '') }}</textarea>
+                            <button onclick="event.stopPropagation(); saveMemo({{ p.id }});" class="btn" style="font-size:12px;padding:4px 12px;white-space:nowrap;">저장</button>
                             {% if user_memos.get(p.id) %}
-                            <button onclick="event.stopPropagation(); deleteMemo({{ p.id }});" class="btn" style="font-size:12px;padding:6px 10px;color:var(--red);background:none;">삭제</button>
+                            <button onclick="event.stopPropagation(); deleteMemo({{ p.id }});" class="btn" style="font-size:12px;padding:4px 8px;color:var(--red);background:none;">삭제</button>
                             {% endif %}
                         </div>
                     </div>
@@ -318,33 +328,12 @@ async function deleteMemo(proposalId) {
     }
 }
 
-// 탭 전환 (UI-12)
-document.querySelectorAll('.detail-tab').forEach(function(btn) {
-    btn.addEventListener('click', function() {
-        var panel = btn.closest('.detail-panel');
-        if (!panel) return;
-        panel.querySelectorAll('.detail-tab').forEach(function(b) {
-            b.classList.remove('active');
-            b.setAttribute('aria-selected', 'false');
-        });
-        panel.querySelectorAll('.detail-tab-content').forEach(function(c) { c.hidden = true; c.classList.remove('active'); });
-        btn.classList.add('active');
-        btn.setAttribute('aria-selected', 'true');
-        var target = panel.querySelector('#' + btn.getAttribute('data-tab'));
-        if (target) { target.hidden = false; target.classList.add('active'); }
-    });
-});
-
-// Sticky CTA: 메모 탭으로 이동 + textarea focus (UI-13)
+// Sticky CTA: 메모 textarea 로 스크롤 + 포커스
 function focusMemo(proposalId) {
-    var panel = document.querySelector('.detail-panel[data-proposal="' + proposalId + '"]');
-    if (!panel) return;
-    var memoTab = panel.querySelector('.detail-tab[data-tab="memo-' + proposalId + '"]');
-    if (memoTab) memoTab.click();
-    setTimeout(function() {
-        var ta = document.getElementById('memo-' + proposalId);
-        if (ta) ta.focus();
-    }, 50);
+    var ta = document.getElementById('memo-' + proposalId);
+    if (!ta) return;
+    ta.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setTimeout(function() { ta.focus(); }, 200);
 }
 
 // Sticky CTA: 티커별 알림 구독 (전역 헬퍼)

@@ -18,7 +18,6 @@
     <nav class="sidebar">
         <div class="sidebar-header">
             <a href="/"><img src="/static/img/logo.png" alt="AlphaSignal" class="sidebar-logo"></a>
-            <button class="sidebar-close-btn" onclick="document.body.classList.remove('sidebar-open')" aria-label="닫기">&times;</button>
         </div>
         <ul class="nav-menu">
             {# ── 인사이트 — 분석 결과 소비 ── #}
@@ -27,6 +26,9 @@
             <li><a href="/pages/themes" class="{% if active_page == 'themes' %}active{% endif %}" onclick="document.body.classList.remove('sidebar-open')">Themes</a></li>
             <li><a href="/pages/proposals" class="{% if active_page == 'proposals' %}active{% endif %}" onclick="document.body.classList.remove('sidebar-open')">Stock Picks</a></li>
             <li><a href="/pages/track-record" class="{% if active_page == 'track_record' %}active{% endif %}" onclick="document.body.classList.remove('sidebar-open')">Track Record</a></li>
+            {% if not auth_enabled or (current_user and (current_user.role in ('admin', 'moderator') or current_user.effective_tier() in ('pro', 'premium'))) %}
+            <li><a href="/pages/chat" class="{% if active_page == 'chat' %}active{% endif %}" onclick="document.body.classList.remove('sidebar-open')">Theme Chat</a></li>
+            {% endif %}
 
             {# ── 내 포트폴리오 — 로그인 사용자만 노출 ── #}
             {% if current_user %}
@@ -35,19 +37,28 @@
             <li><a href="/pages/notifications" class="{% if active_page == 'notifications' %}active{% endif %}" onclick="document.body.classList.remove('sidebar-open')">Notifications{% if unread_notifications %} <span class="nav-badge">{{ unread_notifications }}</span>{% endif %}</a></li>
             {% endif %}
 
-            {# ── 히스토리 — 과거 분석 조회 ── #}
-            <li class="nav-group-title">히스토리</li>
+            {# ── 조회 · 히스토리 — 티커 검색 + 과거 분석 ── #}
+            <li class="nav-group-title">조회 · 히스토리</li>
+            <li>
+                <form action="/pages/stocks/search" method="get" style="padding:0 12px;" onsubmit="var t=this.querySelector('input').value.trim(); if(t){window.location='/pages/stocks/'+encodeURIComponent(t.toUpperCase()); return false;} return false;">
+                    <input type="text" placeholder="티커 입력 (AAPL, 005930...)" style="width:100%;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;">
+                </form>
+            </li>
             <li><a href="/pages/sessions" class="{% if active_page == 'sessions' %}active{% endif %}" onclick="document.body.classList.remove('sidebar-open')">Sessions</a></li>
 
-            {# ── 커뮤니케이션 — Pro+ 티어 또는 Admin/Moderator, AUTH 비활성 환경 ── #}
-            {% if not auth_enabled or (current_user and (current_user.role in ('admin', 'moderator') or current_user.effective_tier() in ('pro', 'premium'))) %}
-            <li class="nav-group-title">커뮤니케이션</li>
-            <li><a href="/pages/chat" class="{% if active_page == 'chat' %}active{% endif %}" onclick="document.body.classList.remove('sidebar-open')">Theme Chat</a></li>
+            {# ── 학습 · 대화 — 교육 + AI 대화 ── #}
+            <li class="nav-group-title">학습 · 대화</li>
+            <li><a href="/pages/education" class="{% if active_page == 'education' %}active{% endif %}" onclick="document.body.classList.remove('sidebar-open')">Education</a></li>
+            {% if not auth_enabled or current_user %}
+            <li><a href="/pages/education/chat" class="{% if active_page == 'education_chat' %}active{% endif %}" onclick="document.body.classList.remove('sidebar-open')">AI Tutor</a></li>
             {% endif %}
 
-            {# ── 계정/요금제 ── #}
-            <li class="nav-group-title">계정</li>
+            {# ── 계정 · 지원 — 요금제 + 문의 ── #}
+            <li class="nav-group-title">계정 · 지원</li>
             <li><a href="/pages/pricing" class="{% if active_page == 'pricing' %}active{% endif %}" onclick="document.body.classList.remove('sidebar-open')">Pricing</a></li>
+            {% if not auth_enabled or current_user %}
+            <li><a href="/pages/inquiry" class="{% if active_page == 'inquiry' %}active{% endif %}" onclick="document.body.classList.remove('sidebar-open')">문의하기</a></li>
+            {% endif %}
         </ul>
         <div class="sidebar-footer">
             {% if not auth_enabled %}
@@ -129,12 +140,78 @@
 
     {% include "partials/_bottom_tabbar.html" %}
     {% include "partials/_upgrade_modal.html" %}
+    {% include "partials/_common_modal.html" %}
 
     <script>
     // 유저 드롭다운 외부 클릭 시 닫기
     document.addEventListener('click', function(e) {
         var dd = document.querySelector('.user-dropdown');
         if (dd && !dd.contains(e.target)) dd.classList.remove('open');
+    });
+
+    // ── 범용 모달 (alert/confirm 대체) ──
+    var _commonModalCallback = null;
+
+    function closeCommonModal() {
+        var modal = document.getElementById('common-modal');
+        if (!modal) return;
+        modal.classList.remove('open');
+        modal.setAttribute('aria-hidden', 'true');
+        _commonModalCallback = null;
+    }
+
+    /**
+     * alert() 대체. showModal('메시지') 또는 showModal('메시지', { icon, title })
+     */
+    function showModal(message, opts) {
+        opts = opts || {};
+        var modal = document.getElementById('common-modal');
+        if (!modal) { alert(message); return; }
+        document.getElementById('common-modal-icon').textContent = opts.icon || '!';
+        document.getElementById('common-modal-title').textContent = opts.title || '알림';
+        document.getElementById('common-modal-body').textContent = message;
+        document.getElementById('common-modal-actions').innerHTML =
+            '<button type="button" class="btn btn-primary" onclick="closeCommonModal()">확인</button>';
+        modal.classList.add('open');
+        modal.setAttribute('aria-hidden', 'false');
+    }
+
+    /**
+     * confirm() 대체. showConfirm('질문', callback) 또는 showConfirm('질문', callback, opts)
+     * opts: { icon, title, confirmText, cancelText, confirmClass }
+     */
+    function showConfirm(message, callback, opts) {
+        opts = opts || {};
+        var modal = document.getElementById('common-modal');
+        if (!modal) { if (confirm(message)) callback(); return; }
+        _commonModalCallback = callback;
+        document.getElementById('common-modal-icon').textContent = opts.icon || '!';
+        document.getElementById('common-modal-title').textContent = opts.title || '확인';
+        document.getElementById('common-modal-body').innerHTML = message.replace(/\n/g, '<br>');
+        var confirmCls = opts.confirmClass || 'btn-primary';
+        document.getElementById('common-modal-actions').innerHTML =
+            '<button type="button" class="btn" onclick="closeCommonModal()">' + (opts.cancelText || '취소') + '</button>' +
+            '<button type="button" class="btn ' + confirmCls + '" onclick="_confirmAndClose()">' + (opts.confirmText || '확인') + '</button>';
+        modal.classList.add('open');
+        modal.setAttribute('aria-hidden', 'false');
+    }
+
+    function _confirmAndClose() {
+        var cb = _commonModalCallback;
+        closeCommonModal();
+        if (cb) cb();
+    }
+
+    // 범용 모달 Esc/배경 클릭으로 닫기
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            var cm = document.getElementById('common-modal');
+            if (cm && cm.classList.contains('open')) { closeCommonModal(); return; }
+        }
+    });
+    document.addEventListener('click', function(e) {
+        var cm = document.getElementById('common-modal');
+        if (cm && e.target === cm) closeCommonModal();
     });
 
     // 업그레이드 모달 전역 핸들러

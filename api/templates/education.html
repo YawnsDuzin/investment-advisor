@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}투자 교육 — AlphaSignal{% endblock %}
+{% block page_title %}투자 교육{% endblock %}
+
+{% block header_actions %}
+<div style="display:flex;gap:8px;align-items:center;">
+    {% if auth_enabled and current_user %}
+    <a href="/pages/education/chat" class="btn">AI 튜터</a>
+    {% elif not auth_enabled %}
+    <a href="/pages/education/chat" class="btn">AI 튜터</a>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- 카테고리 필터 -->
+<div class="filters">
+    <form method="get" action="/pages/education" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;">
+        <select name="category" class="filter-select" onchange="this.form.submit()">
+            <option value="">전체 카테고리</option>
+            {% for key, label in categories.items() %}
+            <option value="{{ key }}" {% if selected_category == key %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+    </form>
+</div>
+
+{% if grouped_topics %}
+{% for cat_key, group in grouped_topics.items() %}
+<div class="edu-category-section">
+    <h3 class="edu-category-title">
+        <span class="edu-category-icon">
+            {% if cat_key == 'basics' %}&#x1F4D6;{% elif cat_key == 'analysis' %}&#x1F4CA;{% elif cat_key == 'risk' %}&#x1F6E1;{% elif cat_key == 'macro' %}&#x1F30D;{% elif cat_key == 'practical' %}&#x1F3AF;{% endif %}
+        </span>
+        {{ group.label }}
+    </h3>
+    <div class="edu-topic-grid">
+        {% for topic in group.topics %}
+        <a href="/pages/education/topic/{{ topic.slug }}" class="edu-topic-card">
+            <div class="edu-topic-header">
+                <span class="edu-topic-title">{{ topic.title }}</span>
+                <span class="badge badge-{{ topic.difficulty }}">{{ topic.difficulty }}</span>
+            </div>
+            <p class="edu-topic-summary">{{ topic.summary }}</p>
+        </a>
+        {% endfor %}
+    </div>
+</div>
+{% endfor %}
+{% else %}
+<div class="chat-empty">
+    <h3>교육 콘텐츠가 없습니다</h3>
+    <p>관리자에게 문의해 주세요.</p>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<style>
+.edu-category-section {
+    margin-bottom: 32px;
+}
+.edu-category-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 16px;
+    color: var(--text);
+}
+.edu-category-icon {
+    font-size: 22px;
+}
+.edu-topic-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 12px;
+}
+.edu-topic-card {
+    display: block;
+    padding: 20px;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    text-decoration: none;
+    color: var(--text);
+    transition: border-color .15s, box-shadow .15s;
+}
+.edu-topic-card:hover {
+    border-color: var(--accent);
+    box-shadow: 0 2px 12px rgba(99,102,241,.15);
+}
+.edu-topic-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+.edu-topic-title {
+    font-weight: 600;
+    font-size: 15px;
+    line-height: 1.4;
+}
+.edu-topic-summary {
+    font-size: 13px;
+    color: var(--text-muted);
+    line-height: 1.5;
+    margin: 0;
+}
+.badge-beginner { background: #22c55e22; color: #22c55e; }
+.badge-intermediate { background: #f59e0b22; color: #f59e0b; }
+.badge-advanced { background: #ef444422; color: #ef4444; }
+</style>
+{% endblock %}

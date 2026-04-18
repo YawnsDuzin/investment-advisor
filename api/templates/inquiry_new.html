@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}문의 작성 — AlphaSignal{% endblock %}
+{% block page_title %}문의 작성{% endblock %}
+
+{% block header_actions %}
+<a href="/pages/inquiry" class="btn" style="font-size:13px;padding:6px 16px;">목록으로</a>
+{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width:720px;">
+    <form id="inquiryForm" onsubmit="submitInquiry(event)">
+        <div class="inquiry-form-group">
+            <label class="inquiry-form-label">유형</label>
+            <select name="category" id="inqCategory" class="filter-select">
+                <option value="general">일반 문의</option>
+                <option value="bug">버그 신고</option>
+                <option value="feature">기능 요청</option>
+            </select>
+        </div>
+
+        <div class="inquiry-form-group">
+            <label class="inquiry-form-label">제목</label>
+            <input type="text" name="title" id="inqTitle" class="filter-input" placeholder="제목을 입력하세요" required maxlength="300" style="width:100%;">
+        </div>
+
+        <div class="inquiry-form-group">
+            <label class="inquiry-form-label">내용</label>
+            <textarea name="content" id="inqContent" class="inquiry-textarea" placeholder="문의 내용을 상세히 작성해 주세요" required rows="8"></textarea>
+        </div>
+
+        <div class="inquiry-form-group">
+            <label class="inquiry-form-label" style="display:flex;align-items:center;gap:8px;">
+                <input type="checkbox" name="is_private" id="inqPrivate">
+                비공개 문의 <span style="font-size:12px;color:var(--text-muted);">(관리자만 확인 가능)</span>
+            </label>
+        </div>
+
+        <div style="display:flex;gap:12px;justify-content:flex-end;margin-top:24px;">
+            <a href="/pages/inquiry" class="btn">취소</a>
+            <button type="submit" class="btn btn-primary" id="btnSubmit">등록</button>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function submitInquiry(e) {
+    e.preventDefault();
+    var btn = document.getElementById('btnSubmit');
+    btn.disabled = true;
+    btn.textContent = '등록 중...';
+
+    try {
+        var res = await fetch('/inquiry', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                category: document.getElementById('inqCategory').value,
+                title: document.getElementById('inqTitle').value.trim(),
+                content: document.getElementById('inqContent').value.trim(),
+                is_private: document.getElementById('inqPrivate').checked,
+            }),
+        });
+
+        if (!res.ok) {
+            var err = await res.json().catch(function() { return {}; });
+            throw new Error(err.detail || '등록에 실패했습니다 (' + res.status + ')');
+        }
+
+        var data = await res.json();
+        window.location.href = '/pages/inquiry/' + data.id;
+    } catch (err) {
+        showModal(err.message);
+        btn.disabled = false;
+        btn.textContent = '등록';
+    }
+}
+</script>
+{% endblock %}

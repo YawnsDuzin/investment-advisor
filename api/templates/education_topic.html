@@ -1,0 +1,241 @@
+{% extends "base.html" %}
+{% block title %}{{ topic.title }} — 투자 교육 — AlphaSignal{% endblock %}
+{% block page_title %}{{ topic.title }}{% endblock %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+{% endblock %}
+
+{% block header_actions %}
+<div style="display:flex;gap:8px;align-items:center;">
+    <a href="/pages/education{% if topic.category %}?category={{ topic.category }}{% endif %}" class="btn">목록으로</a>
+    {% if auth_enabled and current_user %}
+    <a href="/pages/education/chat/new/{{ topic.id }}" class="btn btn-primary">AI 튜터에 질문</a>
+    {% elif not auth_enabled %}
+    <a href="/pages/education/chat/new/{{ topic.id }}" class="btn btn-primary">AI 튜터에 질문</a>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- 토픽 메타 정보 -->
+<div class="edu-topic-meta">
+    <span class="badge badge-{{ topic.difficulty }}">{{ topic.difficulty }}</span>
+    <span class="edu-meta-category">{{ category_label }}</span>
+</div>
+
+{% if topic.summary %}
+<p class="edu-topic-lead">{{ topic.summary }}</p>
+{% endif %}
+
+<!-- 본문 (Markdown) -->
+<div class="edu-content" id="eduContent">{{ topic.content }}</div>
+
+<!-- 과거 사례 -->
+{% if topic.examples %}
+<div class="edu-examples-section">
+    <h3 class="edu-examples-title">과거 유사 사례</h3>
+    {% for ex in topic.examples %}
+    <div class="edu-example-card">
+        <div class="edu-example-header">
+            <span class="edu-example-name">{{ ex.title }}</span>
+            {% if ex.period %}
+            <span class="edu-example-period">{{ ex.period }}</span>
+            {% endif %}
+        </div>
+        <p class="edu-example-desc">{{ ex.description }}</p>
+        {% if ex.lesson %}
+        <div class="edu-example-lesson">
+            <strong>교훈:</strong> {{ ex.lesson }}
+        </div>
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- 이전/다음 네비게이션 -->
+<div class="edu-nav-footer">
+    {% if prev_topic %}
+    <a href="/pages/education/topic/{{ prev_topic.slug }}" class="edu-nav-link edu-nav-prev">
+        <span class="edu-nav-arrow">&larr;</span>
+        <span class="edu-nav-label">이전</span>
+        <span class="edu-nav-title">{{ prev_topic.title }}</span>
+    </a>
+    {% else %}
+    <div></div>
+    {% endif %}
+    {% if next_topic %}
+    <a href="/pages/education/topic/{{ next_topic.slug }}" class="edu-nav-link edu-nav-next">
+        <span class="edu-nav-label">다음</span>
+        <span class="edu-nav-arrow">&rarr;</span>
+        <span class="edu-nav-title">{{ next_topic.title }}</span>
+    </a>
+    {% else %}
+    <div></div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+.edu-topic-meta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
+}
+.edu-meta-category {
+    font-size: 13px;
+    color: var(--text-muted);
+}
+.edu-topic-lead {
+    font-size: 15px;
+    color: var(--text-muted);
+    line-height: 1.6;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+}
+.edu-content {
+    line-height: 1.8;
+    font-size: 14.5px;
+}
+.edu-content h2 { font-size: 20px; margin: 32px 0 12px; color: var(--text); }
+.edu-content h3 { font-size: 17px; margin: 24px 0 10px; color: var(--text); }
+.edu-content p { margin: 8px 0; }
+.edu-content table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px; }
+.edu-content th, .edu-content td {
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    text-align: left;
+}
+.edu-content th { background: var(--bg); font-weight: 600; }
+.edu-content blockquote {
+    border-left: 3px solid var(--accent);
+    margin: 16px 0;
+    padding: 8px 16px;
+    color: var(--text-muted);
+    font-style: italic;
+}
+.edu-content code {
+    background: var(--bg);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 13px;
+}
+.edu-content ul, .edu-content ol {
+    padding-left: 24px;
+    margin: 8px 0;
+}
+.edu-content li { margin: 4px 0; }
+.edu-content strong { color: var(--accent); }
+
+/* 과거 사례 */
+.edu-examples-section {
+    margin-top: 40px;
+    padding-top: 24px;
+    border-top: 2px solid var(--border);
+}
+.edu-examples-title {
+    font-size: 18px;
+    margin-bottom: 16px;
+}
+.edu-example-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 12px;
+}
+.edu-example-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+.edu-example-name {
+    font-weight: 600;
+    font-size: 15px;
+}
+.edu-example-period {
+    font-size: 12px;
+    color: var(--text-muted);
+    background: var(--bg);
+    padding: 3px 8px;
+    border-radius: 4px;
+}
+.edu-example-desc {
+    font-size: 14px;
+    line-height: 1.6;
+    margin: 0 0 10px;
+    color: var(--text-muted);
+}
+.edu-example-lesson {
+    font-size: 13px;
+    padding: 10px 14px;
+    background: rgba(99,102,241,.08);
+    border-radius: 6px;
+    border-left: 3px solid var(--accent);
+    line-height: 1.5;
+}
+
+/* 이전/다음 네비게이션 */
+.edu-nav-footer {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    margin-top: 40px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+}
+.edu-nav-link {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 12px 16px;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    text-decoration: none;
+    color: var(--text);
+    transition: border-color .15s;
+    max-width: 45%;
+}
+.edu-nav-link:hover {
+    border-color: var(--accent);
+}
+.edu-nav-label {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+.edu-nav-title {
+    font-size: 14px;
+    font-weight: 500;
+}
+.edu-nav-arrow {
+    font-size: 16px;
+    color: var(--accent);
+}
+.edu-nav-next {
+    text-align: right;
+    margin-left: auto;
+}
+.badge-beginner { background: #22c55e22; color: #22c55e; }
+.badge-intermediate { background: #f59e0b22; color: #f59e0b; }
+.badge-advanced { background: #ef444422; color: #ef4444; }
+
+@media (max-width: 768px) {
+    .edu-nav-footer { flex-direction: column; }
+    .edu-nav-link { max-width: 100%; }
+}
+</style>
+<script>
+// Markdown 렌더링
+if (typeof marked !== 'undefined') {
+    marked.setOptions({ breaks: true, gfm: true });
+    var el = document.getElementById('eduContent');
+    if (el) el.innerHTML = marked.parse(el.textContent);
+}
+</script>
+{% endblock %}

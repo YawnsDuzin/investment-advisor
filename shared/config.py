@@ -89,6 +89,8 @@ class AnalyzerConfig:
     # 모델 설정 — 용도별 분리 (비용 최적화)
     model_analysis: str = field(default_factory=lambda: os.getenv("MODEL_ANALYSIS", "claude-sonnet-4-6"))
     model_translate: str = field(default_factory=lambda: os.getenv("MODEL_TRANSLATE", "claude-haiku-4-5-20251001"))
+    # SDK 쿼리 타임아웃 (초) — 서버 부하 시 첫 토큰 지연이 길어질 수 있음
+    query_timeout: int = field(default_factory=lambda: int(os.getenv("QUERY_TIMEOUT", "900")))
     # 재분석 임계값 — 신규 뉴스가 이 수 미만이면 분석 스킵
     min_new_news: int = field(default_factory=lambda: int(os.getenv("MIN_NEW_NEWS", "5")))
 

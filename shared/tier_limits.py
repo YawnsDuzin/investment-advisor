@@ -44,6 +44,12 @@ HISTORY_DAYS_LIMITS: Dict[str, Optional[int]] = {
     TIER_PREMIUM: None,
 }
 
+EDU_CHAT_DAILY_TURNS: Dict[str, Optional[int]] = {
+    TIER_FREE: 5,     # 무료도 교육 채팅은 허용 (일 5턴)
+    TIER_PRO: 20,
+    TIER_PREMIUM: None,
+}
+
 THEME_VIEW_LIMITS: Dict[str, Optional[int]] = {
     # Free는 당일 테마 2건까지만 상세 열람 가능
     TIER_FREE: 2,
@@ -94,6 +100,10 @@ def get_chat_daily_limit(tier: str) -> Optional[int]:
 
 def get_history_days_limit(tier: str) -> Optional[int]:
     return HISTORY_DAYS_LIMITS.get(normalize_tier(tier), 7)
+
+
+def get_edu_chat_daily_limit(tier: str) -> Optional[int]:
+    return EDU_CHAT_DAILY_TURNS.get(normalize_tier(tier), 5)
 
 
 def is_unlimited(limit: Optional[int]) -> bool:

@@ -262,6 +262,7 @@ def dashboard(request: Request, user: Optional[UserInDB] = Depends(get_current_u
                        p.upside_pct, p.price_source, p.target_allocation,
                        p.return_1m_pct, p.return_3m_pct, p.return_6m_pct, p.return_1y_pct,
                        p.rationale AS proposal_rationale, p.market,
+                       p.foreign_net_buy_signal, p.squeeze_risk,
                        t.theme_name, t.theme_key, t.confidence_score AS theme_confidence,
                        EXISTS(SELECT 1 FROM stock_analyses sa WHERE sa.proposal_id = p.id) AS has_stock_analysis
                 FROM daily_top_picks dtp
@@ -271,6 +272,80 @@ def dashboard(request: Request, user: Optional[UserInDB] = Depends(get_current_u
                 ORDER BY dtp.rank
             """, (today_date,))
             top_picks_raw = cur.fetchall()
+
+            # 국채 금리 데이터 (bond_yields 테이블 — v20)
+            bond_yields = None
+            try:
+                cur.execute("""
+                    SELECT * FROM bond_yields
+                    WHERE session_id = %s
+                    ORDER BY snapshot_date DESC LIMIT 1
+                """, (session_id,))
+                by_row = cur.fetchone()
+                if by_row:
+                    bond_yields = _serialize_row(by_row)
+            except Exception:
+                pass  # v20 미적용 환경(테이블 미존재)에서도 동작
+
+            # ── 전일 세션 대비 변화량 (delta) ──
+            prev_issue_count = 0
+            prev_theme_count = 0
+            prev_buy_count = 0
+            cur.execute("""
+                SELECT id FROM analysis_sessions
+                WHERE analysis_date < %s
+                ORDER BY analysis_date DESC LIMIT 1
+            """, (today_date,))
+            prev_session = cur.fetchone()
+            if prev_session:
+                prev_sid = prev_session["id"]
+                cur.execute("SELECT COUNT(*) AS cnt FROM global_issues WHERE session_id = %s", (prev_sid,))
+                prev_issue_count = cur.fetchone()["cnt"]
+                cur.execute("SELECT COUNT(*) AS cnt FROM investment_themes WHERE session_id = %s", (prev_sid,))
+                prev_theme_count = cur.fetchone()["cnt"]
+                cur.execute("""
+                    SELECT COUNT(*) AS cnt FROM investment_proposals ip
+                    JOIN investment_themes it ON ip.theme_id = it.id
+                    WHERE it.session_id = %s AND ip.action = 'buy'
+                """, (prev_sid,))
+                prev_buy_count = cur.fetchone()["cnt"]
+
+            # ── 최근 7일 히스토리 (스파크라인) ──
+            cur.execute("""
+                SELECT s.analysis_date,
+                       (SELECT COUNT(*) FROM global_issues WHERE session_id = s.id) AS issue_cnt,
+                       (SELECT COUNT(*) FROM investment_themes WHERE session_id = s.id) AS theme_cnt,
+                       (SELECT COUNT(*) FROM investment_proposals ip
+                        JOIN investment_themes it ON ip.theme_id = it.id
+                        WHERE it.session_id = s.id AND ip.action = 'buy') AS buy_cnt
+                FROM analysis_sessions s
+                ORDER BY s.analysis_date DESC LIMIT 7
+            """)
+            history_rows = cur.fetchall()
+
+            # 워치리스트 ∩ 오늘 분석 크로스 매칭
+            watched_in_today = []
+            if user and watched_tickers:
+                for ticker in watched_tickers:
+                    for theme in themes:
+                        for p in (theme.get("proposals") or []):
+                            if (p.get("ticker") or "").upper() == ticker.upper():
+                                pick_rank = None
+                                for pk_raw in top_picks_raw:
+                                    if (pk_raw.get("ticker") or "").upper() == ticker.upper():
+                                        pick_rank = pk_raw.get("rank")
+                                        break
+                                watched_in_today.append({
+                                    "ticker": p.get("ticker"),
+                                    "asset_name": p.get("asset_name"),
+                                    "current_price": p.get("current_price"),
+                                    "currency": p.get("currency"),
+                                    "market": p.get("market"),
+                                    "action": p.get("action"),
+                                    "in_top_picks": pick_rank is not None,
+                                    "pick_rank": pick_rank,
+                                })
+                                break
 
     finally:
         conn.close()
@@ -284,6 +359,10 @@ def dashboard(request: Request, user: Optional[UserInDB] = Depends(get_current_u
         pk["is_subscribed"] = (
             tk in subscribed_tickers or pk.get("theme_key") in subscribed_theme_keys
         )
+        # 불릿 차트용: 현재가/목표가 비율
+        cp = float(pk.get("current_price") or 0)
+        tp = float(pk.get("target_price_low") or 0)
+        pk["price_pct"] = round(cp / tp * 100, 1) if tp > 0 and cp > 0 else None
         top_picks.append(pk)
 
     # 뉴스를 카테고리별로 그룹핑
@@ -297,6 +376,33 @@ def dashboard(request: Request, user: Optional[UserInDB] = Depends(get_current_u
                 "articles": [],
             }
         news_by_category[cat]["articles"].append(_serialize_row(row))
+
+    # 스파크라인 SVG 좌표 생성 (최근→과거 역순 → 시간순으로 뒤집기)
+    def _spark_points(values, w=60, h=18):
+        if not values or len(values) < 2:
+            return ""
+        mn, mx = min(values), max(values)
+        rng = mx - mn if mx != mn else 1
+        pts = []
+        for i, v in enumerate(values):
+            x = round(i / (len(values) - 1) * w, 1)
+            y = round(h - (v - mn) / rng * (h - 2) - 1, 1)
+            pts.append(f"{x},{y}")
+        return " ".join(pts)
+
+    hist_reversed = list(reversed(history_rows))  # 시간순
+    spark_issues = _spark_points([r["issue_cnt"] for r in hist_reversed])
+    spark_themes = _spark_points([r["theme_cnt"] for r in hist_reversed])
+    spark_buys = _spark_points([r["buy_cnt"] for r in hist_reversed])
+
+    # 리스크 온도 → 게이지 수치 매핑
+    risk_temp = (_serialize_row(session) if session else {}).get("risk_temperature", "")
+    risk_map = {"low": 20, "medium": 55, "high": 85}
+    risk_pct = risk_map.get((risk_temp or "").lower(), 50)
+
+    # 테마 뷰 한도 (tier_limits 참조)
+    from shared.tier_limits import THEME_VIEW_LIMITS, normalize_tier
+    theme_view_limit = THEME_VIEW_LIMITS.get(normalize_tier(ctx.get("tier")), None)
 
     return templates.TemplateResponse(request=request, name="dashboard.html", context={
         **ctx,
@@ -316,6 +422,17 @@ def dashboard(request: Request, user: Optional[UserInDB] = Depends(get_current_u
         "news_by_category": news_by_category,
         "watched_tickers": watched_tickers,
         "top_picks": top_picks,
+        "bond_yields": bond_yields,
+        # 신규 데이터
+        "issue_delta": issue_count - prev_issue_count,
+        "theme_delta": len(themes) - prev_theme_count,
+        "buy_delta": buy_count - prev_buy_count,
+        "spark_issues": spark_issues,
+        "spark_themes": spark_themes,
+        "spark_buys": spark_buys,
+        "risk_pct": risk_pct,
+        "watched_in_today": watched_in_today,
+        "theme_view_limit": theme_view_limit,
     })
 
 
@@ -437,6 +554,26 @@ def session_detail_page(request: Request, session_id: int, user: Optional[UserIn
         "issues": [_serialize_row(i) for i in issues],
         "themes": [_serialize_row(t) for t in themes],
         "tracking_map": tracking_map,
+    })
+
+
+# ──────────────────────────────────────────────
+# Stock Fundamentals (종목 기초정보)
+# ──────────────────────────────────────────────
+@router.get("/pages/stocks/{ticker}")
+def stock_fundamentals_page(
+    request: Request,
+    ticker: str,
+    market: str = Query(default="", description="시장 코드"),
+    user: Optional[UserInDB] = Depends(get_current_user),
+    auth_cfg: AuthConfig = Depends(_get_auth_cfg),
+):
+    """종목 기초정보 페이지 — 온디맨드 yfinance 조회"""
+    ctx = _base_ctx(request, "proposals", user, auth_cfg)
+    return templates.TemplateResponse(request=request, name="stock_fundamentals.html", context={
+        **ctx,
+        "ticker": ticker.upper(),
+        "market": market.upper(),
     })
 
 
@@ -1004,6 +1141,214 @@ def chat_room_page(request: Request, chat_session_id: int, user: Optional[UserIn
 
 
 # ──────────────────────────────────────────────
+# Education — 투자 교육
+# ──────────────────────────────────────────────
+
+# 카테고리 한글 매핑
+_EDU_CATEGORIES = {
+    "basics": "기초 개념",
+    "analysis": "분석 기법",
+    "risk": "리스크 관리",
+    "macro": "매크로 경제",
+    "practical": "실전 활용",
+}
+
+
+@router.get("/pages/education")
+def education_page(request: Request, category: str | None = None, user: Optional[UserInDB] = Depends(get_current_user), auth_cfg: AuthConfig = Depends(_get_auth_cfg)):
+    """투자 교육 토픽 목록 페이지"""
+    ctx = _base_ctx(request, "education", user, auth_cfg)
+    conn = get_connection(_get_cfg())
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            query = "SELECT id, category, slug, title, summary, difficulty, sort_order FROM education_topics"
+            params = []
+            if category:
+                query += " WHERE category = %s"
+                params.append(category)
+            query += " ORDER BY sort_order, id"
+            cur.execute(query, params)
+            topics = cur.fetchall()
+    finally:
+        conn.close()
+
+    # 카테고리별 그룹핑
+    grouped = {}
+    for t in topics:
+        cat = t["category"]
+        if cat not in grouped:
+            grouped[cat] = {"label": _EDU_CATEGORIES.get(cat, cat), "topics": []}
+        grouped[cat]["topics"].append(_serialize_row(t))
+
+    return templates.TemplateResponse(request=request, name="education.html", context={
+        **ctx,
+        "grouped_topics": grouped,
+        "selected_category": category,
+        "categories": _EDU_CATEGORIES,
+    })
+
+
+@router.get("/pages/education/topic/{slug}")
+def education_topic_page(request: Request, slug: str, user: Optional[UserInDB] = Depends(get_current_user), auth_cfg: AuthConfig = Depends(_get_auth_cfg)):
+    """교육 토픽 상세 페이지"""
+    ctx = _base_ctx(request, "education", user, auth_cfg)
+    conn = get_connection(_get_cfg())
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT * FROM education_topics WHERE slug = %s", (slug,))
+            topic = cur.fetchone()
+            if not topic:
+                return RedirectResponse(url="/pages/education", status_code=302)
+
+            # 이전/다음 토픽 네비게이션
+            cur.execute(
+                """SELECT slug, title FROM education_topics
+                   WHERE category = %s AND sort_order < %s
+                   ORDER BY sort_order DESC LIMIT 1""",
+                (topic["category"], topic["sort_order"]),
+            )
+            prev_topic = cur.fetchone()
+
+            cur.execute(
+                """SELECT slug, title FROM education_topics
+                   WHERE category = %s AND sort_order > %s
+                   ORDER BY sort_order ASC LIMIT 1""",
+                (topic["category"], topic["sort_order"]),
+            )
+            next_topic = cur.fetchone()
+    finally:
+        conn.close()
+
+    # examples가 JSON 문자열이면 파싱
+    topic_data = _serialize_row(topic)
+    examples = topic_data.get("examples")
+    if isinstance(examples, str):
+        import json as _json
+        try:
+            topic_data["examples"] = _json.loads(examples)
+        except (ValueError, TypeError):
+            topic_data["examples"] = []
+
+    return templates.TemplateResponse(request=request, name="education_topic.html", context={
+        **ctx,
+        "topic": topic_data,
+        "category_label": _EDU_CATEGORIES.get(topic["category"], topic["category"]),
+        "prev_topic": _serialize_row(prev_topic) if prev_topic else None,
+        "next_topic": _serialize_row(next_topic) if next_topic else None,
+    })
+
+
+@router.get("/pages/education/chat")
+def education_chat_list_page(request: Request, user: Optional[UserInDB] = Depends(get_current_user), auth_cfg: AuthConfig = Depends(_get_auth_cfg)):
+    """AI 튜터 채팅 목록 페이지"""
+    if auth_cfg.enabled and user is None:
+        return RedirectResponse("/auth/login?next=/pages/education/chat", status_code=302)
+
+    ctx = _base_ctx(request, "education_chat", user, auth_cfg)
+    conn = get_connection(_get_cfg())
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # 세션 목록
+            q = """
+                SELECT es.*, et.title AS topic_title, et.category, et.slug AS topic_slug,
+                       (SELECT COUNT(*) FROM education_chat_messages m
+                        WHERE m.chat_session_id = es.id) AS message_count
+                FROM education_chat_sessions es
+                LEFT JOIN education_topics et ON es.topic_id = et.id
+            """
+            params = []
+            if user and user.role != "admin":
+                q += " WHERE es.user_id = %s"
+                params.append(user.id)
+            q += " ORDER BY es.updated_at DESC"
+            cur.execute(q, params)
+            sessions = cur.fetchall()
+
+            # 토픽 목록 (새 채팅 생성용)
+            cur.execute("SELECT id, title, category FROM education_topics ORDER BY sort_order, id")
+            topics = cur.fetchall()
+    finally:
+        conn.close()
+
+    return templates.TemplateResponse(request=request, name="education_chat_list.html", context={
+        **ctx,
+        "chat_sessions": [_serialize_row(s) for s in sessions],
+        "topics": [_serialize_row(t) for t in topics],
+    })
+
+
+@router.get("/pages/education/chat/new/{topic_id}")
+def education_chat_new_redirect(request: Request, topic_id: int, user: Optional[UserInDB] = Depends(get_current_user), auth_cfg: AuthConfig = Depends(_get_auth_cfg)):
+    """AI 튜터 새 채팅 세션 생성 → 채팅방으로 리다이렉트"""
+    if auth_cfg.enabled and user is None:
+        return RedirectResponse(f"/auth/login?next=/pages/education/chat/new/{topic_id}", status_code=302)
+    cfg = _get_cfg()
+    conn = get_connection(cfg)
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT id, title FROM education_topics WHERE id = %s", (topic_id,))
+            topic = cur.fetchone()
+            if not topic:
+                return RedirectResponse(url="/pages/education/chat", status_code=302)
+
+            user_id = user.id if user else None
+            cur.execute(
+                """INSERT INTO education_chat_sessions (topic_id, title, user_id)
+                   VALUES (%s, %s, %s) RETURNING id""",
+                (topic_id, f"{topic['title']} 학습", user_id)
+            )
+            new_id = cur.fetchone()["id"]
+        conn.commit()
+    finally:
+        conn.close()
+
+    return RedirectResponse(url=f"/pages/education/chat/{new_id}", status_code=302)
+
+
+@router.get("/pages/education/chat/{session_id}")
+def education_chat_room_page(request: Request, session_id: int, user: Optional[UserInDB] = Depends(get_current_user), auth_cfg: AuthConfig = Depends(_get_auth_cfg)):
+    """AI 튜터 채팅방 페이지"""
+    if auth_cfg.enabled and user is None:
+        return RedirectResponse(f"/auth/login?next=/pages/education/chat/{session_id}", status_code=302)
+
+    conn = get_connection(_get_cfg())
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                SELECT es.*, et.title AS topic_title, et.category, et.slug AS topic_slug,
+                       et.difficulty, et.summary AS topic_summary
+                FROM education_chat_sessions es
+                LEFT JOIN education_topics et ON es.topic_id = et.id
+                WHERE es.id = %s
+            """, (session_id,))
+            session = cur.fetchone()
+            if not session:
+                return RedirectResponse(url="/pages/education/chat", status_code=302)
+
+            # 소유권 검증
+            if auth_cfg.enabled and user and user.role != "admin" and session.get("user_id") != user.id:
+                return RedirectResponse(url="/pages/education/chat", status_code=302)
+
+            cur.execute("""
+                SELECT id, role, content, created_at
+                FROM education_chat_messages
+                WHERE chat_session_id = %s
+                ORDER BY created_at
+            """, (session_id,))
+            messages = cur.fetchall()
+    finally:
+        conn.close()
+
+    ctx = _base_ctx(request, "education_chat", user, auth_cfg)
+    return templates.TemplateResponse(request=request, name="education_chat_room.html", context={
+        **ctx,
+        "session": _serialize_row(session),
+        "messages": [_serialize_row(m) for m in messages],
+        "category_label": _EDU_CATEGORIES.get(session.get("category", ""), ""),
+    })
+
+
+# ──────────────────────────────────────────────
 # Track Record & Pricing — 공개 페이지
 # ──────────────────────────────────────────────
 @router.get("/pages/track-record")
@@ -1051,4 +1396,157 @@ def pricing_page(request: Request, user: Optional[UserInDB] = Depends(get_curren
     return templates.TemplateResponse(request=request, name="pricing.html", context={
         **ctx,
         "tier_cards": tier_cards,
+    })
+
+
+# ── 고객 문의 페이지 ──────────────────────────────
+
+
+@router.get("/pages/inquiry")
+def inquiry_list_page(
+    request: Request,
+    category: Optional[str] = Query(default=None),
+    status: Optional[str] = Query(default=None),
+    page: int = Query(default=1, ge=1),
+    user: Optional[UserInDB] = Depends(get_current_user),
+    auth_cfg: AuthConfig = Depends(_get_auth_cfg),
+):
+    """문의 게시판 목록 페이지"""
+    # 유효하지 않은 필터값 무시
+    if category and category not in ("general", "bug", "feature"):
+        category = None
+    if status and status not in ("open", "answered", "closed"):
+        status = None
+
+    ctx = _base_ctx(request, "inquiry", user, auth_cfg)
+
+    per_page = 20
+    offset = (page - 1) * per_page
+    can_view_private = user is not None and user.role in ("admin", "moderator")
+
+    conn = get_connection(_get_cfg())
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            conditions = []
+            params = []
+
+            if not can_view_private:
+                if user:
+                    conditions.append("(i.is_private = FALSE OR i.user_id = %s)")
+                    params.append(user.id)
+                else:
+                    conditions.append("i.is_private = FALSE")
+
+            if category:
+                conditions.append("i.category = %s")
+                params.append(category)
+            if status:
+                conditions.append("i.status = %s")
+                params.append(status)
+
+            where = "WHERE " + " AND ".join(conditions) if conditions else ""
+
+            cur.execute(
+                f"""
+                SELECT i.*, u.nickname AS user_nickname,
+                       (SELECT COUNT(*) FROM inquiry_replies r WHERE r.inquiry_id = i.id) AS reply_count
+                FROM inquiries i
+                LEFT JOIN users u ON u.id = i.user_id
+                {where}
+                ORDER BY i.created_at DESC
+                LIMIT %s OFFSET %s
+                """,
+                (*params, per_page, offset),
+            )
+            inquiries = [_serialize_row(dict(r)) for r in cur.fetchall()]
+
+            cur.execute(f"SELECT COUNT(*) FROM inquiries i {where}", tuple(params))
+            total = cur.fetchone()["count"]
+    finally:
+        conn.close()
+
+    total_pages = max(1, (total + per_page - 1) // per_page)
+
+    return templates.TemplateResponse(request=request, name="inquiry_list.html", context={
+        **ctx,
+        "inquiries": inquiries,
+        "total": total,
+        "page": page,
+        "total_pages": total_pages,
+        "selected_category": category,
+        "selected_status": status,
+    })
+
+
+@router.get("/pages/inquiry/new")
+def inquiry_new_page(
+    request: Request,
+    user: Optional[UserInDB] = Depends(get_current_user),
+    auth_cfg: AuthConfig = Depends(_get_auth_cfg),
+):
+    """문의 작성 페이지 — 로그인 필수"""
+    if auth_cfg.enabled and not user:
+        return RedirectResponse(url="/auth/login?next=/pages/inquiry/new", status_code=302)
+    ctx = _base_ctx(request, "inquiry", user, auth_cfg)
+    return templates.TemplateResponse(request=request, name="inquiry_new.html", context=ctx)
+
+
+@router.get("/pages/inquiry/{inquiry_id}")
+def inquiry_detail_page(
+    request: Request,
+    inquiry_id: int,
+    user: Optional[UserInDB] = Depends(get_current_user),
+    auth_cfg: AuthConfig = Depends(_get_auth_cfg),
+):
+    """문의 상세 페이지"""
+    ctx = _base_ctx(request, "inquiry", user, auth_cfg)
+
+    conn = get_connection(_get_cfg())
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT i.*, u.nickname AS user_nickname
+                FROM inquiries i
+                LEFT JOIN users u ON u.id = i.user_id
+                WHERE i.id = %s
+                """,
+                (inquiry_id,),
+            )
+            inquiry = cur.fetchone()
+            if not inquiry:
+                return RedirectResponse(url="/pages/inquiry", status_code=302)
+
+            # 비공개 접근 제어
+            if inquiry["is_private"]:
+                is_author = user and inquiry["user_id"] == user.id
+                can_view = user and user.role in ("admin", "moderator")
+                if not is_author and not can_view:
+                    return RedirectResponse(url="/pages/inquiry", status_code=302)
+
+            # 답변 목록
+            cur.execute(
+                """
+                SELECT r.*, u.nickname AS user_nickname
+                FROM inquiry_replies r
+                LEFT JOIN users u ON u.id = r.user_id
+                WHERE r.inquiry_id = %s
+                ORDER BY r.created_at ASC
+                """,
+                (inquiry_id,),
+            )
+            replies = [_serialize_row(dict(r)) for r in cur.fetchall()]
+    finally:
+        conn.close()
+
+    inquiry = _serialize_row(dict(inquiry))
+    is_author = user and inquiry.get("user_id") == user.id
+    is_staff = user and user.role in ("admin", "moderator")
+
+    return templates.TemplateResponse(request=request, name="inquiry_detail.html", context={
+        **ctx,
+        "inquiry": inquiry,
+        "replies": replies,
+        "is_author": is_author,
+        "is_staff": is_staff,
     })
