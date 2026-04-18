@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% block title %}감사 로그 — AlphaScope{% endblock %}
+{% block page_title %}관리자 감사 로그{% endblock %}
+
+{% block content %}
+<style>
+    .audit-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .audit-table th, .audit-table td {
+        padding: 8px 10px; text-align: left;
+        border-bottom: 1px solid var(--border);
+        vertical-align: top;
+    }
+    .audit-table th { color: var(--text-muted); font-weight: 600; }
+    .audit-table tr:hover { background: var(--bg-card-hover); }
+    .json-cell {
+        font-family: monospace; font-size: 11px; max-width: 280px;
+        white-space: pre-wrap; word-break: break-all;
+        color: var(--text-muted);
+    }
+    .action-tag {
+        display: inline-block; padding: 2px 6px; border-radius: 3px;
+        font-size: 11px; font-weight: 600;
+    }
+    .action-tag.tier_change { background: rgba(147,130,255,0.18); color: var(--purple); }
+    .action-tag.role_change { background: rgba(79,140,255,0.15); color: var(--accent); }
+    .action-tag.status_change { background: rgba(251,191,36,0.18); color: var(--orange); }
+    .action-tag.password_reset { background: rgba(52,211,153,0.15); color: var(--green); }
+    .action-tag.user_delete { background: rgba(248,113,113,0.18); color: var(--red); }
+    .filter-form {
+        display: flex; gap: 8px; align-items: center; margin-bottom: 14px;
+        flex-wrap: wrap;
+    }
+    .filter-form select, .filter-form input {
+        padding: 6px 10px; border: 1px solid var(--border); border-radius: 4px;
+        background: var(--bg); color: var(--text); font-size: 13px;
+    }
+    .filter-form button { padding: 6px 14px; }
+    .topbar {
+        display: flex; justify-content: space-between; align-items: center;
+        margin-bottom: 14px;
+    }
+    .pagination { margin-top: 20px; text-align: center; }
+    .pagination a, .pagination span {
+        display: inline-block; padding: 6px 12px; margin: 0 2px;
+        border: 1px solid var(--border); border-radius: 4px;
+        font-size: 13px;
+    }
+    .pagination .current { background: rgba(79,140,255,0.15); color: var(--accent); border-color: rgba(79,140,255,0.3); font-weight: 600; }
+</style>
+
+<div class="topbar">
+    <p style="color:var(--text-muted);font-size:14px;margin:0;">
+        전체 {{ total }}건 ({{ page }}/{{ total_pages or 1 }} 페이지)
+    </p>
+    <div>
+        <a href="/admin/users" style="color:var(--accent);font-size:13px;">← 사용자 관리</a>
+    </div>
+</div>
+
+<form method="get" class="filter-form">
+    <label>작업</label>
+    <select name="action">
+        <option value="">전체</option>
+        <option value="tier_change" {% if filter_action == 'tier_change' %}selected{% endif %}>티어 변경</option>
+        <option value="role_change" {% if filter_action == 'role_change' %}selected{% endif %}>역할 변경</option>
+        <option value="status_change" {% if filter_action == 'status_change' %}selected{% endif %}>활성 상태</option>
+        <option value="password_reset" {% if filter_action == 'password_reset' %}selected{% endif %}>비밀번호 초기화</option>
+        <option value="user_delete" {% if filter_action == 'user_delete' %}selected{% endif %}>계정 삭제</option>
+    </select>
+    <label>대상 이메일</label>
+    <input type="text" name="target_email" value="{{ filter_target_email }}" placeholder="부분 일치">
+    <button type="submit" class="btn btn-primary" style="font-size:13px;padding:6px 14px;">필터</button>
+    {% if filter_action or filter_target_email %}
+    <a href="/admin/users/audit-logs" style="font-size:12px;color:var(--text-muted);">초기화</a>
+    {% endif %}
+</form>
+
+{% if logs %}
+<table class="audit-table">
+    <thead>
+        <tr>
+            <th>시각</th>
+            <th>작업</th>
+            <th>수행자</th>
+            <th>대상</th>
+            <th>변경 전</th>
+            <th>변경 후</th>
+            <th>사유</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for log in logs %}
+        <tr>
+            <td style="white-space:nowrap;">{{ log.created_at[:19] if log.created_at else '-' }}</td>
+            <td><span class="action-tag {{ log.action }}">{{ log.action }}</span></td>
+            <td>{{ log.actor_email or '(삭제됨)' }}</td>
+            <td>{{ log.target_email or '-' }}</td>
+            <td class="json-cell">{{ log.before_json or '-' }}</td>
+            <td class="json-cell">{{ log.after_json or '-' }}</td>
+            <td style="max-width:200px;word-break:break-word;">{{ log.reason or '-' }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p style="color:var(--text-muted);padding:20px;text-align:center;">조회 결과가 없습니다.</p>
+{% endif %}
+
+{% if total_pages > 1 %}
+<div class="pagination">
+    {% set base = '?action=' ~ filter_action ~ '&target_email=' ~ filter_target_email %}
+    {% if page > 1 %}
+    <a href="{{ base }}&page={{ page - 1 }}&limit={{ limit }}">이전</a>
+    {% endif %}
+    {% for p in range(1, total_pages + 1) %}
+        {% if p == page %}
+        <span class="current">{{ p }}</span>
+        {% else %}
+        <a href="{{ base }}&page={{ p }}&limit={{ limit }}">{{ p }}</a>
+        {% endif %}
+    {% endfor %}
+    {% if page < total_pages %}
+    <a href="{{ base }}&page={{ page + 1 }}&limit={{ limit }}">다음</a>
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}

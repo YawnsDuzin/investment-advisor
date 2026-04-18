@@ -8,6 +8,17 @@ from fastapi.templating import Jinja2Templates
 from markupsafe import Markup
 from shared.config import DatabaseConfig, AuthConfig
 from shared.db import get_connection
+from shared.tier_limits import (
+    TIER_INFO,
+    WATCHLIST_LIMITS,
+    SUBSCRIPTION_LIMITS,
+    STAGE2_DAILY_LIMITS,
+    CHAT_DAILY_TURNS,
+    HISTORY_DAYS_LIMITS,
+    get_watchlist_limit,
+    get_subscription_limit,
+    get_chat_daily_limit,
+)
 from psycopg2.extras import RealDictCursor
 from api.routes.sessions import _serialize_row
 from api.auth.dependencies import get_current_user, _get_auth_cfg
@@ -52,7 +63,7 @@ def _fmt_price(value, currency: str = "") -> str:
         return "-"
     symbol = _CURRENCY_SYMBOLS.get((currency or "").upper(), "")
     # KRW, JPY 등은 소수점 없이 표시
-    if (currency or "").upper() in ("KRW", "JPY", "KRW"):
+    if (currency or "").upper() in ("KRW", "JPY"):
         return f"{symbol}{num:,.0f}"
     return f"{symbol}{num:,.2f}"
 
@@ -65,28 +76,63 @@ def _get_cfg() -> DatabaseConfig:
 
 
 def _base_ctx(request: Request, active_page: str, user: Optional[UserInDB], auth_cfg: AuthConfig) -> dict:
-    """모든 템플릿에 공통으로 전달할 컨텍스트"""
+    """모든 템플릿에 공통으로 전달할 컨텍스트.
+
+    tier 정보와 사용량/한도는 업그레이드 CTA/사용량 배지 표시에 쓰인다.
+    """
+    effective_tier = user.effective_tier() if user else "free"
+
+    tier_info = TIER_INFO.get(effective_tier)
+
     ctx = {
         "request": request,
         "active_page": active_page,
         "current_user": user,
         "auth_enabled": auth_cfg.enabled,
         "unread_notifications": 0,
+        # 티어 UI 표시용
+        "tier": effective_tier,
+        "tier_label": tier_info.label_ko if tier_info else None,
+        "tier_badge_color": tier_info.badge_color if tier_info else "free",
+        # 한도 (템플릿에서 직접 참조 가능)
+        "watchlist_limit": get_watchlist_limit(effective_tier),
+        "subscription_limit": get_subscription_limit(effective_tier),
+        "chat_daily_limit": get_chat_daily_limit(effective_tier),
+        # 현재 사용량 (로그인 시 채워짐)
+        "watchlist_usage": 0,
+        "subscription_usage": 0,
     }
     if user and auth_cfg.enabled:
         try:
             conn = get_connection(_get_cfg())
             try:
                 with conn.cursor() as cur:
+                    # 세 쿼리를 UNION ALL 단일 호출로 묶어 DB 왕복 1회로 처리
                     cur.execute(
-                        "SELECT COUNT(*) FROM user_notifications WHERE user_id = %s AND is_read = FALSE",
-                        (user.id,),
+                        """
+                        SELECT 'noti'   AS k, COUNT(*) FROM user_notifications
+                            WHERE user_id = %s AND is_read = FALSE
+                        UNION ALL
+                        SELECT 'watch'  AS k, COUNT(*) FROM user_watchlist
+                            WHERE user_id = %s
+                        UNION ALL
+                        SELECT 'sub'    AS k, COUNT(*) FROM user_subscriptions
+                            WHERE user_id = %s
+                        """,
+                        (user.id, user.id, user.id),
                     )
-                    ctx["unread_notifications"] = cur.fetchone()[0]
+                    for key, cnt in cur.fetchall():
+                        if key == "noti":
+                            ctx["unread_notifications"] = cnt
+                        elif key == "watch":
+                            ctx["watchlist_usage"] = cnt
+                        elif key == "sub":
+                            ctx["subscription_usage"] = cnt
             finally:
                 conn.close()
-        except Exception:
-            pass
+        except Exception as e:
+            # 메뉴·배지는 0으로 폴백하되 운영자가 알 수 있도록 로그
+            print(f"[pages._base_ctx] 사용량 조회 실패 (user_id={user.id}): {e}")
     return ctx
 
 
@@ -95,6 +141,10 @@ def _base_ctx(request: Request, active_page: str, user: Optional[UserInDB], auth
 # ──────────────────────────────────────────────
 @router.get("/")
 def dashboard(request: Request, user: Optional[UserInDB] = Depends(get_current_user), auth_cfg: AuthConfig = Depends(_get_auth_cfg)):
+    # 인증 활성 + 비로그인 → 랜딩 페이지로 안내 (UI-16)
+    if auth_cfg.enabled and user is None:
+        return RedirectResponse(url="/pages/landing", status_code=302)
+
     ctx = _base_ctx(request, "dashboard", user, auth_cfg)
     conn = get_connection(_get_cfg())
     try:
@@ -184,14 +234,57 @@ def dashboard(request: Request, user: Optional[UserInDB] = Depends(get_current_u
             """, (session_id,))
             raw_news = cur.fetchall()
 
-            # 워치리스트 (로그인 사용자)
+            # 워치리스트 + 알림 구독 (로그인 사용자)
             watched_tickers = set()
+            subscribed_tickers = set()
+            subscribed_theme_keys = set()
             if user:
                 cur.execute("SELECT ticker FROM user_watchlist WHERE user_id = %s", (user.id,))
                 watched_tickers = {r["ticker"] for r in cur.fetchall()}
 
+                cur.execute(
+                    "SELECT sub_type, sub_key FROM user_subscriptions WHERE user_id = %s",
+                    (user.id,),
+                )
+                for r in cur.fetchall():
+                    if r["sub_type"] == "ticker":
+                        subscribed_tickers.add((r["sub_key"] or "").upper())
+                    elif r["sub_type"] == "theme":
+                        subscribed_theme_keys.add(r["sub_key"])
+
+            # ── Top Picks 조회 (v15) ──
+            cur.execute("""
+                SELECT dtp.rank, dtp.proposal_id, dtp.score_rule, dtp.score_final,
+                       dtp.score_breakdown, dtp.rationale_text, dtp.key_risk, dtp.source,
+                       p.ticker, p.asset_name, p.sector, p.currency, p.action,
+                       p.conviction, p.discovery_type, p.price_momentum_check,
+                       p.current_price, p.target_price_low, p.target_price_high,
+                       p.upside_pct, p.price_source, p.target_allocation,
+                       p.return_1m_pct, p.return_3m_pct, p.return_6m_pct, p.return_1y_pct,
+                       p.rationale AS proposal_rationale, p.market,
+                       t.theme_name, t.theme_key, t.confidence_score AS theme_confidence,
+                       EXISTS(SELECT 1 FROM stock_analyses sa WHERE sa.proposal_id = p.id) AS has_stock_analysis
+                FROM daily_top_picks dtp
+                JOIN investment_proposals p ON p.id = dtp.proposal_id
+                JOIN investment_themes t    ON t.id = p.theme_id
+                WHERE dtp.analysis_date = %s
+                ORDER BY dtp.rank
+            """, (today_date,))
+            top_picks_raw = cur.fetchall()
+
     finally:
         conn.close()
+
+    # Top Picks 직렬화 + 개인화 플래그 주입
+    top_picks = []
+    for row in top_picks_raw:
+        pk = _serialize_row(row)
+        tk = (pk.get("ticker") or "").upper()
+        pk["is_watched"] = tk in watched_tickers
+        pk["is_subscribed"] = (
+            tk in subscribed_tickers or pk.get("theme_key") in subscribed_theme_keys
+        )
+        top_picks.append(pk)
 
     # 뉴스를 카테고리별로 그룹핑
     from analyzer.news_collector import CATEGORY_LABELS
@@ -222,6 +315,7 @@ def dashboard(request: Request, user: Optional[UserInDB] = Depends(get_current_u
         "disappeared_themes": disappeared_themes,
         "news_by_category": news_by_category,
         "watched_tickers": watched_tickers,
+        "top_picks": top_picks,
     })
 
 
@@ -900,4 +994,55 @@ def chat_room_page(request: Request, chat_session_id: int, user: Optional[UserIn
         **ctx,
         "session": _serialize_row(session),
         "messages": [_serialize_row(m) for m in messages],
+    })
+
+
+# ──────────────────────────────────────────────
+# Track Record & Pricing — 공개 페이지
+# ──────────────────────────────────────────────
+@router.get("/pages/track-record")
+def track_record_page(request: Request, user: Optional[UserInDB] = Depends(get_current_user), auth_cfg: AuthConfig = Depends(_get_auth_cfg)):
+    """트랙레코드 공개 페이지 — 비로그인도 접근 가능."""
+    ctx = _base_ctx(request, "track_record", user, auth_cfg)
+    # 클라이언트에서 /api/track-record/summary fetch하여 렌더
+    return templates.TemplateResponse(request=request, name="track_record.html", context=ctx)
+
+
+@router.get("/pages/landing")
+def landing_page(request: Request, user: Optional[UserInDB] = Depends(get_current_user), auth_cfg: AuthConfig = Depends(_get_auth_cfg)):
+    """비로그인 공개 랜딩 페이지 — Hero + 핵심 기능 + 트랙레코드 미리보기 + 요금제 티저.
+
+    인증 활성 환경에서 미로그인 사용자가 `/`에 접근하면 이 페이지로 리다이렉트된다.
+    """
+    ctx = _base_ctx(request, "landing", user, auth_cfg)
+    return templates.TemplateResponse(request=request, name="landing.html", context=ctx)
+
+
+@router.get("/pages/pricing")
+def pricing_page(request: Request, user: Optional[UserInDB] = Depends(get_current_user), auth_cfg: AuthConfig = Depends(_get_auth_cfg)):
+    """요금제 비교 페이지 — 정적 콘텐츠 + 티어 상수 렌더."""
+    ctx = _base_ctx(request, "pricing", user, auth_cfg)
+
+    def _display(val):
+        return "무제한" if val is None else str(val)
+
+    tier_cards = []
+    for key in ("free", "pro", "premium"):
+        info = TIER_INFO[key]
+        tier_cards.append({
+            "key": key,
+            "label_ko": info.label_ko,
+            "label_en": info.label_en,
+            "price_krw_monthly": info.price_krw_monthly,
+            "badge_color": info.badge_color,
+            "watchlist_limit": _display(WATCHLIST_LIMITS.get(key)),
+            "subscription_limit": _display(SUBSCRIPTION_LIMITS.get(key)),
+            "stage2_daily_limit": _display(STAGE2_DAILY_LIMITS.get(key)),
+            "chat_daily_limit": _display(CHAT_DAILY_TURNS.get(key)),
+            "history_days_limit": _display(HISTORY_DAYS_LIMITS.get(key)),
+        })
+
+    return templates.TemplateResponse(request=request, name="pricing.html", context={
+        **ctx,
+        "tier_cards": tier_cards,
     })

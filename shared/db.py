@@ -5,7 +5,7 @@ from psycopg2.extras import execute_values, RealDictCursor
 from shared.config import DatabaseConfig
 
 # ── 스키마 버전 관리 ──────────────────────────────
-SCHEMA_VERSION = 14  # v1~v5: 분석 테이블, v6: 테마 채팅, v7: 뉴스 기사, v8: 뉴스 한글 번역, v9: 요약 한글 번역, v10: price_source, v11: JWT 인증, v12: 개인화(워치리스트/구독/알림/메모), v13: AI theme_key, v14: 기간별 수익률
+SCHEMA_VERSION = 17  # v1~v5: 분석 테이블, v6: 테마 채팅, v7: 뉴스 기사, v8: 뉴스 한글 번역, v9: 요약 한글 번역, v10: price_source, v11: JWT 인증, v12: 개인화(워치리스트/구독/알림/메모), v13: AI theme_key, v14: 기간별 수익률, v15: 일별 Top Picks, v16: 구독 티어(users.tier), v17: 관리자 감사 로그(admin_audit_logs)
 
 
 def _ensure_database(cfg: DatabaseConfig) -> None:
@@ -570,6 +570,99 @@ def _migrate_to_v14(cur) -> None:
     print("[DB] v14 마이그레이션 완료 — 기간별 수익률 컬럼 추가 (return_1m/3m/6m/1y_pct)")
 
 
+def _migrate_to_v15(cur) -> None:
+    """v15: 일별 Top Picks — 룰 기반 + AI 재정렬 결과 영속화"""
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS daily_top_picks (
+            id SERIAL PRIMARY KEY,
+            session_id INT REFERENCES analysis_sessions(id) ON DELETE CASCADE,
+            analysis_date DATE NOT NULL,
+            rank INT NOT NULL,
+            proposal_id INT REFERENCES investment_proposals(id) ON DELETE CASCADE,
+            score_rule NUMERIC(7,2),
+            score_final NUMERIC(7,2),
+            score_breakdown JSONB,
+            rationale_text TEXT,
+            key_risk TEXT,
+            source VARCHAR(20) DEFAULT 'rule',
+            created_at TIMESTAMP DEFAULT NOW(),
+            UNIQUE(analysis_date, rank)
+        );
+    """)
+
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_daily_top_picks_date
+            ON daily_top_picks(analysis_date, rank);
+    """)
+
+    cur.execute("""
+        INSERT INTO schema_version (version) VALUES (15)
+        ON CONFLICT (version) DO NOTHING;
+    """)
+
+    print("[DB] v15 마이그레이션 완료 — daily_top_picks 테이블 생성")
+
+
+def _migrate_to_v16(cur) -> None:
+    """v16: 구독 티어 — users.tier, users.tier_expires_at 컬럼 추가"""
+    cur.execute("""
+        ALTER TABLE users
+            ADD COLUMN IF NOT EXISTS tier VARCHAR(20) NOT NULL DEFAULT 'free'
+                CHECK (tier IN ('free', 'pro', 'premium')),
+            ADD COLUMN IF NOT EXISTS tier_expires_at TIMESTAMP;
+    """)
+
+    cur.execute("""
+        INSERT INTO schema_version (version) VALUES (16)
+        ON CONFLICT (version) DO NOTHING;
+    """)
+
+    print("[DB] v16 마이그레이션 완료 — users.tier/tier_expires_at 컬럼 추가")
+
+
+def _migrate_to_v17(cur) -> None:
+    """v17: 관리자 감사 로그 — admin_audit_logs 테이블
+
+    actor/target 이메일을 denormalize해 계정 삭제 후에도 이력 유지.
+    action 구분: tier_change / role_change / status_change / password_reset / user_delete.
+    """
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS admin_audit_logs (
+            id SERIAL PRIMARY KEY,
+            actor_id INT REFERENCES users(id) ON DELETE SET NULL,
+            actor_email VARCHAR(255),
+            target_user_id INT REFERENCES users(id) ON DELETE SET NULL,
+            target_email VARCHAR(255),
+            action VARCHAR(40) NOT NULL,
+            before_state JSONB,
+            after_state JSONB,
+            reason TEXT,
+            created_at TIMESTAMP DEFAULT NOW()
+        );
+    """)
+
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_admin_audit_logs_created
+            ON admin_audit_logs(created_at DESC);
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_admin_audit_logs_target
+            ON admin_audit_logs(target_user_id);
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_admin_audit_logs_action
+            ON admin_audit_logs(action);
+    """)
+
+    cur.execute("""
+        INSERT INTO schema_version (version) VALUES (17)
+        ON CONFLICT (version) DO NOTHING;
+    """)
+
+    print("[DB] v17 마이그레이션 완료 — admin_audit_logs 테이블 생성")
+
+
 def init_db(cfg: DatabaseConfig) -> None:
     """PostgreSQL 설치 확인 → 데이터베이스 생성 → 스키마 마이그레이션"""
     from shared.pg_setup import ensure_postgresql
@@ -623,6 +716,15 @@ def init_db(cfg: DatabaseConfig) -> None:
 
             if current < 14:
                 _migrate_to_v14(cur)
+
+            if current < 15:
+                _migrate_to_v15(cur)
+
+            if current < 16:
+                _migrate_to_v16(cur)
+
+            if current < 17:
+                _migrate_to_v17(cur)
 
         conn.commit()
         print("[DB] 테이블 초기화 완료")
@@ -1211,3 +1313,107 @@ def _update_tracking(cur, analysis_date: str, themes: list, session_id: int) -> 
                   proposal.get("target_price_low"), proposal.get("target_price_high"),
                   proposal.get("quant_score"), proposal.get("sentiment_score"),
                   latest_proposal_id))
+
+
+def save_top_picks(
+    cfg: DatabaseConfig, session_id: int, analysis_date: str,
+    picks: list[dict], source: str = "rule",
+) -> int:
+    """일별 Top Picks 저장 (기존 분 삭제 후 재삽입)
+
+    Args:
+        picks: [{proposal_id, rank, score_rule, score_final, score_breakdown,
+                 rationale_text, key_risk}, ...]
+        source: 'rule' | 'ai_rerank'
+    Returns:
+        저장된 픽 수
+    """
+    if not picks:
+        return 0
+
+    conn = get_connection(cfg)
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "DELETE FROM daily_top_picks WHERE analysis_date = %s",
+                (analysis_date,),
+            )
+            for pk in picks:
+                cur.execute(
+                    """INSERT INTO daily_top_picks
+                       (session_id, analysis_date, rank, proposal_id,
+                        score_rule, score_final, score_breakdown,
+                        rationale_text, key_risk, source)
+                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                    (session_id, analysis_date, pk["rank"], pk["proposal_id"],
+                     pk.get("score_rule"),
+                     pk.get("score_final", pk.get("score_rule")),
+                     json.dumps(pk.get("score_breakdown") or {}, ensure_ascii=False),
+                     pk.get("rationale_text"),
+                     pk.get("key_risk"),
+                     source),
+                )
+        conn.commit()
+        print(f"[DB] Top Picks {len(picks)}건 저장 완료 (source={source})")
+        return len(picks)
+    finally:
+        conn.close()
+
+
+def update_top_picks_ai_rerank(
+    cfg: DatabaseConfig, analysis_date: str, ai_results: list[dict],
+) -> int:
+    """AI 재정렬 결과로 기존 Top Picks 덮어쓰기
+
+    Args:
+        ai_results: [{proposal_id, rank, rationale_text, key_risk, score_final}, ...]
+    Returns:
+        업데이트된 픽 수
+    """
+    if not ai_results:
+        return 0
+
+    conn = get_connection(cfg)
+    try:
+        with conn.cursor() as cur:
+            # 기존 rule 레코드 삭제 → AI 재정렬 결과로 교체
+            cur.execute(
+                "SELECT session_id, proposal_id, score_rule, score_breakdown "
+                "FROM daily_top_picks WHERE analysis_date = %s",
+                (analysis_date,),
+            )
+            existing = {
+                row[1]: {"session_id": row[0], "score_rule": row[2], "score_breakdown": row[3]}
+                for row in cur.fetchall()
+            }
+
+            cur.execute(
+                "DELETE FROM daily_top_picks WHERE analysis_date = %s",
+                (analysis_date,),
+            )
+
+            for r in ai_results:
+                proposal_id = r.get("proposal_id")
+                if proposal_id is None or proposal_id not in existing:
+                    continue
+                ex = existing[proposal_id]
+                cur.execute(
+                    """INSERT INTO daily_top_picks
+                       (session_id, analysis_date, rank, proposal_id,
+                        score_rule, score_final, score_breakdown,
+                        rationale_text, key_risk, source)
+                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'ai_rerank')""",
+                    (ex["session_id"], analysis_date, r["rank"], proposal_id,
+                     ex["score_rule"],
+                     r.get("score_final", ex["score_rule"]),
+                     json.dumps(ex["score_breakdown"] or {}, ensure_ascii=False)
+                       if not isinstance(ex["score_breakdown"], str)
+                       else ex["score_breakdown"],
+                     r.get("rationale_text"),
+                     r.get("key_risk")),
+                )
+        conn.commit()
+        print(f"[DB] Top Picks AI 재정렬 {len(ai_results)}건 반영 완료")
+        return len(ai_results)
+    finally:
+        conn.close()

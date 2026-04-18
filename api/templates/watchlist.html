@@ -4,10 +4,26 @@
 
 {% block content %}
 <!-- 워치리스트 -->
+{% set wl_count = watchlist|length %}
+<div class="section-title" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+    <span>관심 종목</span>
+    {% if watchlist_limit %}
+        <span class="badge-plan badge-plan-{{ tier_badge_color }}" style="font-size:11px;">
+            {{ wl_count }} / {{ watchlist_limit }}
+        </span>
+        {% if wl_count >= watchlist_limit %}
+        <a href="/pages/pricing" class="btn btn-primary" style="font-size:12px;padding:4px 12px;min-height:0;">
+            한도 초과 — 업그레이드
+        </a>
+        {% endif %}
+    {% else %}
+        <span style="font-size:12px;color:var(--text-muted);">{{ wl_count }}종목 (무제한)</span>
+    {% endif %}
+</div>
+
 {% if watchlist %}
-<div class="section-title">관심 종목 ({{ watchlist|length }})</div>
-<div class="table-wrap">
-<table class="screener-table">
+<div class="table-wrap table-stack-mobile-wrap">
+<table class="screener-table table-stack-mobile">
     <thead>
         <tr>
             <th>종목</th>
@@ -25,26 +41,26 @@
     <tbody>
         {% for item in watchlist %}
         <tr>
-            <td style="font-weight:600;">{{ item.asset_name or '-' }}</td>
-            <td><a href="/pages/proposals/history/{{ item.ticker }}" style="color:var(--accent);">{{ item.ticker }}</a></td>
+            <td data-label="종목" style="font-weight:600;">{{ item.asset_name or '-' }}</td>
+            <td data-label="티커"><a href="/pages/proposals/history/{{ item.ticker }}" style="color:var(--accent);">{{ item.ticker }}</a></td>
             {% if item.latest %}
-            <td><span class="badge badge-{{ item.latest.action }}">{{ item.latest.action|upper }}</span></td>
-            <td><span class="badge badge-{{ item.latest.conviction }}">{{ item.latest.conviction }}</span></td>
-            <td>{{ item.latest.current_price|fmt_price(item.latest.currency) }}</td>
-            <td>
+            <td data-label="Action"><span class="badge badge-{{ item.latest.action }}">{{ item.latest.action|upper }}</span></td>
+            <td data-label="확신도"><span class="badge badge-{{ item.latest.conviction }}">{{ item.latest.conviction }}</span></td>
+            <td data-label="현재가">{{ item.latest.current_price|fmt_price(item.latest.currency) }}</td>
+            <td data-label="상승여력">
                 {% if item.latest.upside_pct %}
                 <span class="{% if item.latest.upside_pct > 0 %}upside-positive{% else %}upside-negative{% endif %}">
                     {% if item.latest.upside_pct > 0 %}+{% endif %}{{ item.latest.upside_pct }}%
                 </span>
                 {% else %}-{% endif %}
             </td>
-            <td style="font-size:12px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ item.latest.theme_name }}</td>
-            <td style="font-size:12px;color:var(--text-muted);">{{ item.latest.analysis_date }}</td>
+            <td data-label="테마" style="font-size:12px;">{{ item.latest.theme_name }}</td>
+            <td data-label="분석일" style="font-size:12px;color:var(--text-muted);">{{ item.latest.analysis_date }}</td>
             {% else %}
-            <td colspan="6" style="color:var(--text-muted);font-size:13px;">분석 데이터 없음</td>
+            <td data-label="상태" colspan="6" style="color:var(--text-muted);font-size:13px;">분석 데이터 없음</td>
             {% endif %}
-            <td style="font-size:12px;color:var(--text-muted);">{{ item.created_at[:10] if item.created_at else '' }}</td>
-            <td>
+            <td data-label="등록일" style="font-size:12px;color:var(--text-muted);">{{ item.created_at[:10] if item.created_at else '' }}</td>
+            <td data-label="">
                 <button onclick="removeWatch('{{ item.ticker }}', this)" class="btn" style="font-size:11px;padding:3px 10px;color:var(--red);background:none;">삭제</button>
             </td>
         </tr>
@@ -60,7 +76,22 @@
 {% endif %}
 
 <!-- 구독 목록 -->
-<div class="section-title" style="margin-top:32px;">알림 구독 ({{ subscriptions|length }})</div>
+{% set sub_count = subscriptions|length %}
+<div class="section-title" style="margin-top:32px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+    <span>알림 구독</span>
+    {% if subscription_limit %}
+        <span class="badge-plan badge-plan-{{ tier_badge_color }}" style="font-size:11px;">
+            {{ sub_count }} / {{ subscription_limit }}
+        </span>
+        {% if sub_count >= subscription_limit %}
+        <a href="/pages/pricing" class="btn btn-primary" style="font-size:12px;padding:4px 12px;min-height:0;">
+            한도 초과 — 업그레이드
+        </a>
+        {% endif %}
+    {% else %}
+        <span style="font-size:12px;color:var(--text-muted);">{{ sub_count }}건 (무제한)</span>
+    {% endif %}
+</div>
 {% if subscriptions %}
 <div class="table-wrap">
 <table class="screener-table">

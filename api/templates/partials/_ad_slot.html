@@ -1,0 +1,21 @@
+{# Free 사용자 전용 광고/업그레이드 유도 슬롯.
+   _base_ctx가 주입한 tier 값을 참조 — 비로그인(auth_enabled=false 포함)도 free로 간주.
+   Pro 이상에는 렌더하지 않음. variant 인자로 스타일 분기 가능:
+     - 'banner' (기본): 가로 긴 배너 (대시보드 / 테마 목록)
+     - 'compact': 사이드 카드 (좁은 영역)
+#}
+{% macro ad_slot(variant='banner') -%}
+{% if (tier or 'free') == 'free' %}
+<aside class="ad-slot ad-slot-{{ variant }}" aria-label="업그레이드 안내">
+    <div class="ad-slot-icon" aria-hidden="true">⭐</div>
+    <div class="ad-slot-body">
+        <div class="ad-slot-title">Pro로 업그레이드하고 모든 인사이트를 잠금 해제하세요</div>
+        <div class="ad-slot-desc">관심 종목 30개 · 전체 테마 · AI 채팅 10턴 · 과거 이력 90일</div>
+    </div>
+    <a href="/pages/pricing" class="btn btn-primary ad-slot-cta">플랜 비교 →</a>
+</aside>
+{% endif %}
+{%- endmacro %}
+
+{# 직접 include로 쓸 때 기본 variant 호출 #}
+{{ ad_slot() }}

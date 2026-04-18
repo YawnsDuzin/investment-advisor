@@ -130,70 +130,109 @@
         </tr>
         <tr class="detail-row" data-idx="{{ loop.index0 }}" style="display:none;">
             <td colspan="{% if current_user %}14{% else %}13{% endif %}" style="padding:0;">
-                <div style="padding:14px 18px;background:rgba(79,140,255,0.04);border-left:3px solid var(--accent);font-size:14px;line-height:1.7;">
-                    {# 메타 태그: 섹터, 발굴유형, 주가반영도, 공급망, 벤더티어, 센티먼트 #}
-                    {% if p.sector or p.discovery_type or p.price_momentum_check or p.supply_chain_position or p.vendor_tier or (p.sentiment_score is not none and p.sentiment_score != None) %}
-                    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
-                        {% if p.sector %}
-                        <span style="font-size:12px;padding:3px 10px;border-radius:6px;background:rgba(147,130,255,0.1);border:1px solid rgba(147,130,255,0.2);color:var(--purple);">{{ p.sector }}</span>
-                        {% endif %}
-                        {% if p.discovery_type %}
-                        <span style="font-size:12px;padding:3px 10px;border-radius:6px;background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.2);color:var(--green);">{{ p.discovery_type }}</span>
-                        {% endif %}
-                        {% if p.price_momentum_check %}
-                        <span style="font-size:12px;padding:3px 10px;border-radius:6px;background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.2);color:var(--orange);">모멘텀: {{ p.price_momentum_check }}</span>
-                        {% endif %}
-                        {% if p.supply_chain_position %}
-                        <span style="font-size:12px;padding:3px 10px;border-radius:6px;background:rgba(79,140,255,0.1);border:1px solid rgba(79,140,255,0.2);color:var(--accent);">공급망: {{ p.supply_chain_position }}</span>
-                        {% endif %}
-                        {% if p.vendor_tier %}
-                        <span class="badge badge-tier{{ p.vendor_tier }}" style="font-size:12px;">Tier {{ p.vendor_tier }}</span>
-                        {% endif %}
-                        {% if p.sentiment_score is not none and p.sentiment_score != None %}
-                        <span style="font-size:12px;padding:3px 10px;border-radius:6px;background:rgba(255,255,255,0.05);border:1px solid var(--border);">센티먼트 {{ p.sentiment_score }}</span>
-                        {% endif %}
-                    </div>
-                    {% endif %}
-
-                    {# 기간별 수익률 #}
-                    {% if p.return_1m_pct is not none or p.return_3m_pct is not none or p.return_6m_pct is not none or p.return_1y_pct is not none %}
-                    <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px;padding:10px 14px;background:rgba(255,255,255,0.03);border-radius:8px;border:1px solid var(--border);">
-                        <span style="font-size:11px;color:var(--text-muted);align-self:center;margin-right:4px;">수익률</span>
-                        {% for key, label in [('return_1m_pct', '1개월'), ('return_3m_pct', '3개월'), ('return_6m_pct', '6개월'), ('return_1y_pct', '1년')] %}
-                        {% if p[key] is not none %}
-                        {% set val = p[key] | float %}
-                        {% set color = 'var(--red)' if val < 0 else 'var(--green)' %}
-                        <span style="font-size:13px;font-weight:600;padding:3px 10px;border-radius:6px;background:rgba({% if val < 0 %}239,68,68{% else %}52,211,153{% endif %},0.08);border:1px solid rgba({% if val < 0 %}239,68,68{% else %}52,211,153{% endif %},0.2);color:{{ color }};">
-                            {{ label }} {% if val > 0 %}+{% endif %}{{ "%.1f"|format(val) }}%
-                        </span>
-                        {% endif %}
-                        {% endfor %}
-                    </div>
-                    {% endif %}
-
-                    {% if p.rationale %}
-                    <div style="margin-bottom:10px;"><strong style="color:var(--text-muted);font-size:12px;text-transform:uppercase;">근거</strong><br>{{ p.rationale|nl_numbered }}</div>
-                    {% endif %}
-                    {% if p.risk_factors %}
-                    <div style="margin-bottom:10px;"><strong style="color:var(--text-muted);font-size:12px;text-transform:uppercase;">리스크</strong><br>{{ p.risk_factors|nl_numbered }}</div>
-                    {% endif %}
-                    {% if p.entry_condition or p.exit_condition %}
-                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:4px;">
-                        {% if p.entry_condition %}
-                        <div><strong style="color:var(--green);font-size:12px;text-transform:uppercase;">진입 조건</strong><br>{{ p.entry_condition }}</div>
-                        {% endif %}
-                        {% if p.exit_condition %}
-                        <div><strong style="color:var(--red);font-size:12px;text-transform:uppercase;">청산 조건</strong><br>{{ p.exit_condition }}</div>
-                        {% endif %}
-                    </div>
-                    {% endif %}
-
-                    {# 메모 영역 (로그인 사용자만) #}
+                <div class="detail-panel" data-proposal="{{ p.id }}">
+                    {# Sticky CTA 바 (모바일 고정, PC는 상단 노출) — UI-13 #}
                     {% if current_user %}
-                    <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);">
-                        <strong style="color:var(--text-muted);font-size:12px;text-transform:uppercase;">내 메모</strong>
+                    <div class="detail-sticky-cta">
+                        <button type="button" class="detail-cta-btn" onclick="event.stopPropagation(); addWatch{{ p.id }}();" title="관심 종목 추가">
+                            <span aria-hidden="true">⭐</span> 관심
+                        </button>
+                        <button type="button" class="detail-cta-btn" onclick="event.stopPropagation(); subscribeTicker('{{ p.ticker }}', this);" title="알림 구독">
+                            <span aria-hidden="true">🔔</span> 알림
+                        </button>
+                        <button type="button" class="detail-cta-btn" onclick="event.stopPropagation(); focusMemo({{ p.id }});" title="메모 작성">
+                            <span aria-hidden="true">📝</span> 메모
+                        </button>
+                    </div>
+                    {% endif %}
+
+                    {# 탭 네비게이션 — UI-12 #}
+                    <div class="detail-tabs" role="tablist">
+                        <button type="button" class="detail-tab active" data-tab="overview-{{ p.id }}" role="tab" aria-selected="true" onclick="event.stopPropagation();">개요</button>
+                        {% if p.return_1m_pct is not none or p.return_3m_pct is not none or p.return_6m_pct is not none or p.return_1y_pct is not none %}
+                        <button type="button" class="detail-tab" data-tab="returns-{{ p.id }}" role="tab" onclick="event.stopPropagation();">수익률</button>
+                        {% endif %}
+                        {% if p.rationale or p.risk_factors or p.entry_condition or p.exit_condition %}
+                        <button type="button" class="detail-tab" data-tab="analysis-{{ p.id }}" role="tab" onclick="event.stopPropagation();">분석</button>
+                        {% endif %}
+                        {% if current_user %}
+                        <button type="button" class="detail-tab" data-tab="memo-{{ p.id }}" role="tab" onclick="event.stopPropagation();">메모</button>
+                        {% endif %}
+                    </div>
+
+                    {# 탭 콘텐츠 #}
+                    <div class="detail-tab-content active" id="overview-{{ p.id }}" role="tabpanel">
+                        {% if p.sector or p.discovery_type or p.price_momentum_check or p.supply_chain_position or p.vendor_tier or (p.sentiment_score is not none and p.sentiment_score != None) %}
+                        <div class="detail-meta-tags">
+                            {% if p.sector %}
+                            <span class="meta-tag meta-tag-sector">{{ p.sector }}</span>
+                            {% endif %}
+                            {% if p.discovery_type %}
+                            <span class="meta-tag meta-tag-discovery">{{ p.discovery_type }}</span>
+                            {% endif %}
+                            {% if p.price_momentum_check %}
+                            <span class="meta-tag meta-tag-momentum">모멘텀: {{ p.price_momentum_check }}</span>
+                            {% endif %}
+                            {% if p.supply_chain_position %}
+                            <span class="meta-tag meta-tag-supply">공급망: {{ p.supply_chain_position }}</span>
+                            {% endif %}
+                            {% if p.vendor_tier %}
+                            <span class="badge badge-tier{{ p.vendor_tier }}" style="font-size:12px;">Tier {{ p.vendor_tier }}</span>
+                            {% endif %}
+                            {% if p.sentiment_score is not none and p.sentiment_score != None %}
+                            <span class="meta-tag meta-tag-neutral">센티먼트 {{ p.sentiment_score }}</span>
+                            {% endif %}
+                        </div>
+                        {% else %}
+                        <div style="color:var(--text-muted);font-size:13px;">추가 메타 정보 없음</div>
+                        {% endif %}
+                    </div>
+
+                    {% if p.return_1m_pct is not none or p.return_3m_pct is not none or p.return_6m_pct is not none or p.return_1y_pct is not none %}
+                    <div class="detail-tab-content" id="returns-{{ p.id }}" role="tabpanel" hidden>
+                        <div class="detail-return-grid">
+                            {% for key, label in [('return_1m_pct', '1개월'), ('return_3m_pct', '3개월'), ('return_6m_pct', '6개월'), ('return_1y_pct', '1년')] %}
+                            {% if p[key] is not none %}
+                            {% set val = p[key] | float %}
+                            <div class="detail-return-chip {% if val < 0 %}negative{% else %}positive{% endif %}">
+                                <div class="detail-return-label">{{ label }}</div>
+                                <div class="detail-return-value">{% if val > 0 %}+{% endif %}{{ "%.1f"|format(val) }}%</div>
+                            </div>
+                            {% endif %}
+                            {% endfor %}
+                        </div>
+                        <div style="margin-top:10px;font-size:11px;color:var(--text-muted);">
+                            * 추천 당일 기준 과거 N개월 모멘텀 — 추천 이후 수익률이 아님
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {% if p.rationale or p.risk_factors or p.entry_condition or p.exit_condition %}
+                    <div class="detail-tab-content" id="analysis-{{ p.id }}" role="tabpanel" hidden>
+                        {% if p.rationale %}
+                        <div class="detail-block"><strong class="detail-label">근거</strong><div>{{ p.rationale|nl_numbered }}</div></div>
+                        {% endif %}
+                        {% if p.risk_factors %}
+                        <div class="detail-block"><strong class="detail-label">리스크</strong><div>{{ p.risk_factors|nl_numbered }}</div></div>
+                        {% endif %}
+                        {% if p.entry_condition or p.exit_condition %}
+                        <div class="detail-cond-grid">
+                            {% if p.entry_condition %}
+                            <div><strong class="detail-label" style="color:var(--green);">진입 조건</strong><div>{{ p.entry_condition }}</div></div>
+                            {% endif %}
+                            {% if p.exit_condition %}
+                            <div><strong class="detail-label" style="color:var(--red);">청산 조건</strong><div>{{ p.exit_condition }}</div></div>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+
+                    {% if current_user %}
+                    <div class="detail-tab-content" id="memo-{{ p.id }}" role="tabpanel" hidden>
+                        <strong class="detail-label">내 메모</strong>
                         <div style="margin-top:6px;display:flex;gap:8px;align-items:flex-start;">
-                            <textarea class="memo-input" id="memo-{{ p.id }}" rows="2" placeholder="이 제안에 대한 메모..." style="flex:1;background:var(--bg-primary);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text-primary);font-size:13px;resize:vertical;">{{ user_memos.get(p.id, '') }}</textarea>
+                            <textarea class="memo-input" id="memo-{{ p.id }}" rows="3" placeholder="이 제안에 대한 메모..." style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:13px;resize:vertical;" onclick="event.stopPropagation();">{{ user_memos.get(p.id, '') }}</textarea>
                             <button onclick="event.stopPropagation(); saveMemo({{ p.id }});" class="btn" style="font-size:12px;padding:6px 14px;white-space:nowrap;">저장</button>
                             {% if user_memos.get(p.id) %}
                             <button onclick="event.stopPropagation(); deleteMemo({{ p.id }});" class="btn" style="font-size:12px;padding:6px 10px;color:var(--red);background:none;">삭제</button>
@@ -278,5 +317,63 @@ async function deleteMemo(proposalId) {
         textarea.value = '';
     }
 }
+
+// 탭 전환 (UI-12)
+document.querySelectorAll('.detail-tab').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        var panel = btn.closest('.detail-panel');
+        if (!panel) return;
+        panel.querySelectorAll('.detail-tab').forEach(function(b) {
+            b.classList.remove('active');
+            b.setAttribute('aria-selected', 'false');
+        });
+        panel.querySelectorAll('.detail-tab-content').forEach(function(c) { c.hidden = true; c.classList.remove('active'); });
+        btn.classList.add('active');
+        btn.setAttribute('aria-selected', 'true');
+        var target = panel.querySelector('#' + btn.getAttribute('data-tab'));
+        if (target) { target.hidden = false; target.classList.add('active'); }
+    });
+});
+
+// Sticky CTA: 메모 탭으로 이동 + textarea focus (UI-13)
+function focusMemo(proposalId) {
+    var panel = document.querySelector('.detail-panel[data-proposal="' + proposalId + '"]');
+    if (!panel) return;
+    var memoTab = panel.querySelector('.detail-tab[data-tab="memo-' + proposalId + '"]');
+    if (memoTab) memoTab.click();
+    setTimeout(function() {
+        var ta = document.getElementById('memo-' + proposalId);
+        if (ta) ta.focus();
+    }, 50);
+}
+
+// Sticky CTA: 티커별 알림 구독 (전역 헬퍼)
+async function subscribeTicker(ticker, btn) {
+    var res = await fetch('/api/subscriptions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sub_type: 'ticker', sub_key: ticker, label: ticker })
+    });
+    if (res.ok || res.status === 200) {
+        btn.style.color = 'var(--green)';
+        btn.title = '구독 중';
+    }
+    // 402는 전역 fetch 인터셉터가 업그레이드 모달 표시
+}
+
+// Sticky CTA: 제안별 워치리스트 추가 (Jinja 루프 내 인라인 바인딩은 페이지 로드 시 생성)
+{% for p in proposals %}
+async function addWatch{{ p.id }}() {
+    var res = await fetch('/api/watchlist/{{ p.ticker }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ asset_name: '{{ (p.asset_name or p.ticker)|replace("'", "\\'") }}' })
+    });
+    if (res.ok) {
+        var star = document.querySelector('.watchlist-star[data-ticker="{{ p.ticker }}"]');
+        if (star) { star.classList.add('watched'); star.innerHTML = '&#9733;'; }
+    }
+}
+{% endfor %}
 </script>
 {% endblock %}

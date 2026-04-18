@@ -1,0 +1,261 @@
+{% extends "base.html" %}
+{% block title %}Track Record — AlphaScope{% endblock %}
+{% block page_title %}Track Record{% endblock %}
+
+{% block head %}
+<style>
+    .tr-hero {
+        padding: 20px 22px;
+        border-radius: 12px;
+        background: linear-gradient(135deg, rgba(79,140,255,0.08), rgba(147,130,255,0.06));
+        border: 1px solid var(--border);
+        margin-bottom: 20px;
+    }
+    .tr-hero h3 { margin: 0 0 6px; font-size: 16px; font-weight: 600; }
+    .tr-hero p { margin: 0; font-size: 13px; color: var(--text-muted); line-height: 1.7; }
+
+    .tr-period-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 12px;
+        margin-bottom: 28px;
+    }
+    .tr-period-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 18px;
+        text-align: center;
+    }
+    .tr-period-label { font-size: 12px; color: var(--text-muted); font-weight: 600; letter-spacing: 1px; }
+    .tr-period-winrate { font-size: 28px; font-weight: 700; margin: 8px 0 4px; color: var(--text); }
+    .tr-period-winrate-sub { font-size: 11px; color: var(--text-muted); }
+    .tr-period-avg { margin-top: 10px; font-size: 14px; font-weight: 600; }
+    .tr-period-avg.positive { color: var(--green); }
+    .tr-period-avg.negative { color: var(--red); }
+    .tr-period-n { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+
+    .tr-type-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 10px;
+    }
+    .tr-type-table th, .tr-type-table td {
+        padding: 10px 12px;
+        text-align: left;
+        border-bottom: 1px solid var(--border);
+        font-size: 13px;
+    }
+    .tr-type-table th { color: var(--text-muted); font-weight: 600; font-size: 12px; background: rgba(255,255,255,0.02); }
+    .tr-type-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+    .tr-type-table .win-pos { color: var(--green); font-weight: 600; }
+    .tr-type-table .win-neg { color: var(--red); }
+
+    .tr-pick-list { display: flex; flex-direction: column; gap: 10px; }
+    .tr-pick-row {
+        display: grid;
+        grid-template-columns: 60px 1fr auto auto;
+        gap: 12px;
+        padding: 12px 14px;
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        align-items: center;
+    }
+    .tr-pick-rank { font-size: 11px; color: var(--text-muted); font-weight: 600; }
+    .tr-pick-name { font-weight: 600; font-size: 14px; }
+    .tr-pick-name-sub { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+    .tr-pick-return { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+    .tr-pick-return.positive { color: var(--green); }
+    .tr-pick-return.negative { color: var(--red); }
+    .tr-pick-type {
+        font-size: 10px;
+        padding: 2px 8px;
+        border-radius: 9999px;
+        background: rgba(79,140,255,0.15);
+        color: var(--accent);
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+        white-space: nowrap;
+    }
+    .tr-pick-type-early_signal { background: rgba(147,130,255,0.18); color: var(--purple); }
+    .tr-pick-type-contrarian   { background: rgba(251,191,36,0.18);  color: var(--orange); }
+    .tr-pick-type-deep_value   { background: rgba(52,211,153,0.18);  color: var(--green); }
+    .tr-pick-type-consensus    { background: rgba(79,140,255,0.15);  color: var(--accent); }
+
+    .tr-meta { font-size: 11px; color: var(--text-muted); margin-top: 24px; padding-top: 18px; border-top: 1px solid var(--border); }
+    .tr-loading { text-align: center; padding: 40px; color: var(--text-muted); }
+    .tr-error { color: var(--red); text-align: center; padding: 24px; }
+
+    @media (max-width: 768px) {
+        .tr-period-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+        .tr-period-winrate { font-size: 24px; }
+        .tr-pick-row {
+            grid-template-columns: 1fr auto;
+            gap: 8px;
+        }
+        .tr-pick-rank { grid-column: 1 / -1; }
+        .tr-pick-type { grid-column: 2; }
+        .tr-type-table th, .tr-type-table td { padding: 8px 6px; font-size: 12px; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- 안내 히어로 -->
+<div class="tr-hero">
+    <h3>🎯 AlphaScope Track Record</h3>
+    <p>
+        매일 자동 생성되는 AI 분석 제안의 성과 지표입니다.
+        <strong>수익률은 "추천 당일 기준의 과거 N개월 모멘텀"</strong>이며,
+        추천 이후 실제 수익과 차이가 있을 수 있습니다. 투자 권유가 아닌 참고 지표입니다.
+    </p>
+</div>
+
+<!-- 전체 기간 요약 -->
+<div class="section-title">기간별 승률 · 평균 수익률</div>
+<div class="tr-period-grid" id="tr-period-grid">
+    <div class="tr-loading">불러오는 중…</div>
+</div>
+
+<!-- 분류별 성과 -->
+<div class="section-title">분류별 성과 (Discovery Type)</div>
+<div class="card">
+    <div id="tr-by-type-wrap">
+        <div class="tr-loading">불러오는 중…</div>
+    </div>
+</div>
+
+<!-- 최근 Top Picks -->
+<div class="section-title">최근 30일 Top Picks</div>
+<div id="tr-picks-wrap">
+    <div class="tr-loading">불러오는 중…</div>
+</div>
+
+<div class="tr-meta" id="tr-meta"></div>
+
+<script>
+(function() {
+    const periodLabels = {
+        "1m": "1M", "3m": "3M", "6m": "6M", "1y": "1Y"
+    };
+    const typeLabels = {
+        "consensus": "컨센서스",
+        "early_signal": "얼리시그널",
+        "contrarian": "컨트래리안",
+        "deep_value": "딥밸류",
+        "unknown": "기타"
+    };
+
+    function fmtPct(v) {
+        if (v == null) return "-";
+        const sign = v > 0 ? "+" : "";
+        return sign + v.toFixed(2) + "%";
+    }
+
+    function renderPeriods(periods) {
+        const grid = document.getElementById("tr-period-grid");
+        grid.innerHTML = "";
+        ["1m", "3m", "6m", "1y"].forEach(function(key) {
+            const p = periods[key] || {};
+            const card = document.createElement("div");
+            card.className = "tr-period-card";
+            const avgCls = p.avg_return_pct == null ? "" :
+                (p.avg_return_pct >= 0 ? "positive" : "negative");
+            card.innerHTML =
+                '<div class="tr-period-label">' + periodLabels[key] + '</div>' +
+                '<div class="tr-period-winrate">' + (p.win_rate_pct != null ? p.win_rate_pct.toFixed(1) + '%' : '-') + '</div>' +
+                '<div class="tr-period-winrate-sub">승률 (' + (p.wins || 0) + ' / ' + (p.n || 0) + ')</div>' +
+                '<div class="tr-period-avg ' + avgCls + '">' + fmtPct(p.avg_return_pct) + '</div>' +
+                '<div class="tr-period-n">평균 수익률 (과거)</div>';
+            grid.appendChild(card);
+        });
+    }
+
+    function renderByType(rows) {
+        const wrap = document.getElementById("tr-by-type-wrap");
+        if (!rows || rows.length === 0) {
+            wrap.innerHTML = '<div class="empty-state"><p>아직 충분한 데이터가 없습니다.</p></div>';
+            return;
+        }
+        let html = '<table class="tr-type-table">';
+        html += '<thead><tr>' +
+            '<th>분류</th>' +
+            '<th class="num">샘플 수</th>' +
+            '<th class="num">승률</th>' +
+            '<th class="num">1M 평균</th>' +
+            '<th class="num">3M 평균</th>' +
+            '<th class="num">1Y 평균</th>' +
+            '</tr></thead><tbody>';
+        rows.forEach(function(r) {
+            const winCls = r.win_rate_pct == null ? "" :
+                (r.win_rate_pct >= 50 ? "win-pos" : "win-neg");
+            html += '<tr>' +
+                '<td>' + (typeLabels[r.discovery_type] || r.discovery_type) + '</td>' +
+                '<td class="num">' + (r.n || 0) + '</td>' +
+                '<td class="num ' + winCls + '">' + (r.win_rate_pct != null ? r.win_rate_pct.toFixed(1) + '%' : '-') + '</td>' +
+                '<td class="num">' + fmtPct(r.avg_return_1m_pct) + '</td>' +
+                '<td class="num">' + fmtPct(r.avg_return_3m_pct) + '</td>' +
+                '<td class="num">' + fmtPct(r.avg_return_1y_pct) + '</td>' +
+                '</tr>';
+        });
+        html += '</tbody></table>';
+        wrap.innerHTML = html;
+    }
+
+    function renderPicks(picks) {
+        const wrap = document.getElementById("tr-picks-wrap");
+        if (!picks || picks.length === 0) {
+            wrap.innerHTML = '<div class="empty-state"><p>최근 30일 내 Top Picks 데이터가 없습니다.</p></div>';
+            return;
+        }
+        const list = document.createElement("div");
+        list.className = "tr-pick-list";
+        picks.forEach(function(p) {
+            const row = document.createElement("div");
+            row.className = "tr-pick-row";
+            const retCls = p.return_1m_pct == null ? "" :
+                (p.return_1m_pct >= 0 ? "positive" : "negative");
+            const typeKey = p.discovery_type || "consensus";
+            row.innerHTML =
+                '<div class="tr-pick-rank">#' + (p.rank || '-') + '<br><span class="tr-pick-name-sub">' + (p.analysis_date || '') + '</span></div>' +
+                '<div><div class="tr-pick-name">' + (p.asset_name || p.ticker) + ' <span class="tr-pick-name-sub">(' + p.ticker + ')</span></div>' +
+                '<div class="tr-pick-name-sub">' + (p.theme_name || '-') + '</div></div>' +
+                '<div class="tr-pick-type tr-pick-type-' + typeKey + '">' + (typeLabels[typeKey] || typeKey) + '</div>' +
+                '<div class="tr-pick-return ' + retCls + '">' + fmtPct(p.return_1m_pct) + '</div>';
+            list.appendChild(row);
+        });
+        wrap.innerHTML = "";
+        wrap.appendChild(list);
+    }
+
+    function renderMeta(data) {
+        const el = document.getElementById("tr-meta");
+        const parts = [];
+        if (data.overview && data.overview.total_proposals) {
+            parts.push("총 제안 수: " + data.overview.total_proposals.toLocaleString());
+        }
+        if (data.meta && data.meta.earliest_date && data.meta.latest_date) {
+            parts.push("기간: " + data.meta.earliest_date + " ~ " + data.meta.latest_date);
+        }
+        parts.push(data.disclaimer || "");
+        el.textContent = parts.join(" · ");
+    }
+
+    fetch("/api/track-record/summary")
+        .then(function(r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+        .then(function(data) {
+            renderPeriods((data.overview && data.overview.periods) || {});
+            renderByType(data.by_discovery_type || []);
+            renderPicks(data.recent_top_picks || []);
+            renderMeta(data);
+        })
+        .catch(function(err) {
+            document.getElementById("tr-period-grid").innerHTML =
+                '<div class="tr-error">집계 정보를 불러오지 못했습니다. (' + err.message + ')</div>';
+            document.getElementById("tr-by-type-wrap").innerHTML = "";
+            document.getElementById("tr-picks-wrap").innerHTML = "";
+        });
+})();
+</script>
+{% endblock %}

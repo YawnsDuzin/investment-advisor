@@ -94,6 +94,41 @@ class AnalyzerConfig:
 
 
 @dataclass
+class RecommendationConfig:
+    """대시보드 Top Picks 추천 엔진 설정
+
+    가중치 기반 스코어링으로 투자 제안을 순위화한다.
+    모든 가중치는 환경변수로 오버라이드 가능.
+    """
+    # 가중치 (점수)
+    w_conviction_high: int = field(default_factory=lambda: int(os.getenv("REC_W_CONVICTION_HIGH", "30")))
+    w_stage2_done: int = field(default_factory=lambda: int(os.getenv("REC_W_STAGE2_DONE", "20")))
+    w_discovery_early: int = field(default_factory=lambda: int(os.getenv("REC_W_DISCOVERY_EARLY", "15")))
+    w_action_buy: int = field(default_factory=lambda: int(os.getenv("REC_W_ACTION_BUY", "10")))
+    w_upside_high: int = field(default_factory=lambda: int(os.getenv("REC_W_UPSIDE_HIGH", "10")))
+    w_upside_mid: int = field(default_factory=lambda: int(os.getenv("REC_W_UPSIDE_MID", "5")))
+    w_theme_confidence_mult: int = field(default_factory=lambda: int(os.getenv("REC_W_THEME_CONF_MULT", "10")))
+    w_streak_bonus: int = field(default_factory=lambda: int(os.getenv("REC_W_STREAK_BONUS", "5")))
+    # 감점
+    w_already_priced_penalty: int = field(default_factory=lambda: int(os.getenv("REC_W_PRICED_PENALTY", "15")))
+    w_no_price_penalty: int = field(default_factory=lambda: int(os.getenv("REC_W_NOPRICE_PENALTY", "10")))
+    # 임계값
+    upside_high_threshold: float = field(default_factory=lambda: float(os.getenv("REC_UPSIDE_HIGH", "20.0")))
+    upside_mid_threshold: float = field(default_factory=lambda: float(os.getenv("REC_UPSIDE_MID", "10.0")))
+    momentum_overheated_pct: float = field(default_factory=lambda: float(os.getenv("REC_MOMENTUM_OVERHEAT", "20.0")))
+    streak_days_threshold: int = field(default_factory=lambda: int(os.getenv("REC_STREAK_THRESHOLD", "3")))
+    # 다양성 제약
+    max_candidates: int = field(default_factory=lambda: int(os.getenv("REC_MAX_CANDIDATES", "15")))
+    max_per_theme: int = field(default_factory=lambda: int(os.getenv("REC_MAX_PER_THEME", "2")))
+    max_per_sector: int = field(default_factory=lambda: int(os.getenv("REC_MAX_PER_SECTOR", "3")))
+    top_n_display: int = field(default_factory=lambda: int(os.getenv("REC_TOP_N_DISPLAY", "10")))
+    # AI 재정렬 (Stage 3)
+    enable_ai_rerank: bool = field(default_factory=lambda: _env_bool("REC_ENABLE_AI_RERANK", False))
+    ai_rerank_top_n: int = field(default_factory=lambda: int(os.getenv("REC_AI_RERANK_TOP_N", "10")))
+    ai_rerank_max_turns: int = field(default_factory=lambda: int(os.getenv("REC_AI_RERANK_MAX_TURNS", "2")))
+
+
+@dataclass
 class AuthConfig:
     """JWT 인증 설정"""
     enabled: bool = field(default_factory=lambda: _env_bool("AUTH_ENABLED", False))
@@ -112,4 +147,5 @@ class AppConfig:
     news: NewsConfig = field(default_factory=NewsConfig)
     analyzer: AnalyzerConfig = field(default_factory=AnalyzerConfig)
     auth: AuthConfig = field(default_factory=AuthConfig)
+    recommendation: RecommendationConfig = field(default_factory=RecommendationConfig)
     max_turns: int = field(default_factory=lambda: int(os.getenv("MAX_TURNS", "1")))  # 하위호환

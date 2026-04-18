@@ -4,9 +4,14 @@ from fastapi import APIRouter, HTTPException, Depends, Body
 from pydantic import BaseModel
 from shared.config import DatabaseConfig, AuthConfig
 from shared.db import get_connection
+from shared.tier_limits import (
+    get_watchlist_limit,
+    get_subscription_limit,
+    is_unlimited,
+)
 from psycopg2.extras import RealDictCursor
 from api.routes.sessions import _serialize_row
-from api.auth.dependencies import get_current_user_required
+from api.auth.dependencies import get_current_user_required, quota_exceeded_detail
 from api.auth.models import UserInDB
 
 router = APIRouter(tags=["개인화"])
@@ -54,9 +59,37 @@ def add_watchlist(
     cfg: DatabaseConfig = Depends(_get_cfg),
 ):
     ticker = ticker.upper().strip()
+    tier = user.effective_tier()
+    limit = get_watchlist_limit(tier)
+
     conn = get_connection(cfg)
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # 한도 체크: 무제한(None)이 아니고 신규 ticker면 카운트 확인
+            if not is_unlimited(limit):
+                cur.execute(
+                    "SELECT 1 FROM user_watchlist WHERE user_id = %s AND ticker = %s",
+                    (user.id, ticker),
+                )
+                already_exists = cur.fetchone() is not None
+                if not already_exists:
+                    cur.execute(
+                        "SELECT COUNT(*) FROM user_watchlist WHERE user_id = %s",
+                        (user.id,),
+                    )
+                    count = cur.fetchone()["count"]
+                    if count >= limit:
+                        raise HTTPException(
+                            status_code=402,
+                            detail=quota_exceeded_detail(
+                                feature="watchlist",
+                                current_tier=tier,
+                                usage=count,
+                                limit=limit,
+                                message=f"워치리스트 한도({limit}종목)를 초과했습니다.",
+                            ),
+                        )
+
             cur.execute(
                 "INSERT INTO user_watchlist (user_id, ticker, asset_name, memo) "
                 "VALUES (%s, %s, %s, %s) "
@@ -133,9 +166,38 @@ def add_subscription(
     if not sub_key:
         raise HTTPException(status_code=400, detail="sub_key가 비어있습니다")
 
+    tier = user.effective_tier()
+    limit = get_subscription_limit(tier)
+
     conn = get_connection(cfg)
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # 한도 체크
+            if not is_unlimited(limit):
+                cur.execute(
+                    "SELECT 1 FROM user_subscriptions "
+                    "WHERE user_id = %s AND sub_type = %s AND sub_key = %s",
+                    (user.id, body.sub_type, sub_key),
+                )
+                already_exists = cur.fetchone() is not None
+                if not already_exists:
+                    cur.execute(
+                        "SELECT COUNT(*) FROM user_subscriptions WHERE user_id = %s",
+                        (user.id,),
+                    )
+                    count = cur.fetchone()["count"]
+                    if count >= limit:
+                        raise HTTPException(
+                            status_code=402,
+                            detail=quota_exceeded_detail(
+                                feature="subscription",
+                                current_tier=tier,
+                                usage=count,
+                                limit=limit,
+                                message=f"알림 구독 한도({limit}건)를 초과했습니다.",
+                            ),
+                        )
+
             cur.execute(
                 "INSERT INTO user_subscriptions (user_id, sub_type, sub_key, label) "
                 "VALUES (%s, %s, %s, %s) "
