@@ -2154,30 +2154,29 @@ tbody tr:hover { background: var(--bg-card-hover); }
 
 /* ===== 제안 상세 탭 분할 (UI-12) + Sticky CTA (UI-13) ===== */
 .detail-panel {
-    padding: 14px 18px;
+    padding: 10px 14px;
     background: rgba(79,140,255,0.04);
     border-left: 3px solid var(--accent);
-    font-size: 14px;
-    line-height: 1.7;
+    font-size: 13px;
+    line-height: 1.55;
 }
 
-/* 상단 Sticky CTA — 데스크톱은 상단 정렬, 모바일은 하단 고정 */
+/* 상단 CTA — 버튼 크기만큼만 차지 */
 .detail-sticky-cta {
     display: flex;
-    gap: 8px;
-    padding: 8px 0 10px;
-    margin-bottom: 10px;
+    gap: 6px;
+    padding: 4px 0 6px;
+    margin-bottom: 6px;
     border-bottom: 1px solid var(--border);
     flex-wrap: wrap;
 }
 .detail-cta-btn {
-    flex: 1 1 auto;
-    min-width: 90px;
-    min-height: 36px;
-    padding: 6px 12px;
+    flex: 0 0 auto;
+    min-height: 28px;
+    padding: 4px 12px;
     background: var(--bg-card);
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: 6px;
     color: var(--text);
     font-size: 12px;
     font-weight: 600;
@@ -2193,43 +2192,24 @@ tbody tr:hover { background: var(--bg-card-hover); }
     border-color: rgba(79,140,255,0.4);
 }
 
-/* 탭 네비게이션 */
-.detail-tabs {
-    display: flex;
-    gap: 0;
-    border-bottom: 1px solid var(--border);
-    margin-bottom: 12px;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
+/* 섹션 스택 (탭 제거 — 한번에 전체 표시) */
+.detail-section {
+    padding: 6px 0 8px;
+    border-bottom: 1px dashed rgba(255,255,255,0.06);
+    margin-bottom: 6px;
 }
-.detail-tabs::-webkit-scrollbar { display: none; }
-.detail-tab {
-    background: transparent;
-    border: none;
-    color: var(--text-muted);
-    padding: 8px 14px;
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-    position: relative;
-    white-space: nowrap;
-    min-height: 36px;
-    transition: color 0.15s;
+.detail-section:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
 }
-.detail-tab:hover { color: var(--text); }
-.detail-tab.active {
+.detail-section-title {
+    font-size: 11px;
+    font-weight: 700;
     color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
 }
-.detail-tab.active::after {
-    content: "";
-    position: absolute;
-    left: 0; right: 0; bottom: -1px;
-    height: 2px;
-    background: var(--accent);
-}
-
-.detail-tab-content[hidden] { display: none; }
 
 .detail-meta-tags {
     display: flex;
@@ -2249,15 +2229,18 @@ tbody tr:hover { background: var(--bg-card-hover); }
 .meta-tag-neutral { background: rgba(255,255,255,0.05); }
 
 .detail-return-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 10px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
 }
 .detail-return-chip {
-    padding: 12px;
-    border-radius: 10px;
-    text-align: center;
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+    padding: 3px 10px;
+    border-radius: 6px;
     border: 1px solid var(--border);
+    font-size: 12px;
 }
 .detail-return-chip.positive {
     background: rgba(52,211,153,0.08);
@@ -2273,16 +2256,14 @@ tbody tr:hover { background: var(--bg-card-hover); }
     font-size: 11px;
     color: var(--text-muted);
     font-weight: 600;
-    letter-spacing: 0.5px;
 }
 .detail-return-value {
-    font-size: 17px;
+    font-size: 13px;
     font-weight: 700;
-    margin-top: 4px;
     font-variant-numeric: tabular-nums;
 }
 
-.detail-block { margin-bottom: 12px; }
+.detail-block { margin-bottom: 6px; }
 .detail-label {
     color: var(--text-muted);
     font-size: 12px;
@@ -2608,9 +2589,10 @@ tbody tr:hover { background: var(--bg-card-hover); }
     .card-lock-overlay { padding: 14px; }
     .card-lock-title { font-size: 13px; }
 
-    /* 제안 상세 탭 — 모바일 최적화 (UI-12) */
+    /* 제안 상세 섹션 — 모바일 최적화 */
     .detail-panel { padding: 10px 12px; }
-    .detail-tab { padding: 8px 12px; font-size: 12px; }
+    .detail-section { padding: 8px 0 10px; margin-bottom: 8px; }
+    .detail-section-title { font-size: 11px; }
     .detail-return-grid { grid-template-columns: repeat(2, 1fr); }
     .detail-return-value { font-size: 15px; }
     .detail-cond-grid { grid-template-columns: 1fr; gap: 10px; }
