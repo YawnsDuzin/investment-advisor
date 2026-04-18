@@ -26,20 +26,8 @@
             <li><a href="/pages/themes" class="{% if active_page == 'themes' %}active{% endif %}" onclick="document.body.classList.remove('sidebar-open')">Themes</a></li>
             <li><a href="/pages/proposals" class="{% if active_page == 'proposals' %}active{% endif %}" onclick="document.body.classList.remove('sidebar-open')">Stock Picks</a></li>
             <li><a href="/pages/track-record" class="{% if active_page == 'track_record' %}active{% endif %}" onclick="document.body.classList.remove('sidebar-open')">Track Record</a></li>
-
-            {# ── 종목 조회 ── #}
-            <li class="nav-group-title">종목 조회</li>
-            <li>
-                <form action="/pages/stocks/search" method="get" style="padding:0 12px;" onsubmit="var t=this.querySelector('input').value.trim(); if(t){window.location='/pages/stocks/'+encodeURIComponent(t.toUpperCase()); return false;} return false;">
-                    <input type="text" placeholder="티커 입력 (AAPL, 005930...)" style="width:100%;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;">
-                </form>
-            </li>
-
-            {# ── 학습 — 투자 교육 콘텐츠 ── #}
-            <li class="nav-group-title">학습</li>
-            <li><a href="/pages/education" class="{% if active_page == 'education' %}active{% endif %}" onclick="document.body.classList.remove('sidebar-open')">Education</a></li>
-            {% if not auth_enabled or current_user %}
-            <li><a href="/pages/education/chat" class="{% if active_page == 'education_chat' %}active{% endif %}" onclick="document.body.classList.remove('sidebar-open')">AI Tutor</a></li>
+            {% if not auth_enabled or (current_user and (current_user.role in ('admin', 'moderator') or current_user.effective_tier() in ('pro', 'premium'))) %}
+            <li><a href="/pages/chat" class="{% if active_page == 'chat' %}active{% endif %}" onclick="document.body.classList.remove('sidebar-open')">Theme Chat</a></li>
             {% endif %}
 
             {# ── 내 포트폴리오 — 로그인 사용자만 노출 ── #}
@@ -49,25 +37,28 @@
             <li><a href="/pages/notifications" class="{% if active_page == 'notifications' %}active{% endif %}" onclick="document.body.classList.remove('sidebar-open')">Notifications{% if unread_notifications %} <span class="nav-badge">{{ unread_notifications }}</span>{% endif %}</a></li>
             {% endif %}
 
-            {# ── 히스토리 — 과거 분석 조회 ── #}
-            <li class="nav-group-title">히스토리</li>
+            {# ── 조회 · 히스토리 — 티커 검색 + 과거 분석 ── #}
+            <li class="nav-group-title">조회 · 히스토리</li>
+            <li>
+                <form action="/pages/stocks/search" method="get" style="padding:0 12px;" onsubmit="var t=this.querySelector('input').value.trim(); if(t){window.location='/pages/stocks/'+encodeURIComponent(t.toUpperCase()); return false;} return false;">
+                    <input type="text" placeholder="티커 입력 (AAPL, 005930...)" style="width:100%;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;">
+                </form>
+            </li>
             <li><a href="/pages/sessions" class="{% if active_page == 'sessions' %}active{% endif %}" onclick="document.body.classList.remove('sidebar-open')">Sessions</a></li>
 
-            {# ── 커뮤니케이션 — Pro+ 티어 또는 Admin/Moderator, AUTH 비활성 환경 ── #}
-            {% if not auth_enabled or (current_user and (current_user.role in ('admin', 'moderator') or current_user.effective_tier() in ('pro', 'premium'))) %}
-            <li class="nav-group-title">커뮤니케이션</li>
-            <li><a href="/pages/chat" class="{% if active_page == 'chat' %}active{% endif %}" onclick="document.body.classList.remove('sidebar-open')">Theme Chat</a></li>
+            {# ── 학습 · 대화 — 교육 + AI 대화 ── #}
+            <li class="nav-group-title">학습 · 대화</li>
+            <li><a href="/pages/education" class="{% if active_page == 'education' %}active{% endif %}" onclick="document.body.classList.remove('sidebar-open')">Education</a></li>
+            {% if not auth_enabled or current_user %}
+            <li><a href="/pages/education/chat" class="{% if active_page == 'education_chat' %}active{% endif %}" onclick="document.body.classList.remove('sidebar-open')">AI Tutor</a></li>
             {% endif %}
 
-            {# ── 고객지원 — 로그인 사용자 + AUTH 비활성 환경 ── #}
+            {# ── 계정 · 지원 — 요금제 + 문의 ── #}
+            <li class="nav-group-title">계정 · 지원</li>
+            <li><a href="/pages/pricing" class="{% if active_page == 'pricing' %}active{% endif %}" onclick="document.body.classList.remove('sidebar-open')">Pricing</a></li>
             {% if not auth_enabled or current_user %}
-            <li class="nav-group-title">고객지원</li>
             <li><a href="/pages/inquiry" class="{% if active_page == 'inquiry' %}active{% endif %}" onclick="document.body.classList.remove('sidebar-open')">문의하기</a></li>
             {% endif %}
-
-            {# ── 계정/요금제 ── #}
-            <li class="nav-group-title">계정</li>
-            <li><a href="/pages/pricing" class="{% if active_page == 'pricing' %}active{% endif %}" onclick="document.body.classList.remove('sidebar-open')">Pricing</a></li>
         </ul>
         <div class="sidebar-footer">
             {% if not auth_enabled %}

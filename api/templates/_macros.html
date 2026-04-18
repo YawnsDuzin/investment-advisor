@@ -345,3 +345,208 @@
     {% endif %}
 </span>
 {% endmacro %}
+
+{# ── 변화량 인디케이터 (▲▼ + %/숫자) ── #}
+{% macro change_indicator(delta, suffix='') %}
+{% if delta is none or delta == 0 %}
+<span class="change-indicator change-neutral">—</span>
+{% elif delta > 0 %}
+<span class="change-indicator change-up">&#9650;{{ delta }}{{ suffix }}</span>
+{% else %}
+<span class="change-indicator change-down">&#9660;{{ delta|abs }}{{ suffix }}</span>
+{% endif %}
+{% endmacro %}
+
+{# ── 리스크 온도 반원형 게이지 (SVG) ── #}
+{% macro risk_gauge(risk_pct, risk_label) %}
+<div class="risk-gauge-wrap">
+    <svg viewBox="0 0 120 75" width="120" height="75" class="risk-gauge" aria-label="리스크 온도">
+        <defs>
+            <linearGradient id="riskGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="var(--green)"/>
+                <stop offset="50%" stop-color="var(--orange)"/>
+                <stop offset="100%" stop-color="var(--red)"/>
+            </linearGradient>
+        </defs>
+        {# 반원: 길이 약 157 (π * 50) #}
+        <path d="M 10 65 A 50 50 0 0 1 110 65" fill="none"
+              stroke="var(--border)" stroke-width="8" stroke-linecap="round"/>
+        <path d="M 10 65 A 50 50 0 0 1 110 65" fill="none"
+              stroke="url(#riskGrad)" stroke-width="8" stroke-linecap="round"
+              stroke-dasharray="{{ (risk_pct * 1.57)|round(1) }} 157"/>
+        <text x="60" y="60" text-anchor="middle" fill="var(--text)" font-size="16" font-weight="700">
+            {{ (risk_label or '')|upper }}
+        </text>
+    </svg>
+    <span class="risk-gauge-label">RISK {{ risk_pct }}%</span>
+</div>
+{% endmacro %}
+
+{# ── Top Picks 불릿 차트 ── #}
+{% macro bullet_chart(current_price, target_price, upside_pct, currency, price_pct) %}
+{% if current_price and target_price %}
+<div class="bullet-chart">
+    <div class="bullet-track">
+        <div class="bullet-range" style="width:100%"></div>
+        <div class="bullet-marker" style="left:{{ price_pct or 0 }}%"
+             title="현재가: {{ current_price|fmt_price(currency) }}"></div>
+        <div class="bullet-target" title="목표가: {{ target_price|fmt_price(currency) }}"></div>
+    </div>
+    <div class="bullet-labels">
+        <span>{{ current_price|fmt_price(currency) }}</span>
+        {% if upside_pct is not none and upside_pct != 0 %}
+        <span class="bullet-upside {% if upside_pct > 0 %}color-green{% else %}color-red{% endif %}">
+            {% if upside_pct > 0 %}+{% endif %}{{ "%.1f"|format(upside_pct|float) }}%
+        </span>
+        {% endif %}
+        <span>목표 {{ target_price|fmt_price(currency) }}</span>
+    </div>
+</div>
+{% elif current_price or target_price %}
+<div class="bullet-chart bullet-chart-partial">
+    <div class="bullet-labels">
+        {% if current_price %}
+        <span>현재 {{ current_price|fmt_price(currency) }}</span>
+        {% else %}
+        <span style="color:var(--text-muted);">현재가 미제공</span>
+        {% endif %}
+        {% if target_price %}
+        <span>목표 {{ target_price|fmt_price(currency) }}</span>
+        {% else %}
+        <span style="color:var(--text-muted);">목표가 미제공</span>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+{% endmacro %}
+
+{# ── 테마 신뢰도 프로그레스 링 (SVG) ── #}
+{% macro conf_ring(confidence, size=28) %}
+{% set pct = (confidence|float) %}
+{% set ring_color = 'var(--green)' if pct >= 0.7 else ('var(--accent)' if pct >= 0.5 else 'var(--orange)') %}
+<svg viewBox="0 0 36 36" width="{{ size }}" height="{{ size }}" class="conf-ring" aria-label="신뢰도 {{ (pct*100)|int }}%">
+    <circle cx="18" cy="18" r="15" fill="none" stroke="var(--border)" stroke-width="3"/>
+    <circle cx="18" cy="18" r="15" fill="none" stroke="{{ ring_color }}" stroke-width="3"
+            stroke-dasharray="{{ (pct * 94.2)|round(1) }} 94.2"
+            stroke-linecap="round" transform="rotate(-90 18 18)"/>
+    <text x="18" y="22" text-anchor="middle" fill="var(--text)" font-size="10" font-weight="600">
+        {{ (pct * 100)|int }}
+    </text>
+</svg>
+{% endmacro %}
+
+{# ── 발굴 유형 도넛 차트 (SVG) ── #}
+{% macro discovery_donut(discovery_counts) %}
+{% set total = discovery_counts.values()|sum %}
+{% set colors = {'early_signal': '#9382ff', 'consensus': '#4f8cff', 'contrarian': '#fbbf24', 'deep_value': '#34d399', 'unknown': '#9ba0b4'} %}
+{% set labels = {'early_signal': '얼리시그널', 'consensus': '컨센서스', 'contrarian': '컨트래리안', 'deep_value': '딥밸류', 'unknown': '기타'} %}
+<div class="discovery-donut-wrap">
+    <svg viewBox="0 0 100 100" width="110" height="110" class="discovery-donut" aria-label="발굴 유형 분포">
+        {% set ns = namespace(offset=0) %}
+        {% set circumference = 251.3 %}
+        {% for dt, cnt in discovery_counts.items() %}
+            {% set arc = (cnt / total * circumference)|round(2) %}
+            <circle cx="50" cy="50" r="40" fill="none"
+                    stroke="{{ colors.get(dt, colors['unknown']) }}"
+                    stroke-width="14"
+                    stroke-dasharray="{{ arc }} {{ (circumference - arc)|round(2) }}"
+                    stroke-dashoffset="{{ (-ns.offset)|round(2) }}"
+                    transform="rotate(-90 50 50)"/>
+            {% set ns.offset = ns.offset + arc %}
+        {% endfor %}
+        <circle cx="50" cy="50" r="28" fill="var(--bg-card)"/>
+        <text x="50" y="48" text-anchor="middle" fill="var(--text)" font-size="16" font-weight="700">{{ total }}</text>
+        <text x="50" y="60" text-anchor="middle" fill="var(--text-muted)" font-size="8">종목</text>
+    </svg>
+    <div class="donut-legend">
+        {% for dt, cnt in discovery_counts.items() %}
+        <div class="legend-item">
+            <span class="legend-dot" style="background:{{ colors.get(dt, colors['unknown']) }}"></span>
+            <span class="legend-label">{{ labels.get(dt, dt) }}</span>
+            <span class="legend-pct">{{ cnt }}건 · {{ (cnt / total * 100)|int }}%</span>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endmacro %}
+
+{# ── 섹터 버블 차트 ── #}
+{% macro sector_bubbles(top_sectors) %}
+<div class="sector-bubbles">
+    {% set max_cnt = (top_sectors|map(attribute=1)|max) if top_sectors else 1 %}
+    {% for sec, cnt in top_sectors %}
+        {% set size = 48 + (cnt / max_cnt * 40)|int %}
+        <div class="sector-bubble" style="width:{{ size }}px;height:{{ size }}px;font-size:{{ 10 + (cnt / max_cnt * 3)|int }}px;" title="{{ sec }}: {{ cnt }}건">
+            {{ sec[:4] }}<small>{{ cnt }}</small>
+        </div>
+    {% endfor %}
+</div>
+{% endmacro %}
+
+{# ── 스파크라인 (최근 7일 추이) ── #}
+{% macro sparkline(points, color='var(--accent)') %}
+{% if points %}
+<svg class="sparkline" viewBox="0 0 60 18" width="60" height="18" preserveAspectRatio="none">
+    <polyline points="{{ points }}" fill="none" stroke="{{ color }}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
+{% endif %}
+{% endmacro %}
+
+{# ── Yield Curve 라인 차트 ── #}
+{% macro yield_curve(bond_yields) %}
+{% set tenors = [('kr_1y', '1Y'), ('kr_3y', '3Y'), ('kr_5y', '5Y'), ('kr_10y', '10Y'), ('kr_30y', '30Y')] %}
+{% set vals = [] %}
+{% for k, _ in tenors %}
+    {% if bond_yields.get(k) %}{% set _ = vals.append(bond_yields[k]|float) %}{% endif %}
+{% endfor %}
+{% if vals|length >= 2 %}
+    {% set mn = vals|min %}
+    {% set mx = vals|max %}
+    {% set rng = (mx - mn) if mx != mn else 1 %}
+    {% set curve_status = bond_yields.get('yield_curve_status') %}
+    {% set line_color = 'var(--green)' if curve_status == 'normal' else ('var(--orange)' if curve_status == 'flat' else 'var(--red)') %}
+<svg viewBox="0 0 320 130" class="yield-curve-chart" width="100%" height="140" preserveAspectRatio="none">
+    {# 그리드 #}
+    <line x1="40" y1="15" x2="40" y2="100" stroke="var(--border)" stroke-width="0.5"/>
+    <line x1="40" y1="100" x2="305" y2="100" stroke="var(--border)" stroke-width="0.5"/>
+    <line x1="40" y1="57" x2="305" y2="57" stroke="var(--border)" stroke-width="0.5" stroke-dasharray="2,3" opacity="0.5"/>
+    {# Y축 라벨 #}
+    <text x="36" y="18" text-anchor="end" fill="var(--text-muted)" font-size="9">{{ "%.2f"|format(mx) }}</text>
+    <text x="36" y="60" text-anchor="end" fill="var(--text-muted)" font-size="9">{{ "%.2f"|format((mx+mn)/2) }}</text>
+    <text x="36" y="103" text-anchor="end" fill="var(--text-muted)" font-size="9">{{ "%.2f"|format(mn) }}</text>
+    {# X축 라벨 #}
+    {% set idx = namespace(i=0) %}
+    {% set step = 265 / ((vals|length - 1) if vals|length > 1 else 1) %}
+    {% for k, lbl in tenors %}
+        {% if bond_yields.get(k) %}
+        <text x="{{ 40 + idx.i * step }}" y="118" text-anchor="middle" fill="var(--text-muted)" font-size="10">{{ lbl }}</text>
+        {% set idx.i = idx.i + 1 %}
+        {% endif %}
+    {% endfor %}
+    {# 커브 라인 #}
+    {% set pts = [] %}
+    {% set jdx = namespace(j=0) %}
+    {% for k, _ in tenors %}
+        {% if bond_yields.get(k) %}
+            {% set x = 40 + jdx.j * step %}
+            {% set y = 100 - ((bond_yields[k]|float) - mn) / rng * 85 %}
+            {% set _ = pts.append(x|round(1) ~ ',' ~ y|round(1)) %}
+            {% set jdx.j = jdx.j + 1 %}
+        {% endif %}
+    {% endfor %}
+    <polyline points="{{ pts|join(' ') }}" fill="none" stroke="{{ line_color }}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+    {# 데이터 포인트 #}
+    {% set kdx = namespace(k=0) %}
+    {% for k, _ in tenors %}
+        {% if bond_yields.get(k) %}
+            {% set x = 40 + kdx.k * step %}
+            {% set y = 100 - ((bond_yields[k]|float) - mn) / rng * 85 %}
+            <circle cx="{{ x|round(1) }}" cy="{{ y|round(1) }}" r="3.5" fill="var(--bg-card)" stroke="{{ line_color }}" stroke-width="2"/>
+            <text x="{{ x|round(1) }}" y="{{ (y - 8)|round(1) }}" text-anchor="middle" fill="var(--text)" font-size="10" font-weight="600">{{ bond_yields[k] }}</text>
+            {% set kdx.k = kdx.k + 1 %}
+        {% endif %}
+    {% endfor %}
+</svg>
+{% endif %}
+{% endmacro %}
+

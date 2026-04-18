@@ -29,7 +29,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 investment-advisor/
 ├── shared/              ← 공용: config(.env 로드), db(마이그레이션+저장), logger(DB 로그), pg_setup(자동 설치), tier_limits(구독 티어 제한)
 ├── analyzer/            ← 배치: main(엔트리) → news_collector(RSS) → stock_data(주가조회) → analyzer(2단계) → recommender(Top Picks) → price_tracker(수익률추적) → checkpoint(중단점복구) → krx_data(KRX수급/공매도)
-├── api/                 ← 웹: main(FastAPI) → routes/(pages, sessions, themes, proposals, chat, education, inquiry, admin, auth, user_admin, watchlist, track_record)
+├── api/                 ← 웹: main(FastAPI) → routes/(pages, sessions, themes, proposals, stocks, chat, education, inquiry, admin, auth, user_admin, watchlist, track_record)
 │   ├── auth/            ← JWT 인증 모듈: dependencies, jwt_handler, password, models
 │   ├── chat_engine.py   ← Claude SDK 기반 테마 채팅 엔진
 │   ├── education_engine.py ← Claude SDK 기반 투자 교육 AI 튜터 엔진
@@ -70,6 +70,7 @@ sudo systemctl enable --now investment-advisor-analyzer.timer    # 매일 03:00 
 - PostgreSQL 필요 (Windows는 별도 설치). DB 접속 정보는 `.env` 파일로 관리.
 - Claude Code CLI 필요: `npm install -g @anthropic-ai/claude-code` → `claude login`
 - 라즈베리파이 배포 상세: `_docs/raspberry-pi-setup.md` (OS 설치부터 포트포워딩까지)
+- 라즈베리파이에서 LAN 내 DB 직접 접속이 필요하면 UFW에서 5432 포트를 열고 `postgresql.conf`/`pg_hba.conf` 를 수정한다 (`sudo ufw allow 5432/tcp && sudo ufw reload`). 절차·보안 주의는 `_docs/raspberry-pi-setup.md` 4.5절 참고. **5432는 공유기 포트포워딩 금지** — 외부 접근은 SSH 터널 사용.
 
 ## Environment Variables
 

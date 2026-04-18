@@ -15,6 +15,15 @@
     --orange: #fbbf24;
     --purple: #9382ff;
     --sidebar-w: 240px;
+    /* 의미 기반 alias (누락된 --success/--danger/--warning 보강) */
+    --success: #34d399;
+    --danger: #f87171;
+    --warning: #fbbf24;
+    --color-positive: var(--green);
+    --color-negative: var(--red);
+    --color-warning: var(--orange);
+    --color-signal: var(--purple);
+    --color-neutral: var(--text-muted);
 }
 
 body {
@@ -1790,9 +1799,25 @@ tbody tr:hover { background: var(--bg-card-hover); }
 .top-pick-upside-pos { color: #4ade80; }
 .top-pick-upside-neg { color: #f87171; }
 
-.top-pick-theme { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 12px; }
-.top-pick-theme-label { color: var(--text-muted, #9ba0b4); }
-.top-pick-theme-name { color: var(--text, #e4e6eb); text-decoration: none; font-weight: 500; }
+.top-pick-theme {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    flex-wrap: wrap;
+    font-size: 12px;
+    min-height: 40px;
+    line-height: 1.4;
+}
+.top-pick-theme-label { color: var(--text-muted, #9ba0b4); flex-shrink: 0; }
+.top-pick-theme-name {
+    color: var(--text, #e4e6eb);
+    text-decoration: none;
+    font-weight: 500;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
 .top-pick-theme-name:hover { color: #7aa8ff; text-decoration: underline; }
 .top-pick-theme-conf { color: var(--text-muted, #9ba0b4); font-size: 11px; margin-left: auto; }
 
@@ -3042,5 +3067,486 @@ tbody tr:hover { background: var(--bg-card-hover); }
     .inquiry-detail-header {
         flex-direction: column;
         align-items: flex-start;
+    }
+}
+
+/* ============================================================
+ * Dashboard Redesign (v23) — SVG/CSS 시각화 + 정보 계층 재배치
+ * ============================================================ */
+
+/* ── Tier 1 Hero 레이아웃 ── */
+.dash-hero {
+    display: grid;
+    grid-template-columns: 1fr 1.8fr;
+    gap: 16px;
+    margin-bottom: 20px;
+}
+
+/* ── 변화량 인디케이터 (통일) ── */
+.change-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 4px;
+    vertical-align: middle;
+    margin-left: 6px;
+}
+.change-up {
+    color: var(--color-positive);
+    background: rgba(52, 211, 153, 0.1);
+}
+.change-down {
+    color: var(--color-negative);
+    background: rgba(248, 113, 113, 0.1);
+}
+.change-neutral { color: var(--text-muted); }
+
+/* ── Sparkline (stat-card 내부) ── */
+.sparkline {
+    display: block;
+    margin-top: 6px;
+    opacity: 0.85;
+}
+
+/* ── 리스크 온도 SVG 반원형 게이지 ── */
+.risk-gauge-wrap {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+}
+.risk-gauge { display: block; }
+.risk-gauge-label {
+    font-size: 10px;
+    color: var(--text-muted);
+    letter-spacing: 0.5px;
+}
+
+/* ── 워치리스트 요약 위젯 ── */
+.watchlist-widget {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+}
+.watchlist-widget .widget-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    font-size: 14px;
+    font-weight: 600;
+}
+.widget-more {
+    font-size: 12px;
+    color: var(--accent);
+    font-weight: 500;
+}
+.watchlist-quick {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 180px;
+    overflow-y: auto;
+}
+.wl-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 13px;
+    text-decoration: none;
+    color: inherit;
+    transition: background 0.15s;
+}
+.wl-item:hover { background: var(--bg-card-hover); }
+.wl-item-hot {
+    border-color: rgba(251, 191, 36, 0.4);
+    background: rgba(251, 191, 36, 0.08);
+}
+.wl-ticker { font-weight: 600; color: var(--text); }
+.wl-name {
+    color: var(--text-muted);
+    font-size: 12px;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.wl-price { font-size: 12px; color: var(--text); }
+.wl-badge-pick {
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: rgba(251, 191, 36, 0.2);
+    color: var(--orange);
+    font-weight: 600;
+}
+.wl-empty {
+    font-size: 12px;
+    color: var(--text-muted);
+    padding: 8px;
+    text-align: center;
+}
+
+/* ── Track Record 시각화 (도넛 + 바) ── */
+.tr-visual {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex: 1;
+}
+.tr-donut-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+.tr-donut circle:last-of-type {
+    transition: stroke-dasharray 0.5s ease;
+}
+.tr-return-block { flex: 1; min-width: 140px; }
+.tr-bar-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+}
+.tr-bar-track {
+    height: 8px;
+    background: var(--border);
+    border-radius: 4px;
+    position: relative;
+    overflow: hidden;
+}
+.tr-bar-zero {
+    position: absolute;
+    left: 50%;
+    width: 1px;
+    height: 100%;
+    background: var(--text-muted);
+    z-index: 1;
+}
+.tr-bar-fill {
+    position: absolute;
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.4s ease;
+}
+.tr-bar-pos { background: var(--color-positive); }
+.tr-bar-neg { background: var(--color-negative); }
+.tr-bar-value {
+    margin-top: 4px;
+    font-size: 14px;
+    font-weight: 600;
+}
+.tr-sample {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+.color-green { color: var(--color-positive) !important; }
+.color-red { color: var(--color-negative) !important; }
+
+/* ── Top Picks 불릿 차트 ── */
+.bullet-chart {
+    margin: 10px 0 6px;
+    min-height: 52px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+.bullet-chart-partial .bullet-labels {
+    justify-content: flex-start;
+    gap: 14px;
+}
+.bullet-track {
+    height: 6px;
+    background: var(--border);
+    border-radius: 3px;
+    position: relative;
+    margin: 12px 4px 6px;
+}
+.bullet-range {
+    height: 100%;
+    border-radius: 3px;
+    background: linear-gradient(90deg, rgba(79, 140, 255, 0.3) 0%, rgba(52, 211, 153, 0.5) 100%);
+}
+.bullet-marker {
+    position: absolute;
+    top: -5px;
+    width: 3px;
+    height: 16px;
+    background: var(--accent);
+    border-radius: 1px;
+    transform: translateX(-50%);
+    box-shadow: 0 0 0 1px var(--bg-card);
+}
+.bullet-target {
+    position: absolute;
+    top: -3px;
+    right: -1px;
+    width: 3px;
+    height: 12px;
+    background: var(--color-positive);
+    border-radius: 1px;
+}
+.bullet-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 4px;
+}
+.bullet-labels .bullet-upside {
+    font-weight: 700;
+    font-size: 13px;
+}
+
+/* ── Top Picks 3-Zone 카드 강화 ── */
+.top-pick-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: auto;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+}
+.action-btn {
+    flex: 1;
+    padding: 5px 8px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-muted);
+    text-align: center;
+    text-decoration: none;
+    transition: all 0.15s;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+}
+.action-btn:hover {
+    background: var(--bg-card-hover);
+    color: var(--text);
+    border-color: var(--accent);
+}
+.action-btn:disabled {
+    cursor: default;
+    opacity: 0.7;
+}
+.action-watched {
+    color: var(--orange);
+    border-color: rgba(251, 191, 36, 0.3);
+    background: rgba(251, 191, 36, 0.05);
+}
+.action-btn-signal {
+    color: var(--color-signal);
+    border-color: rgba(147, 130, 255, 0.3);
+}
+.top-pick-rationale.collapsible {
+    cursor: pointer;
+    padding: 0;
+    user-select: none;
+    line-height: 1.4;
+}
+.top-pick-rationale-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 10px;
+    height: 34px;
+    box-sizing: border-box;
+    font-size: 12px;
+    line-height: 1;
+    color: var(--text-muted, #9ba0b4);
+}
+.top-pick-rationale.collapsible .top-pick-rationale-tag {
+    margin-right: 0;
+    line-height: 1;
+    flex-shrink: 0;
+}
+.top-pick-rationale-hint,
+.top-pick-rationale-hint-open {
+    flex: 1;
+    line-height: 1;
+}
+.top-pick-rationale-hint-open { display: none; }
+.top-pick-rationale-arrow {
+    font-size: 9px;
+    line-height: 1;
+    transition: transform 0.2s;
+    color: var(--text-muted, #9ba0b4);
+    flex-shrink: 0;
+}
+.top-pick-rationale-body {
+    display: none;
+    padding: 8px 10px 10px;
+    border-top: 1px dashed rgba(148,163,184,0.15);
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--text, #e4e6eb);
+    user-select: text;
+}
+.top-pick-rationale.collapsible.expanded .top-pick-rationale-body { display: block; }
+.top-pick-rationale.collapsible.expanded .top-pick-rationale-hint { display: none; }
+.top-pick-rationale.collapsible.expanded .top-pick-rationale-hint-open { display: block; }
+.top-pick-rationale.collapsible.expanded .top-pick-rationale-arrow { transform: rotate(180deg); }
+
+/* ── 테마 신뢰도 프로그레스 링 ── */
+.conf-ring { display: inline-block; vertical-align: middle; }
+.conf-ring circle:last-of-type {
+    transition: stroke-dasharray 0.5s ease;
+}
+
+/* ── 발굴 유형 도넛 ── */
+.discovery-donut-wrap {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+.discovery-donut { flex-shrink: 0; }
+.donut-legend {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+}
+.legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+.legend-label { flex: 1; color: var(--text); }
+.legend-pct {
+    color: var(--text-muted);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+}
+
+/* ── 섹터 버블 ── */
+.sector-bubbles {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 0;
+}
+.sector-bubble {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: rgba(79, 140, 255, 0.12);
+    border: 1px solid rgba(79, 140, 255, 0.3);
+    color: var(--accent);
+    font-weight: 600;
+    line-height: 1.1;
+    text-align: center;
+    padding: 8px;
+    transition: transform 0.2s;
+    overflow: hidden;
+    white-space: nowrap;
+}
+.sector-bubble:hover { transform: scale(1.08); }
+.sector-bubble small {
+    font-weight: 400;
+    color: var(--text-muted);
+    font-size: 10px;
+}
+
+/* ── Yield Curve 차트 ── */
+.yield-curve-chart { display: block; margin: 10px 0 4px; }
+
+/* ── Market Summary 접이식 ── */
+.market-summary-toggle {
+    display: none;
+    width: 100%;
+    text-align: center;
+    padding: 8px;
+    color: var(--accent);
+    cursor: pointer;
+    font-size: 13px;
+    background: transparent;
+    border: none;
+    border-top: 1px solid var(--border);
+    margin-top: 8px;
+}
+.market-summary.collapsed .summary-body {
+    max-height: 0;
+    overflow: hidden;
+    padding: 0;
+    margin: 0;
+}
+.market-summary .summary-body {
+    transition: max-height 0.3s ease;
+    max-height: 4000px;
+}
+
+/* ── 모바일 반응형 ── */
+@media (max-width: 768px) {
+    .dash-hero {
+        grid-template-columns: 1fr;
+    }
+    .stat-grid-6 .stat-value {
+        font-size: 22px;
+    }
+    .stat-grid-6 .stat-label {
+        font-size: 11px;
+    }
+    .stat-grid-6 .sparkline {
+        display: none;
+    }
+    /* Top Picks 수평 캐러셀 */
+    .top-picks-grid {
+        display: flex !important;
+        overflow-x: auto;
+        scroll-snap-type: x mandatory;
+        gap: 12px;
+        padding-bottom: 12px;
+        -webkit-overflow-scrolling: touch;
+    }
+    .top-pick-card {
+        flex: 0 0 85vw;
+        scroll-snap-align: start;
+        max-width: 340px;
+    }
+    .top-picks-grid::-webkit-scrollbar { height: 4px; }
+    .top-picks-grid::-webkit-scrollbar-thumb {
+        background: var(--border);
+        border-radius: 2px;
+    }
+    /* 차트 축소 */
+    .risk-gauge { width: 100px; }
+    .tr-visual { flex-direction: column; align-items: center; gap: 10px; }
+    .discovery-donut-wrap { flex-direction: column; gap: 10px; }
+    /* Market Summary 접이식 버튼 노출 */
+    .market-summary-toggle { display: block; }
+    .market-summary.collapsed .summary-body {
+        padding: 0;
+    }
+}
+
+@media (max-width: 480px) {
+    .stat-grid-6 {
+        grid-template-columns: repeat(2, 1fr);
     }
 }

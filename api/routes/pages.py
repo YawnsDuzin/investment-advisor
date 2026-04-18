@@ -262,6 +262,7 @@ def dashboard(request: Request, user: Optional[UserInDB] = Depends(get_current_u
                        p.upside_pct, p.price_source, p.target_allocation,
                        p.return_1m_pct, p.return_3m_pct, p.return_6m_pct, p.return_1y_pct,
                        p.rationale AS proposal_rationale, p.market,
+                       p.foreign_net_buy_signal, p.squeeze_risk,
                        t.theme_name, t.theme_key, t.confidence_score AS theme_confidence,
                        EXISTS(SELECT 1 FROM stock_analyses sa WHERE sa.proposal_id = p.id) AS has_stock_analysis
                 FROM daily_top_picks dtp
@@ -271,6 +272,80 @@ def dashboard(request: Request, user: Optional[UserInDB] = Depends(get_current_u
                 ORDER BY dtp.rank
             """, (today_date,))
             top_picks_raw = cur.fetchall()
+
+            # 국채 금리 데이터 (bond_yields 테이블 — v20)
+            bond_yields = None
+            try:
+                cur.execute("""
+                    SELECT * FROM bond_yields
+                    WHERE session_id = %s
+                    ORDER BY snapshot_date DESC LIMIT 1
+                """, (session_id,))
+                by_row = cur.fetchone()
+                if by_row:
+                    bond_yields = _serialize_row(by_row)
+            except Exception:
+                pass  # v20 미적용 환경(테이블 미존재)에서도 동작
+
+            # ── 전일 세션 대비 변화량 (delta) ──
+            prev_issue_count = 0
+            prev_theme_count = 0
+            prev_buy_count = 0
+            cur.execute("""
+                SELECT id FROM analysis_sessions
+                WHERE analysis_date < %s
+                ORDER BY analysis_date DESC LIMIT 1
+            """, (today_date,))
+            prev_session = cur.fetchone()
+            if prev_session:
+                prev_sid = prev_session["id"]
+                cur.execute("SELECT COUNT(*) AS cnt FROM global_issues WHERE session_id = %s", (prev_sid,))
+                prev_issue_count = cur.fetchone()["cnt"]
+                cur.execute("SELECT COUNT(*) AS cnt FROM investment_themes WHERE session_id = %s", (prev_sid,))
+                prev_theme_count = cur.fetchone()["cnt"]
+                cur.execute("""
+                    SELECT COUNT(*) AS cnt FROM investment_proposals ip
+                    JOIN investment_themes it ON ip.theme_id = it.id
+                    WHERE it.session_id = %s AND ip.action = 'buy'
+                """, (prev_sid,))
+                prev_buy_count = cur.fetchone()["cnt"]
+
+            # ── 최근 7일 히스토리 (스파크라인) ──
+            cur.execute("""
+                SELECT s.analysis_date,
+                       (SELECT COUNT(*) FROM global_issues WHERE session_id = s.id) AS issue_cnt,
+                       (SELECT COUNT(*) FROM investment_themes WHERE session_id = s.id) AS theme_cnt,
+                       (SELECT COUNT(*) FROM investment_proposals ip
+                        JOIN investment_themes it ON ip.theme_id = it.id
+                        WHERE it.session_id = s.id AND ip.action = 'buy') AS buy_cnt
+                FROM analysis_sessions s
+                ORDER BY s.analysis_date DESC LIMIT 7
+            """)
+            history_rows = cur.fetchall()
+
+            # 워치리스트 ∩ 오늘 분석 크로스 매칭
+            watched_in_today = []
+            if user and watched_tickers:
+                for ticker in watched_tickers:
+                    for theme in themes:
+                        for p in (theme.get("proposals") or []):
+                            if (p.get("ticker") or "").upper() == ticker.upper():
+                                pick_rank = None
+                                for pk_raw in top_picks_raw:
+                                    if (pk_raw.get("ticker") or "").upper() == ticker.upper():
+                                        pick_rank = pk_raw.get("rank")
+                                        break
+                                watched_in_today.append({
+                                    "ticker": p.get("ticker"),
+                                    "asset_name": p.get("asset_name"),
+                                    "current_price": p.get("current_price"),
+                                    "currency": p.get("currency"),
+                                    "market": p.get("market"),
+                                    "action": p.get("action"),
+                                    "in_top_picks": pick_rank is not None,
+                                    "pick_rank": pick_rank,
+                                })
+                                break
 
     finally:
         conn.close()
@@ -284,6 +359,10 @@ def dashboard(request: Request, user: Optional[UserInDB] = Depends(get_current_u
         pk["is_subscribed"] = (
             tk in subscribed_tickers or pk.get("theme_key") in subscribed_theme_keys
         )
+        # 불릿 차트용: 현재가/목표가 비율
+        cp = float(pk.get("current_price") or 0)
+        tp = float(pk.get("target_price_low") or 0)
+        pk["price_pct"] = round(cp / tp * 100, 1) if tp > 0 and cp > 0 else None
         top_picks.append(pk)
 
     # 뉴스를 카테고리별로 그룹핑
@@ -298,20 +377,32 @@ def dashboard(request: Request, user: Optional[UserInDB] = Depends(get_current_u
             }
         news_by_category[cat]["articles"].append(_serialize_row(row))
 
-    # 국채 금리 데이터 (bond_yields 테이블 — v20)
-    bond_yields = None
-    try:
-        with conn.cursor(cursor_factory=RealDictCursor) as cur2:
-            cur2.execute("""
-                SELECT * FROM bond_yields
-                WHERE session_id = %s
-                ORDER BY snapshot_date DESC LIMIT 1
-            """, (session["id"],))
-            bond_yields = cur2.fetchone()
-            if bond_yields:
-                bond_yields = _serialize_row(bond_yields)
-    except Exception:
-        pass  # v20 미적용 환경에서도 동작
+    # 스파크라인 SVG 좌표 생성 (최근→과거 역순 → 시간순으로 뒤집기)
+    def _spark_points(values, w=60, h=18):
+        if not values or len(values) < 2:
+            return ""
+        mn, mx = min(values), max(values)
+        rng = mx - mn if mx != mn else 1
+        pts = []
+        for i, v in enumerate(values):
+            x = round(i / (len(values) - 1) * w, 1)
+            y = round(h - (v - mn) / rng * (h - 2) - 1, 1)
+            pts.append(f"{x},{y}")
+        return " ".join(pts)
+
+    hist_reversed = list(reversed(history_rows))  # 시간순
+    spark_issues = _spark_points([r["issue_cnt"] for r in hist_reversed])
+    spark_themes = _spark_points([r["theme_cnt"] for r in hist_reversed])
+    spark_buys = _spark_points([r["buy_cnt"] for r in hist_reversed])
+
+    # 리스크 온도 → 게이지 수치 매핑
+    risk_temp = (_serialize_row(session) if session else {}).get("risk_temperature", "")
+    risk_map = {"low": 20, "medium": 55, "high": 85}
+    risk_pct = risk_map.get((risk_temp or "").lower(), 50)
+
+    # 테마 뷰 한도 (tier_limits 참조)
+    from shared.tier_limits import THEME_VIEW_LIMITS, normalize_tier
+    theme_view_limit = THEME_VIEW_LIMITS.get(normalize_tier(ctx.get("tier")), None)
 
     return templates.TemplateResponse(request=request, name="dashboard.html", context={
         **ctx,
@@ -332,6 +423,16 @@ def dashboard(request: Request, user: Optional[UserInDB] = Depends(get_current_u
         "watched_tickers": watched_tickers,
         "top_picks": top_picks,
         "bond_yields": bond_yields,
+        # 신규 데이터
+        "issue_delta": issue_count - prev_issue_count,
+        "theme_delta": len(themes) - prev_theme_count,
+        "buy_delta": buy_count - prev_buy_count,
+        "spark_issues": spark_issues,
+        "spark_themes": spark_themes,
+        "spark_buys": spark_buys,
+        "risk_pct": risk_pct,
+        "watched_in_today": watched_in_today,
+        "theme_view_limit": theme_view_limit,
     })
 
 
