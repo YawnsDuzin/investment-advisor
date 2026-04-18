@@ -483,6 +483,51 @@
 </div>
 {% endmacro %}
 
+{# ── 발굴 유형 스택바 (Hero 압축용) ── #}
+{% macro discovery_stackbar(discovery_counts) %}
+{% set total = discovery_counts.values()|sum %}
+{% set colors = {'early_signal': '#9382ff', 'consensus': '#4f8cff', 'contrarian': '#fbbf24', 'deep_value': '#34d399', 'unknown': '#9ba0b4'} %}
+{% set labels = {'early_signal': '얼리', 'consensus': '컨센', 'contrarian': '컨트', 'deep_value': '딥밸', 'unknown': '기타'} %}
+{% if total > 0 %}
+<div class="discovery-stackbar-wrap">
+    <div class="discovery-stackbar-head">
+        <span class="discovery-stackbar-total">{{ total }}<small>종목</small></span>
+    </div>
+    <div class="discovery-stackbar-track" role="img" aria-label="발굴 유형 분포">
+        {% for dt, cnt in discovery_counts.items() %}
+        <span class="discovery-stackbar-seg"
+              style="flex:{{ cnt }};background:{{ colors.get(dt, colors['unknown']) }};"
+              title="{{ labels.get(dt, dt) }}: {{ cnt }}건 ({{ (cnt / total * 100)|int }}%)"></span>
+        {% endfor %}
+    </div>
+    <div class="discovery-stackbar-legend">
+        {% for dt, cnt in discovery_counts.items() %}
+        <span class="discovery-legend-chip">
+            <span class="legend-dot" style="background:{{ colors.get(dt, colors['unknown']) }}"></span>
+            {{ labels.get(dt, dt) }} {{ cnt }} · {{ (cnt / total * 100)|int }}%
+        </span>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+{% endmacro %}
+
+{# ── 섹터 칩 (Hero 압축용) ── #}
+{% macro sector_chips(top_sectors) %}
+{% if top_sectors %}
+{% set max_cnt = (top_sectors|map(attribute=1)|max) %}
+<div class="sector-chips">
+    {% for sec, cnt in top_sectors %}
+        {% set intensity = (cnt / max_cnt * 100)|int %}
+        <span class="sector-chip" data-intensity="{{ intensity }}" title="{{ sec }} · {{ cnt }}건">
+            <span class="sector-chip-name">{{ sec }}</span>
+            <span class="sector-chip-count">{{ cnt }}</span>
+        </span>
+    {% endfor %}
+</div>
+{% endif %}
+{% endmacro %}
+
 {# ── 스파크라인 (최근 7일 추이) ── #}
 {% macro sparkline(points, color='var(--accent)') %}
 {% if points %}

@@ -3179,6 +3179,203 @@ tbody tr:hover { background: var(--bg-card-hover); }
     text-align: center;
 }
 
+/* ════════════════════════════════════════════════════════════
+   Dashboard Hero (Option B) — KPI Strip + 3-row 2×2 Grid
+   ════════════════════════════════════════════════════════════ */
+
+/* Row 1: KPI Strip — stat-grid-6의 컴팩트 변형 */
+.kpi-strip {
+    margin-bottom: 16px;
+}
+.kpi-strip .stat-card {
+    padding: 14px 12px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+.kpi-strip .stat-value {
+    font-size: 28px;
+    margin-bottom: 2px;
+}
+.kpi-strip .stat-label {
+    font-size: 12px;
+}
+.kpi-strip .stat-sub {
+    font-size: 11px;
+}
+
+/* Row 1 — KPI + Track Record 통합 (2-col) */
+.hero-row1 {
+    display: grid;
+    grid-template-columns: 1.8fr 1fr;
+    gap: 16px;
+    margin-bottom: 16px;
+    align-items: stretch;
+}
+.hero-row1 > * { margin-bottom: 0; }
+
+/* KPI Strip Tight — Row 1 내부에서 더 압축 (sparkline 제거, 고정폭) */
+.kpi-strip.kpi-strip-tight .stat-card {
+    padding: 8px 10px;
+}
+.kpi-strip.kpi-strip-tight .stat-value {
+    font-size: 22px;
+    line-height: 1.1;
+    margin-bottom: 1px;
+}
+.kpi-strip.kpi-strip-tight .stat-label {
+    font-size: 11px;
+}
+.kpi-strip.kpi-strip-tight .stat-inline-sub {
+    color: var(--text-muted);
+    font-size: 10px;
+    font-weight: 500;
+}
+.kpi-strip.kpi-strip-tight .change-indicator {
+    font-size: 11px;
+    padding: 0 4px;
+    margin-left: 4px;
+}
+
+@media (max-width: 1280px) {
+    .hero-row1 {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Row 2/3 공통: 2-column grid (레거시, 다른 페이지용으로 유지) */
+.hero-grid-2col {
+    display: grid;
+    grid-template-columns: 1fr 1.4fr;
+    gap: 16px;
+    margin-bottom: 16px;
+    align-items: stretch;
+}
+.hero-grid-2col > * {
+    margin-bottom: 0;
+}
+.hero-grid-2col.hero-insights {
+    grid-template-columns: 1fr 1fr;
+    margin-bottom: 20px;
+}
+
+/* Row 2 (3-col 단일 행): 관심 + 발굴 + 섹터를 한 줄에 */
+.hero-grid-3col {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 20px;
+    align-items: stretch;
+}
+.hero-grid-3col > * {
+    margin-bottom: 0;
+    min-width: 0;
+}
+/* 중간 너비에서는 그대로 3-col 유지 — 너무 좁으면 모바일 breakpoint에서 1-col */
+
+/* Hero 내부 Track Record 위젯 — 자식 높이 채우기 */
+.dash-tr-widget.hero-tr {
+    margin-bottom: 0;
+    height: 100%;
+}
+
+/* ── 발굴 유형 분포 스택바 (Hero 압축용) ── */
+.discovery-stackbar-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.discovery-stackbar-head {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+}
+.discovery-stackbar-total {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text);
+}
+.discovery-stackbar-total small {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-weight: 500;
+    margin-left: 4px;
+}
+.discovery-stackbar-track {
+    display: flex;
+    height: 14px;
+    border-radius: 7px;
+    overflow: hidden;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border);
+}
+.discovery-stackbar-seg {
+    transition: flex 0.4s ease;
+    cursor: help;
+}
+.discovery-stackbar-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 14px;
+    font-size: 12px;
+    color: var(--text-muted);
+}
+.discovery-legend-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+.discovery-legend-chip .legend-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+/* ── 섹터 칩 (Top 5) ── */
+.sector-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-content: flex-start;
+}
+.sector-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 16px;
+    background: rgba(79, 140, 255, 0.08);
+    border: 1px solid rgba(79, 140, 255, 0.25);
+    font-size: 13px;
+    color: var(--text);
+    transition: background 0.15s, border-color 0.15s;
+}
+.sector-chip[data-intensity="100"] {
+    background: rgba(79, 140, 255, 0.22);
+    border-color: rgba(79, 140, 255, 0.5);
+    font-weight: 600;
+}
+.sector-chip-name {
+    color: var(--text);
+}
+.sector-chip-count {
+    padding: 1px 7px;
+    border-radius: 10px;
+    background: rgba(255,255,255,0.08);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text);
+}
+
+/* ── Insight Card Compact (Hero Row 3) ── */
+.insight-card-compact {
+    padding: 14px 16px;
+}
+.insight-card-compact .insight-title {
+    margin-bottom: 10px;
+}
+
 /* ── Track Record 시각화 (도넛 + 바) ── */
 .tr-visual {
     display: flex;
@@ -3488,6 +3685,13 @@ tbody tr:hover { background: var(--bg-card-hover); }
     .dash-hero {
         grid-template-columns: 1fr;
     }
+    .hero-grid-2col,
+    .hero-grid-2col.hero-insights,
+    .hero-grid-3col,
+    .hero-row1 {
+        grid-template-columns: 1fr;
+    }
+    .kpi-strip .stat-card { padding: 10px 8px; }
     .stat-grid-6 .stat-value {
         font-size: 22px;
     }
