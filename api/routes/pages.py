@@ -298,6 +298,21 @@ def dashboard(request: Request, user: Optional[UserInDB] = Depends(get_current_u
             }
         news_by_category[cat]["articles"].append(_serialize_row(row))
 
+    # 국채 금리 데이터 (bond_yields 테이블 — v20)
+    bond_yields = None
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur2:
+            cur2.execute("""
+                SELECT * FROM bond_yields
+                WHERE session_id = %s
+                ORDER BY snapshot_date DESC LIMIT 1
+            """, (session["id"],))
+            bond_yields = cur2.fetchone()
+            if bond_yields:
+                bond_yields = _serialize_row(bond_yields)
+    except Exception:
+        pass  # v20 미적용 환경에서도 동작
+
     return templates.TemplateResponse(request=request, name="dashboard.html", context={
         **ctx,
         "session": _serialize_row(session),
@@ -316,6 +331,7 @@ def dashboard(request: Request, user: Optional[UserInDB] = Depends(get_current_u
         "news_by_category": news_by_category,
         "watched_tickers": watched_tickers,
         "top_picks": top_picks,
+        "bond_yields": bond_yields,
     })
 
 
@@ -437,6 +453,26 @@ def session_detail_page(request: Request, session_id: int, user: Optional[UserIn
         "issues": [_serialize_row(i) for i in issues],
         "themes": [_serialize_row(t) for t in themes],
         "tracking_map": tracking_map,
+    })
+
+
+# ──────────────────────────────────────────────
+# Stock Fundamentals (종목 기초정보)
+# ──────────────────────────────────────────────
+@router.get("/pages/stocks/{ticker}")
+def stock_fundamentals_page(
+    request: Request,
+    ticker: str,
+    market: str = Query(default="", description="시장 코드"),
+    user: Optional[UserInDB] = Depends(get_current_user),
+    auth_cfg: AuthConfig = Depends(_get_auth_cfg),
+):
+    """종목 기초정보 페이지 — 온디맨드 yfinance 조회"""
+    ctx = _base_ctx(request, "proposals", user, auth_cfg)
+    return templates.TemplateResponse(request=request, name="stock_fundamentals.html", context={
+        **ctx,
+        "ticker": ticker.upper(),
+        "market": market.upper(),
     })
 
 

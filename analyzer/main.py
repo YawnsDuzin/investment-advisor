@@ -28,6 +28,9 @@ from analyzer.price_tracker import run_price_tracking
 
 
 def main() -> int:
+    # --fresh 옵션: 체크포인트 무시하고 처음부터 실행
+    force_fresh = "--fresh" in sys.argv
+
     cfg = AppConfig()
 
     # DB 초기화 (스키마 마이그레이션 포함)
@@ -43,14 +46,16 @@ def main() -> int:
 
     # 실행(run) 시작 기록
     today = str(date.today())
-    run_id = start_run(cfg.db, run_type="analyzer", meta={"date": today})
+    run_id = start_run(cfg.db, run_type="analyzer", meta={"date": today, "fresh": force_fresh})
 
     log.info("=" * 60)
     log.info(f"[시작] {today} 투자 분석 (멀티스테이지)")
+    if force_fresh:
+        log.info("[옵션] --fresh 모드: 체크포인트 무시, 처음부터 실행")
     log.info("=" * 60)
 
     try:
-        return _run_analysis(cfg, today, run_id, log)
+        return _run_analysis(cfg, today, run_id, log, force_fresh)
     except Exception as e:
         log.error(f"분석 중 예상치 못한 오류: {e}", extra={"detail": traceback.format_exc()})
         finish_run(cfg.db, run_id, status="failure",
@@ -58,8 +63,10 @@ def main() -> int:
         return 1
 
 
-def _run_analysis(cfg: AppConfig, today: str, run_id: int | None, log) -> int:
+def _run_analysis(cfg: AppConfig, today: str, run_id: int | None, log,
+                   force_fresh: bool = False) -> int:
     """분석 파이프라인 실행 — 정상 흐름과 에러 처리를 분리"""
+    from analyzer.checkpoint import CheckpointManager, compute_news_fingerprint
 
     # 1) 뉴스 수집
     try:
@@ -92,6 +99,17 @@ def _run_analysis(cfg: AppConfig, today: str, run_id: int | None, log) -> int:
     except Exception as e:
         log.warning(f"[지문] 비교 실패 (무시하고 분석 진행): {e}")
 
+    # 1-2) 체크포인트 관리자 초기화 (뉴스 지문 기반)
+    news_fp = compute_news_fingerprint(news_articles)
+    checkpoint = CheckpointManager(
+        analysis_date=today,
+        news_fingerprint=news_fp,
+        force_fresh=force_fresh,
+    )
+    last_stage = checkpoint.last_completed_stage()
+    if last_stage:
+        log.info(f"[체크포인트] 마지막 완료 Stage: {last_stage} — 이어서 작업")
+
     # 2) 뉴스 한글 번역 (분석 전 완료 — SDK 프로세스 경합 방지)
     log.info("[번역] 뉴스 한글 번역 시작...")
     try:
@@ -99,7 +117,7 @@ def _run_analysis(cfg: AppConfig, today: str, run_id: int | None, log) -> int:
     except Exception as e:
         log.warning(f"[번역] 번역 실패 (원문 유지): {e}")
 
-    # 3) 멀티스테이지 분석
+    # 3) 멀티스테이지 분석 (체크포인트 전달)
     log.info("[분석] Claude Code SDK 멀티스테이지 파이프라인 시작...")
     try:
         result = run_full_analysis(
@@ -107,6 +125,7 @@ def _run_analysis(cfg: AppConfig, today: str, run_id: int | None, log) -> int:
             date=today,
             cfg=cfg.analyzer,
             db_cfg=cfg.db,
+            checkpoint=checkpoint,
         )
     except Exception as e:
         log.error(f"분석 파이프라인 예외: {e}", extra={"detail": traceback.format_exc()})
@@ -131,8 +150,11 @@ def _run_analysis(cfg: AppConfig, today: str, run_id: int | None, log) -> int:
         session_id = save_analysis(cfg.db, today, result)
         news_count = save_news_articles(cfg.db, session_id, news_articles)
         log.info(f"[DB] 뉴스 기사 {news_count}건 저장 완료")
+        # DB 저장 성공 → 체크포인트 정리
+        checkpoint.clear()
     except Exception as e:
         log.error(f"DB 저장 실패: {e}", extra={"detail": traceback.format_exc()})
+        log.info("[체크포인트] DB 저장 실패 — 체크포인트 유지 (재실행 시 이어서 작업 가능)")
         finish_run(cfg.db, run_id, status="failure",
                    error_message=f"DB 저장 실패: {e}")
         return 1

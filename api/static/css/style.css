@@ -2800,3 +2800,54 @@ tbody tr:hover { background: var(--bg-card-hover); }
         justify-content: center;
     }
 }
+
+/* ── 외부 사이트 링크 ── */
+.ext-links {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    vertical-align: middle;
+}
+.ext-links-full {
+    gap: 6px;
+    flex-wrap: wrap;
+}
+.ext-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    text-decoration: none;
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 5px;
+    font-size: 11px;
+    line-height: 1.4;
+    transition: background .15s, color .15s, border-color .15s;
+}
+.ext-link:hover {
+    background: rgba(79, 140, 255, 0.12);
+    color: var(--accent);
+    border-color: var(--accent);
+}
+.ext-link-icon {
+    font-weight: 700;
+    font-size: 11px;
+    min-width: 12px;
+    text-align: center;
+}
+.ext-link-name {
+    font-size: 11px;
+    font-weight: 500;
+}
+.ext-links-full .ext-link {
+    padding: 3px 10px;
+    font-size: 12px;
+    border-radius: 6px;
+}
+.ext-links-full .ext-link-icon {
+    font-size: 12px;
+}
+.ext-links-full .ext-link-name {
+    font-size: 12px;
+}

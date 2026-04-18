@@ -28,6 +28,14 @@
             <li><a href="/pages/proposals" class="{% if active_page == 'proposals' %}active{% endif %}" onclick="document.body.classList.remove('sidebar-open')">Stock Picks</a></li>
             <li><a href="/pages/track-record" class="{% if active_page == 'track_record' %}active{% endif %}" onclick="document.body.classList.remove('sidebar-open')">Track Record</a></li>
 
+            {# ── 종목 조회 ── #}
+            <li class="nav-group-title">종목 조회</li>
+            <li>
+                <form action="/pages/stocks/search" method="get" style="padding:0 12px;" onsubmit="var t=this.querySelector('input').value.trim(); if(t){window.location='/pages/stocks/'+encodeURIComponent(t.toUpperCase()); return false;} return false;">
+                    <input type="text" placeholder="티커 입력 (AAPL, 005930...)" style="width:100%;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;">
+                </form>
+            </li>
+
             {# ── 내 포트폴리오 — 로그인 사용자만 노출 ── #}
             {% if current_user %}
             <li class="nav-group-title">내 포트폴리오</li>

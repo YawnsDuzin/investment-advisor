@@ -1,0 +1,349 @@
+{% extends "base.html" %}
+{% block title %}{{ ticker }} 기초정보 — AlphaSignal{% endblock %}
+{% block page_title %}
+<span id="stock-name">{{ ticker }}</span> 기초정보
+{% endblock %}
+
+{% block header_actions %}
+<a href="/pages/proposals/history/{{ ticker }}" class="btn" style="font-size:13px;padding:5px 14px;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;color:var(--text-muted);text-decoration:none;">추천 이력</a>
+{% endblock %}
+
+{% block content %}
+<div id="fundamentals-loading" style="text-align:center;padding:60px 0;color:var(--text-muted);">
+    <div style="font-size:24px;margin-bottom:12px;">Loading...</div>
+    <div>{{ ticker }} 데이터 조회 중...</div>
+</div>
+
+<div id="fundamentals-error" style="display:none;text-align:center;padding:60px 0;">
+    <h3 style="color:var(--red);margin-bottom:8px;">조회 실패</h3>
+    <p id="error-msg" style="color:var(--text-muted);"></p>
+    <div style="margin-top:16px;">
+        <a href="/pages/proposals" class="btn" style="padding:8px 20px;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;color:var(--text);text-decoration:none;">목록으로</a>
+    </div>
+</div>
+
+<div id="fundamentals-content" style="display:none;">
+
+    {# ── 가격 요약 바 ── #}
+    <div class="fund-price-bar">
+        <div class="fund-price-main">
+            <span id="f-price" style="font-size:28px;font-weight:700;"></span>
+            <span id="f-change" style="font-size:16px;margin-left:8px;"></span>
+        </div>
+        <div style="display:flex;gap:20px;flex-wrap:wrap;color:var(--text-muted);font-size:13px;">
+            <span>시총: <strong id="f-mcap" style="color:var(--text);"></strong></span>
+            <span>거래량(10일): <strong id="f-vol" style="color:var(--text);"></strong></span>
+            <span id="f-sector-wrap">업종: <strong id="f-sector" style="color:var(--text);"></strong></span>
+        </div>
+    </div>
+
+    {# ── 52주 가격 범위 바 ── #}
+    <div class="fund-range-bar" id="f-range-bar" style="display:none;">
+        <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-muted);margin-bottom:4px;">
+            <span>52주 저가 <strong id="f-low52" style="color:var(--text);"></strong></span>
+            <span>52주 고가 <strong id="f-high52" style="color:var(--text);"></strong></span>
+        </div>
+        <div style="height:8px;background:var(--border);border-radius:4px;position:relative;">
+            <div id="f-range-fill" style="height:100%;background:linear-gradient(90deg, var(--red), var(--orange), var(--green));border-radius:4px;"></div>
+            <div id="f-range-marker" style="position:absolute;top:-3px;width:3px;height:14px;background:var(--accent);border-radius:2px;"></div>
+        </div>
+    </div>
+
+    {# ── 지표 카드 그리드 ── #}
+    <div class="fund-grid">
+
+        {# 밸류에이션 #}
+        <div class="fund-card">
+            <h4 class="fund-card-title">밸류에이션</h4>
+            <div class="fund-metrics" id="valuation-metrics"></div>
+        </div>
+
+        {# 수익성 #}
+        <div class="fund-card">
+            <h4 class="fund-card-title">수익성</h4>
+            <div class="fund-metrics" id="profitability-metrics"></div>
+        </div>
+
+        {# 재무건전성 #}
+        <div class="fund-card">
+            <h4 class="fund-card-title">재무건전성</h4>
+            <div class="fund-metrics" id="health-metrics"></div>
+        </div>
+
+        {# 성장성 #}
+        <div class="fund-card">
+            <h4 class="fund-card-title">성장성</h4>
+            <div class="fund-metrics" id="growth-metrics"></div>
+        </div>
+
+        {# 배당 #}
+        <div class="fund-card">
+            <h4 class="fund-card-title">배당</h4>
+            <div class="fund-metrics" id="dividend-metrics"></div>
+        </div>
+
+        {# 현금흐름 #}
+        <div class="fund-card">
+            <h4 class="fund-card-title">현금흐름</h4>
+            <div class="fund-metrics" id="cashflow-metrics"></div>
+        </div>
+
+        {# 기술 지표 #}
+        <div class="fund-card">
+            <h4 class="fund-card-title">기술 지표</h4>
+            <div class="fund-metrics" id="technical-metrics"></div>
+        </div>
+
+        {# 애널리스트 #}
+        <div class="fund-card">
+            <h4 class="fund-card-title">애널리스트 컨센서스</h4>
+            <div class="fund-metrics" id="analyst-metrics"></div>
+        </div>
+    </div>
+
+    <div style="margin-top:16px;font-size:11px;color:var(--text-muted);text-align:center;">
+        * 데이터 출처: yfinance (1시간 캐싱). 실시간 시세와 차이가 있을 수 있습니다.
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+.fund-price-bar {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px 24px;
+    margin-bottom: 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+.fund-range-bar {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 24px;
+    margin-bottom: 20px;
+}
+.fund-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 16px;
+}
+.fund-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 20px;
+}
+.fund-card-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--accent);
+    margin-bottom: 14px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+}
+.fund-metrics {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.fund-metric-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 13px;
+}
+.fund-metric-label {
+    color: var(--text-muted);
+}
+.fund-metric-value {
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+.fund-metric-value.positive { color: var(--green); }
+.fund-metric-value.negative { color: var(--red); }
+
+@media (max-width: 768px) {
+    .fund-grid { grid-template-columns: 1fr; }
+    .fund-price-bar { flex-direction: column; align-items: flex-start; }
+}
+</style>
+
+<script>
+(function() {
+    var ticker = '{{ ticker }}';
+    var market = '{{ market }}';
+    var url = '/api/stocks/' + encodeURIComponent(ticker) + '/fundamentals';
+    if (market) url += '?market=' + encodeURIComponent(market);
+
+    fetch(url)
+        .then(function(r) {
+            if (!r.ok) throw new Error(r.status === 404 ? '종목 데이터를 찾을 수 없습니다.' : '서버 오류 (' + r.status + ')');
+            return r.json();
+        })
+        .then(render)
+        .catch(function(e) {
+            document.getElementById('fundamentals-loading').style.display = 'none';
+            document.getElementById('fundamentals-error').style.display = 'block';
+            document.getElementById('error-msg').textContent = e.message;
+        });
+
+    var CURRENCY_SYMBOLS = {KRW:'₩', USD:'$', EUR:'€', JPY:'¥', GBP:'£', CNY:'¥', HKD:'HK$', TWD:'NT$'};
+    var INT_CURRENCIES = ['KRW', 'JPY'];
+
+    function fmtPrice(v, cur) {
+        if (v == null) return '-';
+        var sym = CURRENCY_SYMBOLS[cur] || '';
+        if (INT_CURRENCIES.indexOf(cur) >= 0) return sym + v.toLocaleString('ko-KR', {maximumFractionDigits:0});
+        return sym + v.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+    }
+
+    function fmtBigNum(v, cur) {
+        if (v == null) return '-';
+        var sym = CURRENCY_SYMBOLS[cur] || '';
+        if (Math.abs(v) >= 1e12) return sym + (v/1e12).toFixed(1) + '조';
+        if (Math.abs(v) >= 1e8) return sym + Math.round(v/1e8) + '억';
+        if (Math.abs(v) >= 1e6) return sym + (v/1e6).toFixed(1) + 'M';
+        return sym + v.toLocaleString();
+    }
+
+    function fmtPct(v) {
+        if (v == null) return '-';
+        return (v > 0 ? '+' : '') + v.toFixed(2) + '%';
+    }
+
+    function fmtNum(v) {
+        if (v == null) return '-';
+        return v.toLocaleString('en-US', {maximumFractionDigits:2});
+    }
+
+    function addMetric(containerId, label, value, colorClass) {
+        if (value === '-' || value == null) value = '-';
+        var container = document.getElementById(containerId);
+        var row = document.createElement('div');
+        row.className = 'fund-metric-row';
+        var cls = colorClass ? ' ' + colorClass : '';
+        row.innerHTML = '<span class="fund-metric-label">' + label + '</span><span class="fund-metric-value' + cls + '">' + value + '</span>';
+        container.appendChild(row);
+    }
+
+    function pctClass(v) {
+        if (v == null) return '';
+        return v > 0 ? 'positive' : v < 0 ? 'negative' : '';
+    }
+
+    function render(d) {
+        document.getElementById('fundamentals-loading').style.display = 'none';
+        document.getElementById('fundamentals-content').style.display = 'block';
+
+        // 이름 업데이트
+        document.getElementById('stock-name').textContent = d.name || ticker;
+
+        // 가격 바
+        var cur = d.currency || '';
+        document.getElementById('f-price').textContent = fmtPrice(d.price, cur);
+        if (d.change_pct != null) {
+            var chEl = document.getElementById('f-change');
+            chEl.textContent = (d.change_pct > 0 ? '+' : '') + d.change_pct.toFixed(2) + '%';
+            chEl.style.color = d.change_pct >= 0 ? 'var(--green)' : 'var(--red)';
+        }
+        document.getElementById('f-mcap').textContent = fmtBigNum(d.market_cap, cur);
+        document.getElementById('f-vol').textContent = d.volume_avg ? d.volume_avg.toLocaleString() + '주' : '-';
+        if (d.sector || d.industry) {
+            document.getElementById('f-sector').textContent = (d.sector || '') + (d.industry ? ' / ' + d.industry : '');
+        } else {
+            document.getElementById('f-sector-wrap').style.display = 'none';
+        }
+
+        // 52주 범위
+        if (d.high_52w && d.low_52w && d.price) {
+            document.getElementById('f-range-bar').style.display = 'block';
+            document.getElementById('f-low52').textContent = fmtPrice(d.low_52w, cur);
+            document.getElementById('f-high52').textContent = fmtPrice(d.high_52w, cur);
+            var range = d.high_52w - d.low_52w;
+            var pct = range > 0 ? ((d.price - d.low_52w) / range * 100) : 50;
+            pct = Math.max(0, Math.min(100, pct));
+            document.getElementById('f-range-fill').style.width = '100%';
+            document.getElementById('f-range-marker').style.left = 'calc(' + pct + '% - 1.5px)';
+        }
+
+        // 밸류에이션
+        var v = d.valuation || {};
+        addMetric('valuation-metrics', 'PER (Trailing)', fmtNum(v.trailing_pe));
+        addMetric('valuation-metrics', 'PER (Forward)', fmtNum(v.forward_pe));
+        addMetric('valuation-metrics', 'PBR', fmtNum(v.pb_ratio));
+        addMetric('valuation-metrics', 'PSR', fmtNum(v.ps_ratio));
+        addMetric('valuation-metrics', 'PEG', fmtNum(v.peg_ratio));
+        addMetric('valuation-metrics', 'EV/EBITDA', fmtNum(v.ev_ebitda));
+        addMetric('valuation-metrics', 'EPS (Trailing)', fmtPrice(v.eps_trailing, cur));
+        addMetric('valuation-metrics', 'EPS (Forward)', fmtPrice(v.eps_forward, cur));
+
+        // 수익성
+        var p = d.profitability || {};
+        addMetric('profitability-metrics', 'ROE', fmtPct(p.roe), pctClass(p.roe));
+        addMetric('profitability-metrics', 'ROA', fmtPct(p.roa), pctClass(p.roa));
+        addMetric('profitability-metrics', '매출총이익률', fmtPct(p.gross_margin), pctClass(p.gross_margin));
+        addMetric('profitability-metrics', '영업이익률', fmtPct(p.operating_margin), pctClass(p.operating_margin));
+        addMetric('profitability-metrics', '순이익률', fmtPct(p.net_margin), pctClass(p.net_margin));
+        addMetric('profitability-metrics', 'EBITDA', fmtBigNum(p.ebitda, cur));
+
+        // 재무건전성
+        var h = d.health || {};
+        addMetric('health-metrics', '부채비율 (D/E)', fmtNum(h.debt_to_equity));
+        addMetric('health-metrics', '유동비율', fmtNum(h.current_ratio));
+        addMetric('health-metrics', '당좌비율', fmtNum(h.quick_ratio));
+        addMetric('health-metrics', '총 부채', fmtBigNum(h.total_debt, cur));
+        addMetric('health-metrics', '보유 현금', fmtBigNum(h.total_cash, cur));
+
+        // 성장성
+        var g = d.growth || {};
+        addMetric('growth-metrics', '매출 성장률 (YoY)', fmtPct(g.revenue_growth), pctClass(g.revenue_growth));
+        addMetric('growth-metrics', '이익 성장률 (YoY)', fmtPct(g.earnings_growth), pctClass(g.earnings_growth));
+        addMetric('growth-metrics', '분기 이익 성장률', fmtPct(g.earnings_quarterly_growth), pctClass(g.earnings_quarterly_growth));
+
+        // 배당
+        var dv = d.dividend || {};
+        addMetric('dividend-metrics', '배당수익률', fmtPct(dv.dividend_yield));
+        addMetric('dividend-metrics', '배당금', dv.dividend_rate != null ? fmtPrice(dv.dividend_rate, cur) : '-');
+        addMetric('dividend-metrics', '배당성향', fmtPct(dv.payout_ratio));
+
+        // 현금흐름
+        var cf = d.cashflow || {};
+        addMetric('cashflow-metrics', '영업현금흐름', fmtBigNum(cf.operating_cashflow, cur), pctClass(cf.operating_cashflow));
+        addMetric('cashflow-metrics', '잉여현금흐름 (FCF)', fmtBigNum(cf.free_cashflow, cur), pctClass(cf.free_cashflow));
+
+        // 기술 지표
+        var t = d.technical || {};
+        addMetric('technical-metrics', 'Beta', fmtNum(t.beta));
+        addMetric('technical-metrics', '50일 이동평균', fmtPrice(t.fifty_day_avg, cur));
+        addMetric('technical-metrics', '200일 이동평균', fmtPrice(t.two_hundred_day_avg, cur));
+        // 이평선 대비 위치
+        if (t.fifty_day_avg && d.price) {
+            var vs50 = ((d.price - t.fifty_day_avg) / t.fifty_day_avg * 100).toFixed(1);
+            addMetric('technical-metrics', '50일선 대비', (vs50 > 0 ? '+' : '') + vs50 + '%', vs50 >= 0 ? 'positive' : 'negative');
+        }
+        if (t.two_hundred_day_avg && d.price) {
+            var vs200 = ((d.price - t.two_hundred_day_avg) / t.two_hundred_day_avg * 100).toFixed(1);
+            addMetric('technical-metrics', '200일선 대비', (vs200 > 0 ? '+' : '') + vs200 + '%', vs200 >= 0 ? 'positive' : 'negative');
+        }
+
+        // 애널리스트
+        var a = d.analyst || {};
+        addMetric('analyst-metrics', '추천', a.recommendation ? a.recommendation.toUpperCase() : '-');
+        addMetric('analyst-metrics', '목표가 (평균)', fmtPrice(a.target_mean, cur));
+        addMetric('analyst-metrics', '목표가 (저)', fmtPrice(a.target_low, cur));
+        addMetric('analyst-metrics', '목표가 (고)', fmtPrice(a.target_high, cur));
+        if (a.target_mean && d.price) {
+            var upside = ((a.target_mean - d.price) / d.price * 100).toFixed(1);
+            addMetric('analyst-metrics', '상승여력', (upside > 0 ? '+' : '') + upside + '%', upside >= 0 ? 'positive' : 'negative');
+        }
+        addMetric('analyst-metrics', '분석 기관 수', a.num_analysts != null ? a.num_analysts + '개' : '-');
+    }
+})();
+</script>
+{% endblock %}

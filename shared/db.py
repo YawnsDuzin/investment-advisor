@@ -5,7 +5,7 @@ from psycopg2.extras import execute_values, RealDictCursor
 from shared.config import DatabaseConfig
 
 # ── 스키마 버전 관리 ──────────────────────────────
-SCHEMA_VERSION = 19  # v1~v18 + v19: 추천 후 실제 수익률 추적
+SCHEMA_VERSION = 20  # v1~v19 + v20: KRX 확장 데이터(수급/공매도/금리)
 
 
 def _ensure_database(cfg: DatabaseConfig) -> None:
@@ -779,6 +779,97 @@ def _migrate_to_v19(cur) -> None:
     print("[DB] v19 마이그레이션 완료 — 추천 후 실제 수익률 추적 (entry_price, post_return, 스냅샷)")
 
 
+def _migrate_to_v20(cur) -> None:
+    """v20: KRX 확장 데이터 — 투자자 수급, 공매도, 국채 금리, 종목 메타
+
+    Stage 2 분석에 외국인/기관 수급, 공매도 현황, 국채 금리 데이터를 주입하여
+    투자 의사결정 품질을 향상시킨다.
+    """
+    # 1) 투자자별 매매 동향
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS investor_trading_data (
+            id SERIAL PRIMARY KEY,
+            proposal_id INT REFERENCES investment_proposals(id) ON DELETE CASCADE,
+            snapshot_date DATE NOT NULL,
+            foreign_net_buy_5d BIGINT,
+            foreign_net_buy_20d BIGINT,
+            inst_net_buy_5d BIGINT,
+            inst_net_buy_20d BIGINT,
+            foreign_consecutive_days INT,
+            daily_data JSONB,
+            created_at TIMESTAMP DEFAULT NOW(),
+            UNIQUE(proposal_id, snapshot_date)
+        );
+    """)
+
+    # 2) 공매도 현황
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS short_selling_data (
+            id SERIAL PRIMARY KEY,
+            proposal_id INT REFERENCES investment_proposals(id) ON DELETE CASCADE,
+            snapshot_date DATE NOT NULL,
+            short_balance_ratio_pct NUMERIC(7,2),
+            short_volume_ratio_pct NUMERIC(7,2),
+            short_balance_change_5d_pct NUMERIC(7,2),
+            squeeze_risk VARCHAR(10),
+            daily_data JSONB,
+            created_at TIMESTAMP DEFAULT NOW(),
+            UNIQUE(proposal_id, snapshot_date)
+        );
+    """)
+
+    # 3) 국채 금리 스냅샷 (세션당 1건)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS bond_yields (
+            id SERIAL PRIMARY KEY,
+            session_id INT REFERENCES analysis_sessions(id) ON DELETE CASCADE,
+            snapshot_date DATE NOT NULL,
+            kr_1y NUMERIC(6,3),
+            kr_2y NUMERIC(6,3),
+            kr_3y NUMERIC(6,3),
+            kr_5y NUMERIC(6,3),
+            kr_10y NUMERIC(6,3),
+            kr_30y NUMERIC(6,3),
+            corp_aa NUMERIC(6,3),
+            cd_91d NUMERIC(6,3),
+            spread_10y_2y NUMERIC(6,3),
+            yield_curve_status VARCHAR(20),
+            created_at TIMESTAMP DEFAULT NOW(),
+            UNIQUE(session_id, snapshot_date)
+        );
+    """)
+
+    # 4) investment_proposals 확장 컬럼
+    cur.execute("""
+        ALTER TABLE investment_proposals
+            ADD COLUMN IF NOT EXISTS foreign_ownership_pct NUMERIC(6,2),
+            ADD COLUMN IF NOT EXISTS index_membership TEXT[],
+            ADD COLUMN IF NOT EXISTS squeeze_risk VARCHAR(10),
+            ADD COLUMN IF NOT EXISTS foreign_net_buy_signal VARCHAR(20);
+    """)
+
+    # 5) 인덱스
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_investor_trading_proposal
+            ON investor_trading_data(proposal_id, snapshot_date DESC);
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_short_selling_proposal
+            ON short_selling_data(proposal_id, snapshot_date DESC);
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_bond_yields_date
+            ON bond_yields(snapshot_date DESC);
+    """)
+
+    cur.execute("""
+        INSERT INTO schema_version (version) VALUES (20)
+        ON CONFLICT (version) DO NOTHING;
+    """)
+
+    print("[DB] v20 마이그레이션 완료 — KRX 확장 데이터 (수급/공매도/금리) 테이블 생성")
+
+
 def init_db(cfg: DatabaseConfig) -> None:
     """PostgreSQL 설치 확인 → 데이터베이스 생성 → 스키마 마이그레이션"""
     from shared.pg_setup import ensure_postgresql
@@ -847,6 +938,9 @@ def init_db(cfg: DatabaseConfig) -> None:
 
             if current < 19:
                 _migrate_to_v19(cur)
+
+            if current < 20:
+                _migrate_to_v20(cur)
 
         conn.commit()
         print("[DB] 테이블 초기화 완료")
@@ -1022,8 +1116,10 @@ def save_analysis(cfg: DatabaseConfig, analysis_date: str, result: dict) -> int:
                             sector, currency, vendor_tier, supply_chain_position,
                             discovery_type, price_momentum_check, price_source,
                             return_1m_pct, return_3m_pct, return_6m_pct, return_1y_pct,
-                            entry_price)
-                           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                            entry_price,
+                            foreign_ownership_pct, index_membership,
+                            squeeze_risk, foreign_net_buy_signal)
+                           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                            RETURNING id""",
                         (theme_id, proposal.get("asset_type"),
                          proposal.get("asset_name"), proposal.get("ticker"),
@@ -1041,7 +1137,11 @@ def save_analysis(cfg: DatabaseConfig, analysis_date: str, result: dict) -> int:
                          proposal.get("price_source"),
                          proposal.get("return_1m_pct"), proposal.get("return_3m_pct"),
                          proposal.get("return_6m_pct"), proposal.get("return_1y_pct"),
-                         proposal.get("current_price"))
+                         proposal.get("current_price"),
+                         proposal.get("foreign_ownership_pct"),
+                         proposal.get("index_membership"),
+                         proposal.get("squeeze_risk"),
+                         proposal.get("foreign_net_buy_signal"))
                     )
                     proposal_id = cur.fetchone()[0]
 

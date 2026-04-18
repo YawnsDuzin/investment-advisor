@@ -7,6 +7,7 @@ from shared.db import init_db
 from api.routes import (
     sessions, themes, proposals, pages, chat, admin,
     auth as auth_routes, user_admin, watchlist, track_record,
+    stocks,
 )
 
 
@@ -46,6 +47,7 @@ app.include_router(admin.router)
 app.include_router(user_admin.router)
 app.include_router(watchlist.router)
 app.include_router(track_record.router)
+app.include_router(stocks.router)
 
 # HTML 페이지 라우트 (/, /pages/*)
 app.include_router(pages.router)

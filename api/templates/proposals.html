@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import external_links %}
 {% block title %}Proposals — AlphaSignal{% endblock %}
 {% block page_title %}종목 스크리너{% endblock %}
 
@@ -106,6 +107,8 @@
             <td style="font-weight:600;">{{ p.asset_name }}</td>
             <td>
                 <a href="/pages/proposals/history/{{ p.ticker }}" style="color:var(--accent);" onclick="event.stopPropagation();">{{ p.ticker }}</a>
+                <a href="/pages/stocks/{{ p.ticker }}{% if p.market %}?market={{ p.market }}{% endif %}" style="font-size:10px;color:var(--text-muted);margin-left:4px;border:1px solid var(--border);border-radius:3px;padding:1px 4px;" onclick="event.stopPropagation();" title="기초정보">info</a>
+                <span onclick="event.stopPropagation();">{{ external_links(p.ticker, p.market or '') }}</span>
                 {% if p.market %}<span style="font-size:11px;color:var(--text-muted);">{{ p.market }}</span>{% endif %}
             </td>
             <td><span class="badge badge-{{ p.conviction }}">{{ p.conviction }}</span></td>
@@ -181,6 +184,24 @@
                             {% endif %}
                             {% if p.sentiment_score is not none and p.sentiment_score != None %}
                             <span class="meta-tag meta-tag-neutral">센티먼트 {{ p.sentiment_score }}</span>
+                            {% endif %}
+                            {# KRX 확장 데이터 뱃지 #}
+                            {% if p.foreign_net_buy_signal == 'strong_buy' %}
+                            <span class="meta-tag" style="background:var(--success);color:#fff;">🏦 외인 강력매수</span>
+                            {% elif p.foreign_net_buy_signal == 'buy' %}
+                            <span class="meta-tag" style="background:#2d6a4f;color:#fff;">🏦 외인 순매수</span>
+                            {% elif p.foreign_net_buy_signal == 'sell' %}
+                            <span class="meta-tag" style="background:var(--danger);color:#fff;">🏦 외인 순매도</span>
+                            {% endif %}
+                            {% if p.squeeze_risk == 'high' %}
+                            <span class="meta-tag" style="background:#d00;color:#fff;">⚡ 숏스퀴즈 위험</span>
+                            {% elif p.squeeze_risk == 'medium' %}
+                            <span class="meta-tag" style="background:#e85d04;color:#fff;">📊 공매도 과열</span>
+                            {% endif %}
+                            {% if p.index_membership %}
+                            {% for idx in p.index_membership %}
+                            <span class="meta-tag meta-tag-neutral">📌 {{ idx }}</span>
+                            {% endfor %}
                             {% endif %}
                         </div>
                         {% else %}

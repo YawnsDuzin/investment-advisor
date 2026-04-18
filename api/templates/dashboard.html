@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import theme_header, indicator_tags, grade_badge %}
+{% from "_macros.html" import theme_header, indicator_tags, grade_badge, external_links %}
 {% from "partials/_ad_slot.html" import ad_slot %}
 {% block title %}Dashboard — AlphaSignal{% endblock %}
 {% block page_title %}Dashboard{% endblock %}
@@ -85,6 +85,50 @@
         <div class="stat-label">총 비중</div>
     </div>
 </div>
+
+<!-- 국채 금리 패널 (KRX 데이터) -->
+{% if bond_yields %}
+<div class="card" style="margin-bottom:20px;">
+    <div class="card-header">
+        <span class="card-title">🏛️ 한국 금리 환경</span>
+        <span style="font-size:13px;color:var(--text-muted);">
+            {% if bond_yields.yield_curve_status == 'normal' %}
+            <span style="color:var(--success);">● 정상</span>
+            {% elif bond_yields.yield_curve_status == 'flat' %}
+            <span style="color:var(--warning);">● 평탄</span>
+            {% elif bond_yields.yield_curve_status == 'inverted' %}
+            <span style="color:var(--danger);">● 역전</span>
+            {% endif %}
+        </span>
+    </div>
+    <div class="card-body" style="padding:16px;">
+        <div class="stat-grid" style="grid-template-columns:repeat(auto-fit, minmax(100px, 1fr));">
+            {% for key, label in [('kr_1y', '1년'), ('kr_3y', '3년'), ('kr_5y', '5년'), ('kr_10y', '10년'), ('kr_30y', '30년')] %}
+            {% if bond_yields[key] %}
+            <div class="stat-card" style="padding:10px;">
+                <div class="stat-value" style="font-size:18px;">{{ bond_yields[key] }}%</div>
+                <div class="stat-label">국고{{ label }}</div>
+            </div>
+            {% endif %}
+            {% endfor %}
+            {% if bond_yields.spread_10y_2y is not none %}
+            <div class="stat-card" style="padding:10px;">
+                <div class="stat-value" style="font-size:18px;{% if bond_yields.spread_10y_2y < 0 %}color:var(--danger);{% endif %}">
+                    {{ bond_yields.spread_10y_2y }}%p
+                </div>
+                <div class="stat-label">스프레드(10Y-2Y)</div>
+            </div>
+            {% endif %}
+            {% if bond_yields.corp_aa %}
+            <div class="stat-card" style="padding:10px;">
+                <div class="stat-value" style="font-size:18px;">{{ bond_yields.corp_aa }}%</div>
+                <div class="stat-label">회사채AA-</div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endif %}
 
 <!-- Track Record 위젯 — 기간 토글(1M/3M/6M/1Y) (UI-11) -->
 <div class="dash-tr-widget">
@@ -224,12 +268,20 @@
                 {% if pk.is_subscribed %}
                 <span class="top-pick-badge top-pick-badge-subscribed" title="구독 중">&#128276;</span>
                 {% endif %}
+                {% if pk.foreign_net_buy_signal == 'strong_buy' %}
+                <span class="top-pick-badge" style="background:#2d6a4f;color:#fff;" title="외국인 5일+ 연속 순매수">🏦 외인매수</span>
+                {% endif %}
+                {% if pk.squeeze_risk == 'high' %}
+                <span class="top-pick-badge" style="background:#d00;color:#fff;" title="숏스퀴즈 위험">⚡ 숏스퀴즈</span>
+                {% endif %}
             </div>
         </div>
 
         <div class="top-pick-title">
             <a href="/pages/proposals/history/{{ pk.ticker }}" class="top-pick-name">{{ pk.asset_name }}</a>
             <span class="top-pick-ticker">{{ pk.ticker }}{% if pk.market %} &middot; {{ pk.market }}{% endif %}</span>
+            {{ external_links(pk.ticker, pk.market or '') }}
+            <a href="/pages/stocks/{{ pk.ticker }}{% if pk.market %}?market={{ pk.market }}{% endif %}" style="font-size:10px;color:var(--text-muted);border:1px solid var(--border);border-radius:3px;padding:1px 4px;text-decoration:none;margin-left:4px;" title="기초정보">info</a>
         </div>
 
         {% if pk.sector %}

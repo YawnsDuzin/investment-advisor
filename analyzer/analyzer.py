@@ -294,12 +294,14 @@ async def stage1a_discover_themes(
     existing_keys: list[dict] | None = None,
     model: str | None = None,
     timeout_sec: int = 600,
+    bond_yield_section: str = "",
 ) -> dict:
     """Stage 1-A: 뉴스 기반 이슈 분석 + 테마 발굴 (투자 제안 제외)"""
     keys_section = _format_existing_theme_keys(existing_keys or [])
     prompt = STAGE1A_PROMPT.format(
         news_text=news_text, date=date,
         existing_theme_keys_section=keys_section,
+        bond_yield_section=bond_yield_section,
     )
     response = await _query_claude(prompt, STAGE1A_SYSTEM, max_turns, model=model, timeout_sec=timeout_sec)
     return _parse_json_response(response)
@@ -333,19 +335,25 @@ async def stage2_analyze_stock(
     ticker: str, asset_name: str, market: str,
     theme_context: str, date: str, max_turns: int = 6,
     stock_data_text: str = "",
+    investor_data_text: str = "",
+    short_selling_text: str = "",
     model: str | None = None,
     timeout_sec: int = 600,
 ) -> dict:
     """Stage 2: 개별 종목 심층분석 (펀더멘털·산업·모멘텀·퀀트·리스크)"""
-    # 주가 데이터가 있으면 프롬프트에 삽입
     stock_data_section = ""
     if stock_data_text:
         stock_data_section = f"\n\n## 실시간 시장 데이터 (조회 시점: {date})\n\n{stock_data_text}\n"
+
+    investor_section = f"\n\n{investor_data_text}\n" if investor_data_text else ""
+    short_section = f"\n\n{short_selling_text}\n" if short_selling_text else ""
 
     prompt = STAGE2_PROMPT.format(
         ticker=ticker, asset_name=asset_name,
         market=market, theme_context=theme_context, date=date,
         stock_data_section=stock_data_section,
+        investor_data_section=investor_section,
+        short_selling_section=short_section,
     )
     response = await _query_claude(prompt, STAGE2_SYSTEM, max_turns, model=model, timeout_sec=timeout_sec)
     return _parse_json_response(response)
@@ -356,16 +364,31 @@ async def stage2_analyze_stock(
 async def run_pipeline(
     news_text: str, date: str, cfg: AnalyzerConfig,
     db_cfg: DatabaseConfig | None = None,
+    checkpoint=None,
 ) -> dict:
     """멀티스테이지 분석 파이프라인 실행
 
     Stage 1-A: 뉴스 → 이슈/테마/시나리오/매크로 (제안 제외)
     Stage 1-B: 테마별 투자 제안 생성 (병렬, 동시 2개 제한)
     Stage 2: 상위 테마의 핵심 종목 심층분석 (병렬, 동시 2개 제한)
+
+    Args:
+        checkpoint: CheckpointManager 인스턴스 (None이면 체크포인트 미사용)
     """
     log = get_logger("파이프라인")
     # SDK 동시 호출 수 제한 — 과도한 병렬 실행 시 CLI 프로세스 충돌 방지
     _sdk_semaphore = asyncio.Semaphore(2)
+
+    # ── KRX 확장 데이터: 국채 금리 조회 (Stage 1-A 프롬프트용) ──
+    bond_yield_text = ""
+    try:
+        from analyzer.krx_data import fetch_korea_bond_yields, format_bond_yields_text
+        bond_data = fetch_korea_bond_yields()
+        if bond_data:
+            bond_yield_text = "\n" + format_bond_yields_text(bond_data) + "\n"
+    except Exception as e:
+        log.warning(f"국채 금리 조회 실패 (무시): {e}")
+
     # ── 최근 추천 이력 조회 (중복 방지용) ──
     recent_recs = []
     existing_keys = []
@@ -383,67 +406,94 @@ async def run_pipeline(
         except Exception as e:
             log.warning(f"theme_key 조회 실패 (무시): {e}")
 
-    # ── Stage 1-A: 이슈 분석 + 테마 발굴 (잘림 시 1회 재시도) ──
+    # ── Stage 1-A: 이슈 분석 + 테마 발굴 (체크포인트 지원) ──
     timeout = cfg.query_timeout
-    log.info(f"[Stage 1-A] 이슈 분석 + 테마 발굴 중... (모델: {cfg.model_analysis}, 타임아웃: {timeout}초)")
-    result = await stage1a_discover_themes(
-        news_text, date, cfg.max_turns,
-        existing_keys=existing_keys,
-        model=cfg.model_analysis,
-        timeout_sec=timeout,
-    )
-
-    if result.get("error"):
-        log.error(f"[Stage 1-A] 실패 — {result['error']}")
-        return result
-
-    # 잘린 응답으로 테마가 너무 적으면 1회 재시도
-    if result.get("_truncated") and len(result.get("themes", [])) < 3:
-        log.warning(f"[Stage 1-A] 잘린 응답으로 테마 {len(result.get('themes', []))}건만 복구됨 — 재시도...")
-        await asyncio.sleep(5)
-        retry_result = await stage1a_discover_themes(
+    if checkpoint and checkpoint.has("stage1a"):
+        result = checkpoint.load("stage1a")
+        log.info(f"[Stage 1-A] 체크포인트에서 복원 — 이슈 {len(result.get('issues', []))}건, 테마 {len(result.get('themes', []))}건")
+    else:
+        log.info(f"[Stage 1-A] 이슈 분석 + 테마 발굴 중... (모델: {cfg.model_analysis}, 타임아웃: {timeout}초)")
+        result = await stage1a_discover_themes(
             news_text, date, cfg.max_turns,
             existing_keys=existing_keys,
             model=cfg.model_analysis,
             timeout_sec=timeout,
+            bond_yield_section=bond_yield_text,
         )
-        if not retry_result.get("error") and len(retry_result.get("themes", [])) > len(result.get("themes", [])):
-            result = retry_result
-            log.info(f"[Stage 1-A] 재시도 성공 — 테마 {len(result.get('themes', []))}건 복구")
-        else:
-            log.warning("[Stage 1-A] 재시도 결과 개선 없음 — 기존 결과 사용")
+
+        if result.get("error"):
+            log.error(f"[Stage 1-A] 실패 — {result['error']}")
+            return result
+
+        # 잘린 응답으로 테마가 너무 적으면 1회 재시도
+        if result.get("_truncated") and len(result.get("themes", [])) < 3:
+            log.warning(f"[Stage 1-A] 잘린 응답으로 테마 {len(result.get('themes', []))}건만 복구됨 — 재시도...")
+            await asyncio.sleep(5)
+            retry_result = await stage1a_discover_themes(
+                news_text, date, cfg.max_turns,
+                existing_keys=existing_keys,
+                model=cfg.model_analysis,
+                timeout_sec=timeout,
+                bond_yield_section=bond_yield_text,
+            )
+            if not retry_result.get("error") and len(retry_result.get("themes", [])) > len(result.get("themes", [])):
+                result = retry_result
+                log.info(f"[Stage 1-A] 재시도 성공 — 테마 {len(result.get('themes', []))}건 복구")
+            else:
+                log.warning("[Stage 1-A] 재시도 결과 개선 없음 — 기존 결과 사용")
+
+        if checkpoint:
+            checkpoint.save("stage1a", result)
 
     themes = result.get("themes", [])
     issues = result.get("issues", [])
     log.info(f"[Stage 1-A] 완료 — 이슈 {len(issues)}건, 테마 {len(themes)}건")
 
-    # ── Stage 1-B: 테마별 투자 제안 생성 (병렬) ──
-    log.info(f"[Stage 1-B] 테마별 투자 제안 생성 시작 — {len(themes)}개 테마 (병렬 실행)")
+    # ── Stage 1-B: 테마별 투자 제안 생성 (체크포인트 지원) ──
+    if checkpoint and checkpoint.has("stage1b"):
+        stage1b_data = checkpoint.load("stage1b")
+        # 체크포인트의 proposals를 themes에 병합
+        saved_proposals = stage1b_data.get("theme_proposals", {})
+        for theme in themes:
+            tname = theme.get("theme_name", "")
+            if tname in saved_proposals:
+                theme["proposals"] = saved_proposals[tname]
+        total_proposals = sum(len(t.get("proposals", [])) for t in themes)
+        log.info(f"[Stage 1-B] 체크포인트에서 복원 — 총 {total_proposals}건 제안")
+    else:
+        log.info(f"[Stage 1-B] 테마별 투자 제안 생성 시작 — {len(themes)}개 테마 (병렬 실행)")
 
-    async def _generate_proposals_for_theme(i: int, theme: dict) -> None:
-        async with _sdk_semaphore:
-            theme_name = theme.get("theme_name", f"테마{i+1}")
-            log.info(f"[Stage 1-B] ({i+1}/{len(themes)}) '{theme_name}' 제안 생성 중...")
-            try:
-                proposals = await stage1b_generate_proposals(
-                    theme, date, cfg.max_turns, recent_recs,
-                    model=cfg.model_analysis,
-                    timeout_sec=timeout,
-                )
-                theme["proposals"] = proposals
-                log.info(f"[Stage 1-B] ({i+1}/{len(themes)}) '{theme_name}' — {len(proposals)}건 제안 완료")
-            except Exception as e:
-                log.error(f"[Stage 1-B] ({i+1}/{len(themes)}) '{theme_name}' 제안 생성 실패: {e}",
-                          extra={"detail": traceback.format_exc()})
-                theme["proposals"] = []
+        async def _generate_proposals_for_theme(i: int, theme: dict) -> None:
+            async with _sdk_semaphore:
+                theme_name = theme.get("theme_name", f"테마{i+1}")
+                log.info(f"[Stage 1-B] ({i+1}/{len(themes)}) '{theme_name}' 제안 생성 중...")
+                try:
+                    proposals = await stage1b_generate_proposals(
+                        theme, date, cfg.max_turns, recent_recs,
+                        model=cfg.model_analysis,
+                        timeout_sec=timeout,
+                    )
+                    theme["proposals"] = proposals
+                    log.info(f"[Stage 1-B] ({i+1}/{len(themes)}) '{theme_name}' — {len(proposals)}건 제안 완료")
+                except Exception as e:
+                    log.error(f"[Stage 1-B] ({i+1}/{len(themes)}) '{theme_name}' 제안 생성 실패: {e}",
+                              extra={"detail": traceback.format_exc()})
+                    theme["proposals"] = []
 
-    await asyncio.gather(*[
-        _generate_proposals_for_theme(i, theme)
-        for i, theme in enumerate(themes)
-    ])
+        await asyncio.gather(*[
+            _generate_proposals_for_theme(i, theme)
+            for i, theme in enumerate(themes)
+        ])
 
-    total_proposals = sum(len(t.get("proposals", [])) for t in themes)
-    log.info(f"[Stage 1-B] 완료 — 총 {total_proposals}건 제안 생성")
+        total_proposals = sum(len(t.get("proposals", [])) for t in themes)
+        log.info(f"[Stage 1-B] 완료 — 총 {total_proposals}건 제안 생성")
+
+        if checkpoint:
+            theme_proposals = {
+                t.get("theme_name", ""): t.get("proposals", [])
+                for t in themes
+            }
+            checkpoint.save("stage1b", {"theme_proposals": theme_proposals})
 
     # ── KRX 티커 검증/교정 (Stage 1-B 이후, 모멘텀 체크 전) ──
     all_stock_proposals = [
@@ -526,6 +576,10 @@ async def run_pipeline(
                     p["current_price"] = None
                     p["price_source"] = None
 
+    # 모멘텀 체크포인트 저장 (Stage 1-B + 모멘텀 결과 통합)
+    if checkpoint and not checkpoint.has("momentum"):
+        checkpoint.save("momentum", result)
+
     # ── Stage 2: 핵심 종목 심층분석 ──
     if not cfg.enable_stock_analysis:
         log.info("[Stage 2] 종목 심층분석 비활성화 — 건너뜀")
@@ -575,6 +629,23 @@ async def run_pipeline(
     else:
         log.info("[주가 데이터] 비활성화 — Claude 추정치 사용")
 
+    # ── KRX 확장 데이터: 투자자 수급 + 공매도 조회 (Stage 2 프롬프트용) ──
+    investor_map: dict[str, dict] = {}
+    short_map: dict[str, dict] = {}
+    try:
+        from analyzer.krx_data import (
+            fetch_investor_trading_batch, fetch_short_selling_batch,
+            format_investor_data_text, format_short_selling_text,
+        )
+        krx_stock_list = [
+            {"ticker": p["ticker"], "market": p.get("market", "")}
+            for p, _ in stock_targets
+        ]
+        investor_map = fetch_investor_trading_batch(krx_stock_list)
+        short_map = fetch_short_selling_batch(krx_stock_list)
+    except Exception as e:
+        log.warning(f"KRX 수급/공매도 조회 실패 (무시): {e}")
+
     log.info(f"[Stage 2] 종목 심층분석 시작 — {len(stock_targets)}종목 (병렬 실행)")
 
     _STAGE2_REQUIRED_FIELDS = ("factor_scores", "sentiment_score", "recommendation")
@@ -590,6 +661,27 @@ async def run_pipeline(
                 sd = stock_data_map.get(ticker.upper())
                 sd_text = format_stock_data_text(sd) if sd else ""
 
+                # KRX 확장 데이터 포맷팅
+                inv_text = ""
+                sht_text = ""
+                tk_upper = ticker.upper()
+                if tk_upper in investor_map:
+                    inv_text = format_investor_data_text(investor_map[tk_upper])
+                if tk_upper in short_map:
+                    sht_text = format_short_selling_text(short_map[tk_upper])
+                    # 공매도 위험도를 proposal에 태깅
+                    proposal["squeeze_risk"] = short_map[tk_upper].get("squeeze_risk")
+                if tk_upper in investor_map:
+                    consec = investor_map[tk_upper].get("foreign_consecutive_days", 0)
+                    if consec >= 5:
+                        proposal["foreign_net_buy_signal"] = "strong_buy"
+                    elif consec >= 3:
+                        proposal["foreign_net_buy_signal"] = "buy"
+                    elif consec <= -5:
+                        proposal["foreign_net_buy_signal"] = "sell"
+                    else:
+                        proposal["foreign_net_buy_signal"] = "neutral"
+
                 max_attempts = 2
                 stock_result = None
                 for attempt in range(1, max_attempts + 1):
@@ -598,6 +690,8 @@ async def run_pipeline(
                         market=market, theme_context=theme_name,
                         date=date, max_turns=cfg.max_turns,
                         stock_data_text=sd_text,
+                        investor_data_text=inv_text,
+                        short_selling_text=sht_text,
                         model=cfg.model_analysis,
                         timeout_sec=timeout,
                     )
@@ -644,6 +738,10 @@ async def run_pipeline(
     ])
 
     log.info("[Stage 2] 종목 심층분석 완료")
+
+    if checkpoint:
+        checkpoint.save("stage2", result)
+
     return result
 
 
@@ -758,6 +856,7 @@ def run_analysis(news_text: str, date: str, max_turns: int = 6) -> dict:
 def run_full_analysis(
     news_text: str, date: str, cfg: AnalyzerConfig,
     db_cfg: DatabaseConfig | None = None,
+    checkpoint=None,
 ) -> dict:
     """동기 래퍼 — 멀티스테이지 전체 파이프라인"""
-    return anyio.run(run_pipeline, news_text, date, cfg, db_cfg)
+    return anyio.run(run_pipeline, news_text, date, cfg, db_cfg, checkpoint)
