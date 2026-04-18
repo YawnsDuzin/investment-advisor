@@ -79,12 +79,13 @@ def query_theme_chat_sync(
     theme_context: str,
     conversation_history: list[dict],
     user_message: str,
-    max_turns: int = 2,
+    max_turns: int = 1,
 ) -> str:
     """테마 채팅용 Claude SDK 동기 호출
 
     별도 이벤트 루프에서 실행하여 uvicorn 루프와 충돌 방지.
     FastAPI 엔드포인트에서 run_in_executor로 호출.
+    채팅은 tool use 없이 단일 턴 응답이므로 max_turns=1이면 충분.
     """
     # 대화 이력을 프롬프트에 포함 (최근 20개 제한)
     recent_history = conversation_history[-20:]

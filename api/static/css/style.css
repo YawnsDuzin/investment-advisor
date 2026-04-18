@@ -57,6 +57,11 @@ a:hover { color: var(--accent-hover); }
     color: var(--accent);
     line-height: 1.3;
 }
+.sidebar-logo {
+    max-width: 170px;
+    height: auto;
+    display: block;
+}
 
 .sidebar-close-btn {
     display: none;

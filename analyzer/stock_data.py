@@ -1,5 +1,6 @@
 """실시간 주가/재무 데이터 조회 모듈 — yfinance + pykrx(한국 주식 크로스체크)"""
 from datetime import datetime, timedelta
+from shared.logger import get_logger
 
 try:
     import yfinance as yf
@@ -122,7 +123,7 @@ def _pykrx_fetch_price(ticker: str) -> dict | None:
             "source": "pykrx",
         }
     except Exception as e:
-        print(f"  [pykrx] {raw_ticker} 조회 실패: {e}")
+        get_logger("pykrx").warning(f"{raw_ticker} 조회 실패: {e}")
         return None
 
 
@@ -183,7 +184,7 @@ def _build_krx_lookup() -> None:
                     _krx_name_to_ticker[name] = t
                     _krx_ticker_to_name[t] = name
         except Exception as e:
-            print(f"  [pykrx] {market} 종목 목록 조회 실패: {e}")
+            get_logger("pykrx").warning(f"{market} 종목 목록 조회 실패: {e}")
 
 
 def validate_krx_tickers(proposals: list[dict]) -> dict:
@@ -318,7 +319,7 @@ def fetch_stock_data(ticker: str, market: str) -> dict | None:
         if pykrx_data:
             if result is None:
                 # yfinance 실패 → pykrx 폴백
-                print(f"  [주가] {ticker} yfinance 실패 → pykrx 폴백")
+                get_logger("주가").info(f"{ticker} yfinance 실패 → pykrx 폴백")
                 result = {
                     "ticker": ticker,
                     "yf_ticker": _normalize_ticker(ticker, market),
@@ -339,7 +340,7 @@ def fetch_stock_data(ticker: str, market: str) -> dict | None:
                 # 크로스체크: 3% 이상 괴리 시 pykrx 가격 우선
                 diff_pct = abs(result["price"] - pykrx_data["price"]) / pykrx_data["price"] * 100
                 if diff_pct > 3:
-                    print(f"  [주가] {ticker} 가격 괴리 {diff_pct:.1f}%: "
+                    get_logger("주가").warning(f"{ticker} 가격 괴리 {diff_pct:.1f}%: "
                           f"yfinance={result['price']:,.0f} vs pykrx={pykrx_data['price']:,.0f} → pykrx 채택")
                     result["price"] = pykrx_data["price"]
                     result["price_source"] = "pykrx_crosscheck"
@@ -360,7 +361,7 @@ def _fetch_stock_data_yfinance(ticker: str, market: str) -> dict | None:
         info = stock.info
 
         if not info or info.get("regularMarketPrice") is None:
-            print(f"  [주가] {yf_ticker} 데이터 없음")
+            get_logger("주가").warning(f"{yf_ticker} 데이터 없음")
             return None
 
         price = info.get("regularMarketPrice") or info.get("currentPrice")
@@ -390,7 +391,7 @@ def _fetch_stock_data_yfinance(ticker: str, market: str) -> dict | None:
         }
 
     except Exception as e:
-        print(f"  [주가] {yf_ticker} 조회 실패: {e}")
+        get_logger("주가").warning(f"{yf_ticker} 조회 실패: {e}")
         return None
 
 
@@ -521,7 +522,8 @@ def fetch_multiple_stocks(stocks: list[dict]) -> dict[str, dict]:
         return {}
 
     results = {}
-    print(f"  [주가] {len(unique_stocks)}종목 병렬 조회 시작...")
+    log = get_logger("주가")
+    log.info(f"{len(unique_stocks)}종목 병렬 조회 시작...")
 
     with ThreadPoolExecutor(max_workers=min(len(unique_stocks), 8)) as pool:
         futures = {
@@ -535,9 +537,9 @@ def fetch_multiple_stocks(stocks: list[dict]) -> dict[str, dict]:
                 if data:
                     results[ticker] = data
                     price_str = f"{data.get('currency', '')}{data['price']:,.2f}" if data.get('price') else "N/A"
-                    print(f"  [주가] {ticker} → {price_str}")
+                    log.info(f"{ticker} → {price_str}")
             except Exception as e:
-                print(f"  [주가] {ticker} 조회 오류: {e}")
+                log.warning(f"{ticker} 조회 오류: {e}")
 
     return results
 

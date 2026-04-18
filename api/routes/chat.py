@@ -9,7 +9,7 @@ from shared.tier_limits import get_chat_daily_limit, is_unlimited
 from psycopg2.extras import RealDictCursor
 from api.routes.sessions import _serialize_row
 from api.chat_engine import build_theme_context, query_theme_chat_sync
-from api.auth.dependencies import require_role, quota_exceeded_detail
+from api.auth.dependencies import get_current_user_required, quota_exceeded_detail
 from api.auth.models import UserInDB
 
 # 서비스 운영 타임존 — 일일 한도는 KST 기준으로 리셋
@@ -34,8 +34,21 @@ class ChatMessageRequest(BaseModel):
 
 
 @router.post("/sessions")
-def create_chat_session(body: CreateSessionRequest, user: Optional[UserInDB] = Depends(require_role("admin", "moderator"))):
-    """새 채팅 세션 생성"""
+def create_chat_session(body: CreateSessionRequest, user: Optional[UserInDB] = Depends(get_current_user_required)):
+    """새 채팅 세션 생성 — 로그인 필수, Free 티어는 채팅 차단"""
+    # 티어 기반 채팅 접근 체크 (admin/moderator는 무조건 허용)
+    if user and user.role not in ("admin", "moderator"):
+        tier = user.effective_tier()
+        daily_limit = get_chat_daily_limit(tier)
+        if daily_limit is not None and daily_limit <= 0:
+            raise HTTPException(
+                status_code=402,
+                detail=quota_exceeded_detail(
+                    feature="chat",
+                    current_tier=tier,
+                    message="AI 채팅은 Pro 이상 플랜에서 이용 가능합니다.",
+                ),
+            )
     cfg = _get_cfg()
     conn = get_connection(cfg)
     try:
@@ -61,7 +74,7 @@ def create_chat_session(body: CreateSessionRequest, user: Optional[UserInDB] = D
 
 
 @router.get("/sessions")
-def list_chat_sessions(theme_id: int | None = None, user: Optional[UserInDB] = Depends(require_role("admin", "moderator"))):
+def list_chat_sessions(theme_id: int | None = None, user: Optional[UserInDB] = Depends(get_current_user_required)):
     """채팅 세션 목록 조회 — 본인 세션만 (Admin은 전체)"""
     cfg = _get_cfg()
     conn = get_connection(cfg)
@@ -97,7 +110,7 @@ def list_chat_sessions(theme_id: int | None = None, user: Optional[UserInDB] = D
 
 
 @router.get("/sessions/{session_id}")
-def get_chat_session(session_id: int, user: Optional[UserInDB] = Depends(require_role("admin", "moderator"))):
+def get_chat_session(session_id: int, user: Optional[UserInDB] = Depends(get_current_user_required)):
     """채팅 세션 상세 + 메시지 이력 — 본인 세션만 (Admin은 전체)"""
     cfg = _get_cfg()
     conn = get_connection(cfg)
@@ -133,7 +146,7 @@ def get_chat_session(session_id: int, user: Optional[UserInDB] = Depends(require
 
 
 @router.delete("/sessions/{session_id}")
-def delete_chat_session(session_id: int, user: Optional[UserInDB] = Depends(require_role("admin", "moderator"))):
+def delete_chat_session(session_id: int, user: Optional[UserInDB] = Depends(get_current_user_required)):
     """채팅 세션 삭제 — 본인 세션만 (Admin은 전체)"""
     cfg = _get_cfg()
     conn = get_connection(cfg)
@@ -159,7 +172,7 @@ def delete_chat_session(session_id: int, user: Optional[UserInDB] = Depends(requ
 
 
 @router.post("/sessions/{session_id}/messages")
-def send_message(session_id: int, body: ChatMessageRequest, user: Optional[UserInDB] = Depends(require_role("admin", "moderator"))):
+def send_message(session_id: int, body: ChatMessageRequest, user: Optional[UserInDB] = Depends(get_current_user_required)):
     """사용자 메시지 전송 → Claude 응답 생성 → 양쪽 DB 저장
 
     동기 함수 — FastAPI가 threadpool에서 실행.
@@ -186,9 +199,7 @@ def send_message(session_id: int, body: ChatMessageRequest, user: Optional[UserI
                 raise HTTPException(status_code=403, detail="본인의 채팅 세션에만 메시지를 보낼 수 있습니다")
 
             # 일일 턴 한도 체크 (admin/moderator는 무제한, 일반 사용자는 티어 기반)
-            # 참고: 현재 세션 생성이 require_role("admin","moderator")로 막혀있어 일반 user는 이 경로까지 오지 못한다.
-            # 향후 session 생성을 tier 기반으로 완화하면 이 한도 체크가 실질 동작한다.
-            if user and user.role == "user":
+            if user and user.role not in ("admin", "moderator"):
                 tier = user.effective_tier()
                 daily_limit = get_chat_daily_limit(tier)
                 if not is_unlimited(daily_limit):
