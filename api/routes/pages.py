@@ -1040,6 +1040,214 @@ def chat_room_page(request: Request, chat_session_id: int, user: Optional[UserIn
 
 
 # ──────────────────────────────────────────────
+# Education — 투자 교육
+# ──────────────────────────────────────────────
+
+# 카테고리 한글 매핑
+_EDU_CATEGORIES = {
+    "basics": "기초 개념",
+    "analysis": "분석 기법",
+    "risk": "리스크 관리",
+    "macro": "매크로 경제",
+    "practical": "실전 활용",
+}
+
+
+@router.get("/pages/education")
+def education_page(request: Request, category: str | None = None, user: Optional[UserInDB] = Depends(get_current_user), auth_cfg: AuthConfig = Depends(_get_auth_cfg)):
+    """투자 교육 토픽 목록 페이지"""
+    ctx = _base_ctx(request, "education", user, auth_cfg)
+    conn = get_connection(_get_cfg())
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            query = "SELECT id, category, slug, title, summary, difficulty, sort_order FROM education_topics"
+            params = []
+            if category:
+                query += " WHERE category = %s"
+                params.append(category)
+            query += " ORDER BY sort_order, id"
+            cur.execute(query, params)
+            topics = cur.fetchall()
+    finally:
+        conn.close()
+
+    # 카테고리별 그룹핑
+    grouped = {}
+    for t in topics:
+        cat = t["category"]
+        if cat not in grouped:
+            grouped[cat] = {"label": _EDU_CATEGORIES.get(cat, cat), "topics": []}
+        grouped[cat]["topics"].append(_serialize_row(t))
+
+    return templates.TemplateResponse(request=request, name="education.html", context={
+        **ctx,
+        "grouped_topics": grouped,
+        "selected_category": category,
+        "categories": _EDU_CATEGORIES,
+    })
+
+
+@router.get("/pages/education/topic/{slug}")
+def education_topic_page(request: Request, slug: str, user: Optional[UserInDB] = Depends(get_current_user), auth_cfg: AuthConfig = Depends(_get_auth_cfg)):
+    """교육 토픽 상세 페이지"""
+    ctx = _base_ctx(request, "education", user, auth_cfg)
+    conn = get_connection(_get_cfg())
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT * FROM education_topics WHERE slug = %s", (slug,))
+            topic = cur.fetchone()
+            if not topic:
+                return RedirectResponse(url="/pages/education", status_code=302)
+
+            # 이전/다음 토픽 네비게이션
+            cur.execute(
+                """SELECT slug, title FROM education_topics
+                   WHERE category = %s AND sort_order < %s
+                   ORDER BY sort_order DESC LIMIT 1""",
+                (topic["category"], topic["sort_order"]),
+            )
+            prev_topic = cur.fetchone()
+
+            cur.execute(
+                """SELECT slug, title FROM education_topics
+                   WHERE category = %s AND sort_order > %s
+                   ORDER BY sort_order ASC LIMIT 1""",
+                (topic["category"], topic["sort_order"]),
+            )
+            next_topic = cur.fetchone()
+    finally:
+        conn.close()
+
+    # examples가 JSON 문자열이면 파싱
+    topic_data = _serialize_row(topic)
+    examples = topic_data.get("examples")
+    if isinstance(examples, str):
+        import json as _json
+        try:
+            topic_data["examples"] = _json.loads(examples)
+        except (ValueError, TypeError):
+            topic_data["examples"] = []
+
+    return templates.TemplateResponse(request=request, name="education_topic.html", context={
+        **ctx,
+        "topic": topic_data,
+        "category_label": _EDU_CATEGORIES.get(topic["category"], topic["category"]),
+        "prev_topic": _serialize_row(prev_topic) if prev_topic else None,
+        "next_topic": _serialize_row(next_topic) if next_topic else None,
+    })
+
+
+@router.get("/pages/education/chat")
+def education_chat_list_page(request: Request, user: Optional[UserInDB] = Depends(get_current_user), auth_cfg: AuthConfig = Depends(_get_auth_cfg)):
+    """AI 튜터 채팅 목록 페이지"""
+    if auth_cfg.enabled and user is None:
+        return RedirectResponse("/auth/login?next=/pages/education/chat", status_code=302)
+
+    ctx = _base_ctx(request, "education_chat", user, auth_cfg)
+    conn = get_connection(_get_cfg())
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # 세션 목록
+            q = """
+                SELECT es.*, et.title AS topic_title, et.category, et.slug AS topic_slug,
+                       (SELECT COUNT(*) FROM education_chat_messages m
+                        WHERE m.chat_session_id = es.id) AS message_count
+                FROM education_chat_sessions es
+                LEFT JOIN education_topics et ON es.topic_id = et.id
+            """
+            params = []
+            if user and user.role != "admin":
+                q += " WHERE es.user_id = %s"
+                params.append(user.id)
+            q += " ORDER BY es.updated_at DESC"
+            cur.execute(q, params)
+            sessions = cur.fetchall()
+
+            # 토픽 목록 (새 채팅 생성용)
+            cur.execute("SELECT id, title, category FROM education_topics ORDER BY sort_order, id")
+            topics = cur.fetchall()
+    finally:
+        conn.close()
+
+    return templates.TemplateResponse(request=request, name="education_chat_list.html", context={
+        **ctx,
+        "chat_sessions": [_serialize_row(s) for s in sessions],
+        "topics": [_serialize_row(t) for t in topics],
+    })
+
+
+@router.get("/pages/education/chat/new/{topic_id}")
+def education_chat_new_redirect(request: Request, topic_id: int, user: Optional[UserInDB] = Depends(get_current_user), auth_cfg: AuthConfig = Depends(_get_auth_cfg)):
+    """AI 튜터 새 채팅 세션 생성 → 채팅방으로 리다이렉트"""
+    if auth_cfg.enabled and user is None:
+        return RedirectResponse(f"/auth/login?next=/pages/education/chat/new/{topic_id}", status_code=302)
+    cfg = _get_cfg()
+    conn = get_connection(cfg)
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT id, title FROM education_topics WHERE id = %s", (topic_id,))
+            topic = cur.fetchone()
+            if not topic:
+                return RedirectResponse(url="/pages/education/chat", status_code=302)
+
+            user_id = user.id if user else None
+            cur.execute(
+                """INSERT INTO education_chat_sessions (topic_id, title, user_id)
+                   VALUES (%s, %s, %s) RETURNING id""",
+                (topic_id, f"{topic['title']} 학습", user_id)
+            )
+            new_id = cur.fetchone()["id"]
+        conn.commit()
+    finally:
+        conn.close()
+
+    return RedirectResponse(url=f"/pages/education/chat/{new_id}", status_code=302)
+
+
+@router.get("/pages/education/chat/{session_id}")
+def education_chat_room_page(request: Request, session_id: int, user: Optional[UserInDB] = Depends(get_current_user), auth_cfg: AuthConfig = Depends(_get_auth_cfg)):
+    """AI 튜터 채팅방 페이지"""
+    if auth_cfg.enabled and user is None:
+        return RedirectResponse(f"/auth/login?next=/pages/education/chat/{session_id}", status_code=302)
+
+    conn = get_connection(_get_cfg())
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                SELECT es.*, et.title AS topic_title, et.category, et.slug AS topic_slug,
+                       et.difficulty, et.summary AS topic_summary
+                FROM education_chat_sessions es
+                LEFT JOIN education_topics et ON es.topic_id = et.id
+                WHERE es.id = %s
+            """, (session_id,))
+            session = cur.fetchone()
+            if not session:
+                return RedirectResponse(url="/pages/education/chat", status_code=302)
+
+            # 소유권 검증
+            if auth_cfg.enabled and user and user.role != "admin" and session.get("user_id") != user.id:
+                return RedirectResponse(url="/pages/education/chat", status_code=302)
+
+            cur.execute("""
+                SELECT id, role, content, created_at
+                FROM education_chat_messages
+                WHERE chat_session_id = %s
+                ORDER BY created_at
+            """, (session_id,))
+            messages = cur.fetchall()
+    finally:
+        conn.close()
+
+    ctx = _base_ctx(request, "education_chat", user, auth_cfg)
+    return templates.TemplateResponse(request=request, name="education_chat_room.html", context={
+        **ctx,
+        "session": _serialize_row(session),
+        "messages": [_serialize_row(m) for m in messages],
+        "category_label": _EDU_CATEGORIES.get(session.get("category", ""), ""),
+    })
+
+
+# ──────────────────────────────────────────────
 # Track Record & Pricing — 공개 페이지
 # ──────────────────────────────────────────────
 @router.get("/pages/track-record")
@@ -1087,4 +1295,157 @@ def pricing_page(request: Request, user: Optional[UserInDB] = Depends(get_curren
     return templates.TemplateResponse(request=request, name="pricing.html", context={
         **ctx,
         "tier_cards": tier_cards,
+    })
+
+
+# ── 고객 문의 페이지 ──────────────────────────────
+
+
+@router.get("/pages/inquiry")
+def inquiry_list_page(
+    request: Request,
+    category: Optional[str] = Query(default=None),
+    status: Optional[str] = Query(default=None),
+    page: int = Query(default=1, ge=1),
+    user: Optional[UserInDB] = Depends(get_current_user),
+    auth_cfg: AuthConfig = Depends(_get_auth_cfg),
+):
+    """문의 게시판 목록 페이지"""
+    # 유효하지 않은 필터값 무시
+    if category and category not in ("general", "bug", "feature"):
+        category = None
+    if status and status not in ("open", "answered", "closed"):
+        status = None
+
+    ctx = _base_ctx(request, "inquiry", user, auth_cfg)
+
+    per_page = 20
+    offset = (page - 1) * per_page
+    can_view_private = user is not None and user.role in ("admin", "moderator")
+
+    conn = get_connection(_get_cfg())
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            conditions = []
+            params = []
+
+            if not can_view_private:
+                if user:
+                    conditions.append("(i.is_private = FALSE OR i.user_id = %s)")
+                    params.append(user.id)
+                else:
+                    conditions.append("i.is_private = FALSE")
+
+            if category:
+                conditions.append("i.category = %s")
+                params.append(category)
+            if status:
+                conditions.append("i.status = %s")
+                params.append(status)
+
+            where = "WHERE " + " AND ".join(conditions) if conditions else ""
+
+            cur.execute(
+                f"""
+                SELECT i.*, u.nickname AS user_nickname,
+                       (SELECT COUNT(*) FROM inquiry_replies r WHERE r.inquiry_id = i.id) AS reply_count
+                FROM inquiries i
+                LEFT JOIN users u ON u.id = i.user_id
+                {where}
+                ORDER BY i.created_at DESC
+                LIMIT %s OFFSET %s
+                """,
+                (*params, per_page, offset),
+            )
+            inquiries = [_serialize_row(dict(r)) for r in cur.fetchall()]
+
+            cur.execute(f"SELECT COUNT(*) FROM inquiries i {where}", tuple(params))
+            total = cur.fetchone()["count"]
+    finally:
+        conn.close()
+
+    total_pages = max(1, (total + per_page - 1) // per_page)
+
+    return templates.TemplateResponse(request=request, name="inquiry_list.html", context={
+        **ctx,
+        "inquiries": inquiries,
+        "total": total,
+        "page": page,
+        "total_pages": total_pages,
+        "selected_category": category,
+        "selected_status": status,
+    })
+
+
+@router.get("/pages/inquiry/new")
+def inquiry_new_page(
+    request: Request,
+    user: Optional[UserInDB] = Depends(get_current_user),
+    auth_cfg: AuthConfig = Depends(_get_auth_cfg),
+):
+    """문의 작성 페이지 — 로그인 필수"""
+    if auth_cfg.enabled and not user:
+        return RedirectResponse(url="/auth/login?next=/pages/inquiry/new", status_code=302)
+    ctx = _base_ctx(request, "inquiry", user, auth_cfg)
+    return templates.TemplateResponse(request=request, name="inquiry_new.html", context=ctx)
+
+
+@router.get("/pages/inquiry/{inquiry_id}")
+def inquiry_detail_page(
+    request: Request,
+    inquiry_id: int,
+    user: Optional[UserInDB] = Depends(get_current_user),
+    auth_cfg: AuthConfig = Depends(_get_auth_cfg),
+):
+    """문의 상세 페이지"""
+    ctx = _base_ctx(request, "inquiry", user, auth_cfg)
+
+    conn = get_connection(_get_cfg())
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT i.*, u.nickname AS user_nickname
+                FROM inquiries i
+                LEFT JOIN users u ON u.id = i.user_id
+                WHERE i.id = %s
+                """,
+                (inquiry_id,),
+            )
+            inquiry = cur.fetchone()
+            if not inquiry:
+                return RedirectResponse(url="/pages/inquiry", status_code=302)
+
+            # 비공개 접근 제어
+            if inquiry["is_private"]:
+                is_author = user and inquiry["user_id"] == user.id
+                can_view = user and user.role in ("admin", "moderator")
+                if not is_author and not can_view:
+                    return RedirectResponse(url="/pages/inquiry", status_code=302)
+
+            # 답변 목록
+            cur.execute(
+                """
+                SELECT r.*, u.nickname AS user_nickname
+                FROM inquiry_replies r
+                LEFT JOIN users u ON u.id = r.user_id
+                WHERE r.inquiry_id = %s
+                ORDER BY r.created_at ASC
+                """,
+                (inquiry_id,),
+            )
+            replies = [_serialize_row(dict(r)) for r in cur.fetchall()]
+    finally:
+        conn.close()
+
+    inquiry = _serialize_row(dict(inquiry))
+    is_author = user and inquiry.get("user_id") == user.id
+    is_staff = user and user.role in ("admin", "moderator")
+
+    return templates.TemplateResponse(request=request, name="inquiry_detail.html", context={
+        **ctx,
+        "inquiry": inquiry,
+        "replies": replies,
+        "is_author": is_author,
+        "is_staff": is_staff,
     })

@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% block title %}{{ inquiry.title }} — AlphaSignal{% endblock %}
+{% block page_title %}문의 상세{% endblock %}
+
+{% block header_actions %}
+<div style="display:flex;gap:8px;align-items:center;">
+    <a href="/pages/inquiry" class="btn">목록으로</a>
+    {% if is_staff %}
+    <select id="statusSelect" class="filter-select" style="font-size:13px;" onchange="changeStatus(this.value)">
+        <option value="open" {% if inquiry.status == 'open' %}selected{% endif %}>접수</option>
+        <option value="answered" {% if inquiry.status == 'answered' %}selected{% endif %}>답변 완료</option>
+        <option value="closed" {% if inquiry.status == 'closed' %}selected{% endif %}>종료</option>
+    </select>
+    {% endif %}
+    {% if current_user and current_user.role == 'admin' %}
+    <button class="btn" onclick="deleteInquiry()" style="color:var(--red);">삭제</button>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- 문의 본문 -->
+<div class="card">
+    <div class="inquiry-detail-header">
+        <div>
+            {% if inquiry.is_private %}<span class="badge badge-private">비공개</span>{% endif %}
+            <span class="badge badge-category-{{ inquiry.category }}">
+                {% if inquiry.category == 'bug' %}버그{% elif inquiry.category == 'feature' %}기능 요청{% else %}일반{% endif %}
+            </span>
+            <span class="badge badge-status-{{ inquiry.status }}">
+                {% if inquiry.status == 'open' %}접수{% elif inquiry.status == 'answered' %}답변 완료{% else %}종료{% endif %}
+            </span>
+        </div>
+        <div class="inquiry-detail-meta">
+            <span>{{ inquiry.user_nickname or '탈퇴 사용자' }}</span>
+            <span>{{ inquiry.created_at }}</span>
+        </div>
+    </div>
+    <h3 style="margin:16px 0 12px;">{{ inquiry.title }}</h3>
+    <div class="inquiry-detail-content">{{ inquiry.content }}</div>
+</div>
+
+<!-- 답변/코멘트 목록 -->
+{% if replies %}
+<div class="section-title">답변 ({{ replies|length }})</div>
+{% for reply in replies %}
+<div class="card inquiry-reply {% if reply.role in ('admin', 'moderator') %}inquiry-reply-staff{% endif %}">
+    <div class="inquiry-reply-header">
+        <span class="inquiry-reply-author">
+            {{ reply.user_nickname or '탈퇴 사용자' }}
+            {% if reply.role in ('admin', 'moderator') %}
+            <span class="badge badge-staff">{{ reply.role }}</span>
+            {% endif %}
+        </span>
+        <span class="inquiry-reply-time">{{ reply.created_at }}</span>
+    </div>
+    <div class="inquiry-reply-content">{{ reply.content }}</div>
+</div>
+{% endfor %}
+{% endif %}
+
+<!-- 답변/코멘트 작성 폼 -->
+{% if is_staff or is_author %}
+<div class="section-title">
+    {% if is_staff %}답변 작성{% else %}코멘트 작성{% endif %}
+</div>
+<div class="card">
+    <form onsubmit="submitReply(event)">
+        <textarea id="replyContent" class="inquiry-textarea" placeholder="{% if is_staff %}답변을 작성하세요{% else %}추가 내용을 작성하세요{% endif %}" required rows="4"></textarea>
+        <div style="display:flex;justify-content:flex-end;margin-top:12px;">
+            <button type="submit" class="btn btn-primary" id="btnReply">등록</button>
+        </div>
+    </form>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+var INQUIRY_ID = {{ inquiry.id }};
+
+async function submitReply(e) {
+    e.preventDefault();
+    var btn = document.getElementById('btnReply');
+    var content = document.getElementById('replyContent').value.trim();
+    if (!content) return;
+
+    btn.disabled = true;
+    btn.textContent = '등록 중...';
+
+    try {
+        var res = await fetch('/inquiry/' + INQUIRY_ID + '/replies', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: content }),
+        });
+        if (!res.ok) {
+            var err = await res.json().catch(function() { return {}; });
+            throw new Error(err.detail || '등록에 실패했습니다');
+        }
+        location.reload();
+    } catch (err) {
+        showModal(err.message);
+        btn.disabled = false;
+        btn.textContent = '등록';
+    }
+}
+
+{% if is_staff %}
+async function changeStatus(newStatus) {
+    try {
+        var res = await fetch('/inquiry/' + INQUIRY_ID + '/status', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: newStatus }),
+        });
+        if (!res.ok) {
+            var err = await res.json().catch(function() { return {}; });
+            throw new Error(err.detail || '상태 변경에 실패했습니다');
+        }
+        location.reload();
+    } catch (err) {
+        showModal(err.message);
+    }
+}
+{% endif %}
+
+{% if current_user and current_user.role == 'admin' %}
+function deleteInquiry() {
+    showConfirm('이 문의를 삭제하시겠습니까?\n삭제된 문의는 복구할 수 없습니다.', async function() {
+        try {
+            var res = await fetch('/inquiry/' + INQUIRY_ID, { method: 'DELETE' });
+            if (!res.ok) throw new Error('삭제에 실패했습니다');
+            window.location.href = '/pages/inquiry';
+        } catch (err) {
+            showModal(err.message);
+        }
+    }, { icon: '!', title: '문의 삭제', confirmText: '삭제', confirmClass: 'btn-danger' });
+}
+{% endif %}
+</script>
+{% endblock %}

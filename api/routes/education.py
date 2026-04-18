@@ -1,0 +1,263 @@
+"""투자 교육 API — 토픽 조회 + AI 튜터 채팅 CRUD"""
+from typing import Optional
+from datetime import datetime, timezone, timedelta
+from fastapi import APIRouter, HTTPException, Depends
+from pydantic import BaseModel
+from shared.config import DatabaseConfig
+from shared.db import get_connection
+from shared.tier_limits import get_edu_chat_daily_limit, is_unlimited
+from psycopg2.extras import RealDictCursor
+from api.routes.sessions import _serialize_row
+from api.education_engine import build_topic_context, query_edu_chat_sync
+from api.auth.dependencies import get_current_user_required, quota_exceeded_detail
+from api.auth.models import UserInDB
+
+_KST = timezone(timedelta(hours=9))
+
+router = APIRouter(prefix="/education", tags=["교육"])
+
+
+def _get_cfg() -> DatabaseConfig:
+    return DatabaseConfig()
+
+
+class CreateEduSessionRequest(BaseModel):
+    topic_id: int
+
+
+class EduMessageRequest(BaseModel):
+    content: str
+
+
+# ── 토픽 조회 ──────────────────────────────────────
+
+
+@router.get("/topics")
+def list_topics(category: str | None = None):
+    """교육 토픽 목록 조회 (카테고리 필터 가능)"""
+    cfg = _get_cfg()
+    conn = get_connection(cfg)
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            query = "SELECT id, category, slug, title, summary, difficulty, sort_order FROM education_topics"
+            params = []
+            if category:
+                query += " WHERE category = %s"
+                params.append(category)
+            query += " ORDER BY sort_order, id"
+            cur.execute(query, params)
+            topics = cur.fetchall()
+        return [_serialize_row(t) for t in topics]
+    finally:
+        conn.close()
+
+
+@router.get("/topics/{slug}")
+def get_topic(slug: str):
+    """교육 토픽 상세 조회 (slug 기반)"""
+    cfg = _get_cfg()
+    conn = get_connection(cfg)
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT * FROM education_topics WHERE slug = %s", (slug,))
+            topic = cur.fetchone()
+            if not topic:
+                raise HTTPException(status_code=404, detail="토픽을 찾을 수 없습니다")
+        return _serialize_row(topic)
+    finally:
+        conn.close()
+
+
+# ── AI 튜터 채팅 세션 CRUD ─────────────────────────
+
+
+@router.post("/sessions")
+def create_edu_session(body: CreateEduSessionRequest, user: Optional[UserInDB] = Depends(get_current_user_required)):
+    """교육 AI 튜터 채팅 세션 생성"""
+    cfg = _get_cfg()
+    conn = get_connection(cfg)
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT id, title FROM education_topics WHERE id = %s", (body.topic_id,))
+            topic = cur.fetchone()
+            if not topic:
+                raise HTTPException(status_code=404, detail="토픽을 찾을 수 없습니다")
+
+            user_id = user.id if user else None
+            cur.execute(
+                """INSERT INTO education_chat_sessions (topic_id, title, user_id)
+                   VALUES (%s, %s, %s) RETURNING id, topic_id, title, created_at, updated_at""",
+                (body.topic_id, f"{topic['title']} 학습", user_id)
+            )
+            session = cur.fetchone()
+        conn.commit()
+        return _serialize_row(session)
+    finally:
+        conn.close()
+
+
+@router.get("/sessions")
+def list_edu_sessions(user: Optional[UserInDB] = Depends(get_current_user_required)):
+    """AI 튜터 채팅 세션 목록 — 본인 세션만 (Admin은 전체)"""
+    cfg = _get_cfg()
+    conn = get_connection(cfg)
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            query = """
+                SELECT es.*, et.title AS topic_title, et.category,
+                       (SELECT COUNT(*) FROM education_chat_messages m
+                        WHERE m.chat_session_id = es.id) AS message_count
+                FROM education_chat_sessions es
+                LEFT JOIN education_topics et ON es.topic_id = et.id
+            """
+            conditions = []
+            params = []
+
+            if user and user.role != "admin":
+                conditions.append("es.user_id = %s")
+                params.append(user.id)
+
+            if conditions:
+                query += " WHERE " + " AND ".join(conditions)
+            query += " ORDER BY es.updated_at DESC"
+            cur.execute(query, params)
+            sessions = cur.fetchall()
+        return [_serialize_row(s) for s in sessions]
+    finally:
+        conn.close()
+
+
+@router.delete("/sessions/{session_id}")
+def delete_edu_session(session_id: int, user: Optional[UserInDB] = Depends(get_current_user_required)):
+    """AI 튜터 채팅 세션 삭제"""
+    cfg = _get_cfg()
+    conn = get_connection(cfg)
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT id, user_id FROM education_chat_sessions WHERE id = %s", (session_id,))
+            session = cur.fetchone()
+            if not session:
+                raise HTTPException(status_code=404, detail="세션을 찾을 수 없습니다")
+
+            if user and user.role != "admin" and session.get("user_id") != user.id:
+                raise HTTPException(status_code=403, detail="본인의 학습 세션만 삭제할 수 있습니다")
+
+            cur.execute("DELETE FROM education_chat_sessions WHERE id = %s", (session_id,))
+        conn.commit()
+        return {"message": "삭제 완료"}
+    finally:
+        conn.close()
+
+
+# ── 메시지 전송 + Claude 응답 ──────────────────────
+
+
+@router.post("/sessions/{session_id}/messages")
+def send_edu_message(session_id: int, body: EduMessageRequest, user: Optional[UserInDB] = Depends(get_current_user_required)):
+    """사용자 질문 전송 → AI 튜터 응답 생성 → 양쪽 DB 저장"""
+    cfg = _get_cfg()
+    conn = get_connection(cfg)
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # 1) 세션 + 토픽 정보 조회
+            cur.execute("""
+                SELECT es.id, es.topic_id, es.user_id
+                FROM education_chat_sessions es
+                WHERE es.id = %s
+            """, (session_id,))
+            session = cur.fetchone()
+            if not session:
+                raise HTTPException(status_code=404, detail="세션을 찾을 수 없습니다")
+
+            if user and user.role != "admin" and session.get("user_id") != user.id:
+                raise HTTPException(status_code=403, detail="본인의 학습 세션에만 메시지를 보낼 수 있습니다")
+
+            # 일일 턴 한도 체크
+            if user and user.role not in ("admin", "moderator"):
+                tier = user.effective_tier()
+                daily_limit = get_edu_chat_daily_limit(tier)
+                if not is_unlimited(daily_limit):
+                    today_kst_start = datetime.now(_KST).replace(hour=0, minute=0, second=0, microsecond=0)
+                    cur.execute(
+                        """SELECT COUNT(*) AS c FROM education_chat_messages m
+                           JOIN education_chat_sessions s ON m.chat_session_id = s.id
+                           WHERE s.user_id = %s AND m.role = 'user'
+                             AND m.created_at >= %s""",
+                        (user.id, today_kst_start),
+                    )
+                    today_count = cur.fetchone()["c"]
+                    if today_count >= (daily_limit or 0):
+                        raise HTTPException(
+                            status_code=402,
+                            detail=quota_exceeded_detail(
+                                feature="education",
+                                current_tier=tier,
+                                usage=today_count,
+                                limit=daily_limit,
+                                message="오늘 AI 튜터 질문 횟수를 모두 사용했습니다.",
+                            ),
+                        )
+
+            # 2) 토픽 컨텍스트 구성
+            topic_id = session["topic_id"]
+            cur.execute("SELECT * FROM education_topics WHERE id = %s", (topic_id,))
+            topic = cur.fetchone()
+
+            topic_context = build_topic_context(dict(topic)) if topic else "일반 투자 교육"
+
+            # 3) 대화 이력 로드
+            cur.execute("""
+                SELECT role, content FROM education_chat_messages
+                WHERE chat_session_id = %s ORDER BY created_at
+            """, (session_id,))
+            history = [dict(row) for row in cur.fetchall()]
+
+            # 4) 사용자 메시지 저장
+            cur.execute(
+                """INSERT INTO education_chat_messages (chat_session_id, role, content)
+                   VALUES (%s, 'user', %s) RETURNING id, role, content, created_at""",
+                (session_id, body.content)
+            )
+            user_msg = cur.fetchone()
+        conn.commit()
+
+        # 5) Claude SDK 호출
+        assistant_text = query_edu_chat_sync(
+            topic_context=topic_context,
+            conversation_history=history,
+            user_message=body.content,
+        )
+
+        # 6) 응답 저장 + 세션 업데이트
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """INSERT INTO education_chat_messages (chat_session_id, role, content)
+                   VALUES (%s, 'assistant', %s) RETURNING id, role, content, created_at""",
+                (session_id, assistant_text)
+            )
+            assistant_msg = cur.fetchone()
+
+            # 첫 메시지면 제목 자동 설정
+            cur.execute(
+                "SELECT COUNT(*) AS cnt FROM education_chat_messages WHERE chat_session_id = %s",
+                (session_id,)
+            )
+            if cur.fetchone()["cnt"] <= 2:
+                title = body.content[:50] + ("..." if len(body.content) > 50 else "")
+                cur.execute(
+                    "UPDATE education_chat_sessions SET title = %s, updated_at = NOW() WHERE id = %s",
+                    (title, session_id)
+                )
+            else:
+                cur.execute(
+                    "UPDATE education_chat_sessions SET updated_at = NOW() WHERE id = %s",
+                    (session_id,)
+                )
+        conn.commit()
+
+        return {
+            "user_message": _serialize_row(user_msg),
+            "assistant_message": _serialize_row(assistant_msg),
+        }
+    finally:
+        conn.close()

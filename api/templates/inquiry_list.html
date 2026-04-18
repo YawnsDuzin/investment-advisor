@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}고객 문의 — AlphaSignal{% endblock %}
+{% block page_title %}고객 문의{% endblock %}
+
+{% block header_actions %}
+{% if current_user %}
+<a href="/pages/inquiry/new" class="btn btn-primary" style="font-size:13px;padding:6px 16px;">문의 작성</a>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<!-- 필터 -->
+<div class="filters">
+    <form method="get" action="/pages/inquiry" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;width:100%;">
+        <select name="category" class="filter-select" onchange="this.form.submit()">
+            <option value="">전체 유형</option>
+            <option value="general" {% if selected_category == 'general' %}selected{% endif %}>일반 문의</option>
+            <option value="bug" {% if selected_category == 'bug' %}selected{% endif %}>버그 신고</option>
+            <option value="feature" {% if selected_category == 'feature' %}selected{% endif %}>기능 요청</option>
+        </select>
+        <select name="status" class="filter-select" onchange="this.form.submit()">
+            <option value="">전체 상태</option>
+            <option value="open" {% if selected_status == 'open' %}selected{% endif %}>접수</option>
+            <option value="answered" {% if selected_status == 'answered' %}selected{% endif %}>답변 완료</option>
+            <option value="closed" {% if selected_status == 'closed' %}selected{% endif %}>종료</option>
+        </select>
+    </form>
+</div>
+
+<!-- 문의 목록 -->
+{% if inquiries %}
+<div class="inquiry-list">
+    {% for inq in inquiries %}
+    <a href="/pages/inquiry/{{ inq.id }}" class="inquiry-row">
+        <div class="inquiry-row-main">
+            <div class="inquiry-row-title">
+                {% if inq.is_private %}<span class="badge badge-private">비공개</span>{% endif %}
+                <span class="badge badge-category-{{ inq.category }}">
+                    {% if inq.category == 'bug' %}버그{% elif inq.category == 'feature' %}기능 요청{% else %}일반{% endif %}
+                </span>
+                <span>{{ inq.title }}</span>
+            </div>
+            <div class="inquiry-row-meta">
+                <span>{{ inq.user_nickname or '탈퇴 사용자' }}</span>
+                <span>{{ inq.created_at }}</span>
+                {% if inq.reply_count %}<span>답변 {{ inq.reply_count }}건</span>{% endif %}
+            </div>
+        </div>
+        <span class="badge badge-status-{{ inq.status }}">
+            {% if inq.status == 'open' %}접수{% elif inq.status == 'answered' %}답변 완료{% else %}종료{% endif %}
+        </span>
+    </a>
+    {% endfor %}
+</div>
+
+<!-- 페이지네이션 -->
+{% if total_pages > 1 %}
+<div class="inquiry-pagination">
+    {% if page > 1 %}
+    <a href="/pages/inquiry?page={{ page - 1 }}{% if selected_category %}&category={{ selected_category }}{% endif %}{% if selected_status %}&status={{ selected_status }}{% endif %}" class="btn">&laquo; 이전</a>
+    {% endif %}
+    <span class="inquiry-pagination-info">{{ page }} / {{ total_pages }}</span>
+    {% if page < total_pages %}
+    <a href="/pages/inquiry?page={{ page + 1 }}{% if selected_category %}&category={{ selected_category }}{% endif %}{% if selected_status %}&status={{ selected_status }}{% endif %}" class="btn">다음 &raquo;</a>
+    {% endif %}
+</div>
+{% endif %}
+
+{% else %}
+<div class="empty-state">
+    <h3>등록된 문의가 없습니다</h3>
+    <p>궁금한 점이나 개선 요청이 있다면 문의를 작성해 주세요.</p>
+</div>
+{% endif %}
+{% endblock %}

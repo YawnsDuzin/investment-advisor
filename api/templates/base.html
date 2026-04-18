@@ -18,7 +18,6 @@
     <nav class="sidebar">
         <div class="sidebar-header">
             <a href="/"><img src="/static/img/logo.png" alt="AlphaSignal" class="sidebar-logo"></a>
-            <button class="sidebar-close-btn" onclick="document.body.classList.remove('sidebar-open')" aria-label="닫기">&times;</button>
         </div>
         <ul class="nav-menu">
             {# ── 인사이트 — 분석 결과 소비 ── #}
@@ -36,6 +35,13 @@
                 </form>
             </li>
 
+            {# ── 학습 — 투자 교육 콘텐츠 ── #}
+            <li class="nav-group-title">학습</li>
+            <li><a href="/pages/education" class="{% if active_page == 'education' %}active{% endif %}" onclick="document.body.classList.remove('sidebar-open')">Education</a></li>
+            {% if not auth_enabled or current_user %}
+            <li><a href="/pages/education/chat" class="{% if active_page == 'education_chat' %}active{% endif %}" onclick="document.body.classList.remove('sidebar-open')">AI Tutor</a></li>
+            {% endif %}
+
             {# ── 내 포트폴리오 — 로그인 사용자만 노출 ── #}
             {% if current_user %}
             <li class="nav-group-title">내 포트폴리오</li>
@@ -51,6 +57,12 @@
             {% if not auth_enabled or (current_user and (current_user.role in ('admin', 'moderator') or current_user.effective_tier() in ('pro', 'premium'))) %}
             <li class="nav-group-title">커뮤니케이션</li>
             <li><a href="/pages/chat" class="{% if active_page == 'chat' %}active{% endif %}" onclick="document.body.classList.remove('sidebar-open')">Theme Chat</a></li>
+            {% endif %}
+
+            {# ── 고객지원 — 로그인 사용자 + AUTH 비활성 환경 ── #}
+            {% if not auth_enabled or current_user %}
+            <li class="nav-group-title">고객지원</li>
+            <li><a href="/pages/inquiry" class="{% if active_page == 'inquiry' %}active{% endif %}" onclick="document.body.classList.remove('sidebar-open')">문의하기</a></li>
             {% endif %}
 
             {# ── 계정/요금제 ── #}

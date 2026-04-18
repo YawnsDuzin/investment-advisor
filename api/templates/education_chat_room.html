@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+{% block title %}{{ session.title or 'AI 튜터' }} — AlphaSignal{% endblock %}
+{% block page_title %}{{ session.title or 'AI 튜터' }}{% endblock %}
+{% block header_actions %}
+<div style="display:flex;gap:8px;align-items:center;">
+    <a href="/pages/education/chat" class="btn">목록으로</a>
+    {% if session.topic_slug %}
+    <a href="/pages/education/topic/{{ session.topic_slug }}" class="btn">교재 보기</a>
+    {% endif %}
+    <button class="btn" onclick="deleteSession()" style="color:var(--red);">삭제</button>
+</div>
+{% endblock %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<!-- 토픽 정보 헤더 -->
+<div class="chat-theme-header">
+    <span style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <span style="font-weight:600;">{{ session.topic_title or '일반 학습' }}</span>
+        {% if category_label %}
+        <span class="badge" style="font-size:12px;">{{ category_label }}</span>
+        {% endif %}
+        {% if session.difficulty %}
+        <span class="badge badge-{{ session.difficulty }}">{{ session.difficulty }}</span>
+        {% endif %}
+    </span>
+    {% if session.topic_summary %}
+    <span style="font-size:13px;color:var(--text-muted);max-width:400px;text-overflow:ellipsis;overflow:hidden;white-space:nowrap;">{{ session.topic_summary }}</span>
+    {% endif %}
+</div>
+
+<!-- 채팅 영역 -->
+<div class="chat-container">
+    <div class="chat-messages" id="chatMessages">
+        {% if not messages %}
+        <div class="chat-empty" id="chatWelcome">
+            <p>이 토픽에 대해 궁금한 점을 질문해 보세요.</p>
+            <p style="font-size:13px;margin-top:8px;">예: "이 개념을 쉽게 설명해줘", "실제로 어떻게 활용해?", "과거 사례를 더 알려줘"</p>
+        </div>
+        {% endif %}
+
+        {% for msg in messages %}
+        <div class="chat-bubble chat-bubble-{{ msg.role }}">
+            {% if msg.role == 'assistant' %}
+            <div class="chat-bubble-content">{{ msg.content }}</div>
+            {% else %}
+            {{ msg.content }}
+            {% endif %}
+            <div class="chat-bubble-time">{{ msg.created_at }}</div>
+        </div>
+        {% endfor %}
+
+        <div class="chat-loading" id="chatLoading">
+            <span class="chat-loading-dots">답변 생성 중<span>.</span><span>.</span><span>.</span></span>
+        </div>
+    </div>
+
+    <div class="chat-input-bar">
+        <textarea id="chatInput" rows="1" placeholder="질문을 입력하세요..."
+                  onkeydown="handleKeyDown(event)"></textarea>
+        <button class="btn-send" id="btnSend" onclick="sendMessage()">전송</button>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+.badge-beginner { background: #22c55e22; color: #22c55e; }
+.badge-intermediate { background: #f59e0b22; color: #f59e0b; }
+.badge-advanced { background: #ef444422; color: #ef4444; }
+</style>
+<script>
+const SESSION_ID = {{ session.id }};
+const chatMessages = document.getElementById('chatMessages');
+const chatInput = document.getElementById('chatInput');
+const btnSend = document.getElementById('btnSend');
+const chatLoading = document.getElementById('chatLoading');
+const chatWelcome = document.getElementById('chatWelcome');
+
+if (typeof marked !== 'undefined') {
+    marked.setOptions({ breaks: true, gfm: true });
+}
+
+// 기존 assistant 메시지 Markdown 렌더링
+document.querySelectorAll('.chat-bubble-assistant .chat-bubble-content').forEach(function(el) {
+    if (typeof marked !== 'undefined') {
+        el.innerHTML = marked.parse(el.textContent);
+    }
+});
+
+chatInput.addEventListener('input', function() {
+    this.style.height = 'auto';
+    this.style.height = Math.min(this.scrollHeight, 160) + 'px';
+});
+
+function handleKeyDown(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+    }
+}
+
+function scrollToBottom() {
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+function appendMessage(role, content, time) {
+    var bubble = document.createElement('div');
+    bubble.className = 'chat-bubble chat-bubble-' + role;
+
+    if (role === 'assistant' && typeof marked !== 'undefined') {
+        var contentDiv = document.createElement('div');
+        contentDiv.className = 'chat-bubble-content';
+        contentDiv.innerHTML = marked.parse(content);
+        bubble.appendChild(contentDiv);
+    } else {
+        bubble.textContent = content;
+    }
+
+    if (time) {
+        var timeDiv = document.createElement('div');
+        timeDiv.className = 'chat-bubble-time';
+        timeDiv.textContent = time;
+        bubble.appendChild(timeDiv);
+    }
+
+    chatMessages.insertBefore(bubble, chatLoading);
+    scrollToBottom();
+}
+
+async function sendMessage() {
+    var content = chatInput.value.trim();
+    if (!content) return;
+
+    if (chatWelcome) chatWelcome.remove();
+
+    appendMessage('user', content);
+    chatInput.value = '';
+    chatInput.style.height = 'auto';
+    btnSend.disabled = true;
+    chatLoading.classList.add('active');
+    scrollToBottom();
+
+    try {
+        var res = await fetch('/education/sessions/' + SESSION_ID + '/messages', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: content }),
+        });
+
+        if (!res.ok) {
+            var err = await res.json().catch(function() { return {}; });
+            throw new Error(err.detail || '오류 (' + res.status + ')');
+        }
+
+        var data = await res.json();
+        appendMessage(
+            'assistant',
+            data.assistant_message.content,
+            data.assistant_message.created_at
+        );
+    } catch (err) {
+        appendMessage('assistant', '오류가 발생했습니다: ' + err.message);
+    } finally {
+        chatLoading.classList.remove('active');
+        btnSend.disabled = false;
+        chatInput.focus();
+        scrollToBottom();
+    }
+}
+
+async function deleteSession() {
+    showConfirm('이 학습 세션을 삭제하시겠습니까?', async function() {
+        try {
+            await fetch('/education/sessions/' + SESSION_ID, { method: 'DELETE' });
+            window.location.href = '/pages/education/chat';
+        } catch (err) {
+            showModal('삭제 실패: ' + err.message);
+        }
+    });
+}
+
+scrollToBottom();
+chatInput.focus();
+</script>
+{% endblock %}
