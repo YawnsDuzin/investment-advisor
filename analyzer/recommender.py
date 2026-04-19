@@ -51,14 +51,30 @@ def build_candidate_pool(
             # asset_type이 stock이 아닌 자산(ETF/commodity 등)은 우선 제외 — 대시보드 초기 범위
             if p.get("asset_type") not in ("stock", "etf"):
                 continue
+
+            has_stage2 = (
+                p.get("_proposal_id") in stage2_proposal_ids
+                if p.get("_proposal_id") else False
+            )
+
+            # Stage 2 심층분석 완료 종목에서 upside_pct가 음수면 제외
+            # (Stage 1 AI 추정 목표가는 신뢰하지 않으므로 필터링에 사용하지 않음)
+            if has_stage2:
+                upside = p.get("upside_pct")
+                if upside is not None:
+                    try:
+                        if float(upside) < 0:
+                            continue
+                    except (ValueError, TypeError):
+                        pass
+
             candidates.append({
                 **p,
                 "_theme_name": theme_name,
                 "_theme_id": tmeta.get("id"),
                 "_theme_confidence": theme_confidence,
                 "_streak_days": tmeta.get("streak_days", 1),
-                "_has_stage2": p.get("_proposal_id") in stage2_proposal_ids
-                    if p.get("_proposal_id") else False,
+                "_has_stage2": has_stage2,
             })
     return candidates
 
@@ -92,14 +108,17 @@ def score_proposal(proposal: dict, cfg: RecommendationConfig) -> tuple[float, di
         breakdown["action_buy"] = cfg.w_action_buy
         total += cfg.w_action_buy
 
-    # upside 구간별 가점
-    upside = _safe_float(proposal.get("upside_pct"))
-    if upside >= cfg.upside_high_threshold:
-        breakdown["upside_high"] = cfg.w_upside_high
-        total += cfg.w_upside_high
-    elif upside >= cfg.upside_mid_threshold:
-        breakdown["upside_mid"] = cfg.w_upside_mid
-        total += cfg.w_upside_mid
+    # upside 구간별 가점 — Stage 2 심층분석 완료 종목만 신뢰
+    # (Stage 1 AI 추정 목표가는 실제 시세와 괴리가 클 수 있어 가점 미적용)
+    has_stage2 = proposal.get("_has_stage2") or proposal.get("has_stock_analysis")
+    if has_stage2:
+        upside = _safe_float(proposal.get("upside_pct"))
+        if upside >= cfg.upside_high_threshold:
+            breakdown["upside_high"] = cfg.w_upside_high
+            total += cfg.w_upside_high
+        elif upside >= cfg.upside_mid_threshold:
+            breakdown["upside_mid"] = cfg.w_upside_mid
+            total += cfg.w_upside_mid
 
     # 테마 신뢰도 가점 (0.00~1.00 * mult)
     theme_conf = _safe_float(proposal.get("_theme_confidence"))
