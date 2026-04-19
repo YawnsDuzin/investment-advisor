@@ -1,0 +1,246 @@
+{% extends "base.html" %}
+{% from "_macros.html" import external_links %}
+
+{% block title %}{{ analysis.asset_name if analysis else '종목' }} 심층분석 — AlphaSignal{% endblock %}
+{% block page_title %}
+{% if analysis %}{{ analysis.asset_name }} ({{ analysis.ticker }}) 심층분석{% else %}종목 심층분석{% endif %}
+{% endblock %}
+
+{% block header_actions %}
+{% if analysis %}
+<a href="/pages/proposals/history/{{ analysis.ticker }}" class="btn" style="font-size:12px;padding:4px 12px;margin-right:8px;background:var(--bg-card);border:1px solid var(--border);">추천 이력</a>
+<a href="/pages/stocks/{{ analysis.ticker }}" class="btn" style="font-size:12px;padding:4px 12px;margin-right:8px;background:var(--bg-card);border:1px solid var(--border);">기초정보</a>
+{{ external_links(analysis.ticker, analysis.market or '', 'full') }}
+{% endif %}
+{% endblock %}
+
+{% block content %}
+{% if not analysis %}
+<div class="empty-state">
+    <h3>해당 제안에 대한 종목 심층분석이 없습니다</h3>
+    <p style="color:var(--text-muted);">Proposal ID: {{ proposal_id }}</p>
+</div>
+{% else %}
+
+<!-- 상단 요약 카드 -->
+<div class="card" style="margin-bottom:18px;">
+    <div class="card-header">
+        <span style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+            <span class="card-title">{{ analysis.asset_name }}</span>
+            <span style="font-size:15px;color:var(--text-muted);">{{ analysis.ticker }} @ {{ analysis.market }}</span>
+            {% if analysis.sector %}
+            <span class="badge badge-category">{{ analysis.sector }}</span>
+            {% endif %}
+        </span>
+        <span style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <span class="badge badge-{{ analysis.action }}">{{ analysis.action|upper }}</span>
+            <span class="badge badge-{{ analysis.conviction }}">{{ analysis.conviction }}</span>
+            {% if analysis.quant_score %}<span class="score-display">Q {{ analysis.quant_score }}/5</span>{% endif %}
+            {% if analysis.sentiment_score is not none %}<span class="score-display score-sentiment">S {{ analysis.sentiment_score }}</span>{% endif %}
+        </span>
+    </div>
+    <div class="stat-grid" style="margin-bottom:0;">
+        <div class="stat-card">
+            <div class="stat-value">{{ analysis.current_price|fmt_price(analysis.currency) if analysis.current_price else '-' }}</div>
+            <div class="stat-label">현재가</div>
+        </div>
+        <div class="stat-card">
+            {% if analysis.target_price_low and analysis.target_price_high %}
+            <div class="stat-value">{{ analysis.target_price_low|fmt_price(analysis.currency) }}~{{ analysis.target_price_high|fmt_price(analysis.currency) }}</div>
+            {% else %}
+            <div class="stat-value">-</div>
+            {% endif %}
+            <div class="stat-label">목표가</div>
+        </div>
+        <div class="stat-card">
+            {% if analysis.upside_pct %}
+            <div class="stat-value {% if analysis.upside_pct > 0 %}confidence-up{% else %}confidence-down{% endif %}">
+                {% if analysis.upside_pct > 0 %}+{% endif %}{{ analysis.upside_pct }}%
+            </div>
+            {% else %}
+            <div class="stat-value">-</div>
+            {% endif %}
+            <div class="stat-label">상승여력</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ analysis.target_allocation }}%</div>
+            <div class="stat-label">목표 비중</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" style="font-size:15px;"><a href="/pages/sessions/date/{{ analysis.analysis_date }}" style="color:var(--accent);">{{ analysis.analysis_date }}</a></div>
+            <div class="stat-label">분석일</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" style="font-size:15px;">{{ analysis.theme_name }}</div>
+            <div class="stat-label">테마 · {{ analysis.time_horizon }}</div>
+        </div>
+    </div>
+</div>
+
+<!-- 기업 개요 -->
+{% if analysis.company_overview %}
+<div class="card" style="margin-bottom:18px;">
+    <div class="card-header"><span class="card-title">기업 개요</span></div>
+    <div class="field-value" style="white-space:pre-line;line-height:1.8;">{{ analysis.company_overview }}</div>
+</div>
+{% endif %}
+
+<!-- 재무 요약 + 팩터 스코어 (2단) -->
+<div class="proposal-card-body" style="margin-bottom:18px;">
+    {% if analysis.financial_summary %}
+    <div class="card" style="margin:0;">
+        <div class="card-header"><span class="card-title">재무 요약</span></div>
+        <div class="table-wrap" style="margin-bottom:0;">
+            <table>
+                <tbody>
+                    {% for key, label in [
+                        ('per', 'PER'),
+                        ('pbr', 'PBR'),
+                        ('roe', 'ROE'),
+                        ('debt_ratio', '부채비율'),
+                        ('revenue_3y', '매출 추이'),
+                        ('operating_margin', '영업이익률'),
+                        ('dcf_fair_value', 'DCF 공정가치'),
+                        ('dcf_wacc', 'WACC'),
+                    ] %}
+                        {% if analysis.financial_summary.get(key) is not none %}
+                        <tr>
+                            <td style="color:var(--text-muted);width:40%;">{{ label }}</td>
+                            <td style="font-weight:600;">{{ analysis.financial_summary[key] }}</td>
+                        </tr>
+                        {% endif %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if analysis.factor_scores %}
+    <div class="card" style="margin:0;">
+        <div class="card-header"><span class="card-title">팩터 스코어</span></div>
+        <div class="table-wrap" style="margin-bottom:0;">
+            <table>
+                <tbody>
+                    {% for key, label in [
+                        ('value', 'Value'),
+                        ('growth', 'Growth'),
+                        ('quality', 'Quality'),
+                        ('momentum', 'Momentum'),
+                        ('size_liquidity', 'Size/Liquidity'),
+                        ('composite', 'Composite'),
+                    ] %}
+                        {% if analysis.factor_scores.get(key) is not none %}
+                        {% set val = analysis.factor_scores[key]|float %}
+                        <tr>
+                            <td style="color:var(--text-muted);width:35%;">{{ label }}</td>
+                            <td>
+                                <span class="confidence-bar" style="display:inline-block;width:120px;vertical-align:middle;">
+                                    <span class="confidence-bar-fill" style="width:{{ (val / 5.0 * 100)|int }}%"></span>
+                                </span>
+                                <span style="margin-left:8px;font-weight:600;">{{ val }}/5</span>
+                            </td>
+                        </tr>
+                        {% endif %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- DCF 공정가치 (상세 필드가 별도 컬럼에 있을 경우) -->
+{% if analysis.dcf_fair_value or analysis.dcf_wacc %}
+<div class="card" style="margin-bottom:18px;">
+    <div class="card-header"><span class="card-title">DCF 밸류에이션</span></div>
+    <div class="stat-grid" style="margin-bottom:0;">
+        {% if analysis.dcf_fair_value %}
+        <div class="stat-card">
+            <div class="stat-value">{{ analysis.dcf_fair_value|fmt_price(analysis.currency) }}</div>
+            <div class="stat-label">DCF 공정가치</div>
+        </div>
+        {% endif %}
+        {% if analysis.dcf_wacc %}
+        <div class="stat-card">
+            <div class="stat-value">{{ analysis.dcf_wacc }}%</div>
+            <div class="stat-label">WACC</div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+<!-- 산업 포지션 -->
+{% if analysis.industry_position %}
+<div class="card" style="margin-bottom:18px;">
+    <div class="card-header"><span class="card-title">산업 포지션</span></div>
+    <div class="field-value" style="white-space:pre-line;line-height:1.8;">{{ analysis.industry_position }}</div>
+</div>
+{% endif %}
+
+<!-- 모멘텀 / 리스크 (2단) -->
+<div class="proposal-card-body" style="margin-bottom:18px;">
+    {% if analysis.momentum_summary %}
+    <div class="card" style="margin:0;">
+        <div class="card-header"><span class="card-title">모멘텀 분석</span></div>
+        <div class="field-value" style="white-space:pre-line;line-height:1.8;">{{ analysis.momentum_summary }}</div>
+    </div>
+    {% endif %}
+
+    {% if analysis.risk_summary %}
+    <div class="card" style="margin:0;">
+        <div class="card-header"><span class="card-title" style="color:var(--red);">리스크 요약</span></div>
+        <div class="field-value" style="white-space:pre-line;line-height:1.8;">{{ analysis.risk_summary }}</div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Bull / Bear Case -->
+<div class="proposal-card-body" style="margin-bottom:18px;">
+    {% if analysis.bull_case %}
+    <div class="card scenario-card-bull" style="margin:0;">
+        <div class="card-header"><span class="card-title" style="color:var(--green);">🐂 Bull Case</span></div>
+        <div class="field-value" style="white-space:pre-line;line-height:1.8;">{{ analysis.bull_case }}</div>
+    </div>
+    {% endif %}
+
+    {% if analysis.bear_case %}
+    <div class="card scenario-card-bear" style="margin:0;">
+        <div class="card-header"><span class="card-title" style="color:var(--red);">🐻 Bear Case</span></div>
+        <div class="field-value" style="white-space:pre-line;line-height:1.8;">{{ analysis.bear_case }}</div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- 진입/청산 조건 -->
+{% if analysis.entry_condition or analysis.exit_condition %}
+<div class="card" style="margin-bottom:18px;">
+    <div class="card-header"><span class="card-title">진입·청산 조건</span></div>
+    <div class="proposal-card-body">
+        {% if analysis.entry_condition %}
+        <div class="field-group">
+            <div class="field-label">진입 조건</div>
+            <div class="field-value">{{ analysis.entry_condition }}</div>
+        </div>
+        {% endif %}
+        {% if analysis.exit_condition %}
+        <div class="field-group">
+            <div class="field-label">청산 조건</div>
+            <div class="field-value">{{ analysis.exit_condition }}</div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+<!-- 전체 리포트 (Markdown 원문) -->
+{% if analysis.report_markdown %}
+<div class="card" style="margin-bottom:18px;">
+    <div class="card-header"><span class="card-title">전체 리포트</span></div>
+    <pre style="white-space:pre-wrap;word-wrap:break-word;font-family:inherit;font-size:14px;line-height:1.7;color:var(--text);background:var(--bg);padding:16px;border-radius:8px;border:1px solid var(--border);margin:0;">{{ analysis.report_markdown }}</pre>
+</div>
+{% endif %}
+
+{% endif %}
+{% endblock %}

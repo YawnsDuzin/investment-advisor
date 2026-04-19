@@ -629,6 +629,48 @@ def theme_history_page(request: Request, theme_key: str, user: Optional[UserInDB
 
 
 # ──────────────────────────────────────────────
+# Stock Deep Analysis Page (종목 심층분석)
+# ──────────────────────────────────────────────
+@router.get("/proposals/{proposal_id}/stock-analysis")
+def stock_analysis_page(
+    request: Request,
+    proposal_id: int,
+    user: Optional[UserInDB] = Depends(get_current_user),
+    auth_cfg: AuthConfig = Depends(_get_auth_cfg),
+):
+    """투자 제안 종목의 심층분석 리포트 페이지"""
+    ctx = _base_ctx(request, "proposals", user, auth_cfg)
+    conn = get_connection(_get_cfg())
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                SELECT sa.*,
+                       p.ticker, p.asset_name, p.market, p.currency, p.sector,
+                       p.action, p.conviction, p.target_allocation,
+                       p.current_price, p.target_price_low, p.target_price_high,
+                       p.upside_pct, p.quant_score, p.sentiment_score,
+                       p.rationale, p.risk_factors,
+                       p.entry_condition, p.exit_condition,
+                       t.theme_name, t.confidence_score, t.time_horizon,
+                       s.analysis_date
+                FROM stock_analyses sa
+                JOIN investment_proposals p ON sa.proposal_id = p.id
+                JOIN investment_themes t ON p.theme_id = t.id
+                JOIN analysis_sessions s ON t.session_id = s.id
+                WHERE sa.proposal_id = %s
+            """, (proposal_id,))
+            row = cur.fetchone()
+    finally:
+        conn.close()
+
+    return templates.TemplateResponse(request=request, name="stock_analysis.html", context={
+        **ctx,
+        "proposal_id": proposal_id,
+        "analysis": _serialize_row(row) if row else None,
+    })
+
+
+# ──────────────────────────────────────────────
 # Ticker History (신규)
 # ──────────────────────────────────────────────
 @router.get("/pages/proposals/history/{ticker}")

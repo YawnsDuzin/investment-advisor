@@ -9,6 +9,7 @@ from api.auth.dependencies import get_current_user_required
 from api.auth.models import UserInDB
 
 router = APIRouter(prefix="/proposals", tags=["투자 제안"])
+api_router = APIRouter(prefix="/api/proposals", tags=["투자 제안 (API)"])
 
 
 def _get_cfg() -> DatabaseConfig:
@@ -165,9 +166,9 @@ def latest_portfolio_summary(_user: Optional[UserInDB] = Depends(get_current_use
     }
 
 
-@router.get("/{proposal_id}/stock-analysis")
+@api_router.get("/{proposal_id}/stock-analysis")
 def get_stock_analysis(proposal_id: int, _user: Optional[UserInDB] = Depends(get_current_user_required)):
-    """투자 제안에 대한 종목 심층분석 조회"""
+    """투자 제안에 대한 종목 심층분석 조회 (JSON)"""
     conn = get_connection(_get_cfg())
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
