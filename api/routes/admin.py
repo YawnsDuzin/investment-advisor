@@ -412,7 +412,12 @@ _COPY_TABLES = [
     "macro_impacts",
     "investment_proposals",
     "stock_analyses",
+    "proposal_price_snapshots",
+    "investor_trading_data",
+    "short_selling_data",
     "news_articles",
+    "bond_yields",
+    "daily_top_picks",
     "theme_tracking",
     "proposal_tracking",
 ]
@@ -429,7 +434,7 @@ def copy_from_remote(
 ):
     """원격 DB에서 분석 데이터를 로컬 DB로 복사 (SSE 스트리밍)"""
     import psycopg2
-    from psycopg2.extras import RealDictCursor
+    from psycopg2.extras import Json, RealDictCursor
 
     def stream():
         local_cfg = DatabaseConfig()
@@ -486,13 +491,16 @@ def copy_from_remote(
                         yield f"data: [건너뜀] {table} — 0건\n\n"
                         continue
 
-                    # 컬럼 목록 (로컬 테이블 기준으로 필터)
+                    # 컬럼 목록 + 타입 (JSONB 컬럼 감지용)
                     with local_conn.cursor() as lcur:
                         lcur.execute(
-                            "SELECT column_name FROM information_schema.columns WHERE table_name = %s",
+                            "SELECT column_name, data_type FROM information_schema.columns "
+                            "WHERE table_name = %s",
                             (table,),
                         )
-                        local_cols = {r[0] for r in lcur.fetchall()}
+                        col_info = {r[0]: r[1] for r in lcur.fetchall()}
+                    local_cols = set(col_info.keys())
+                    jsonb_cols = {c for c, t in col_info.items() if t in ("jsonb", "json")}
 
                     # 원격·로컬 공통 컬럼만 사용
                     remote_cols = list(rows[0].keys())
@@ -507,7 +515,10 @@ def copy_from_remote(
 
                     with local_conn.cursor() as lcur:
                         for row in rows:
-                            values = [row[c] for c in common_cols]
+                            values = [
+                                Json(row[c]) if (c in jsonb_cols and isinstance(row[c], (dict, list))) else row[c]
+                                for c in common_cols
+                            ]
                             lcur.execute(
                                 f"INSERT INTO {table} ({col_list}) VALUES ({placeholders}) "
                                 f"ON CONFLICT DO NOTHING",
