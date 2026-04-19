@@ -2,6 +2,8 @@
 import re
 from datetime import date
 from typing import Optional
+import markdown as _markdown
+import bleach
 from fastapi import APIRouter, Request, Query, Depends
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -69,6 +71,64 @@ def _fmt_price(value, currency: str = "") -> str:
 
 
 templates.env.filters["fmt_price"] = _fmt_price
+
+
+# ── Markdown → HTML 렌더링 (sanitize) ───────────────────────────
+# 심층분석 리포트(report_markdown)와 같이 AI가 생성한 마크다운 본문을 안전한 HTML로 변환
+_MD_ALLOWED_TAGS = [
+    "h1", "h2", "h3", "h4", "h5", "h6",
+    "p", "br", "hr",
+    "strong", "em", "b", "i", "u", "s", "del", "mark", "sub", "sup",
+    "blockquote", "code", "pre",
+    "ul", "ol", "li",
+    "a",
+    "table", "thead", "tbody", "tr", "th", "td",
+    "img",
+    "span", "div",
+]
+_MD_ALLOWED_ATTRS = {
+    "a": ["href", "title", "target", "rel"],
+    "img": ["src", "alt", "title"],
+    "th": ["align", "colspan", "rowspan"],
+    "td": ["align", "colspan", "rowspan"],
+    "code": ["class"],
+    "pre": ["class"],
+    "span": ["class"],
+    "div": ["class"],
+}
+_MD_ALLOWED_PROTOCOLS = ["http", "https", "mailto"]
+
+
+def _markdown_to_html(text) -> Markup:
+    """AI가 생성한 마크다운 원문을 sanitize된 HTML로 렌더링.
+
+    - extensions: tables(|표|), fenced_code(```), nl2br(줄바꿈→<br>), sane_lists
+    - bleach로 화이트리스트 태그/속성만 허용 → XSS 방지
+    - 모든 링크에 target="_blank" + rel="noopener" 부여
+    """
+    if not text:
+        return Markup("")
+    html = _markdown.markdown(
+        str(text),
+        extensions=["tables", "fenced_code", "nl2br", "sane_lists"],
+        output_format="html",
+    )
+    cleaned = bleach.clean(
+        html,
+        tags=_MD_ALLOWED_TAGS,
+        attributes=_MD_ALLOWED_ATTRS,
+        protocols=_MD_ALLOWED_PROTOCOLS,
+        strip=True,
+    )
+    cleaned = re.sub(
+        r'<a\s+([^>]*?)>',
+        lambda m: f'<a {m.group(1)} target="_blank" rel="noopener noreferrer">',
+        cleaned,
+    )
+    return Markup(cleaned)
+
+
+templates.env.filters["markdown_to_html"] = _markdown_to_html
 
 
 def _get_cfg() -> DatabaseConfig:

@@ -257,14 +257,14 @@
 </div>
 {% endif %}
 
-{# 전체 리포트 (Markdown 원문) #}
+{# 전체 리포트 (Markdown → HTML 렌더) #}
 {% if analysis.report_markdown %}
 <div id="sec-report" class="card sa-section">
     <div class="card-header">
         <span class="card-title">전체 리포트</span>
         <button type="button" class="btn" onclick="toggleReport(this)" style="font-size:12px;padding:4px 12px;">접기</button>
     </div>
-    <pre class="sa-report-pre">{{ analysis.report_markdown }}</pre>
+    <div class="sa-report-md">{{ analysis.report_markdown|markdown_to_html }}</div>
 </div>
 {% endif %}
 
@@ -275,10 +275,10 @@
 {% block scripts %}
 <script>
 function toggleReport(btn) {
-    var pre = btn.closest('.card').querySelector('.sa-report-pre');
-    if (!pre) return;
-    var collapsed = pre.style.display === 'none';
-    pre.style.display = collapsed ? 'block' : 'none';
+    var body = btn.closest('.card').querySelector('.sa-report-md, .sa-report-pre');
+    if (!body) return;
+    var collapsed = body.style.display === 'none';
+    body.style.display = collapsed ? 'block' : 'none';
     btn.textContent = collapsed ? '접기' : '펼치기';
 }
 </script>
