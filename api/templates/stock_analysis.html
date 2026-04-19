@@ -21,77 +21,99 @@
     <p style="color:var(--text-muted);">Proposal ID: {{ proposal_id }}</p>
 </div>
 {% else %}
+<div class="sa-page">
 
-<!-- 상단 요약 카드 -->
-<div class="card" style="margin-bottom:18px;">
-    <div class="card-header">
-        <span style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-            <span class="card-title">{{ analysis.asset_name }}</span>
-            <span style="font-size:15px;color:var(--text-muted);">{{ analysis.ticker }} @ {{ analysis.market }}</span>
-            {% if analysis.sector %}
-            <span class="badge badge-category">{{ analysis.sector }}</span>
-            {% endif %}
-        </span>
-        <span style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-            <span class="badge badge-{{ analysis.action }}">{{ analysis.action|upper }}</span>
-            <span class="badge badge-{{ analysis.conviction }}">{{ analysis.conviction }}</span>
-            {% if analysis.quant_score %}<span class="score-display">Q {{ analysis.quant_score }}/5</span>{% endif %}
-            {% if analysis.sentiment_score is not none %}<span class="score-display score-sentiment">S {{ analysis.sentiment_score }}</span>{% endif %}
-        </span>
-    </div>
-    <div class="stat-grid" style="margin-bottom:0;">
-        <div class="stat-card">
-            <div class="stat-value">{{ analysis.current_price|fmt_price(analysis.currency) if analysis.current_price else '-' }}</div>
-            <div class="stat-label">현재가</div>
-        </div>
-        <div class="stat-card">
-            {% if analysis.target_price_low and analysis.target_price_high %}
-            <div class="stat-value">{{ analysis.target_price_low|fmt_price(analysis.currency) }}~{{ analysis.target_price_high|fmt_price(analysis.currency) }}</div>
-            {% else %}
-            <div class="stat-value">-</div>
-            {% endif %}
-            <div class="stat-label">목표가</div>
-        </div>
-        <div class="stat-card">
-            {% if analysis.upside_pct %}
-            <div class="stat-value {% if analysis.upside_pct > 0 %}confidence-up{% else %}confidence-down{% endif %}">
-                {% if analysis.upside_pct > 0 %}+{% endif %}{{ analysis.upside_pct }}%
+{# ══════════════════════════════════════════════
+   Hero — 종목명/가격 플로우/상승여력
+   ══════════════════════════════════════════════ #}
+<div class="sa-hero">
+    <div class="sa-hero-row">
+        <div class="sa-hero-title">
+            <div class="sa-hero-asset">{{ analysis.asset_name }}</div>
+            <div class="sa-hero-ticker">
+                <span>{{ analysis.ticker }} @ {{ analysis.market }}</span>
+                {% if analysis.sector %}
+                <span class="badge badge-category">{{ analysis.sector }}</span>
+                {% endif %}
             </div>
-            {% else %}
-            <div class="stat-value">-</div>
+            <div class="sa-hero-badges">
+                <span class="badge badge-{{ analysis.action }}">{{ analysis.action|upper }}</span>
+                <span class="badge badge-{{ analysis.conviction }}">{{ analysis.conviction }}</span>
+                {% if analysis.quant_score %}<span class="score-display">Q {{ analysis.quant_score }}/5</span>{% endif %}
+                {% if analysis.sentiment_score is not none %}<span class="score-display score-sentiment">S {{ analysis.sentiment_score }}</span>{% endif %}
+            </div>
+        </div>
+
+        {# 가격 플로우: 현재가 → 목표가 #}
+        <div class="sa-price-flow">
+            <div class="sa-price-box">
+                <div class="sa-price-label">현재가</div>
+                <div class="sa-price-value">{{ analysis.current_price|fmt_price(analysis.currency) if analysis.current_price else '-' }}</div>
+            </div>
+            {% if analysis.target_price_low and analysis.target_price_high %}
+            <div class="sa-arrow">→</div>
+            <div class="sa-price-box">
+                <div class="sa-price-label">목표가</div>
+                <div class="sa-price-value sa-price-value-target">{{ analysis.target_price_low|fmt_price(analysis.currency) }} ~ {{ analysis.target_price_high|fmt_price(analysis.currency) }}</div>
+            </div>
             {% endif %}
-            <div class="stat-label">상승여력</div>
         </div>
-        <div class="stat-card">
-            <div class="stat-value">{{ analysis.target_allocation }}%</div>
-            <div class="stat-label">목표 비중</div>
+
+        {# 상승여력 칩 #}
+        {% if analysis.upside_pct is not none %}
+        <div class="sa-upside-chip {% if analysis.upside_pct >= 0 %}sa-upside-chip-up{% else %}sa-upside-chip-down{% endif %}">
+            <span class="sa-upside-value">{% if analysis.upside_pct >= 0 %}+{% endif %}{{ analysis.upside_pct }}%</span>
+            <span class="sa-upside-label">상승여력</span>
         </div>
-        <div class="stat-card">
-            <div class="stat-value" style="font-size:15px;"><a href="/pages/sessions/date/{{ analysis.analysis_date }}" style="color:var(--accent);">{{ analysis.analysis_date }}</a></div>
-            <div class="stat-label">분석일</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-value" style="font-size:15px;">{{ analysis.theme_name }}</div>
-            <div class="stat-label">테마 · {{ analysis.time_horizon }}</div>
-        </div>
+        {% endif %}
+    </div>
+
+    {# 메타 바: 비중/분석일/테마/기간 #}
+    <div class="sa-meta-bar">
+        <span class="sa-meta-chip"><span class="sa-meta-chip-label">목표 비중</span><strong>{{ analysis.target_allocation }}%</strong></span>
+        <span class="sa-meta-chip"><span class="sa-meta-chip-label">분석일</span><a href="/pages/sessions/date/{{ analysis.analysis_date }}">{{ analysis.analysis_date }}</a></span>
+        {% if analysis.theme_name %}
+        <span class="sa-meta-chip"><span class="sa-meta-chip-label">테마</span><strong>{{ analysis.theme_name }}</strong></span>
+        {% endif %}
+        {% if analysis.time_horizon %}
+        <span class="sa-meta-chip"><span class="sa-meta-chip-label">기간</span><strong>{{ analysis.time_horizon }}</strong></span>
+        {% endif %}
+        {% if analysis.confidence_score %}
+        <span class="sa-meta-chip"><span class="sa-meta-chip-label">테마 확신도</span><strong>{{ analysis.confidence_score }}</strong></span>
+        {% endif %}
     </div>
 </div>
 
-<!-- 기업 개요 -->
+{# ══════════════════════════════════════════════
+   TOC — 섹션 퀵 네비 (sticky)
+   ══════════════════════════════════════════════ #}
+<nav class="sa-toc" aria-label="섹션 이동">
+    <span class="sa-toc-label">바로가기</span>
+    {% if analysis.company_overview %}<a href="#sec-overview">기업 개요</a>{% endif %}
+    {% if analysis.financial_summary or analysis.factor_scores %}<a href="#sec-financial">재무/팩터</a>{% endif %}
+    {% if analysis.industry_position %}<a href="#sec-industry">산업 포지션</a>{% endif %}
+    {% if analysis.momentum_summary or analysis.risk_summary %}<a href="#sec-momentum">모멘텀/리스크</a>{% endif %}
+    {% if analysis.bull_case or analysis.bear_case %}<a href="#sec-cases">Bull/Bear</a>{% endif %}
+    {% if analysis.entry_condition or analysis.exit_condition %}<a href="#sec-conditions">진입/청산</a>{% endif %}
+    {% if analysis.report_markdown %}<a href="#sec-report">전체 리포트</a>{% endif %}
+</nav>
+
+{# 기업 개요 #}
 {% if analysis.company_overview %}
-<div class="card" style="margin-bottom:18px;">
+<div id="sec-overview" class="card sa-section">
     <div class="card-header"><span class="card-title">기업 개요</span></div>
-    <div class="field-value" style="white-space:pre-line;line-height:1.8;">{{ analysis.company_overview }}</div>
+    <div class="sa-body-text">{{ analysis.company_overview }}</div>
 </div>
 {% endif %}
 
-<!-- 재무 요약 + 팩터 스코어 (2단) -->
-<div class="proposal-card-body" style="margin-bottom:18px;">
+{# 재무 요약 + 팩터 스코어 (2단) #}
+{% if analysis.financial_summary or analysis.factor_scores %}
+<div id="sec-financial" class="proposal-card-body sa-section">
     {% if analysis.financial_summary %}
     <div class="card" style="margin:0;">
         <div class="card-header"><span class="card-title">재무 요약</span></div>
         <div class="table-wrap" style="margin-bottom:0;">
-            <table>
+            <table class="sa-kv-table">
                 <tbody>
                     {% for key, label in [
                         ('per', 'PER'),
@@ -105,8 +127,8 @@
                     ] %}
                         {% if analysis.financial_summary.get(key) is not none %}
                         <tr>
-                            <td style="color:var(--text-muted);width:40%;">{{ label }}</td>
-                            <td style="font-weight:600;">{{ analysis.financial_summary[key] }}</td>
+                            <td>{{ label }}</td>
+                            <td>{{ analysis.financial_summary[key] }}</td>
                         </tr>
                         {% endif %}
                     {% endfor %}
@@ -119,40 +141,37 @@
     {% if analysis.factor_scores %}
     <div class="card" style="margin:0;">
         <div class="card-header"><span class="card-title">팩터 스코어</span></div>
-        <div class="table-wrap" style="margin-bottom:0;">
-            <table>
-                <tbody>
-                    {% for key, label in [
-                        ('value', 'Value'),
-                        ('growth', 'Growth'),
-                        ('quality', 'Quality'),
-                        ('momentum', 'Momentum'),
-                        ('size_liquidity', 'Size/Liquidity'),
-                        ('composite', 'Composite'),
-                    ] %}
-                        {% if analysis.factor_scores.get(key) is not none %}
-                        {% set val = analysis.factor_scores[key]|float %}
-                        <tr>
-                            <td style="color:var(--text-muted);width:35%;">{{ label }}</td>
-                            <td>
-                                <span class="confidence-bar" style="display:inline-block;width:120px;vertical-align:middle;">
-                                    <span class="confidence-bar-fill" style="width:{{ (val / 5.0 * 100)|int }}%"></span>
-                                </span>
-                                <span style="margin-left:8px;font-weight:600;">{{ val }}/5</span>
-                            </td>
-                        </tr>
-                        {% endif %}
-                    {% endfor %}
-                </tbody>
-            </table>
+        <div style="padding: 4px 2px;">
+            {% for key, label in [
+                ('value', 'Value'),
+                ('growth', 'Growth'),
+                ('quality', 'Quality'),
+                ('momentum', 'Momentum'),
+                ('size_liquidity', 'Size/Liquidity'),
+                ('composite', 'Composite'),
+            ] %}
+                {% if analysis.factor_scores.get(key) is not none %}
+                {% set val = analysis.factor_scores[key]|float %}
+                <div style="display:flex;align-items:center;gap:12px;padding:8px 4px;font-size:14px;">
+                    <div style="width:120px;color:var(--text-muted);">{{ label }}</div>
+                    <div style="flex:1;">
+                        <span class="confidence-bar" style="display:block;">
+                            <span class="confidence-bar-fill" style="width:{{ (val / 5.0 * 100)|int }}%"></span>
+                        </span>
+                    </div>
+                    <div style="width:52px;text-align:right;font-weight:700;font-variant-numeric:tabular-nums;">{{ val }}/5</div>
+                </div>
+                {% endif %}
+            {% endfor %}
         </div>
     </div>
     {% endif %}
 </div>
+{% endif %}
 
-<!-- DCF 공정가치 (상세 필드가 별도 컬럼에 있을 경우) -->
+{# DCF 밸류에이션 (독립 컬럼) #}
 {% if analysis.dcf_fair_value or analysis.dcf_wacc %}
-<div class="card" style="margin-bottom:18px;">
+<div class="card sa-section">
     <div class="card-header"><span class="card-title">DCF 밸류에이션</span></div>
     <div class="stat-grid" style="margin-bottom:0;">
         {% if analysis.dcf_fair_value %}
@@ -171,76 +190,96 @@
 </div>
 {% endif %}
 
-<!-- 산업 포지션 -->
+{# 산업 포지션 #}
 {% if analysis.industry_position %}
-<div class="card" style="margin-bottom:18px;">
+<div id="sec-industry" class="card sa-section">
     <div class="card-header"><span class="card-title">산업 포지션</span></div>
-    <div class="field-value" style="white-space:pre-line;line-height:1.8;">{{ analysis.industry_position }}</div>
+    <div class="sa-body-text">{{ analysis.industry_position }}</div>
 </div>
 {% endif %}
 
-<!-- 모멘텀 / 리스크 (2단) -->
-<div class="proposal-card-body" style="margin-bottom:18px;">
+{# 모멘텀 / 리스크 (2단) #}
+{% if analysis.momentum_summary or analysis.risk_summary %}
+<div id="sec-momentum" class="proposal-card-body sa-section">
     {% if analysis.momentum_summary %}
     <div class="card" style="margin:0;">
         <div class="card-header"><span class="card-title">모멘텀 분석</span></div>
-        <div class="field-value" style="white-space:pre-line;line-height:1.8;">{{ analysis.momentum_summary }}</div>
+        <div class="sa-body-text">{{ analysis.momentum_summary }}</div>
     </div>
     {% endif %}
 
     {% if analysis.risk_summary %}
-    <div class="card" style="margin:0;">
-        <div class="card-header"><span class="card-title" style="color:var(--red);">리스크 요약</span></div>
-        <div class="field-value" style="white-space:pre-line;line-height:1.8;">{{ analysis.risk_summary }}</div>
+    <div class="card sa-risk-card" style="margin:0;">
+        <div class="card-header"><span class="card-title">⚠ 리스크 요약</span></div>
+        <div class="sa-body-text">{{ analysis.risk_summary }}</div>
     </div>
     {% endif %}
 </div>
+{% endif %}
 
-<!-- Bull / Bear Case -->
-<div class="proposal-card-body" style="margin-bottom:18px;">
+{# Bull / Bear Case (2단) #}
+{% if analysis.bull_case or analysis.bear_case %}
+<div id="sec-cases" class="proposal-card-body sa-section">
     {% if analysis.bull_case %}
-    <div class="card scenario-card-bull" style="margin:0;">
+    <div class="card sa-bull-card" style="margin:0;">
         <div class="card-header"><span class="card-title" style="color:var(--green);">🐂 Bull Case</span></div>
-        <div class="field-value" style="white-space:pre-line;line-height:1.8;">{{ analysis.bull_case }}</div>
+        <div class="sa-body-text">{{ analysis.bull_case }}</div>
     </div>
     {% endif %}
 
     {% if analysis.bear_case %}
-    <div class="card scenario-card-bear" style="margin:0;">
+    <div class="card sa-bear-card" style="margin:0;">
         <div class="card-header"><span class="card-title" style="color:var(--red);">🐻 Bear Case</span></div>
-        <div class="field-value" style="white-space:pre-line;line-height:1.8;">{{ analysis.bear_case }}</div>
+        <div class="sa-body-text">{{ analysis.bear_case }}</div>
     </div>
     {% endif %}
 </div>
+{% endif %}
 
-<!-- 진입/청산 조건 -->
+{# 진입·청산 조건 #}
 {% if analysis.entry_condition or analysis.exit_condition %}
-<div class="card" style="margin-bottom:18px;">
-    <div class="card-header"><span class="card-title">진입·청산 조건</span></div>
-    <div class="proposal-card-body">
+<div id="sec-conditions" class="card sa-section">
+    <div class="card-header"><span class="card-title">진입 · 청산 조건</span></div>
+    <div class="sa-condition-grid">
         {% if analysis.entry_condition %}
-        <div class="field-group">
-            <div class="field-label">진입 조건</div>
-            <div class="field-value">{{ analysis.entry_condition }}</div>
+        <div class="sa-condition-card sa-condition-card-entry">
+            <div class="sa-condition-label sa-condition-label-entry">▶ 진입 조건</div>
+            <div class="sa-condition-text">{{ analysis.entry_condition }}</div>
         </div>
         {% endif %}
         {% if analysis.exit_condition %}
-        <div class="field-group">
-            <div class="field-label">청산 조건</div>
-            <div class="field-value">{{ analysis.exit_condition }}</div>
+        <div class="sa-condition-card sa-condition-card-exit">
+            <div class="sa-condition-label sa-condition-label-exit">◀ 청산 조건</div>
+            <div class="sa-condition-text">{{ analysis.exit_condition }}</div>
         </div>
         {% endif %}
     </div>
 </div>
 {% endif %}
 
-<!-- 전체 리포트 (Markdown 원문) -->
+{# 전체 리포트 (Markdown 원문) #}
 {% if analysis.report_markdown %}
-<div class="card" style="margin-bottom:18px;">
-    <div class="card-header"><span class="card-title">전체 리포트</span></div>
-    <pre style="white-space:pre-wrap;word-wrap:break-word;font-family:inherit;font-size:14px;line-height:1.7;color:var(--text);background:var(--bg);padding:16px;border-radius:8px;border:1px solid var(--border);margin:0;">{{ analysis.report_markdown }}</pre>
+<div id="sec-report" class="card sa-section">
+    <div class="card-header">
+        <span class="card-title">전체 리포트</span>
+        <button type="button" class="btn" onclick="toggleReport(this)" style="font-size:12px;padding:4px 12px;">접기</button>
+    </div>
+    <pre class="sa-report-pre">{{ analysis.report_markdown }}</pre>
 </div>
 {% endif %}
 
+</div>
 {% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toggleReport(btn) {
+    var pre = btn.closest('.card').querySelector('.sa-report-pre');
+    if (!pre) return;
+    var collapsed = pre.style.display === 'none';
+    pre.style.display = collapsed ? 'block' : 'none';
+    btn.textContent = collapsed ? '접기' : '펼치기';
+}
+</script>
 {% endblock %}
