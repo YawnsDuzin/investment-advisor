@@ -13,6 +13,8 @@ pykrx>=1.0.0
 fastapi>=0.115.0
 uvicorn[standard]>=0.30.0
 jinja2>=3.1.0
+markdown>=3.6
+bleach>=6.1.0
 
 # auth
 python-jose[cryptography]>=3.3.0
