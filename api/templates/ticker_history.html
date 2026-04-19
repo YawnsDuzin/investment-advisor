@@ -12,56 +12,56 @@
 {% endblock %}
 
 {% block content %}
-{% if tracking_list %}
-<!-- 추적 요약 카드 -->
-{% for tr in tracking_list %}
+{% if tracking %}
+<!-- 추적 요약 카드 (ticker 단위 통합) -->
 <div class="card" style="margin-bottom:16px;">
     <div class="card-header">
-        <span style="display:flex;align-items:center;gap:12px;">
-            <span class="card-title" style="font-size:20px;">{{ tr.asset_name or ticker }}</span>
+        <span style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+            <span class="card-title" style="font-size:20px;">{{ tracking.asset_name or ticker }}</span>
             <span style="font-size:15px;color:var(--text-muted);">{{ ticker }}</span>
-            {% if tr.recommendation_count >= 2 %}
-            <span class="tracking-badge tracking-badge-streak">{{ tr.recommendation_count }}회 추천</span>
+            {% if tracking.recommendation_count and tracking.recommendation_count >= 2 %}
+            <span class="tracking-badge tracking-badge-streak">{{ tracking.recommendation_count }}회 추천</span>
+            {% endif %}
+            {% if tracking.theme_count and tracking.theme_count >= 2 %}
+            <span class="tracking-badge" style="background:rgba(147,130,255,0.12);color:var(--purple);border:1px solid rgba(147,130,255,0.25);">{{ tracking.theme_count }}개 테마</span>
             {% endif %}
         </span>
         <span style="display:flex;align-items:center;gap:10px;">
-            <span class="badge badge-{{ tr.latest_action }}">{{ tr.latest_action|upper }}</span>
-            {% if tr.prev_action and tr.prev_action != tr.latest_action %}
-            <span style="font-size:14px;color:var(--text-muted);">(이전: {{ tr.prev_action }})</span>
+            {% if tracking.latest_action %}<span class="badge badge-{{ tracking.latest_action }}">{{ tracking.latest_action|upper }}</span>{% endif %}
+            {% if tracking.prev_action and tracking.prev_action != tracking.latest_action %}
+            <span style="font-size:14px;color:var(--text-muted);">(이전: {{ tracking.prev_action }})</span>
             {% endif %}
-            <span class="badge badge-{{ tr.latest_conviction }}">{{ tr.latest_conviction }}</span>
+            {% if tracking.latest_conviction %}<span class="badge badge-{{ tracking.latest_conviction }}">{{ tracking.latest_conviction }}</span>{% endif %}
         </span>
     </div>
     <div class="stat-grid" style="margin-bottom:0;">
         <div class="stat-card">
-            <div class="stat-value">{{ tr.recommendation_count }}</div>
-            <div class="stat-label">추천 횟수</div>
+            <div class="stat-value">{{ tracking.recommendation_count }}</div>
+            <div class="stat-label">추천 횟수{% if tracking.theme_count and tracking.theme_count >= 2 %} (중복 제외){% endif %}</div>
         </div>
         <div class="stat-card">
-            <div class="stat-value">{{ tr.first_recommended_date }}</div>
+            <div class="stat-value">{{ tracking.first_recommended_date or '-' }}</div>
             <div class="stat-label">최초 추천</div>
         </div>
         <div class="stat-card">
-            <div class="stat-value">{{ tr.last_recommended_date }}</div>
+            <div class="stat-value">{{ tracking.last_recommended_date or '-' }}</div>
             <div class="stat-label">최근 추천</div>
         </div>
         <div class="stat-card">
-            {% if tr.latest_target_price_low and tr.latest_target_price_high %}
-            <div class="stat-value">{{ tr.latest_target_price_low|int|fmt_price(tr.latest_currency) }}~{{ tr.latest_target_price_high|int|fmt_price(tr.latest_currency) }}</div>
+            {% if tracking.latest_target_price_low and tracking.latest_target_price_high %}
+            <div class="stat-value">{{ tracking.latest_target_price_low|int|fmt_price(tracking.latest_currency) }}~{{ tracking.latest_target_price_high|int|fmt_price(tracking.latest_currency) }}</div>
             {% else %}
             <div class="stat-value">-</div>
             {% endif %}
-            <div class="stat-label">최신 목표가</div>
+            <div class="stat-label">{% if tracking.theme_count and tracking.theme_count >= 2 %}테마별 목표가 범위{% else %}최신 목표가{% endif %}</div>
         </div>
     </div>
-    {% if tr.prev_target_price_low and tr.latest_target_price_low %}
-    <div style="margin-top:12px;font-size:14px;color:var(--text-muted);">
-        이전 목표가: {{ tr.prev_target_price_low|int|fmt_price(tr.latest_currency) }}~{{ tr.prev_target_price_high|int|fmt_price(tr.latest_currency) }}
-        → 현재: {{ tr.latest_target_price_low|int|fmt_price(tr.latest_currency) }}~{{ tr.latest_target_price_high|int|fmt_price(tr.latest_currency) }}
+    {% if tracking.theme_count and tracking.theme_count >= 2 %}
+    <div style="margin-top:12px;font-size:13px;color:var(--text-muted);">
+        ※ 이 종목은 {{ tracking.theme_count }}개 테마에서 동시에 추천되었습니다. 테마별 목표가·확신도는 아래 <strong>일자별 추천 이력</strong> 에서 확인하세요.
     </div>
     {% endif %}
 </div>
-{% endfor %}
 {% endif %}
 
 {% if history %}
