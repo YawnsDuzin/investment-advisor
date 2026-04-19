@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import theme_header, scenario_grid, indicator_tags, macro_impact_table, external_links %}
+{% from "_macros.html" import theme_header, scenario_grid, indicator_tags, macro_impact_table, external_links, market_summary_body %}
 {% block title %}세션 #{{ session.id }} — AlphaSignal{% endblock %}
 {% block page_title %}세션 #{{ session.id }} &middot; {{ session.analysis_date }}{% endblock %}
 {% block header_actions %}<a href="/pages/sessions" class="btn">목록으로</a>{% endblock %}
@@ -15,7 +15,9 @@
         </span>
         {% endif %}
     </div>
-    {{ session.market_summary or "(없음)" }}
+    <div class="summary-body">
+        {{ market_summary_body(session.market_summary, "(없음)") }}
+    </div>
 </div>
 
 <!-- 글로벌 이슈 -->

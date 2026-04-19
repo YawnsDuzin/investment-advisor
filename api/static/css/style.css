@@ -461,6 +461,40 @@ a:hover { color: var(--accent-hover); }
     color: var(--text);
 }
 
+.summary-highlight-dash {
+    background: rgba(52,211,153,0.05);
+    border-left: 3px solid var(--green);
+    color: var(--text);
+}
+
+.summary-bullet {
+    display: inline-block;
+    margin-right: 8px;
+    color: var(--accent);
+    font-weight: 700;
+}
+.summary-bullet-green { color: var(--green); }
+
+.summary-label {
+    color: var(--accent);
+    font-weight: 700;
+}
+.summary-label-green { color: var(--green); }
+.summary-sep { color: var(--text-muted); margin-right: 4px; }
+.summary-text { color: var(--text); }
+
+.summary-section-warn .summary-section-title {
+    color: var(--red);
+    border-bottom-color: rgba(248,113,113,0.25);
+}
+.summary-section-warn .summary-section-content {
+    background: rgba(248,113,113,0.06);
+    border-left: 3px solid var(--red);
+    padding: 10px 14px;
+    border-radius: 6px;
+    margin-top: 6px;
+}
+
 /* ===== Stat Grid 확장 (6열) ===== */
 .stat-grid-6 {
     grid-template-columns: repeat(6, 1fr);
