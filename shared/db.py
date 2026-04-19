@@ -5,7 +5,7 @@ from psycopg2.extras import execute_values, RealDictCursor
 from shared.config import DatabaseConfig
 
 # ── 스키마 버전 관리 ──────────────────────────────
-SCHEMA_VERSION = 22  # v1~v21 + v22: 고객 문의(inquiry) 테이블
+SCHEMA_VERSION = 23  # v23: ai_query_archive + app_logs.context + incident_reports
 
 
 def _ensure_database(cfg: DatabaseConfig) -> None:
@@ -997,6 +997,83 @@ def _migrate_to_v22(cur) -> None:
     print("[DB] v22 마이그레이션 완료 — 고객 문의 게시판 테이블 생성")
 
 
+def _migrate_to_v23(cur) -> None:
+    """v23: 진단 인프라 — ai_query_archive, app_logs.context, incident_reports
+
+    - ai_query_archive: Claude SDK 쿼리의 원본 프롬프트/응답을 영구 보존.
+      JSON 파싱 실패·빈 복구·타임아웃 등 사후 재현·재분석 가능하게 한다.
+    - app_logs.context: 구조화 로그 컨텍스트 (stage/ticker/theme_key 등 JSONB).
+    - incident_reports: 실행별 사건 요약 (이상 가격, JSON 실패, 미등록 티커 등).
+    """
+    # 1) ai_query_archive: AI 쿼리 원본 보존
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS ai_query_archive (
+            id SERIAL PRIMARY KEY,
+            run_id INT REFERENCES app_runs(id) ON DELETE CASCADE,
+            stage VARCHAR(50),
+            target_key VARCHAR(200),
+            model VARCHAR(80),
+            prompt_system TEXT,
+            prompt_user TEXT,
+            response_raw TEXT,
+            response_chars INT,
+            elapsed_sec NUMERIC(8,2),
+            parse_status VARCHAR(30),
+            parse_error TEXT,
+            recovered_fields JSONB,
+            created_at TIMESTAMP DEFAULT NOW()
+        );
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_ai_query_run
+            ON ai_query_archive(run_id, stage);
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_ai_query_parse_fail
+            ON ai_query_archive(parse_status)
+            WHERE parse_status NOT IN ('success', NULL);
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_ai_query_created
+            ON ai_query_archive(created_at DESC);
+    """)
+
+    # 2) app_logs.context JSONB — 구조화 컨텍스트 (B-5)
+    cur.execute("""
+        ALTER TABLE app_logs
+            ADD COLUMN IF NOT EXISTS context JSONB;
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_app_logs_context_ticker
+            ON app_logs((context->>'ticker'))
+            WHERE context ? 'ticker';
+    """)
+
+    # 3) incident_reports: 실행별 자동 요약 (B-3)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS incident_reports (
+            id SERIAL PRIMARY KEY,
+            run_id INT UNIQUE REFERENCES app_runs(id) ON DELETE CASCADE,
+            session_id INT REFERENCES analysis_sessions(id) ON DELETE SET NULL,
+            severity VARCHAR(20) DEFAULT 'info',
+            issue_count INT DEFAULT 0,
+            report JSONB NOT NULL,
+            created_at TIMESTAMP DEFAULT NOW()
+        );
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_incident_reports_severity
+            ON incident_reports(severity, created_at DESC);
+    """)
+
+    cur.execute("""
+        INSERT INTO schema_version (version) VALUES (23)
+        ON CONFLICT (version) DO NOTHING;
+    """)
+
+    print("[DB] v23 마이그레이션 완료 — ai_query_archive + app_logs.context + incident_reports")
+
+
 def _seed_education_topics(cur) -> None:
     """교육 토픽 시드 데이터 삽입"""
     topics = [
@@ -1564,6 +1641,9 @@ def init_db(cfg: DatabaseConfig) -> None:
 
             if current < 22:
                 _migrate_to_v22(cur)
+
+            if current < 23:
+                _migrate_to_v23(cur)
 
         conn.commit()
         print("[DB] 테이블 초기화 완료")

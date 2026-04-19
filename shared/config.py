@@ -93,6 +93,8 @@ class AnalyzerConfig:
     query_timeout: int = field(default_factory=lambda: int(os.getenv("QUERY_TIMEOUT", "900")))
     # 재분석 임계값 — 신규 뉴스가 이 수 미만이면 분석 스킵
     min_new_news: int = field(default_factory=lambda: int(os.getenv("MIN_NEW_NEWS", "5")))
+    # SDK 동시 실행 수 제한 (Stage 1-B/Stage 2 병렬) — 기본 2
+    sdk_concurrency: int = field(default_factory=lambda: int(os.getenv("SDK_CONCURRENCY", "2")))
 
 
 @dataclass

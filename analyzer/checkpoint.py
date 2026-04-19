@@ -13,19 +13,24 @@
     else:
         result = run_stage1a(...)
         cp.save("stage1a", result)
-    cp.clear()  # DB 저장 성공 후 정리
+    cp.clear(archive=True)  # DB 저장 성공 후 아카이브 보존
 """
 import hashlib
 import json
 import os
 import shutil
-from datetime import datetime
+import tarfile
+import time
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from shared.logger import get_logger
 
 # 체크포인트 Stage 순서
 STAGES = ("stage1a", "stage1b", "momentum", "stage2", "final")
+
+# B-4: 아카이브 보존 기간 (일)
+CHECKPOINT_ARCHIVE_RETENTION_DAYS = int(os.getenv("CHECKPOINT_ARCHIVE_DAYS", "60"))
 
 
 def compute_news_fingerprint(news_articles: list[dict]) -> str:
@@ -134,14 +139,62 @@ class CheckpointManager:
         """Stage 체크포인트 존재 여부"""
         return (self.dir / f"{stage}.json").exists()
 
-    def clear(self) -> None:
-        """모든 체크포인트 삭제 (DB 저장 성공 후 호출)"""
-        if self.dir.exists():
+    def clear(self, archive: bool = False) -> Path | None:
+        """체크포인트 정리 (DB 저장 성공 후 호출).
+
+        Args:
+            archive: True면 삭제 전 tar.gz로 보존 (_checkpoints/archive/{date}.tar.gz)
+
+        Returns:
+            아카이브 파일 경로 (archive=True 이고 성공 시), 아니면 None.
+        """
+        if not self.dir.exists():
+            return None
+
+        archive_path: Path | None = None
+        if archive:
             try:
-                shutil.rmtree(self.dir)
-                self.log.info("체크포인트 정리 완료")
+                archive_path = self._archive_and_prune()
             except Exception as e:
-                self.log.warning(f"체크포인트 정리 실패: {e}")
+                self.log.warning(f"체크포인트 아카이브 실패: {e}")
+
+        try:
+            shutil.rmtree(self.dir)
+            if archive_path:
+                self.log.info(f"체크포인트 정리 완료 (아카이브: {archive_path.name})")
+            else:
+                self.log.info("체크포인트 정리 완료")
+        except Exception as e:
+            self.log.warning(f"체크포인트 정리 실패: {e}")
+        return archive_path
+
+    def _archive_and_prune(self) -> Path | None:
+        """현재 체크포인트 디렉토리를 tar.gz로 압축, 오래된 아카이브 정리."""
+        archive_dir = self.dir.parent / "archive"
+        archive_dir.mkdir(parents=True, exist_ok=True)
+
+        # 기존 같은 날짜 아카이브는 덮어쓰기
+        target = archive_dir / f"{self.date}.tar.gz"
+        if target.exists():
+            target.unlink()
+
+        with tarfile.open(target, "w:gz") as tar:
+            tar.add(self.dir, arcname=self.date)
+
+        # 오래된 아카이브 정리
+        cutoff = time.time() - CHECKPOINT_ARCHIVE_RETENTION_DAYS * 86400
+        pruned = 0
+        for f in archive_dir.glob("*.tar.gz"):
+            try:
+                if f.stat().st_mtime < cutoff:
+                    f.unlink()
+                    pruned += 1
+            except Exception:
+                pass
+        if pruned:
+            self.log.info(f"아카이브 {pruned}건 만료 정리 ({CHECKPOINT_ARCHIVE_RETENTION_DAYS}일 경과)")
+
+        return target
 
     def last_completed_stage(self) -> str | None:
         """마지막으로 완료된 Stage 반환"""
@@ -149,3 +202,24 @@ class CheckpointManager:
             if self.has(stage):
                 return stage
         return None
+
+
+def list_archives(base_dir: str = "_checkpoints") -> list[dict]:
+    """보존된 체크포인트 아카이브 목록 (관리자 페이지 B-2 에서 사용)."""
+    archive_dir = Path(base_dir) / "archive"
+    if not archive_dir.exists():
+        return []
+    items: list[dict] = []
+    for f in sorted(archive_dir.glob("*.tar.gz"), reverse=True):
+        try:
+            stat = f.stat()
+            items.append({
+                "date": f.stem.replace(".tar", ""),
+                "filename": f.name,
+                "path": str(f),
+                "size_bytes": stat.st_size,
+                "mtime": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+            })
+        except Exception:
+            continue
+    return items

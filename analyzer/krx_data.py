@@ -312,34 +312,88 @@ def fetch_korea_bond_yields() -> dict | None:
         # 행 인덱스 또는 컬럼에서 금리 추출
         result = {}
 
-        # pykrx.bond의 반환 형식에 따라 파싱
-        # 일반적으로 채권 종류가 인덱스, 수익률이 컬럼
+        # A-5: pykrx.bond 반환 DataFrame 구조가 버전에 따라 다름 —
+        # 인덱스/컬럼 어느 쪽에 수익률이 있든 숫자를 찾아 매핑한다.
+        import re as _re
+
+        def _find_numeric_value(row) -> float | None:
+            """row(Series)에서 첫 수치형 값을 반환. dtype 무관."""
+            for v in row:
+                try:
+                    if v is None:
+                        continue
+                    fv = float(v)
+                    # 0이 아닌 합리적 금리 범위 (0.01 ~ 20%)
+                    if 0 < abs(fv) < 50:
+                        return fv
+                except (TypeError, ValueError):
+                    continue
+            return None
+
+        def _match_bond_key(label: str) -> str | None:
+            """라벨에서 금리 키 추출 — 다양한 표기법 수용.
+            '국고채 3년', '국고채권(3년)', '국고3Y', 'KR3Y' 등 모두 매칭.
+            """
+            s = label.replace(" ", "").replace("-", "").upper()
+            # 국고/국채 계열
+            if "국고" in label or "국채" in label or s.startswith("KR"):
+                m = _re.search(r"(\d+)\s*년|(\d+)\s*Y", label, _re.IGNORECASE) \
+                    or _re.search(r"(\d+)Y", s)
+                if m:
+                    year = int(next(g for g in m.groups() if g))
+                    key_map = {1: "kr_1y", 2: "kr_2y", 3: "kr_3y", 5: "kr_5y",
+                               10: "kr_10y", 20: "kr_20y", 30: "kr_30y"}
+                    return key_map.get(year)
+            # 회사채 AA-
+            if "회사채" in label and ("AA" in label.upper() or "AA-" in label.upper()):
+                return "corp_aa"
+            # CD 91일
+            if ("CD" in label.upper() and "91" in label) or "91일물" in label:
+                return "cd_91d"
+            return None
+
+        # 인덱스 라벨 기반 1차 파싱
         for idx in yields_data.index:
             idx_str = str(idx)
-            val = float(yields_data.loc[idx].iloc[0]) if len(yields_data.columns) > 0 else None
-            if val is None:
+            key = _match_bond_key(idx_str)
+            if not key:
                 continue
+            val = _find_numeric_value(yields_data.loc[idx])
+            if val is not None and result.get(key) is None:
+                result[key] = val
 
-            if "국고채1년" in idx_str or "국고1년" in idx_str:
-                result["kr_1y"] = val
-            elif "국고채2년" in idx_str or "국고2년" in idx_str:
-                result["kr_2y"] = val
-            elif "국고채3년" in idx_str or "국고3년" in idx_str:
-                result["kr_3y"] = val
-            elif "국고채5년" in idx_str or "국고5년" in idx_str:
-                result["kr_5y"] = val
-            elif "국고채10년" in idx_str or "국고10년" in idx_str:
-                result["kr_10y"] = val
-            elif "국고채30년" in idx_str or "국고30년" in idx_str:
-                result["kr_30y"] = val
-            elif "회사채" in idx_str and ("AA-" in idx_str or "AA" in idx_str):
-                result["corp_aa"] = val
-            elif "CD" in idx_str and "91" in idx_str:
-                result["cd_91d"] = val
+        # 2차: 컬럼 기반 파싱 (가로형 DataFrame 대비)
+        if not result:
+            for col in yields_data.columns:
+                col_str = str(col)
+                key = _match_bond_key(col_str)
+                if not key:
+                    continue
+                # 컬럼 전체에서 첫 유효 숫자 선택
+                val = _find_numeric_value(yields_data[col])
+                if val is not None and result.get(key) is None:
+                    result[key] = val
 
         if not result.get("kr_3y"):
-            log.warning("국채 3년 금리 누락 — 데이터 형식 불일치")
-            return None
+            # A-5: 원본 구조를 detail에 포함해 추후 진단 가능하도록
+            try:
+                cols = list(yields_data.columns)
+                idx_sample = [str(i) for i in list(yields_data.index)[:15]]
+                preview = yields_data.head(5).to_string()[:1500]
+                detail = (
+                    f"columns={cols}\n"
+                    f"index_sample={idx_sample}\n"
+                    f"--- preview ---\n{preview}"
+                )
+            except Exception as _e:
+                detail = f"raw preview 생성 실패: {_e}"
+            log.warning(
+                "국채 3년 금리 누락 — 데이터 형식 불일치 (pykrx 버전 이슈 가능)",
+                extra={"detail": detail, "stage": "KRX금리"},
+            )
+            # 부분 성공이라도 반환 (타 기간물은 있을 수 있음)
+            if not any(k.startswith("kr_") for k in result):
+                return None
 
         # 장단기 스프레드 계산
         kr_10y = result.get("kr_10y", result.get("kr_5y", 0))

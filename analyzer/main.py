@@ -19,12 +19,15 @@ from shared.db import (
     init_db, save_analysis, save_news_articles, get_latest_news_titles,
     get_connection, save_top_picks, update_top_picks_ai_rerank,
 )
-from shared.logger import init_logger, start_run, finish_run, get_logger
+from shared.logger import (
+    init_logger, start_run, finish_run, get_logger, save_incident_report,
+)
 from psycopg2.extras import RealDictCursor
 from analyzer.news_collector import collect_news_structured
 from analyzer.analyzer import run_full_analysis, translate_news
 from analyzer.recommender import compute_rule_based_picks, ai_rerank_picks
 from analyzer.price_tracker import run_price_tracking
+from analyzer.validators import build_incident_report, summarize_ai_queries
 
 
 def main() -> int:
@@ -150,8 +153,8 @@ def _run_analysis(cfg: AppConfig, today: str, run_id: int | None, log,
         session_id = save_analysis(cfg.db, today, result)
         news_count = save_news_articles(cfg.db, session_id, news_articles)
         log.info(f"[DB] 뉴스 기사 {news_count}건 저장 완료")
-        # DB 저장 성공 → 체크포인트 정리
-        checkpoint.clear()
+        # B-4: DB 저장 성공 → 체크포인트를 아카이브로 보존 후 작업 디렉토리 정리
+        checkpoint.clear(archive=True)
     except Exception as e:
         log.error(f"DB 저장 실패: {e}", extra={"detail": traceback.format_exc()})
         log.info("[체크포인트] DB 저장 실패 — 체크포인트 유지 (재실행 시 이어서 작업 가능)")
@@ -180,6 +183,35 @@ def _run_analysis(cfg: AppConfig, today: str, run_id: int | None, log,
 
     # 8) 결과 요약 출력
     _print_summary(result, session_id)
+
+    # 9) 사건 보고서 생성 (B-3) — 가격 이상/Stage 2 실패/AI 파싱 이슈 종합
+    try:
+        ai_stats = summarize_ai_queries(cfg.db, run_id) if run_id else {}
+        report = build_incident_report(
+            result=result,
+            ai_query_stats=ai_stats,
+            ticker_validation=result.get("_ticker_validation"),
+        )
+        severity = report.get("severity", "info")
+        save_incident_report(cfg.db, run_id, session_id, report, severity=severity)
+        counts = report.get("counts", {})
+        if severity == "critical":
+            log.warning(
+                f"[사건 보고] 🔴 critical — 가격이상 {counts.get('price_anomalies', 0)}, "
+                f"Stage 2 실패 {counts.get('stage2_errors', 0)}, "
+                f"AI 파싱 실패 {counts.get('ai_query_failed', 0)}"
+            )
+        elif severity == "warn":
+            log.info(
+                f"[사건 보고] 🟡 warn — 가격미조회 {counts.get('no_price', 0)}, "
+                f"Stage 2 incomplete {counts.get('stage2_incomplete', 0)}, "
+                f"AI truncated {counts.get('ai_query_truncated', 0)}, "
+                f"티커 미등록 {counts.get('ticker_invalid', 0)}"
+            )
+        else:
+            log.info("[사건 보고] 🟢 info — 특이사항 없음")
+    except Exception as e:
+        log.warning(f"[사건 보고] 생성 실패 (무시): {e}")
 
     # 실행 완료 기록
     summary = (f"이슈 {len(issues)}건, 테마 {len(themes)}건, "
