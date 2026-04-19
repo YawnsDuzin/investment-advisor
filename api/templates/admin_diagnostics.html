@@ -1,0 +1,394 @@
+{% extends "base.html" %}
+{% block title %}진단 — 실행 로그 · AI 쿼리 아카이브{% endblock %}
+{% block page_title %}진단 · 실행 로그 · AI 쿼리 아카이브{% endblock %}
+
+{% block content %}
+<div class="card" style="padding:16px 20px;margin-bottom:12px;">
+    <div style="font-size:13px;color:var(--text-muted);">
+        분석 실행 이력(run)과 각 실행의 로그·AI 쿼리 원본·체크포인트·사건 보고서를 조회합니다.
+        JSON 파싱 실패나 복구된 쿼리의 원본 응답을 다운로드해 수동 재분석이 가능합니다.
+    </div>
+</div>
+
+<!-- 실행 목록 + 상세 -->
+<div style="display:grid;grid-template-columns:1fr 1.5fr;gap:12px;">
+    <!-- 좌측: run 목록 -->
+    <div class="card" style="padding:16px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+            <div style="font-size:14px;font-weight:600;">실행 이력 (app_runs)</div>
+            <select id="runTypeFilter" class="btn" style="padding:4px 8px;font-size:12px;" onchange="loadRuns()">
+                <option value="">전체</option>
+                <option value="analyzer">analyzer</option>
+                <option value="translate">translate</option>
+                <option value="api_request">api_request</option>
+            </select>
+        </div>
+        <div id="runsList" style="max-height:600px;overflow-y:auto;font-size:12px;"></div>
+    </div>
+
+    <!-- 우측: run 상세 -->
+    <div class="card" style="padding:16px;">
+        <div id="runDetail" style="font-size:13px;">
+            <div style="color:var(--text-muted);">좌측에서 실행을 선택하세요.</div>
+        </div>
+    </div>
+</div>
+
+<!-- 사건 보고서 최근 목록 -->
+<div class="card" style="padding:16px;margin-top:12px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <div style="font-size:14px;font-weight:600;">최근 사건 보고서 (incident_reports)</div>
+        <select id="severityFilter" class="btn" style="padding:4px 8px;font-size:12px;" onchange="loadIncidents()">
+            <option value="">전체</option>
+            <option value="critical">critical</option>
+            <option value="warn">warn</option>
+            <option value="info">info</option>
+        </select>
+    </div>
+    <div id="incidentsList" style="font-size:12px;"></div>
+</div>
+
+<!-- 체크포인트 목록 -->
+<div class="card" style="padding:16px;margin-top:12px;">
+    <div style="font-size:14px;font-weight:600;margin-bottom:10px;">체크포인트</div>
+    <div id="checkpointsList" style="font-size:12px;"></div>
+</div>
+
+<style>
+.diag-row {
+    padding:8px 10px;border-bottom:1px solid var(--border);cursor:pointer;
+    display:flex;justify-content:space-between;align-items:center;gap:8px;
+}
+.diag-row:hover { background:var(--bg-hover, rgba(255,255,255,0.04)); }
+.diag-row.active { background:rgba(100,180,255,0.08); border-left:2px solid var(--accent); }
+.sev-critical { color:#e05555;font-weight:600; }
+.sev-warn { color:#d4a017;font-weight:600; }
+.sev-info { color:var(--text-muted); }
+.status-success { color:#4caf50; }
+.status-failure { color:#e05555; }
+.status-running { color:#d4a017; }
+.status-partial { color:#d4a017; }
+.status-skipped { color:var(--text-muted); }
+.query-status-success { color:#4caf50; }
+.query-status-truncated_recovered { color:#d4a017; }
+.query-status-failed { color:#e05555; }
+.query-status-empty { color:#e05555; }
+.query-status-timeout_partial { color:#d4a017; }
+.query-status-timeout_exhausted { color:#e05555; }
+.query-status-sdk_error { color:#e05555; }
+.diag-tab {
+    padding:6px 14px;cursor:pointer;border-bottom:2px solid transparent;
+    font-size:12px;color:var(--text-muted);
+}
+.diag-tab.active { color:var(--accent);border-bottom-color:var(--accent); }
+.code-block {
+    background:rgba(0,0,0,0.3);padding:10px;border-radius:4px;
+    font-family:monospace;font-size:11px;white-space:pre-wrap;word-break:break-all;
+    max-height:320px;overflow-y:auto;
+}
+</style>
+
+<script>
+let currentRunId = null;
+let currentTab = 'logs';
+
+function fmtDateTime(s) {
+    if (!s) return '-';
+    return s.replace('T', ' ').substring(0, 19);
+}
+
+function esc(s) {
+    if (s === null || s === undefined) return '';
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+async function loadRuns() {
+    const type = document.getElementById('runTypeFilter').value;
+    const url = type ? `/admin/runs?run_type=${type}&limit=50` : '/admin/runs?limit=50';
+    try {
+        const res = await fetch(url);
+        const data = await res.json();
+        const html = (data.runs || []).map(r => {
+            const statusCls = `status-${r.status || 'running'}`;
+            const dur = r.duration_sec ? `${Math.round(r.duration_sec)}s` : '-';
+            return `<div class="diag-row" data-run-id="${r.id}" onclick="selectRun(${r.id})">
+                <div style="flex:1;min-width:0;">
+                    <div style="font-weight:600;">#${r.id} · ${esc(r.run_type)}</div>
+                    <div style="color:var(--text-muted);font-size:11px;">
+                        ${fmtDateTime(r.started_at)} · ${dur} · ${esc(r.summary || '')}
+                    </div>
+                </div>
+                <div class="${statusCls}" style="font-size:11px;">${esc(r.status)}</div>
+            </div>`;
+        }).join('');
+        document.getElementById('runsList').innerHTML = html || '<div style="padding:20px;color:var(--text-muted);">실행 이력 없음</div>';
+    } catch (e) {
+        document.getElementById('runsList').innerHTML = `<div style="color:#e05555;">오류: ${esc(e.message)}</div>`;
+    }
+}
+
+async function selectRun(runId) {
+    currentRunId = runId;
+    document.querySelectorAll('#runsList .diag-row').forEach(el => {
+        el.classList.toggle('active', el.dataset.runId == String(runId));
+    });
+    await loadRunDetail();
+}
+
+async function loadRunDetail() {
+    if (!currentRunId) return;
+    const detail = document.getElementById('runDetail');
+    detail.innerHTML = '<div style="color:var(--text-muted);">로딩 중...</div>';
+    try {
+        const res = await fetch(`/admin/runs/${currentRunId}`);
+        const data = await res.json();
+        const r = data.run || {};
+        const logStats = data.log_stats || {};
+        const aiStats = data.ai_query_stats || {};
+        const inc = data.incident;
+        const sev = inc && inc.severity || 'info';
+        const sevCls = `sev-${sev}`;
+
+        let incidentHtml = '';
+        if (inc && inc.report) {
+            const report = inc.report;
+            const cnt = report.counts || {};
+            incidentHtml = `
+            <div style="margin:12px 0;padding:10px;background:rgba(0,0,0,0.2);border-radius:4px;">
+                <div style="font-weight:600;margin-bottom:6px;">
+                    📋 사건 보고서 · <span class="${sevCls}">${sev}</span> (총 ${inc.issue_count}건)
+                </div>
+                <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;font-size:11px;color:var(--text-muted);">
+                    <div>가격이상: <b>${cnt.price_anomalies || 0}</b></div>
+                    <div>가격미조회: <b>${cnt.no_price || 0}</b></div>
+                    <div>Stage2 incomplete: <b>${cnt.stage2_incomplete || 0}</b></div>
+                    <div>Stage2 error: <b>${cnt.stage2_errors || 0}</b></div>
+                    <div>AI 파싱실패: <b>${cnt.ai_query_failed || 0}</b></div>
+                    <div>AI 복구: <b>${cnt.ai_query_truncated || 0}</b></div>
+                    <div>티커 미등록: <b>${cnt.ticker_invalid || 0}</b></div>
+                    <div>티커 교정: <b>${cnt.ticker_corrected || 0}</b></div>
+                </div>
+                ${report.price_anomalies && report.price_anomalies.length ? `
+                <div style="margin-top:8px;font-size:11px;">
+                    <div style="color:#e05555;font-weight:600;">⚠️ 가격 이상 종목</div>
+                    <ul style="margin:4px 0;padding-left:20px;">
+                        ${report.price_anomalies.slice(0,10).map(a => `<li>${esc(a.asset_name)} (${esc(a.ticker)}) @ ${esc(a.market)}: ${esc((a.flags||[]).join(', '))}</li>`).join('')}
+                    </ul>
+                </div>` : ''}
+                ${report.stage2_errors && report.stage2_errors.length ? `
+                <div style="margin-top:6px;font-size:11px;">
+                    <div style="color:#e05555;font-weight:600;">Stage 2 실패</div>
+                    <ul style="margin:4px 0;padding-left:20px;">
+                        ${report.stage2_errors.slice(0,10).map(e => `<li>${esc(e.asset_name)} (${esc(e.ticker)}): ${esc(e.error)}</li>`).join('')}
+                    </ul>
+                </div>` : ''}
+                ${report.stage2_incomplete && report.stage2_incomplete.length ? `
+                <div style="margin-top:6px;font-size:11px;">
+                    <div style="color:#d4a017;font-weight:600;">Stage 2 incomplete (필드 누락)</div>
+                    <ul style="margin:4px 0;padding-left:20px;">
+                        ${report.stage2_incomplete.slice(0,10).map(e => `<li>${esc(e.asset_name)} (${esc(e.ticker)}): 누락 ${esc((e.missing||[]).join(', '))}</li>`).join('')}
+                    </ul>
+                </div>` : ''}
+            </div>`;
+        }
+
+        detail.innerHTML = `
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                <div>
+                    <div style="font-size:16px;font-weight:600;">Run #${r.id} · ${esc(r.run_type)}</div>
+                    <div style="font-size:12px;color:var(--text-muted);">
+                        시작: ${fmtDateTime(r.started_at)} · 종료: ${fmtDateTime(r.finished_at)} ·
+                        ${r.duration_sec ? Math.round(r.duration_sec) + 's' : '-'}
+                    </div>
+                    <div style="margin-top:4px;font-size:13px;">${esc(r.summary || '(요약 없음)')}</div>
+                    ${r.error_message ? `<div style="color:#e05555;font-size:12px;margin-top:4px;">❌ ${esc(r.error_message)}</div>` : ''}
+                </div>
+                <div class="status-${r.status}" style="font-size:13px;font-weight:600;">${esc(r.status)}</div>
+            </div>
+
+            <div style="margin-top:10px;display:flex;gap:6px;font-size:11px;color:var(--text-muted);">
+                로그: ${Object.entries(logStats).map(([k,v])=>`${k} ${v}`).join(' · ') || '없음'}
+                · AI 쿼리: ${Object.entries(aiStats).map(([k,v])=>`${k} ${v}`).join(' · ') || '없음'}
+            </div>
+
+            ${incidentHtml}
+
+            <div style="border-bottom:1px solid var(--border);margin:12px 0;display:flex;gap:4px;">
+                <div class="diag-tab ${currentTab==='logs'?'active':''}" onclick="switchTab('logs')">로그</div>
+                <div class="diag-tab ${currentTab==='queries'?'active':''}" onclick="switchTab('queries')">AI 쿼리</div>
+                <div class="diag-tab ${currentTab==='queries_failed'?'active':''}" onclick="switchTab('queries_failed')">실패 쿼리만</div>
+            </div>
+
+            <div id="tabContent"></div>
+        `;
+        await renderTab();
+    } catch (e) {
+        detail.innerHTML = `<div style="color:#e05555;">오류: ${esc(e.message)}</div>`;
+    }
+}
+
+async function switchTab(name) {
+    currentTab = name;
+    document.querySelectorAll('.diag-tab').forEach(el => {
+        el.classList.toggle('active', el.textContent.trim() === (
+            name === 'logs' ? '로그' : name === 'queries' ? 'AI 쿼리' : '실패 쿼리만'
+        ));
+    });
+    await renderTab();
+}
+
+async function renderTab() {
+    const content = document.getElementById('tabContent');
+    if (!content) return;
+    content.innerHTML = '<div style="color:var(--text-muted);">로딩 중...</div>';
+    try {
+        if (currentTab === 'logs') {
+            const res = await fetch(`/admin/runs/${currentRunId}/logs?limit=500`);
+            const data = await res.json();
+            const logs = data.logs || [];
+            content.innerHTML = `
+                <div style="max-height:500px;overflow-y:auto;font-family:monospace;font-size:11px;line-height:1.4;">
+                ${logs.map(l => {
+                    const cls = l.level === 'ERROR' ? 'color:#e05555;' :
+                                l.level === 'WARNING' ? 'color:#d4a017;' : 'color:var(--text);';
+                    return `<div style="${cls}padding:2px 0;border-bottom:1px solid rgba(255,255,255,0.03);">
+                        <span style="color:var(--text-muted);">[${fmtDateTime(l.created_at)}]</span>
+                        <span style="color:var(--accent);">${esc(l.source || '')}</span>
+                        <b>${esc(l.level)}</b> ${esc(l.message)}
+                        ${l.detail ? `<div style="color:var(--text-muted);font-size:10px;margin-left:20px;">${esc(l.detail).substring(0,500)}</div>` : ''}
+                    </div>`;
+                }).join('') || '<div style="color:var(--text-muted);">로그 없음</div>'}
+                </div>
+            `;
+        } else {
+            const failedOnly = currentTab === 'queries_failed';
+            const res = await fetch(`/admin/runs/${currentRunId}/queries?failed_only=${failedOnly}&limit=200`);
+            const data = await res.json();
+            const queries = data.queries || [];
+            content.innerHTML = `
+                <div style="max-height:500px;overflow-y:auto;font-size:11px;">
+                ${queries.map(q => `<div class="diag-row" style="flex-direction:column;align-items:stretch;" onclick="viewQuery(${q.id})">
+                    <div style="display:flex;justify-content:space-between;gap:8px;">
+                        <div style="flex:1;min-width:0;">
+                            <div style="font-weight:600;">#${q.id} · ${esc(q.stage)} · ${esc(q.target_key || '-')}</div>
+                            <div style="color:var(--text-muted);font-size:10px;">
+                                ${esc(q.model || '')} · ${q.response_chars || 0}자 · ${q.elapsed_sec ? Math.round(q.elapsed_sec) + 's' : '-'}
+                                ${q.parse_error ? '· ' + esc(q.parse_error).substring(0,60) : ''}
+                            </div>
+                        </div>
+                        <div class="query-status-${q.parse_status}" style="font-size:10px;">${esc(q.parse_status || '-')}</div>
+                    </div>
+                </div>`).join('') || '<div style="color:var(--text-muted);padding:20px;">쿼리 없음</div>'}
+                </div>
+            `;
+        }
+    } catch (e) {
+        content.innerHTML = `<div style="color:#e05555;">오류: ${esc(e.message)}</div>`;
+    }
+}
+
+async function viewQuery(queryId) {
+    try {
+        const res = await fetch(`/admin/queries/${queryId}`);
+        const q = await res.json();
+        const html = `
+            <div style="font-size:13px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                    <div>
+                        <div style="font-weight:600;">쿼리 #${q.id} · ${esc(q.stage)} · ${esc(q.target_key || '-')}</div>
+                        <div style="color:var(--text-muted);font-size:11px;">
+                            ${esc(q.model || '')} · ${q.response_chars || 0}자 · ${q.elapsed_sec ? Math.round(q.elapsed_sec) + 's' : '-'}
+                            · 상태: <span class="query-status-${q.parse_status}">${esc(q.parse_status)}</span>
+                        </div>
+                        ${q.parse_error ? `<div style="color:#e05555;font-size:11px;">${esc(q.parse_error)}</div>` : ''}
+                        ${q.recovered_fields ? `<div style="color:#d4a017;font-size:11px;">복구된 필드: ${esc(JSON.stringify(q.recovered_fields))}</div>` : ''}
+                    </div>
+                    <div style="display:flex;gap:6px;">
+                        <a class="btn" href="/admin/queries/${q.id}/raw" target="_blank" style="padding:4px 12px;font-size:11px;text-decoration:none;">Raw 다운로드</a>
+                        <button class="btn" onclick="loadRunDetail()" style="padding:4px 12px;font-size:11px;">← 뒤로</button>
+                    </div>
+                </div>
+
+                <div style="margin-top:10px;">
+                    <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">SYSTEM PROMPT (${(q.prompt_system||'').length}자)</div>
+                    <div class="code-block">${esc((q.prompt_system || '').substring(0, 2000))}${(q.prompt_system||'').length > 2000 ? '...(truncated)' : ''}</div>
+                </div>
+                <div style="margin-top:10px;">
+                    <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">USER PROMPT (${(q.prompt_user||'').length}자)</div>
+                    <div class="code-block">${esc((q.prompt_user || '').substring(0, 3000))}${(q.prompt_user||'').length > 3000 ? '...(truncated)' : ''}</div>
+                </div>
+                <div style="margin-top:10px;">
+                    <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">RESPONSE RAW (${q.response_chars || 0}자)</div>
+                    <div class="code-block">${esc((q.response_raw || '').substring(0, 8000))}${(q.response_raw||'').length > 8000 ? '\n...(truncated — Raw 다운로드로 전문 확인)' : ''}</div>
+                </div>
+            </div>
+        `;
+        document.getElementById('runDetail').innerHTML = html;
+    } catch (e) {
+        alert('오류: ' + e.message);
+    }
+}
+
+async function loadIncidents() {
+    const sev = document.getElementById('severityFilter').value;
+    const url = sev ? `/admin/incidents?severity=${sev}&limit=30` : '/admin/incidents?limit=30';
+    try {
+        const res = await fetch(url);
+        const data = await res.json();
+        const html = (data.incidents || []).map(i => {
+            const report = i.report || {};
+            const cnt = report.counts || {};
+            return `<div class="diag-row" onclick="selectRun(${i.run_id})">
+                <div style="flex:1;min-width:0;">
+                    <div style="font-weight:600;">Run #${i.run_id} · ${esc(i.run_type || '')}</div>
+                    <div style="color:var(--text-muted);font-size:11px;">
+                        ${fmtDateTime(i.started_at)} ·
+                        가격이상 ${cnt.price_anomalies || 0}, Stage2 실패 ${cnt.stage2_errors || 0},
+                        AI 실패 ${cnt.ai_query_failed || 0}, 티커 미등록 ${cnt.ticker_invalid || 0}
+                    </div>
+                </div>
+                <div class="sev-${i.severity}" style="font-size:11px;">${esc(i.severity)} · ${i.issue_count || 0}</div>
+            </div>`;
+        }).join('');
+        document.getElementById('incidentsList').innerHTML = html || '<div style="padding:20px;color:var(--text-muted);">사건 보고서 없음</div>';
+    } catch (e) {
+        document.getElementById('incidentsList').innerHTML = `<div style="color:#e05555;">오류: ${esc(e.message)}</div>`;
+    }
+}
+
+async function loadCheckpoints() {
+    try {
+        const res = await fetch('/admin/checkpoints');
+        const data = await res.json();
+        const live = (data.live || []).map(c => `
+            <div class="diag-row" style="flex-direction:column;align-items:stretch;">
+                <div><b>[진행중]</b> ${esc(c.date)} · stages: ${(c.stages||[]).join(', ') || '(없음)'}</div>
+                ${c.meta ? `<div style="color:var(--text-muted);font-size:11px;">last_stage: ${esc(c.meta.last_stage)} · fp: ${esc((c.meta.news_fingerprint||'').substring(0,16))}</div>` : ''}
+            </div>
+        `).join('');
+        const archives = (data.archives || []).map(a => `
+            <div class="diag-row">
+                <div>
+                    <b>${esc(a.date)}</b>
+                    <span style="color:var(--text-muted);font-size:11px;">
+                        · ${(a.size_bytes/1024).toFixed(1)} KB · ${fmtDateTime(a.mtime)}
+                    </span>
+                </div>
+                <a class="btn" href="/admin/checkpoints/archive/${esc(a.date)}/download" style="padding:4px 12px;font-size:11px;text-decoration:none;">다운로드</a>
+            </div>
+        `).join('');
+        document.getElementById('checkpointsList').innerHTML =
+            (live || archives)
+                ? (live + archives)
+                : '<div style="padding:20px;color:var(--text-muted);">체크포인트 없음</div>';
+    } catch (e) {
+        document.getElementById('checkpointsList').innerHTML = `<div style="color:#e05555;">오류: ${esc(e.message)}</div>`;
+    }
+}
+
+// 초기 로드
+loadRuns();
+loadIncidents();
+loadCheckpoints();
+</script>
+{% endblock %}

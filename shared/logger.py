@@ -31,12 +31,14 @@ class DBLogHandler(logging.Handler):
     """로그 레코드를 app_logs 테이블에 저장하는 핸들러
 
     DB 장애 시 로그 저장 실패를 무시하여 애플리케이션을 중단하지 않는다.
+    B-5: extra={"context": {...}} 전달 시 JSONB 컬럼에 저장 (v23+).
     """
 
     def emit(self, record: logging.LogRecord) -> None:
         if _db_cfg is None:
             return
         try:
+            import json as _json
             from shared.db import get_connection
             conn = get_connection(_db_cfg)
             try:
@@ -45,16 +47,35 @@ class DBLogHandler(logging.Handler):
                     run_id = getattr(record, 'run_id', _current_run_id)
                     stage = getattr(record, 'stage', record.name)
                     detail = getattr(record, 'detail', None)
+                    context = getattr(record, 'context', None)
                     if record.exc_info and not detail:
                         detail = self.format(record)  # 트레이스백 포함
 
-                    cur.execute(
-                        """INSERT INTO app_logs
-                           (run_id, level, source, message, detail)
-                           VALUES (%s, %s, %s, %s, %s)""",
-                        (run_id, record.levelname, stage,
-                         record.getMessage(), detail),
-                    )
+                    context_json = None
+                    if context is not None:
+                        try:
+                            context_json = _json.dumps(context, ensure_ascii=False, default=str)
+                        except Exception:
+                            context_json = None
+
+                    # v23+: context 컬럼 포함. 없으면 graceful fallback.
+                    try:
+                        cur.execute(
+                            """INSERT INTO app_logs
+                               (run_id, level, source, message, detail, context)
+                               VALUES (%s, %s, %s, %s, %s, %s::jsonb)""",
+                            (run_id, record.levelname, stage,
+                             record.getMessage(), detail, context_json),
+                        )
+                    except Exception:
+                        conn.rollback()
+                        cur.execute(
+                            """INSERT INTO app_logs
+                               (run_id, level, source, message, detail)
+                               VALUES (%s, %s, %s, %s, %s)""",
+                            (run_id, record.levelname, stage,
+                             record.getMessage(), detail),
+                        )
                 conn.commit()
             finally:
                 conn.close()
@@ -266,3 +287,199 @@ def get_run_logs(db_cfg, run_id: int, level: str | None = None,
             conn.close()
     except Exception:
         return []
+
+
+# ── AI 쿼리 아카이브 (B-1) ────────────────────────
+
+def archive_ai_query(
+    stage: str,
+    target_key: str | None,
+    model: str | None,
+    prompt_system: str,
+    prompt_user: str,
+    response_raw: str,
+    elapsed_sec: float,
+    parse_status: str,
+    parse_error: str | None = None,
+    recovered_fields: dict | None = None,
+    run_id: int | None = None,
+) -> int | None:
+    """Claude SDK 쿼리의 원본 프롬프트+응답을 ai_query_archive에 영구 보존.
+
+    JSON 파싱 실패·빈 복구·타임아웃 등 사후 재현·재분석이 가능해진다.
+
+    Args:
+        stage: 'stage1a', 'stage1b', 'stage2', 'translate' 등
+        target_key: 테마명 또는 ticker — 디버깅 식별자
+        model: 사용 모델
+        prompt_system: 시스템 프롬프트
+        prompt_user: 사용자 프롬프트
+        response_raw: Claude 원본 응답 전문 (truncate 안 함)
+        elapsed_sec: 쿼리 소요 시간(초)
+        parse_status: 'success' | 'truncated_recovered' | 'failed' | 'empty' | 'timeout_partial'
+        parse_error: JSON 파싱 에러 메시지
+        recovered_fields: 복구 시 살아남은 필드 요약 (예: {"themes": 0, "issues": 0})
+        run_id: 현재 run_id (기본: 글로벌 _current_run_id)
+
+    Returns:
+        archive id (저장 실패 시 None)
+    """
+    if _db_cfg is None:
+        return None
+
+    effective_run_id = run_id if run_id is not None else _current_run_id
+
+    try:
+        import json as _json
+        from shared.db import get_connection
+        conn = get_connection(_db_cfg)
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """INSERT INTO ai_query_archive
+                       (run_id, stage, target_key, model,
+                        prompt_system, prompt_user, response_raw,
+                        response_chars, elapsed_sec, parse_status,
+                        parse_error, recovered_fields)
+                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+                       RETURNING id""",
+                    (
+                        effective_run_id, stage, target_key, model,
+                        prompt_system, prompt_user, response_raw,
+                        len(response_raw or ""), elapsed_sec, parse_status,
+                        parse_error,
+                        _json.dumps(recovered_fields, ensure_ascii=False)
+                            if recovered_fields else None,
+                    ),
+                )
+                archive_id = cur.fetchone()[0]
+            conn.commit()
+            return archive_id
+        finally:
+            conn.close()
+    except Exception:
+        # 아카이브 실패는 분석을 중단시키지 않음 (콘솔 로그로만)
+        try:
+            get_logger("archive").warning("AI 쿼리 아카이브 저장 실패 (무시)")
+        except Exception:
+            pass
+        return None
+
+
+def get_run_ai_queries(db_cfg, run_id: int, failed_only: bool = False,
+                       limit: int = 200) -> list[dict]:
+    """특정 run의 AI 쿼리 아카이브 목록 조회 (진단 UI용)"""
+    from psycopg2.extras import RealDictCursor
+    try:
+        from shared.db import get_connection
+        conn = get_connection(db_cfg)
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                if failed_only:
+                    cur.execute(
+                        """SELECT id, run_id, stage, target_key, model,
+                                  response_chars, elapsed_sec, parse_status,
+                                  parse_error, recovered_fields, created_at
+                           FROM ai_query_archive
+                           WHERE run_id = %s AND parse_status != 'success'
+                           ORDER BY created_at LIMIT %s""",
+                        (run_id, limit),
+                    )
+                else:
+                    cur.execute(
+                        """SELECT id, run_id, stage, target_key, model,
+                                  response_chars, elapsed_sec, parse_status,
+                                  parse_error, recovered_fields, created_at
+                           FROM ai_query_archive
+                           WHERE run_id = %s
+                           ORDER BY created_at LIMIT %s""",
+                        (run_id, limit),
+                    )
+                return [dict(row) for row in cur.fetchall()]
+        finally:
+            conn.close()
+    except Exception:
+        return []
+
+
+def get_ai_query_raw(db_cfg, query_id: int) -> dict | None:
+    """단일 AI 쿼리의 raw 응답 전문 반환 (진단용)"""
+    from psycopg2.extras import RealDictCursor
+    try:
+        from shared.db import get_connection
+        conn = get_connection(db_cfg)
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(
+                    "SELECT * FROM ai_query_archive WHERE id = %s",
+                    (query_id,),
+                )
+                row = cur.fetchone()
+                return dict(row) if row else None
+        finally:
+            conn.close()
+    except Exception:
+        return None
+
+
+# ── 사건 보고서 (B-3) ────────────────────────────
+
+def save_incident_report(db_cfg, run_id: int, session_id: int | None,
+                         report: dict, severity: str = "info") -> None:
+    """실행 종료 시 사건 보고서를 DB에 저장 (incident_reports).
+
+    Args:
+        report: {"truncated_queries": [...], "price_anomalies": [...],
+                 "invalid_tickers": [...], "stage2_failures": [...], ...}
+        severity: 'info' | 'warn' | 'critical'
+    """
+    if db_cfg is None or run_id is None:
+        return
+    try:
+        import json as _json
+        from shared.db import get_connection
+        # 보고서 항목 개수 계산
+        issue_count = 0
+        for v in report.values():
+            if isinstance(v, list):
+                issue_count += len(v)
+
+        conn = get_connection(db_cfg)
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """INSERT INTO incident_reports
+                       (run_id, session_id, severity, issue_count, report)
+                       VALUES (%s, %s, %s, %s, %s::jsonb)
+                       ON CONFLICT (run_id) DO UPDATE SET
+                         severity = EXCLUDED.severity,
+                         issue_count = EXCLUDED.issue_count,
+                         report = EXCLUDED.report""",
+                    (run_id, session_id, severity, issue_count,
+                     _json.dumps(report, ensure_ascii=False, default=str)),
+                )
+            conn.commit()
+        finally:
+            conn.close()
+    except Exception:
+        pass
+
+
+def get_incident_report(db_cfg, run_id: int) -> dict | None:
+    """run_id 의 사건 보고서 조회"""
+    from psycopg2.extras import RealDictCursor
+    try:
+        from shared.db import get_connection
+        conn = get_connection(db_cfg)
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(
+                    "SELECT * FROM incident_reports WHERE run_id = %s",
+                    (run_id,),
+                )
+                row = cur.fetchone()
+                return dict(row) if row else None
+        finally:
+            conn.close()
+    except Exception:
+        return None

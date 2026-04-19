@@ -354,7 +354,7 @@ def fetch_stock_data(ticker: str, market: str) -> dict | None:
     Returns:
         dict with keys: ticker, price, change_pct, high_52w, low_52w,
         volume_avg, market_cap, per, pbr, eps, dividend_yield, currency,
-        + price_source
+        + price_source, price_anomaly(선택)
         실패 시 None
     """
     is_krx = _is_korean_market(market)
@@ -401,7 +401,66 @@ def fetch_stock_data(ticker: str, market: str) -> dict | None:
                 if not result.get("pbr") and pykrx_data.get("pbr"):
                     result["pbr"] = pykrx_data["pbr"]
 
+    # A-2: 가격 sanity check — 페니스톡·200일MA 대비 대괴리 감지
+    if result and result.get("price"):
+        anomalies = _detect_price_anomalies(result)
+        if anomalies:
+            result["price_anomaly"] = anomalies
+            currency = result.get("currency", "")
+            get_logger("주가").warning(
+                f"{ticker} 가격 이상 감지: {', '.join(anomalies)} "
+                f"({currency}{result['price']:,.4f}) — 상장폐지·분할·심볼오류 의심"
+            )
+
     return result
+
+
+# ── 가격 이상 감지 (A-2) ──────────────────────────
+
+def _detect_price_anomalies(data: dict) -> list[str]:
+    """주가 이상징후 감지 — 의심 종목 사전 경고용.
+
+    감지 항목:
+    - penny_stock: USD/EUR/GBP $1 미만, KRW 100원 미만, JPY/HKD/TWD 10 미만
+    - extreme_drawdown_from_52w_high: 52주 고가 대비 -80% 이하 (상장폐지 위기 수준)
+    - price_vs_52w_low_anomaly: 52주 저가 아래에서 거래 중 (데이터 이상 가능)
+    - market_cap_penny: 시가총액 미화 5천만달러 미만 (micro-cap 리스크)
+    - too_cheap_for_market: 시장별 통화 단위 대비 비정상 저가
+    """
+    flags: list[str] = []
+    price = data.get("price")
+    if not price or price <= 0:
+        return flags
+
+    currency = (data.get("currency") or "").upper()
+
+    # 통화별 penny stock 임계값
+    penny_thresholds = {
+        "USD": 1.0, "EUR": 1.0, "GBP": 0.5, "CAD": 1.0, "AUD": 1.0,
+        "KRW": 100.0, "JPY": 10.0, "HKD": 1.0, "TWD": 10.0, "CNY": 1.0,
+    }
+    threshold = penny_thresholds.get(currency)
+    if threshold is not None and price < threshold:
+        flags.append(f"penny_stock(<{threshold}{currency})")
+
+    # 52주 고가 대비 급락률
+    high_52w = data.get("high_52w")
+    if high_52w and high_52w > 0:
+        drawdown_pct = (price - high_52w) / high_52w * 100
+        if drawdown_pct <= -80:
+            flags.append(f"52w_high_drawdown({drawdown_pct:.0f}%)")
+
+    # 52주 저가 아래 거래 (데이터 이상)
+    low_52w = data.get("low_52w")
+    if low_52w and low_52w > 0 and price < low_52w * 0.95:
+        flags.append("below_52w_low")
+
+    # 시가총액 극소형주
+    mcap = data.get("market_cap")
+    if mcap and currency == "USD" and mcap < 50_000_000:
+        flags.append(f"micro_cap(${mcap/1e6:.0f}M)")
+
+    return flags
 
 
 def _fetch_stock_data_yfinance(ticker: str, market: str) -> dict | None:

@@ -1,16 +1,21 @@
-"""관리자 API — 분석 실행 + SSE 실시간 로그 스트리밍"""
+"""관리자 API — 분석 실행 + SSE 실시간 로그 스트리밍 + 진단 (B-2)"""
 import os
 import sys
 import subprocess
 import threading
 import queue
 import time
+from pathlib import Path
 from typing import Optional
-from fastapi import APIRouter, Request, Query, Depends, Body
-from fastapi.responses import StreamingResponse, JSONResponse
+from fastapi import APIRouter, Request, Query, Depends, Body, HTTPException
+from fastapi.responses import StreamingResponse, JSONResponse, PlainTextResponse, FileResponse
 from fastapi.templating import Jinja2Templates
 from shared.config import DatabaseConfig, AnalyzerConfig, AuthConfig
 from shared.db import get_untranslated_news, update_news_title_ko, update_news_translation, get_connection
+from shared.logger import (
+    get_recent_runs, get_run_logs, get_run_ai_queries,
+    get_ai_query_raw, get_incident_report,
+)
 from api.auth.dependencies import require_role, get_current_user, _get_auth_cfg
 from api.auth.models import UserInDB
 
@@ -562,3 +567,317 @@ def copy_from_remote(
                 local_conn.close()
 
     return StreamingResponse(stream(), media_type="text/event-stream")
+
+
+# ── 진단 탭 (B-2) ─────────────────────────────────
+
+@router.get("/diagnostics")
+def diagnostics_page(
+    request: Request,
+    user: Optional[UserInDB] = Depends(get_current_user),
+    auth_cfg: AuthConfig = Depends(_get_auth_cfg),
+):
+    """진단 페이지 (로그·쿼리·체크포인트·사건 보고서 조회)."""
+    from fastapi.responses import RedirectResponse
+    if auth_cfg.enabled:
+        if user is None:
+            return RedirectResponse("/auth/login?next=/admin/diagnostics", status_code=302)
+        if user.role != "admin":
+            raise HTTPException(status_code=403, detail="접근 권한이 없습니다")
+    return templates.TemplateResponse(request=request, name="admin_diagnostics.html", context={
+        "request": request,
+        "active_page": "admin",
+        "current_user": user,
+        "auth_enabled": auth_cfg.enabled,
+    })
+
+
+@router.get("/runs")
+def api_list_runs(
+    run_type: Optional[str] = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=500),
+    _admin: Optional[UserInDB] = Depends(require_role("admin")),
+):
+    """최근 실행(app_runs) 목록."""
+    cfg = DatabaseConfig()
+    runs = get_recent_runs(cfg, run_type=run_type, limit=limit)
+    # datetime/Decimal 직렬화
+    for r in runs:
+        for k, v in list(r.items()):
+            if hasattr(v, "isoformat"):
+                r[k] = v.isoformat()
+            elif hasattr(v, "__float__") and not isinstance(v, (int, float, bool)):
+                try:
+                    r[k] = float(v)
+                except Exception:
+                    r[k] = str(v)
+    return {"runs": runs, "total": len(runs)}
+
+
+@router.get("/runs/{run_id}")
+def api_run_detail(
+    run_id: int,
+    _admin: Optional[UserInDB] = Depends(require_role("admin")),
+):
+    """단일 run 상세 (run + 사건보고서 + 통계)."""
+    cfg = DatabaseConfig()
+    conn = get_connection(cfg)
+    try:
+        from psycopg2.extras import RealDictCursor
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT * FROM app_runs WHERE id = %s", (run_id,))
+            run = cur.fetchone()
+            if not run:
+                raise HTTPException(status_code=404, detail="run not found")
+            cur.execute(
+                """SELECT level, COUNT(*) AS cnt FROM app_logs
+                   WHERE run_id = %s GROUP BY level""",
+                (run_id,),
+            )
+            log_stats = {r["level"]: int(r["cnt"]) for r in cur.fetchall()}
+            cur.execute(
+                """SELECT parse_status, COUNT(*) AS cnt FROM ai_query_archive
+                   WHERE run_id = %s GROUP BY parse_status""",
+                (run_id,),
+            )
+            ai_stats = {r["parse_status"] or "unknown": int(r["cnt"]) for r in cur.fetchall()}
+    finally:
+        conn.close()
+
+    incident = get_incident_report(cfg, run_id)
+
+    def _serialize(obj):
+        if hasattr(obj, "isoformat"):
+            return obj.isoformat()
+        if hasattr(obj, "__float__") and not isinstance(obj, (int, float, bool)):
+            try:
+                return float(obj)
+            except Exception:
+                return str(obj)
+        return obj
+
+    run_clean = {k: _serialize(v) for k, v in dict(run).items()}
+    incident_clean = None
+    if incident:
+        incident_clean = {k: _serialize(v) for k, v in incident.items()}
+    return {
+        "run": run_clean,
+        "log_stats": log_stats,
+        "ai_query_stats": ai_stats,
+        "incident": incident_clean,
+    }
+
+
+@router.get("/runs/{run_id}/logs")
+def api_run_logs(
+    run_id: int,
+    level: Optional[str] = Query(default=None, description="INFO/WARNING/ERROR"),
+    limit: int = Query(default=500, ge=1, le=5000),
+    _admin: Optional[UserInDB] = Depends(require_role("admin")),
+):
+    """run의 app_logs 조회."""
+    cfg = DatabaseConfig()
+    logs = get_run_logs(cfg, run_id, level=level, limit=limit)
+    for r in logs:
+        for k, v in list(r.items()):
+            if hasattr(v, "isoformat"):
+                r[k] = v.isoformat()
+    return {"logs": logs, "total": len(logs)}
+
+
+@router.get("/runs/{run_id}/queries")
+def api_run_queries(
+    run_id: int,
+    failed_only: bool = Query(default=False),
+    limit: int = Query(default=200, ge=1, le=2000),
+    _admin: Optional[UserInDB] = Depends(require_role("admin")),
+):
+    """run의 ai_query_archive 목록 (raw 응답은 제외)."""
+    cfg = DatabaseConfig()
+    queries = get_run_ai_queries(cfg, run_id, failed_only=failed_only, limit=limit)
+    for r in queries:
+        for k, v in list(r.items()):
+            if hasattr(v, "isoformat"):
+                r[k] = v.isoformat()
+            elif hasattr(v, "__float__") and not isinstance(v, (int, float, bool)):
+                try:
+                    r[k] = float(v)
+                except Exception:
+                    r[k] = str(v)
+    return {"queries": queries, "total": len(queries)}
+
+
+@router.get("/queries/{query_id}")
+def api_query_detail(
+    query_id: int,
+    _admin: Optional[UserInDB] = Depends(require_role("admin")),
+):
+    """단일 AI 쿼리 상세 (프롬프트·응답 전문 포함)."""
+    cfg = DatabaseConfig()
+    row = get_ai_query_raw(cfg, query_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="query not found")
+    for k, v in list(row.items()):
+        if hasattr(v, "isoformat"):
+            row[k] = v.isoformat()
+        elif hasattr(v, "__float__") and not isinstance(v, (int, float, bool)):
+            try:
+                row[k] = float(v)
+            except Exception:
+                row[k] = str(v)
+    return row
+
+
+@router.get("/queries/{query_id}/raw")
+def api_query_raw_text(
+    query_id: int,
+    _admin: Optional[UserInDB] = Depends(require_role("admin")),
+):
+    """AI 쿼리 raw 응답 전문을 plain text로 다운로드."""
+    cfg = DatabaseConfig()
+    row = get_ai_query_raw(cfg, query_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="query not found")
+    stage = row.get("stage", "unknown")
+    tk = (row.get("target_key") or "").replace("/", "_").replace(":", "_")[:80]
+    filename = f"query_{query_id}_{stage}_{tk}.txt"
+    body = (
+        f"# AI Query Archive #{query_id}\n"
+        f"stage: {stage}\n"
+        f"target: {row.get('target_key')}\n"
+        f"model: {row.get('model')}\n"
+        f"parse_status: {row.get('parse_status')}\n"
+        f"parse_error: {row.get('parse_error')}\n"
+        f"response_chars: {row.get('response_chars')}\n"
+        f"elapsed_sec: {row.get('elapsed_sec')}\n"
+        f"created_at: {row.get('created_at')}\n"
+        f"\n===== SYSTEM PROMPT =====\n{row.get('prompt_system') or ''}\n"
+        f"\n===== USER PROMPT =====\n{row.get('prompt_user') or ''}\n"
+        f"\n===== RESPONSE RAW =====\n{row.get('response_raw') or ''}\n"
+    )
+    return PlainTextResponse(
+        body,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/checkpoints")
+def api_list_checkpoints(
+    _admin: Optional[UserInDB] = Depends(require_role("admin")),
+):
+    """체크포인트 아카이브 목록 + 현재 진행 중인 체크포인트."""
+    from analyzer.checkpoint import list_archives
+    archives = list_archives()
+
+    live: list[dict] = []
+    cp_root = Path("_checkpoints")
+    if cp_root.exists():
+        for d in sorted(cp_root.iterdir(), reverse=True):
+            if d.is_dir() and d.name != "archive":
+                stages = sorted(f.stem for f in d.glob("*.json") if f.stem != "_meta")
+                meta_path = d / "_meta.json"
+                meta = None
+                if meta_path.exists():
+                    try:
+                        import json as _json
+                        meta = _json.loads(meta_path.read_text(encoding="utf-8"))
+                    except Exception:
+                        meta = None
+                live.append({
+                    "date": d.name,
+                    "stages": stages,
+                    "meta": meta,
+                })
+    return {"archives": archives, "live": live}
+
+
+@router.get("/checkpoints/{date}")
+def api_checkpoint_detail(
+    date: str,
+    stage: Optional[str] = Query(default=None),
+    _admin: Optional[UserInDB] = Depends(require_role("admin")),
+):
+    """체크포인트 단건 조회 — 현재 진행 중인 체크포인트의 특정 stage."""
+    # 경로 탈출 방지
+    if not date.replace("-", "").isalnum() or len(date) > 20:
+        raise HTTPException(status_code=400, detail="invalid date")
+
+    cp_dir = Path("_checkpoints") / date
+    if not cp_dir.exists():
+        raise HTTPException(status_code=404, detail="checkpoint not found")
+
+    if stage:
+        # 경로 탈출 방지
+        if not stage.replace("_", "").isalnum() or len(stage) > 30:
+            raise HTTPException(status_code=400, detail="invalid stage")
+        target = cp_dir / f"{stage}.json"
+        if not target.exists():
+            raise HTTPException(status_code=404, detail="stage not found")
+        import json as _json
+        try:
+            data = _json.loads(target.read_text(encoding="utf-8"))
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"parse error: {e}")
+        return {"date": date, "stage": stage, "data": data}
+
+    # 전체 stage 목록
+    stages = sorted(f.stem for f in cp_dir.glob("*.json") if f.stem != "_meta")
+    return {"date": date, "stages": stages}
+
+
+@router.get("/checkpoints/archive/{date}/download")
+def api_checkpoint_archive_download(
+    date: str,
+    _admin: Optional[UserInDB] = Depends(require_role("admin")),
+):
+    """체크포인트 아카이브 tar.gz 다운로드."""
+    if not date.replace("-", "").isalnum() or len(date) > 20:
+        raise HTTPException(status_code=400, detail="invalid date")
+    target = Path("_checkpoints") / "archive" / f"{date}.tar.gz"
+    if not target.exists():
+        raise HTTPException(status_code=404, detail="archive not found")
+    return FileResponse(
+        path=str(target),
+        media_type="application/gzip",
+        filename=f"checkpoint_{date}.tar.gz",
+    )
+
+
+@router.get("/incidents")
+def api_list_incidents(
+    severity: Optional[str] = Query(default=None, description="info/warn/critical"),
+    limit: int = Query(default=30, ge=1, le=200),
+    _admin: Optional[UserInDB] = Depends(require_role("admin")),
+):
+    """사건 보고서 목록 (최근 run들의 incident 요약)."""
+    cfg = DatabaseConfig()
+    conn = get_connection(cfg)
+    try:
+        from psycopg2.extras import RealDictCursor
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            if severity:
+                cur.execute(
+                    """SELECT ir.*, ar.run_type, ar.started_at, ar.status
+                       FROM incident_reports ir
+                       JOIN app_runs ar ON ar.id = ir.run_id
+                       WHERE ir.severity = %s
+                       ORDER BY ir.created_at DESC LIMIT %s""",
+                    (severity, limit),
+                )
+            else:
+                cur.execute(
+                    """SELECT ir.*, ar.run_type, ar.started_at, ar.status
+                       FROM incident_reports ir
+                       JOIN app_runs ar ON ar.id = ir.run_id
+                       ORDER BY ir.created_at DESC LIMIT %s""",
+                    (limit,),
+                )
+            rows = [dict(r) for r in cur.fetchall()]
+    finally:
+        conn.close()
+
+    for r in rows:
+        for k, v in list(r.items()):
+            if hasattr(v, "isoformat"):
+                r[k] = v.isoformat()
+    return {"incidents": rows, "total": len(rows)}
