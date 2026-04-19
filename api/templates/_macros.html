@@ -1,5 +1,63 @@
 {# ── 공통 매크로 ─────────────────────────────── #}
 
+{# ── 시장 요약 본문 (구조화 렌더링)
+   입력 형식: [시장 환경] / [핵심 이슈] / [투자 시사점] / [주의] + ★/- 불릿
+   - 섹션 타이틀은 색상 강조, `[주의]`/`[경고]`/`[리스크]`는 red 테마로 래핑
+   - ★ / - 불릿은 left-border 하이라이트, `라벨: 내용` 의 라벨을 강조
+── #}
+{% macro market_summary_body(text, fallback="(분석 요약 없음)") -%}
+{%- if text -%}
+{%- set has_sections = '[' in text and ']' in text -%}
+{%- if has_sections -%}
+{%- for line in text.split('\n') -%}
+{%- set trimmed = line.strip() -%}
+{%- if trimmed == '' -%}
+{%- elif trimmed.startswith('[') and ']' in trimmed -%}
+    {%- set section_title = trimmed.split(']')[0][1:] -%}
+    {%- set section_content = trimmed.split(']', 1)[1].strip() -%}
+    {%- set is_warn = ('주의' in section_title) or ('경고' in section_title) or ('리스크' in section_title) -%}
+    <div class="summary-section{% if is_warn %} summary-section-warn{% endif %}">
+        <div class="summary-section-title">{{ section_title }}</div>
+        {%- if section_content -%}
+        <div class="summary-section-content">{{ section_content }}</div>
+        {%- endif -%}
+    </div>
+{%- elif trimmed.startswith('★') -%}
+    {%- set rest = trimmed[1:].strip() -%}
+    <div class="summary-highlight summary-highlight-star">
+        <span class="summary-bullet">★</span>
+        {%- if ':' in rest -%}
+        <strong class="summary-label">{{ rest.split(':',1)[0].strip() }}</strong><span class="summary-sep">:</span> <span class="summary-text">{{ rest.split(':',1)[1].strip() }}</span>
+        {%- else -%}
+        <span class="summary-text">{{ rest }}</span>
+        {%- endif -%}
+    </div>
+{%- elif trimmed.startswith('-') -%}
+    {%- set rest = trimmed[1:].strip() -%}
+    <div class="summary-highlight summary-highlight-dash">
+        <span class="summary-bullet summary-bullet-green">▸</span>
+        {%- if ':' in rest -%}
+        <strong class="summary-label summary-label-green">{{ rest.split(':',1)[0].strip() }}</strong><span class="summary-sep">:</span> <span class="summary-text">{{ rest.split(':',1)[1].strip() }}</span>
+        {%- else -%}
+        <span class="summary-text">{{ rest }}</span>
+        {%- endif -%}
+    </div>
+{%- elif trimmed.startswith('▸') -%}
+    <div class="summary-highlight summary-highlight-theme">{{ trimmed }}</div>
+{%- elif trimmed.startswith('⚠') -%}
+    <div class="summary-highlight summary-highlight-warn">{{ trimmed }}</div>
+{%- else -%}
+    <div class="summary-section-content">{{ trimmed }}</div>
+{%- endif -%}
+{%- endfor -%}
+{%- else -%}
+<div style="white-space: pre-line;">{{ text }}</div>
+{%- endif -%}
+{%- else -%}
+{{ fallback }}
+{%- endif -%}
+{%- endmacro %}
+
 {# ── 제안 카드 (테마 내부용: 간결 모드) ── #}
 {% macro proposal_card_compact(p) %}
 <div class="proposal-card" style="margin-bottom:12px;">
