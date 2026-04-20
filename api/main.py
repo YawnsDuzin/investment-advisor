@@ -40,6 +40,7 @@ app.include_router(auth_routes.router)
 
 # JSON API 라우트 (/sessions, /themes, /proposals, /chat)
 app.include_router(sessions.router)
+app.include_router(sessions.pages_router)
 app.include_router(themes.router)
 app.include_router(proposals.router)
 app.include_router(proposals.api_router)
