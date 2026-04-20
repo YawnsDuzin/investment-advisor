@@ -1,5 +1,5 @@
 """공통 FastAPI dependency 팩토리 (B2 + B2.5)."""
-from typing import Iterator, Optional
+from typing import Any, Iterator, Optional
 
 from fastapi import Depends, Request
 from shared.config import DatabaseConfig, AuthConfig
@@ -13,7 +13,7 @@ def get_db_cfg() -> DatabaseConfig:
     return DatabaseConfig()
 
 
-def get_db_conn(cfg: DatabaseConfig = Depends(get_db_cfg)) -> Iterator:
+def get_db_conn(cfg: DatabaseConfig = Depends(get_db_cfg)) -> Iterator[Any]:
     """DB 연결을 FastAPI dependency lifecycle로 관리 (B2.5).
 
     사용: `def route(conn = Depends(get_db_conn))`.

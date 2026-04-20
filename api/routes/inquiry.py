@@ -5,7 +5,7 @@ from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 from psycopg2.extras import RealDictCursor
 from api.serialization import serialize_row as _serialize_row
-from api.auth.dependencies import get_current_user, get_current_user_required, require_role, _get_auth_cfg
+from api.auth.dependencies import get_current_user_required, require_role
 from api.auth.models import UserInDB
 from api.templates_provider import templates
 from api.deps import get_db_conn, make_page_ctx

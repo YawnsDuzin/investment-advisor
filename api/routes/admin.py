@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Optional
 from fastapi import APIRouter, Request, Query, Depends, Body, HTTPException
 from fastapi.responses import StreamingResponse, JSONResponse, PlainTextResponse, FileResponse
+from psycopg2.extras import RealDictCursor
 from shared.config import AnalyzerConfig, AuthConfig
 from api.templates_provider import templates
 from shared.db import get_untranslated_news, update_news_title_ko, update_news_translation, get_connection
@@ -624,7 +625,6 @@ def api_run_detail(
 ):
     """단일 run 상세 (run + 사건보고서 + 통계)."""
     cfg = _get_cfg()
-    from psycopg2.extras import RealDictCursor
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute("SELECT * FROM app_runs WHERE id = %s", (run_id,))
         run = cur.fetchone()
@@ -850,7 +850,6 @@ def api_list_incidents(
     conn=Depends(get_db_conn),
 ):
     """사건 보고서 목록 (최근 run들의 incident 요약)."""
-    from psycopg2.extras import RealDictCursor
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         if severity:
             cur.execute(

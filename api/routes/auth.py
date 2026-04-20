@@ -2,7 +2,7 @@
 from typing import Optional
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Request, Form, Depends, HTTPException
-from fastapi.responses import RedirectResponse, HTMLResponse, JSONResponse
+from fastapi.responses import RedirectResponse, JSONResponse
 from shared.config import AuthConfig
 from psycopg2.extras import RealDictCursor
 from api.auth.password import hash_password, verify_password
