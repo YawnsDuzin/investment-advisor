@@ -7,17 +7,19 @@ import queue
 import time
 from pathlib import Path
 from typing import Optional
-from fastapi import APIRouter, Request, Query, Depends, Body, HTTPException
+from fastapi import APIRouter, Query, Depends, Body, HTTPException
 from fastapi.responses import StreamingResponse, JSONResponse, PlainTextResponse, FileResponse
-from shared.config import DatabaseConfig, AnalyzerConfig, AuthConfig
+from psycopg2.extras import RealDictCursor
+from shared.config import AnalyzerConfig
 from api.templates_provider import templates
 from shared.db import get_untranslated_news, update_news_title_ko, update_news_translation, get_connection
 from shared.logger import (
     get_recent_runs, get_run_logs, get_run_ai_queries,
     get_ai_query_raw, get_incident_report,
 )
-from api.auth.dependencies import require_role, get_current_user, _get_auth_cfg
+from api.auth.dependencies import require_role
 from api.auth.models import UserInDB
+from api.deps import get_db_cfg as _get_cfg, get_db_conn, make_page_ctx
 
 router = APIRouter(prefix="/admin", tags=["관리자"])
 
@@ -40,22 +42,15 @@ def _broadcast(msg: str | None):
 
 
 @router.get("")
-def admin_page(request: Request, user: Optional[UserInDB] = Depends(get_current_user), auth_cfg: AuthConfig = Depends(_get_auth_cfg)):
+def admin_page(ctx: dict = Depends(make_page_ctx("admin"))):
     """관리자 페이지"""
     from fastapi.responses import RedirectResponse
-    if auth_cfg.enabled:
-        if user is None:
+    if ctx["auth_enabled"]:
+        if ctx["_user"] is None:
             return RedirectResponse("/auth/login?next=/admin", status_code=302)
-        if user.role != "admin":
-            from fastapi import HTTPException
+        if ctx["_user"].role != "admin":
             raise HTTPException(status_code=403, detail="접근 권한이 없습니다")
-    return templates.TemplateResponse(request=request, name="admin.html", context={
-        "request": request,
-        "active_page": "admin",
-        "is_running": _running,
-        "current_user": user,
-        "auth_enabled": auth_cfg.enabled,
-    })
+    return templates.TemplateResponse(request=ctx["request"], name="admin.html", context=ctx)
 
 
 @router.get("/status")
@@ -83,6 +78,7 @@ def get_logs(after: int = Query(default=0, ge=0), _admin: Optional[UserInDB] = D
 @router.post("/run")
 def run_analysis(_admin: Optional[UserInDB] = Depends(require_role("admin"))):
     """분석 파이프라인 실행 (SSE 스트리밍)"""
+    # SSE stream — B2.5 Pattern A 예외: stream lifecycle과 FastAPI Depends yield 충돌 회피
     global _running, _process, _log_lines
 
     if _running:
@@ -170,6 +166,7 @@ def run_analysis(_admin: Optional[UserInDB] = Depends(require_role("admin"))):
 @router.get("/stream")
 def stream_existing(_admin: Optional[UserInDB] = Depends(require_role("admin"))):
     """실행 중인 분석의 로그를 실시간 구독 (재접속용)"""
+    # SSE stream — B2.5 Pattern A 예외: stream lifecycle과 FastAPI Depends yield 충돌 회피
     if not _running:
         def not_running():
             yield "event: done\ndata: not_running\n\n"
@@ -231,7 +228,7 @@ _translating = False
 @router.get("/translate-news/status")
 def translate_status(_admin: Optional[UserInDB] = Depends(require_role("admin"))):
     """미번역 뉴스 건수 조회"""
-    cfg = DatabaseConfig()
+    cfg = _get_cfg()
     articles = get_untranslated_news(cfg)
     return {"untranslated_count": len(articles), "translating": _translating}
 
@@ -239,6 +236,7 @@ def translate_status(_admin: Optional[UserInDB] = Depends(require_role("admin"))
 @router.post("/translate-news")
 def translate_existing_news(_admin: Optional[UserInDB] = Depends(require_role("admin"))):
     """기존 미번역 뉴스를 한글 번역 (SSE 스트리밍)"""
+    # SSE stream — B2.5 Pattern A 예외: stream lifecycle과 FastAPI Depends yield 충돌 회피
     global _translating
 
     if _translating:
@@ -247,7 +245,7 @@ def translate_existing_news(_admin: Optional[UserInDB] = Depends(require_role("a
             yield "event: done\ndata: already\n\n"
         return StreamingResponse(already(), media_type="text/event-stream")
 
-    cfg = DatabaseConfig()
+    cfg = _get_cfg()
     articles = get_untranslated_news(cfg)
 
     if not articles:
@@ -374,10 +372,11 @@ def translate_existing_news(_admin: Optional[UserInDB] = Depends(require_role("a
 # ── 전체 데이터 삭제 ──────────────────────────────
 
 @router.post("/reset-all-data")
-def reset_all_data(_admin: Optional[UserInDB] = Depends(require_role("admin"))):
+def reset_all_data(
+    _admin: Optional[UserInDB] = Depends(require_role("admin")),
+    conn=Depends(get_db_conn),
+):
     """분석 데이터 전체 삭제 (CASCADE로 하위 테이블 포함)"""
-    cfg = DatabaseConfig()
-    conn = get_connection(cfg)
     try:
         with conn.cursor() as cur:
             # CASCADE 관계에 의해 하위 테이블 자동 삭제
@@ -400,8 +399,6 @@ def reset_all_data(_admin: Optional[UserInDB] = Depends(require_role("admin"))):
     except Exception as e:
         conn.rollback()
         return JSONResponse(status_code=500, content={"message": f"삭제 실패: {e}"})
-    finally:
-        conn.close()
 
 
 # ── 원격 DB → 로컬 DB 데이터 복사 ──────────────────
@@ -436,11 +433,12 @@ def copy_from_remote(
     _admin: Optional[UserInDB] = Depends(require_role("admin")),
 ):
     """원격 DB에서 분석 데이터를 로컬 DB로 복사 (SSE 스트리밍)"""
+    # SSE stream — B2.5 Pattern A 예외: stream lifecycle과 FastAPI Depends yield 충돌 회피
     import psycopg2
     from psycopg2.extras import Json, RealDictCursor
 
     def stream():
-        local_cfg = DatabaseConfig()
+        local_cfg = _get_cfg()
         remote_conn = None
         local_conn = None
 
@@ -570,24 +568,15 @@ def copy_from_remote(
 # ── 진단 탭 (B-2) ─────────────────────────────────
 
 @router.get("/diagnostics")
-def diagnostics_page(
-    request: Request,
-    user: Optional[UserInDB] = Depends(get_current_user),
-    auth_cfg: AuthConfig = Depends(_get_auth_cfg),
-):
+def diagnostics_page(ctx: dict = Depends(make_page_ctx("admin"))):
     """진단 페이지 (로그·쿼리·체크포인트·사건 보고서 조회)."""
     from fastapi.responses import RedirectResponse
-    if auth_cfg.enabled:
-        if user is None:
+    if ctx["auth_enabled"]:
+        if ctx["_user"] is None:
             return RedirectResponse("/auth/login?next=/admin/diagnostics", status_code=302)
-        if user.role != "admin":
+        if ctx["_user"].role != "admin":
             raise HTTPException(status_code=403, detail="접근 권한이 없습니다")
-    return templates.TemplateResponse(request=request, name="admin_diagnostics.html", context={
-        "request": request,
-        "active_page": "admin",
-        "current_user": user,
-        "auth_enabled": auth_cfg.enabled,
-    })
+    return templates.TemplateResponse(request=ctx["request"], name="admin_diagnostics.html", context=ctx)
 
 
 @router.get("/runs")
@@ -597,7 +586,7 @@ def api_list_runs(
     _admin: Optional[UserInDB] = Depends(require_role("admin")),
 ):
     """최근 실행(app_runs) 목록."""
-    cfg = DatabaseConfig()
+    cfg = _get_cfg()
     runs = get_recent_runs(cfg, run_type=run_type, limit=limit)
     # datetime/Decimal 직렬화
     for r in runs:
@@ -616,31 +605,27 @@ def api_list_runs(
 def api_run_detail(
     run_id: int,
     _admin: Optional[UserInDB] = Depends(require_role("admin")),
+    conn=Depends(get_db_conn),
 ):
     """단일 run 상세 (run + 사건보고서 + 통계)."""
-    cfg = DatabaseConfig()
-    conn = get_connection(cfg)
-    try:
-        from psycopg2.extras import RealDictCursor
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("SELECT * FROM app_runs WHERE id = %s", (run_id,))
-            run = cur.fetchone()
-            if not run:
-                raise HTTPException(status_code=404, detail="run not found")
-            cur.execute(
-                """SELECT level, COUNT(*) AS cnt FROM app_logs
-                   WHERE run_id = %s GROUP BY level""",
-                (run_id,),
-            )
-            log_stats = {r["level"]: int(r["cnt"]) for r in cur.fetchall()}
-            cur.execute(
-                """SELECT parse_status, COUNT(*) AS cnt FROM ai_query_archive
-                   WHERE run_id = %s GROUP BY parse_status""",
-                (run_id,),
-            )
-            ai_stats = {r["parse_status"] or "unknown": int(r["cnt"]) for r in cur.fetchall()}
-    finally:
-        conn.close()
+    cfg = _get_cfg()
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute("SELECT * FROM app_runs WHERE id = %s", (run_id,))
+        run = cur.fetchone()
+        if not run:
+            raise HTTPException(status_code=404, detail="run not found")
+        cur.execute(
+            """SELECT level, COUNT(*) AS cnt FROM app_logs
+               WHERE run_id = %s GROUP BY level""",
+            (run_id,),
+        )
+        log_stats = {r["level"]: int(r["cnt"]) for r in cur.fetchall()}
+        cur.execute(
+            """SELECT parse_status, COUNT(*) AS cnt FROM ai_query_archive
+               WHERE run_id = %s GROUP BY parse_status""",
+            (run_id,),
+        )
+        ai_stats = {r["parse_status"] or "unknown": int(r["cnt"]) for r in cur.fetchall()}
 
     incident = get_incident_report(cfg, run_id)
 
@@ -674,7 +659,7 @@ def api_run_logs(
     _admin: Optional[UserInDB] = Depends(require_role("admin")),
 ):
     """run의 app_logs 조회."""
-    cfg = DatabaseConfig()
+    cfg = _get_cfg()
     logs = get_run_logs(cfg, run_id, level=level, limit=limit)
     for r in logs:
         for k, v in list(r.items()):
@@ -691,7 +676,7 @@ def api_run_queries(
     _admin: Optional[UserInDB] = Depends(require_role("admin")),
 ):
     """run의 ai_query_archive 목록 (raw 응답은 제외)."""
-    cfg = DatabaseConfig()
+    cfg = _get_cfg()
     queries = get_run_ai_queries(cfg, run_id, failed_only=failed_only, limit=limit)
     for r in queries:
         for k, v in list(r.items()):
@@ -711,7 +696,7 @@ def api_query_detail(
     _admin: Optional[UserInDB] = Depends(require_role("admin")),
 ):
     """단일 AI 쿼리 상세 (프롬프트·응답 전문 포함)."""
-    cfg = DatabaseConfig()
+    cfg = _get_cfg()
     row = get_ai_query_raw(cfg, query_id)
     if not row:
         raise HTTPException(status_code=404, detail="query not found")
@@ -732,7 +717,7 @@ def api_query_raw_text(
     _admin: Optional[UserInDB] = Depends(require_role("admin")),
 ):
     """AI 쿼리 raw 응답 전문을 plain text로 다운로드."""
-    cfg = DatabaseConfig()
+    cfg = _get_cfg()
     row = get_ai_query_raw(cfg, query_id)
     if not row:
         raise HTTPException(status_code=404, detail="query not found")
@@ -846,33 +831,28 @@ def api_list_incidents(
     severity: Optional[str] = Query(default=None, description="info/warn/critical"),
     limit: int = Query(default=30, ge=1, le=200),
     _admin: Optional[UserInDB] = Depends(require_role("admin")),
+    conn=Depends(get_db_conn),
 ):
     """사건 보고서 목록 (최근 run들의 incident 요약)."""
-    cfg = DatabaseConfig()
-    conn = get_connection(cfg)
-    try:
-        from psycopg2.extras import RealDictCursor
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            if severity:
-                cur.execute(
-                    """SELECT ir.*, ar.run_type, ar.started_at, ar.status
-                       FROM incident_reports ir
-                       JOIN app_runs ar ON ar.id = ir.run_id
-                       WHERE ir.severity = %s
-                       ORDER BY ir.created_at DESC LIMIT %s""",
-                    (severity, limit),
-                )
-            else:
-                cur.execute(
-                    """SELECT ir.*, ar.run_type, ar.started_at, ar.status
-                       FROM incident_reports ir
-                       JOIN app_runs ar ON ar.id = ir.run_id
-                       ORDER BY ir.created_at DESC LIMIT %s""",
-                    (limit,),
-                )
-            rows = [dict(r) for r in cur.fetchall()]
-    finally:
-        conn.close()
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        if severity:
+            cur.execute(
+                """SELECT ir.*, ar.run_type, ar.started_at, ar.status
+                   FROM incident_reports ir
+                   JOIN app_runs ar ON ar.id = ir.run_id
+                   WHERE ir.severity = %s
+                   ORDER BY ir.created_at DESC LIMIT %s""",
+                (severity, limit),
+            )
+        else:
+            cur.execute(
+                """SELECT ir.*, ar.run_type, ar.started_at, ar.status
+                   FROM incident_reports ir
+                   JOIN app_runs ar ON ar.id = ir.run_id
+                   ORDER BY ir.created_at DESC LIMIT %s""",
+                (limit,),
+            )
+        rows = [dict(r) for r in cur.fetchall()]
 
     for r in rows:
         for k, v in list(r.items()):
