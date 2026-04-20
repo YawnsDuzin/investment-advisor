@@ -1,1 +1,27 @@
-/* 01_tokens — populated in later tasks */
+/* ===== Reset & Base ===== */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+    --bg: #0f1117;
+    --bg-card: #1a1d27;
+    --bg-card-hover: #222632;
+    --border: #2a2e3a;
+    --text: #e4e6eb;
+    --text-muted: #9ba0b4;
+    --accent: #4f8cff;
+    --accent-hover: #6ba0ff;
+    --green: #34d399;
+    --red: #f87171;
+    --orange: #fbbf24;
+    --purple: #9382ff;
+    --sidebar-w: 240px;
+    /* 의미 기반 alias (누락된 --success/--danger/--warning 보강) */
+    --success: #34d399;
+    --danger: #f87171;
+    --warning: #fbbf24;
+    --color-positive: var(--green);
+    --color-negative: var(--red);
+    --color-warning: var(--orange);
+    --color-signal: var(--purple);
+    --color-neutral: var(--text-muted);
+}
