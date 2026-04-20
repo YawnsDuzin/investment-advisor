@@ -1,7 +1,44 @@
-"""DB 계층 공개 API (A 트랙 분할 진행 중 — 임시 shim).
+"""DB 계층 공개 API.
 
-T2~T11에서 내부 구조가 점진적으로 `shared.db.*` 서브모듈로 이동한다.
-T12에서 이 shim을 명시적 re-export + __all__ 선언으로 치환하고
-`shared/db_legacy.py`를 삭제한다.
+외부 모듈은 이 패키지에서만 import할 것. 내부 구조(connection/schema/migrations/
+session_repo/news_repo/query_repo/top_picks_repo)는 구현 디테일이며 호출부는
+신경쓰지 않아도 된다.
+
+테스트에서 `_migrate_to_vN` 같은 private 심볼이 필요하면
+`shared.db.migrations.versions`에서 직접 import한다.
 """
-from shared.db_legacy import *  # noqa: F401, F403
+from shared.db.connection import get_connection
+from shared.db.schema import SCHEMA_VERSION, init_db
+from shared.db.session_repo import save_analysis
+from shared.db.news_repo import (
+    save_news_articles,
+    get_untranslated_news,
+    update_news_title_ko,
+    update_news_translation,
+    get_latest_news_titles,
+)
+from shared.db.query_repo import (
+    get_recent_recommendations,
+    get_existing_theme_keys,
+)
+from shared.db.top_picks_repo import (
+    save_top_picks,
+    update_top_picks_ai_rerank,
+)
+
+
+__all__ = [
+    "SCHEMA_VERSION",
+    "get_connection",
+    "init_db",
+    "save_analysis",
+    "save_news_articles",
+    "get_untranslated_news",
+    "update_news_title_ko",
+    "update_news_translation",
+    "get_latest_news_titles",
+    "get_recent_recommendations",
+    "get_existing_theme_keys",
+    "save_top_picks",
+    "update_top_picks_ai_rerank",
+]
