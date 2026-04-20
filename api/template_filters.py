@@ -34,6 +34,7 @@ def fmt_price(value, currency: str = "") -> str:
     if num == 0:
         return "-"
     symbol = _CURRENCY_SYMBOLS.get((currency or "").upper(), "")
+    # KRW, JPY 등은 소수점 없이 표시
     if (currency or "").upper() in ("KRW", "JPY"):
         return f"{symbol}{num:,.0f}"
     return f"{symbol}{num:,.2f}"
@@ -64,7 +65,12 @@ _MD_ALLOWED_PROTOCOLS = ["http", "https", "mailto"]
 
 
 def markdown_to_html(text) -> Markup:
-    """AI가 생성한 마크다운 원문을 sanitize된 HTML로 렌더링."""
+    """AI가 생성한 마크다운 원문을 sanitize된 HTML로 렌더링.
+
+    - extensions: tables(|표|), fenced_code(```), nl2br(줄바꿈→<br>), sane_lists
+    - bleach로 화이트리스트 태그/속성만 허용 → XSS 방지
+    - 모든 링크에 target="_blank" + rel="noopener" 부여
+    """
     if not text:
         return Markup("")
     html = _markdown.markdown(
