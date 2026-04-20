@@ -1,0 +1,50 @@
+"""DB 마이그레이션 오케스트레이터.
+
+versions.py의 `_migrate_to_vN` 함수들을 버전→함수 dict로 테이블화하고
+run_migrations()가 current_version 이후부터 target_version까지 순차 적용한다.
+
+새 마이그레이션 추가 시:
+1. versions.py에 `_migrate_to_vN(cur)` 함수 추가
+2. 아래 _MIGRATIONS dict에 `N: v._migrate_to_vN,` 한 줄 추가
+3. shared/db/schema.py의 SCHEMA_VERSION 상수 증가
+"""
+from shared.db.migrations import versions as _v
+
+
+_MIGRATIONS = {
+    2: _v._migrate_to_v2,
+    3: _v._migrate_to_v3,
+    4: _v._migrate_to_v4,
+    5: _v._migrate_to_v5,
+    6: _v._migrate_to_v6,
+    7: _v._migrate_to_v7,
+    8: _v._migrate_to_v8,
+    9: _v._migrate_to_v9,
+    10: _v._migrate_to_v10,
+    11: _v._migrate_to_v11,
+    12: _v._migrate_to_v12,
+    13: _v._migrate_to_v13,
+    14: _v._migrate_to_v14,
+    15: _v._migrate_to_v15,
+    16: _v._migrate_to_v16,
+    17: _v._migrate_to_v17,
+    18: _v._migrate_to_v18,
+    19: _v._migrate_to_v19,
+    20: _v._migrate_to_v20,
+    21: _v._migrate_to_v21,
+    22: _v._migrate_to_v22,
+    23: _v._migrate_to_v23,
+}
+
+
+def run_migrations(cur, current_version: int, target_version: int) -> None:
+    """current_version+1 부터 target_version까지 순차 적용.
+
+    Raises:
+        RuntimeError: target 버전에 해당하는 마이그레이션이 dict에 없을 때.
+    """
+    for ver in range(current_version + 1, target_version + 1):
+        migrate = _MIGRATIONS.get(ver)
+        if migrate is None:
+            raise RuntimeError(f"Missing migration for v{ver}")
+        migrate(cur)

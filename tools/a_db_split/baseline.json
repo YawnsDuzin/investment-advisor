@@ -1,0 +1,18 @@
+{
+  "generated_at_sha": "a8b7ce2b00c81cdb44789934054207f4fd8036eb",
+  "symbols": {
+    "SCHEMA_VERSION": "<int>",
+    "get_connection": "callable(cfg: shared.config.DatabaseConfig)",
+    "get_existing_theme_keys": "callable(cfg: shared.config.DatabaseConfig) -> list[dict]",
+    "get_latest_news_titles": "callable(cfg: shared.config.DatabaseConfig) -> list[str]",
+    "get_recent_recommendations": "callable(cfg: shared.config.DatabaseConfig, days: int = 7) -> list[dict]",
+    "get_untranslated_news": "callable(cfg: shared.config.DatabaseConfig) -> list[dict]",
+    "init_db": "callable(cfg: shared.config.DatabaseConfig) -> None",
+    "save_analysis": "callable(cfg: shared.config.DatabaseConfig, analysis_date: str, result: dict) -> int",
+    "save_news_articles": "callable(cfg: shared.config.DatabaseConfig, session_id: int, articles: list[dict]) -> int",
+    "save_top_picks": "callable(cfg: shared.config.DatabaseConfig, session_id: int, analysis_date: str, picks: list[dict], source: str = 'rule') -> int",
+    "update_news_title_ko": "callable(cfg: shared.config.DatabaseConfig, updates: list[tuple[int, str]]) -> int",
+    "update_news_translation": "callable(cfg: shared.config.DatabaseConfig, updates: list[tuple[int, str, str]]) -> int",
+    "update_top_picks_ai_rerank": "callable(cfg: shared.config.DatabaseConfig, analysis_date: str, ai_results: list[dict]) -> int"
+  }
+}

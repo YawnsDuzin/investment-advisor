@@ -20,11 +20,11 @@ class TestSchemaMigrationV17:
         assert db.SCHEMA_VERSION == 17
 
     def test_migrate_v17_function_exists(self):
-        from shared.db import _migrate_to_v17
+        from shared.db.migrations.versions import _migrate_to_v17
         assert callable(_migrate_to_v17)
 
     def test_migrate_v17_creates_audit_table(self):
-        from shared.db import _migrate_to_v17
+        from shared.db.migrations.versions import _migrate_to_v17
 
         cur = MagicMock()
         _migrate_to_v17(cur)
