@@ -10,16 +10,16 @@ from typing import Optional
 from fastapi import APIRouter, Request, Query, Depends, Body, HTTPException
 from fastapi.responses import StreamingResponse, JSONResponse, PlainTextResponse, FileResponse
 from psycopg2.extras import RealDictCursor
-from shared.config import AnalyzerConfig, AuthConfig
+from shared.config import AnalyzerConfig
 from api.templates_provider import templates
 from shared.db import get_untranslated_news, update_news_title_ko, update_news_translation, get_connection
 from shared.logger import (
     get_recent_runs, get_run_logs, get_run_ai_queries,
     get_ai_query_raw, get_incident_report,
 )
-from api.auth.dependencies import require_role, get_current_user, _get_auth_cfg
+from api.auth.dependencies import require_role
 from api.auth.models import UserInDB
-from api.deps import get_db_cfg as _get_cfg, get_db_conn
+from api.deps import get_db_cfg as _get_cfg, get_db_conn, make_page_ctx
 
 router = APIRouter(prefix="/admin", tags=["관리자"])
 
@@ -42,22 +42,16 @@ def _broadcast(msg: str | None):
 
 
 @router.get("")
-def admin_page(request: Request, user: Optional[UserInDB] = Depends(get_current_user), auth_cfg: AuthConfig = Depends(_get_auth_cfg)):
+def admin_page(ctx: dict = Depends(make_page_ctx("admin"))):
     """관리자 페이지"""
     from fastapi.responses import RedirectResponse
-    if auth_cfg.enabled:
-        if user is None:
+    if ctx["auth_enabled"]:
+        if ctx["_user"] is None:
             return RedirectResponse("/auth/login?next=/admin", status_code=302)
-        if user.role != "admin":
-            from fastapi import HTTPException
+        if ctx["_user"].role != "admin":
             raise HTTPException(status_code=403, detail="접근 권한이 없습니다")
-    return templates.TemplateResponse(request=request, name="admin.html", context={
-        "request": request,
-        "active_page": "admin",
-        "is_running": _running,
-        "current_user": user,
-        "auth_enabled": auth_cfg.enabled,
-    })
+    ctx["is_running"] = _running
+    return templates.TemplateResponse(request=ctx["request"], name="admin.html", context=ctx)
 
 
 @router.get("/status")
@@ -575,24 +569,15 @@ def copy_from_remote(
 # ── 진단 탭 (B-2) ─────────────────────────────────
 
 @router.get("/diagnostics")
-def diagnostics_page(
-    request: Request,
-    user: Optional[UserInDB] = Depends(get_current_user),
-    auth_cfg: AuthConfig = Depends(_get_auth_cfg),
-):
+def diagnostics_page(ctx: dict = Depends(make_page_ctx("admin_diagnostics"))):
     """진단 페이지 (로그·쿼리·체크포인트·사건 보고서 조회)."""
     from fastapi.responses import RedirectResponse
-    if auth_cfg.enabled:
-        if user is None:
+    if ctx["auth_enabled"]:
+        if ctx["_user"] is None:
             return RedirectResponse("/auth/login?next=/admin/diagnostics", status_code=302)
-        if user.role != "admin":
+        if ctx["_user"].role != "admin":
             raise HTTPException(status_code=403, detail="접근 권한이 없습니다")
-    return templates.TemplateResponse(request=request, name="admin_diagnostics.html", context={
-        "request": request,
-        "active_page": "admin",
-        "current_user": user,
-        "auth_enabled": auth_cfg.enabled,
-    })
+    return templates.TemplateResponse(request=ctx["request"], name="admin_diagnostics.html", context=ctx)
 
 
 @router.get("/runs")

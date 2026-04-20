@@ -13,13 +13,12 @@ from fastapi import APIRouter, Request, HTTPException, Depends, Query
 from fastapi.responses import RedirectResponse
 from psycopg2.extras import Json, RealDictCursor
 
-from shared.config import AuthConfig
 from api.templates_provider import templates
-from api.deps import get_db_cfg as _get_cfg, get_db_conn
+from api.deps import get_db_cfg as _get_cfg, get_db_conn, make_page_ctx
 
 from shared.tier_limits import VALID_TIERS, TIER_INFO, normalize_tier
 from api.serialization import serialize_row as _serialize_row
-from api.auth.dependencies import require_role, get_current_user, _get_auth_cfg
+from api.auth.dependencies import require_role
 from api.auth.models import UserInDB
 from api.auth.password import hash_password
 
@@ -82,24 +81,22 @@ def _parse_expires_at(raw: Optional[str]) -> Optional[datetime]:
 
 @router.get("")
 def user_list_page(
-    request: Request,
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=20, ge=1, le=100),
     q: Optional[str] = Query(None, description="이메일/닉네임 검색"),
     role: Optional[str] = Query(None, description="역할 필터"),
     status: Optional[str] = Query(None, description="상태 필터 (active/inactive)"),
     tier: Optional[str] = Query(None, description="티어 필터"),
-    user: Optional[UserInDB] = Depends(get_current_user),
-    auth_cfg: AuthConfig = Depends(_get_auth_cfg),
-    conn=Depends(get_db_conn),
+    ctx: dict = Depends(make_page_ctx("admin_users")),
 ):
     """사용자 관리 페이지"""
-    if auth_cfg.enabled:
-        if user is None:
+    if ctx["auth_enabled"]:
+        if ctx["_user"] is None:
             return RedirectResponse("/auth/login?next=/admin/users", status_code=302)
-        if user.role not in ("admin", "moderator"):
+        if ctx["_user"].role not in ("admin", "moderator"):
             raise HTTPException(status_code=403, detail="접근 권한이 없습니다")
 
+    conn = ctx["_conn"]
     offset = (page - 1) * limit
 
     # 동적 WHERE 절 구성
@@ -153,11 +150,7 @@ def user_list_page(
         qs_params["tier"] = tier
     pagination_qs = urlencode(qs_params)
 
-    return templates.TemplateResponse(request=request, name="user_admin.html", context={
-        "request": request,
-        "active_page": "user_admin",
-        "current_user": user,
-        "auth_enabled": auth_cfg.enabled,
+    ctx.update({
         "users": users,
         "page": page,
         "limit": limit,
@@ -171,6 +164,7 @@ def user_list_page(
         "filter_tier": tier or "",
         "pagination_qs": pagination_qs,
     })
+    return templates.TemplateResponse(request=ctx["request"], name="user_admin.html", context=ctx)
 
 
 # ── 역할 변경 ────────────────────────────────
@@ -443,22 +437,20 @@ def delete_user(
 
 @router.get("/audit-logs")
 def audit_logs_page(
-    request: Request,
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=30, ge=1, le=200),
     action: Optional[str] = Query(None),
     target_email: Optional[str] = Query(None),
-    user: Optional[UserInDB] = Depends(get_current_user),
-    auth_cfg: AuthConfig = Depends(_get_auth_cfg),
-    conn=Depends(get_db_conn),
+    ctx: dict = Depends(make_page_ctx("admin_audit")),
 ):
     """관리자 작업 감사 로그 뷰어 (Admin 전용 페이지)"""
-    if auth_cfg.enabled:
-        if user is None:
+    if ctx["auth_enabled"]:
+        if ctx["_user"] is None:
             return RedirectResponse("/auth/login?next=/admin/users/audit-logs", status_code=302)
-        if user.role != "admin":
+        if ctx["_user"].role != "admin":
             raise HTTPException(status_code=403, detail="Admin 전용 페이지입니다")
 
+    conn = ctx["_conn"]
     offset = (page - 1) * limit
 
     where_clauses = []
@@ -494,11 +486,7 @@ def audit_logs_page(
         cur.execute(f"SELECT COUNT(*) AS cnt FROM admin_audit_logs {where_sql}", params)
         total = cur.fetchone()["cnt"]
 
-    return templates.TemplateResponse(request=request, name="admin_audit_logs.html", context={
-        "request": request,
-        "active_page": "user_admin",
-        "current_user": user,
-        "auth_enabled": auth_cfg.enabled,
+    ctx.update({
         "logs": rows,
         "page": page,
         "limit": limit,
@@ -507,3 +495,4 @@ def audit_logs_page(
         "filter_action": action or "",
         "filter_target_email": target_email or "",
     })
+    return templates.TemplateResponse(request=ctx["request"], name="admin_audit_logs.html", context=ctx)
