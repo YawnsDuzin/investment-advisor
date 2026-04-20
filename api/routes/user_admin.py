@@ -11,10 +11,11 @@ from urllib.parse import urlencode
 
 from fastapi import APIRouter, Request, HTTPException, Depends, Query
 from fastapi.responses import RedirectResponse
-from fastapi.templating import Jinja2Templates
 from psycopg2.extras import Json, RealDictCursor
 
 from shared.config import DatabaseConfig, AuthConfig
+from api.templates_provider import templates
+from api.deps import get_db_cfg as _get_db_cfg
 from shared.db import get_connection
 from shared.tier_limits import VALID_TIERS, TIER_INFO, normalize_tier
 from api.serialization import serialize_row as _serialize_row
@@ -23,12 +24,6 @@ from api.auth.models import UserInDB
 from api.auth.password import hash_password
 
 router = APIRouter(prefix="/admin/users", tags=["사용자 관리"])
-
-templates = Jinja2Templates(directory="api/templates")
-
-
-def _get_db_cfg() -> DatabaseConfig:
-    return DatabaseConfig()
 
 
 # ── 감사 로그 헬퍼 ────────────────────────────────
