@@ -17,7 +17,7 @@ from psycopg2.extras import Json, RealDictCursor
 from shared.config import DatabaseConfig, AuthConfig
 from shared.db import get_connection
 from shared.tier_limits import VALID_TIERS, TIER_INFO, normalize_tier
-from api.routes.sessions import _serialize_row
+from api.serialization import serialize_row as _serialize_row
 from api.auth.dependencies import require_role, get_current_user, _get_auth_cfg
 from api.auth.models import UserInDB
 from api.auth.password import hash_password

@@ -9,13 +9,12 @@ from shared.config import DatabaseConfig, AuthConfig
 from shared.db import get_connection
 from shared.tier_limits import get_chat_daily_limit, is_unlimited
 from psycopg2.extras import RealDictCursor
-from api.routes.sessions import _serialize_row
 from api.chat_engine import build_theme_context, query_theme_chat_sync
 from api.auth.dependencies import get_current_user_required, get_current_user, _get_auth_cfg, quota_exceeded_detail
 from api.auth.models import UserInDB
 from api.page_context import base_ctx as _base_ctx
 from api.template_filters import register as _register_filters
-from api.serialization import serialize_row as _serialize_row  # noqa: F811
+from api.serialization import serialize_row as _serialize_row
 
 # 서비스 운영 타임존 — 일일 한도는 KST 기준으로 리셋
 _KST = timezone(timedelta(hours=9))

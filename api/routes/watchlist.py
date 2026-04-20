@@ -12,8 +12,7 @@ from shared.tier_limits import (
     is_unlimited,
 )
 from psycopg2.extras import RealDictCursor
-from api.routes.sessions import _serialize_row
-from api.serialization import serialize_row as _serialize_row_page
+from api.serialization import serialize_row as _serialize_row
 from api.page_context import base_ctx as _base_ctx
 from api.template_filters import register as _register_filters
 from api.auth.dependencies import get_current_user, get_current_user_required, quota_exceeded_detail, _get_auth_cfg
@@ -383,7 +382,7 @@ def watchlist_page(request: Request, user: Optional[UserInDB] = Depends(get_curr
                 "SELECT * FROM user_watchlist WHERE user_id = %s ORDER BY created_at DESC",
                 (user.id,),
             )
-            watchlist = [_serialize_row_page(r) for r in cur.fetchall()]
+            watchlist = [_serialize_row(r) for r in cur.fetchall()]
 
             for item in watchlist:
                 cur.execute("""
@@ -396,13 +395,13 @@ def watchlist_page(request: Request, user: Optional[UserInDB] = Depends(get_curr
                     ORDER BY s.analysis_date DESC LIMIT 1
                 """, (item["ticker"],))
                 latest = cur.fetchone()
-                item["latest"] = _serialize_row_page(latest) if latest else None
+                item["latest"] = _serialize_row(latest) if latest else None
 
             cur.execute(
                 "SELECT * FROM user_subscriptions WHERE user_id = %s ORDER BY created_at DESC",
                 (user.id,),
             )
-            subscriptions = [_serialize_row_page(r) for r in cur.fetchall()]
+            subscriptions = [_serialize_row(r) for r in cur.fetchall()]
     finally:
         conn.close()
 
@@ -428,7 +427,7 @@ def notifications_page(request: Request, user: Optional[UserInDB] = Depends(get_
                 "SELECT * FROM user_notifications WHERE user_id = %s ORDER BY created_at DESC LIMIT 100",
                 (user.id,),
             )
-            notifications = [_serialize_row_page(r) for r in cur.fetchall()]
+            notifications = [_serialize_row(r) for r in cur.fetchall()]
             unread_count = sum(1 for n in notifications if not n.get("is_read"))
     finally:
         conn.close()
