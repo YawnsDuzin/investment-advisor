@@ -5,7 +5,7 @@ from fastapi.staticfiles import StaticFiles
 from shared.config import DatabaseConfig, AuthConfig
 from shared.db import init_db
 from api.routes import (
-    sessions, themes, proposals, pages, chat, admin,
+    sessions, themes, proposals, chat, admin,
     auth as auth_routes, user_admin, watchlist, track_record,
     stocks, education, inquiry, marketing, dashboard,
 )
@@ -38,7 +38,7 @@ app.mount("/static", StaticFiles(directory="api/static"), name="static")
 # 인증 라우트 (/auth/*)
 app.include_router(auth_routes.router)
 
-# JSON API 라우트 (/sessions, /themes, /proposals, /chat)
+# 도메인 라우터: 각 도메인의 JSON API + HTML 페이지 (B1 콜로케이션)
 app.include_router(sessions.router)
 app.include_router(sessions.pages_router)
 app.include_router(themes.router)
@@ -61,12 +61,8 @@ app.include_router(education.pages_router)
 app.include_router(inquiry.router)
 app.include_router(inquiry.pages_router)
 
-# 도메인 콜로케이션된 페이지 라우터들 (B1 진행 중)
 app.include_router(marketing.pages_router)
 app.include_router(dashboard.pages_router)
-
-# HTML 페이지 라우트 (/, /pages/*)
-app.include_router(pages.router)
 
 
 if __name__ == "__main__":
