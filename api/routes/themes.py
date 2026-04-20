@@ -1,25 +1,18 @@
 """투자 테마 조회 API + 테마 페이지 라우트"""
 from typing import Optional
 from fastapi import APIRouter, Query, Depends, Request
-from fastapi.templating import Jinja2Templates
-from shared.config import DatabaseConfig, AuthConfig
+from shared.config import AuthConfig
 from shared.db import get_connection
 from psycopg2.extras import RealDictCursor
 from api.serialization import serialize_row as _serialize_row
 from api.page_context import base_ctx as _base_ctx
-from api.template_filters import register as _register_filters
+from api.templates_provider import templates
+from api.deps import get_db_cfg as _get_cfg
 from api.auth.dependencies import get_current_user, get_current_user_required, _get_auth_cfg
 from api.auth.models import UserInDB
 
 router = APIRouter(prefix="/themes", tags=["테마"])
 pages_router = APIRouter(prefix="/pages/themes", tags=["테마 페이지"])
-
-_templates = Jinja2Templates(directory="api/templates")
-_register_filters(_templates.env)
-
-
-def _get_cfg() -> DatabaseConfig:
-    return DatabaseConfig()
 
 
 @router.get("")
@@ -128,7 +121,7 @@ def theme_history_page(request: Request, theme_key: str, user: Optional[UserInDB
             cur.execute("SELECT * FROM theme_tracking WHERE theme_key = %s", (theme_key,))
             tracking = cur.fetchone()
             if not tracking:
-                return _templates.TemplateResponse(request=request, name="theme_history.html",
+                return templates.TemplateResponse(request=request, name="theme_history.html",
                     context={**ctx, "tracking": None, "history": []})
 
             # 일자별 테마 데이터 (이름이 유사한 것 모두)
@@ -158,7 +151,7 @@ def theme_history_page(request: Request, theme_key: str, user: Optional[UserInDB
     finally:
         conn.close()
 
-    return _templates.TemplateResponse(request=request, name="theme_history.html", context={
+    return templates.TemplateResponse(request=request, name="theme_history.html", context={
         **ctx,
         "tracking": _serialize_row(tracking),
         "history": [_serialize_row(h) for h in history],
@@ -227,7 +220,7 @@ def themes_page(
     finally:
         conn.close()
 
-    return _templates.TemplateResponse(request=request, name="themes.html", context={
+    return templates.TemplateResponse(request=request, name="themes.html", context={
         **ctx,
         "themes": [_serialize_row(t) for t in themes],
         "tracking_map": tracking_map,

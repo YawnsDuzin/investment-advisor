@@ -3,26 +3,19 @@ from datetime import date
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Query, Request, Depends
 from fastapi.responses import HTMLResponse
-from fastapi.templating import Jinja2Templates
-from shared.config import DatabaseConfig, AuthConfig
+from shared.config import AuthConfig
 from shared.db import get_connection
 from psycopg2.extras import RealDictCursor
 from api.serialization import serialize_row as _serialize_row
 from api.page_context import base_ctx as _base_ctx
-from api.template_filters import register as _register_filters
+from api.templates_provider import templates
+from api.deps import get_db_cfg as _get_cfg
 from api.auth.dependencies import get_current_user, get_current_user_required, _get_auth_cfg
 from api.auth.models import UserInDB
 
 router = APIRouter(prefix="/proposals", tags=["투자 제안"])
 api_router = APIRouter(prefix="/api/proposals", tags=["투자 제안 (API)"])
 pages_router = APIRouter(prefix="/pages/proposals", tags=["투자 제안 페이지"])
-
-_templates = Jinja2Templates(directory="api/templates")
-_register_filters(_templates.env)
-
-
-def _get_cfg() -> DatabaseConfig:
-    return DatabaseConfig()
 
 
 @router.get("")
@@ -233,7 +226,7 @@ def stock_analysis_page(
     finally:
         conn.close()
 
-    return _templates.TemplateResponse(request=request, name="stock_analysis.html", context={
+    return templates.TemplateResponse(request=request, name="stock_analysis.html", context={
         **ctx,
         "proposal_id": proposal_id,
         "analysis": _serialize_row(row) if row else None,
@@ -295,7 +288,7 @@ def ticker_history_page(request: Request, ticker: str, user: Optional[UserInDB] 
             "latest_currency": currency,
         }
 
-    return _templates.TemplateResponse(request=request, name="ticker_history.html", context={
+    return templates.TemplateResponse(request=request, name="ticker_history.html", context={
         **ctx,
         "ticker": ticker.upper(),
         "tracking": tracking,
@@ -424,7 +417,7 @@ def proposals_page(
         conn.close()
 
     ctx = _base_ctx(request, "proposals", user, auth_cfg)
-    return _templates.TemplateResponse(request=request, name="proposals.html", context={
+    return templates.TemplateResponse(request=request, name="proposals.html", context={
         **ctx,
         "proposals": [_serialize_row(p) for p in proposals],
         "prop_tracking": prop_tracking,
