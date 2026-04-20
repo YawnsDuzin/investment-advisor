@@ -130,3 +130,10 @@ pages_router  = APIRouter(prefix="/pages/sessions",   tags=["세션 페이지"])
 
 - **B2 보일러플레이트 추출**: `_get_cfg`/`_get_auth_cfg`를 `api/deps.py`로 통합, `RealDictCursor` + `try/finally` 패턴을 컨텍스트 매니저화, `_base_ctx` 호출을 `Depends`로 자동화
 - **B3 응답·예외 일관성**: JSON 응답 포맷 (`{data, error}` 등) 통일, `HTTPException` → 도메인 예외 + 글로벌 핸들러, 상태 코드 정책 정리
+
+## 검증 완료 (2026-04-20)
+
+- **자동**: baseline diff `00-before-v2` vs `99-final` = **0건 회귀** (27개 페이지 응답 byte-동일, 3개 STATUS_ONLY 라우트는 status 일치)
+- **수동 스모크**: 5개 핵심 페이지 + 1개 인터랙션 정상 확인 (`/`, `/pages/sessions`, `/pages/themes`, `/pages/proposals`, `/pages/proposals/history/{ticker}`)
+- **커밋 수**: 21개 (c0966d1 → 836660b)
+- **최종 코드 리뷰**: Critical 0건, Important 5건 모두 pre-existing 또는 dead-import (B2/B3 cleanup 후보)
