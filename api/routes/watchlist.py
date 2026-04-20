@@ -1,6 +1,8 @@
-"""관심 종목 워치리스트 + 알림 구독 + 제안 메모 API"""
+"""관심 종목 워치리스트 + 알림 구독 + 제안 메모 API + 개인화 페이지"""
 from typing import Optional
-from fastapi import APIRouter, HTTPException, Depends, Body
+from fastapi import APIRouter, HTTPException, Depends, Body, Request
+from fastapi.responses import RedirectResponse
+from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 from shared.config import DatabaseConfig, AuthConfig
 from shared.db import get_connection
@@ -11,10 +13,17 @@ from shared.tier_limits import (
 )
 from psycopg2.extras import RealDictCursor
 from api.routes.sessions import _serialize_row
-from api.auth.dependencies import get_current_user_required, quota_exceeded_detail
+from api.serialization import serialize_row as _serialize_row_page
+from api.page_context import base_ctx as _base_ctx
+from api.template_filters import register as _register_filters
+from api.auth.dependencies import get_current_user, get_current_user_required, quota_exceeded_detail, _get_auth_cfg
 from api.auth.models import UserInDB
 
 router = APIRouter(tags=["개인화"])
+pages_router = APIRouter(tags=["개인화 페이지"])  # prefix 없음 — path는 라우트별 명시
+
+_templates = Jinja2Templates(directory="api/templates")
+_register_filters(_templates.env)
 
 
 def _get_cfg() -> DatabaseConfig:
@@ -353,3 +362,93 @@ def delete_memo(
     finally:
         conn.close()
     return {"ok": True}
+
+
+# ──────────────────────────────────────────────
+# 개인화 페이지 라우트 (pages_router)
+# ──────────────────────────────────────────────
+
+# ── Watchlist (관심 종목) ──────────────────────
+@pages_router.get("/pages/watchlist")
+def watchlist_page(request: Request, user: Optional[UserInDB] = Depends(get_current_user), auth_cfg: AuthConfig = Depends(_get_auth_cfg)):
+    """관심 종목 워치리스트 — 로그인 사용자만"""
+    if not auth_cfg.enabled or user is None:
+        return RedirectResponse("/auth/login?next=/pages/watchlist", status_code=302)
+
+    ctx = _base_ctx(request, "watchlist", user, auth_cfg)
+    conn = get_connection(_get_cfg())
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                "SELECT * FROM user_watchlist WHERE user_id = %s ORDER BY created_at DESC",
+                (user.id,),
+            )
+            watchlist = [_serialize_row_page(r) for r in cur.fetchall()]
+
+            for item in watchlist:
+                cur.execute("""
+                    SELECT p.action, p.conviction, p.current_price, p.currency,
+                           p.upside_pct, p.target_allocation, t.theme_name, s.analysis_date
+                    FROM investment_proposals p
+                    JOIN investment_themes t ON p.theme_id = t.id
+                    JOIN analysis_sessions s ON t.session_id = s.id
+                    WHERE UPPER(p.ticker) = UPPER(%s)
+                    ORDER BY s.analysis_date DESC LIMIT 1
+                """, (item["ticker"],))
+                latest = cur.fetchone()
+                item["latest"] = _serialize_row_page(latest) if latest else None
+
+            cur.execute(
+                "SELECT * FROM user_subscriptions WHERE user_id = %s ORDER BY created_at DESC",
+                (user.id,),
+            )
+            subscriptions = [_serialize_row_page(r) for r in cur.fetchall()]
+    finally:
+        conn.close()
+
+    return _templates.TemplateResponse(request=request, name="watchlist.html", context={
+        **ctx,
+        "watchlist": watchlist,
+        "subscriptions": subscriptions,
+    })
+
+
+# ── Notifications (알림) ───────────────────────
+@pages_router.get("/pages/notifications")
+def notifications_page(request: Request, user: Optional[UserInDB] = Depends(get_current_user), auth_cfg: AuthConfig = Depends(_get_auth_cfg)):
+    """알림 목록 — 로그인 사용자만"""
+    if not auth_cfg.enabled or user is None:
+        return RedirectResponse("/auth/login?next=/pages/notifications", status_code=302)
+
+    ctx = _base_ctx(request, "notifications", user, auth_cfg)
+    conn = get_connection(_get_cfg())
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                "SELECT * FROM user_notifications WHERE user_id = %s ORDER BY created_at DESC LIMIT 100",
+                (user.id,),
+            )
+            notifications = [_serialize_row_page(r) for r in cur.fetchall()]
+            unread_count = sum(1 for n in notifications if not n.get("is_read"))
+    finally:
+        conn.close()
+
+    return _templates.TemplateResponse(request=request, name="notifications.html", context={
+        **ctx,
+        "notifications": notifications,
+        "unread_count": unread_count,
+    })
+
+
+# ── Profile (비밀번호 변경) ────────────────────
+@pages_router.get("/pages/profile")
+def profile_page(request: Request, user: Optional[UserInDB] = Depends(get_current_user), auth_cfg: AuthConfig = Depends(_get_auth_cfg)):
+    """프로필 페이지 — 로그인 사용자만"""
+    if not auth_cfg.enabled or user is None:
+        return RedirectResponse("/auth/login?next=/pages/profile", status_code=302)
+    ctx = _base_ctx(request, "profile", user, auth_cfg)
+    return _templates.TemplateResponse(request=request, name="profile.html", context={
+        **ctx,
+        "error": "",
+        "success": "",
+    })
