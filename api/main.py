@@ -1,6 +1,8 @@
 """FastAPI 투자 분석 조회 웹서비스"""
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from shared.config import DatabaseConfig, AuthConfig
 from shared.db import init_db
@@ -31,6 +33,43 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+# ── 글로벌 예외 핸들러 (B3) ──────────────────────────
+_STATUS_CODE_MAP = {
+    400: "bad_request",
+    401: "unauthorized",
+    402: "payment_required",
+    403: "forbidden",
+    404: "not_found",
+    409: "conflict",
+    422: "validation_failed",
+    429: "rate_limited",
+    500: "server_error",
+}
+
+
+def _status_to_code(status: int) -> str:
+    return _STATUS_CODE_MAP.get(status, f"http_{status}")
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    """HTTPException 응답을 {"error": <code>, "detail": <msg>} 포맷으로 통일."""
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"error": _status_to_code(exc.status_code), "detail": exc.detail},
+        headers=dict(exc.headers) if exc.headers else None,
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """FastAPI 기본 422 응답을 {"error": "validation_failed", "detail": [...]} 포맷으로 통일."""
+    return JSONResponse(
+        status_code=422,
+        content={"error": "validation_failed", "detail": exc.errors()},
+    )
+
 
 # 정적 파일 (CSS, JS)
 app.mount("/static", StaticFiles(directory="api/static"), name="static")
