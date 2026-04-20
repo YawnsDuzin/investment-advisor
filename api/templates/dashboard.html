@@ -1,5 +1,7 @@
 {% extends "base.html" %}
-{% from "_macros.html" import theme_header, indicator_tags, grade_badge, external_links, change_indicator, risk_gauge, bullet_chart, conf_ring, discovery_stackbar, sector_chips, sparkline, yield_curve %}
+{% from "_macros/theme.html" import theme_header, indicator_tags, conf_ring, discovery_stackbar, sector_chips %}
+{% from "_macros/proposal.html" import change_indicator, risk_gauge, bullet_chart %}
+{% from "_macros/common.html" import grade_badge, external_links, sparkline, yield_curve %}
 {% from "partials/_ad_slot.html" import ad_slot with context %}
 {% block title %}Dashboard — AlphaSignal{% endblock %}
 {% block page_title %}Dashboard{% endblock %}
