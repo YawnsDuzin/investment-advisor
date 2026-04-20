@@ -124,7 +124,7 @@ def make_page_ctx(active_page: str):
     return _dep
 ```
 
-**효과:** 인증된 페이지당 DB 연결 1개만 열림 (기존엔 2개).
+**효과:** base_ctx의 자체 DB 연결 제거 — FastAPI dependency lifecycle로 통합 관리. (get_current_user의 별도 연결은 auth dep 레이어에 존재)
 
 ### 3.3 admin/user_admin 4개 페이지 Pattern B 적용
 

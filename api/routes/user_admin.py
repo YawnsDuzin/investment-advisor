@@ -9,7 +9,7 @@ from datetime import datetime
 from typing import Any, Dict, Optional
 from urllib.parse import urlencode
 
-from fastapi import APIRouter, Request, HTTPException, Depends, Query
+from fastapi import APIRouter, HTTPException, Depends, Query
 from fastapi.responses import RedirectResponse
 from psycopg2.extras import Json, RealDictCursor
 
@@ -87,7 +87,7 @@ def user_list_page(
     role: Optional[str] = Query(None, description="역할 필터"),
     status: Optional[str] = Query(None, description="상태 필터 (active/inactive)"),
     tier: Optional[str] = Query(None, description="티어 필터"),
-    ctx: dict = Depends(make_page_ctx("admin_users")),
+    ctx: dict = Depends(make_page_ctx("admin")),
 ):
     """사용자 관리 페이지"""
     if ctx["auth_enabled"]:
@@ -441,7 +441,7 @@ def audit_logs_page(
     limit: int = Query(default=30, ge=1, le=200),
     action: Optional[str] = Query(None),
     target_email: Optional[str] = Query(None),
-    ctx: dict = Depends(make_page_ctx("admin_audit")),
+    ctx: dict = Depends(make_page_ctx("admin")),
 ):
     """관리자 작업 감사 로그 뷰어 (Admin 전용 페이지)"""
     if ctx["auth_enabled"]:

@@ -7,7 +7,7 @@ import queue
 import time
 from pathlib import Path
 from typing import Optional
-from fastapi import APIRouter, Request, Query, Depends, Body, HTTPException
+from fastapi import APIRouter, Query, Depends, Body, HTTPException
 from fastapi.responses import StreamingResponse, JSONResponse, PlainTextResponse, FileResponse
 from psycopg2.extras import RealDictCursor
 from shared.config import AnalyzerConfig
@@ -50,7 +50,6 @@ def admin_page(ctx: dict = Depends(make_page_ctx("admin"))):
             return RedirectResponse("/auth/login?next=/admin", status_code=302)
         if ctx["_user"].role != "admin":
             raise HTTPException(status_code=403, detail="접근 권한이 없습니다")
-    ctx["is_running"] = _running
     return templates.TemplateResponse(request=ctx["request"], name="admin.html", context=ctx)
 
 
@@ -569,7 +568,7 @@ def copy_from_remote(
 # ── 진단 탭 (B-2) ─────────────────────────────────
 
 @router.get("/diagnostics")
-def diagnostics_page(ctx: dict = Depends(make_page_ctx("admin_diagnostics"))):
+def diagnostics_page(ctx: dict = Depends(make_page_ctx("admin"))):
     """진단 페이지 (로그·쿼리·체크포인트·사건 보고서 조회)."""
     from fastapi.responses import RedirectResponse
     if ctx["auth_enabled"]:
