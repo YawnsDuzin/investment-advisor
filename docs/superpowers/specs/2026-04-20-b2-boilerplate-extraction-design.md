@@ -184,3 +184,16 @@ B1과 동일한 도구 + 전략:
 - **C**: 템플릿·UX 개선 (병렬 진행 가능)
 - **A**: `shared/db.py` 분할
 - **D**: `analyzer/` 파이프라인 분해
+
+---
+
+## 검증 완료 (2026-04-20)
+
+- **자동**: baseline diff `00-before-v2` vs `b2-99-final` = 0건 회귀 (27개 페이지 응답 byte-동일, STATUS_ONLY 3개 제외)
+- **중복 제거 결과**:
+  - `def _get_cfg` 정의: 기존 10곳 → 0곳 (모두 `api.deps.get_db_cfg` alias 사용)
+  - `Jinja2Templates(directory=...)` 인스턴스화: 기존 14곳 → 1곳 (`api/templates_provider.py`만)
+  - `_register_filters` 호출: 기존 22회 → 1회 (`api/templates_provider.py`만)
+  - `_templates` prefix: 기존 5파일 → 0 (모두 `templates`로 통일)
+- **커밋**: Task 1(fdceaf6), Task 2(4c7a6bc), Task 3(0a80e8e), Task 4(bd148c4), Task 5(2df4fb1), Task 6(a30b48f), Task 7(d91ffab)
+- **명령어**: baseline 캡처 → `route_baseline.py capture --label b2-99-final` (27개 라우트 수집) → diff 검증 → `route_baseline.py diff 00-before-v2 b2-99-final` (STATUS_ONLY 3개 제외 byte-동일)
