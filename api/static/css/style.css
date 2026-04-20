@@ -1700,10 +1700,979 @@ tbody tr:hover { background: var(--bg-card-hover); }
 }
 
 /* ======== 11_dashboard_hero.css ======== */
-/* 11_dashboard_hero — populated in later tasks */
+/* ── Tier 1 Hero 레이아웃 ── */
+.dash-hero {
+    display: grid;
+    grid-template-columns: 1fr 1.8fr;
+    gap: 16px;
+    margin-bottom: 20px;
+}
+
+/* Row 1: KPI Strip — stat-grid-6의 컴팩트 변형 */
+.kpi-strip {
+    margin-bottom: 16px;
+}
+.kpi-strip .stat-card {
+    padding: 14px 12px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+.kpi-strip .stat-value {
+    font-size: 28px;
+    margin-bottom: 2px;
+}
+.kpi-strip .stat-label {
+    font-size: 12px;
+}
+.kpi-strip .stat-sub {
+    font-size: 11px;
+}
+
+/* Row 1 — KPI + Track Record 통합 (2-col) */
+.hero-row1 {
+    display: grid;
+    grid-template-columns: 1.8fr 1fr;
+    gap: 16px;
+    margin-bottom: 16px;
+    align-items: stretch;
+}
+.hero-row1 > * { margin-bottom: 0; }
+
+/* KPI Strip Tight — Row 1 내부에서 더 압축 (sparkline 제거, 고정폭) */
+.kpi-strip.kpi-strip-tight .stat-card {
+    padding: 8px 10px;
+}
+.kpi-strip.kpi-strip-tight .stat-value {
+    font-size: 22px;
+    line-height: 1.1;
+    margin-bottom: 1px;
+}
+.kpi-strip.kpi-strip-tight .stat-label {
+    font-size: 11px;
+}
+.kpi-strip.kpi-strip-tight .stat-inline-sub {
+    color: var(--text-muted);
+    font-size: 10px;
+    font-weight: 500;
+}
+.kpi-strip.kpi-strip-tight .change-indicator {
+    font-size: 11px;
+    padding: 0 4px;
+    margin-left: 4px;
+}
+
+@media (max-width: 1280px) {
+    .hero-row1 {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Row 2/3 공통: 2-column grid (레거시, 다른 페이지용으로 유지) */
+.hero-grid-2col {
+    display: grid;
+    grid-template-columns: 1fr 1.4fr;
+    gap: 16px;
+    margin-bottom: 16px;
+    align-items: stretch;
+}
+.hero-grid-2col > * {
+    margin-bottom: 0;
+}
+.hero-grid-2col.hero-insights {
+    grid-template-columns: 1fr 1fr;
+    margin-bottom: 20px;
+}
+
+/* Row 2 (3-col 단일 행): 관심 + 발굴 + 섹터를 한 줄에 */
+.hero-grid-3col {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 20px;
+    align-items: stretch;
+}
+.hero-grid-3col > * {
+    margin-bottom: 0;
+    min-width: 0;
+}
+/* 중간 너비에서는 그대로 3-col 유지 — 너무 좁으면 모바일 breakpoint에서 1-col */
+
+/* Hero 내부 Track Record 위젯 — 자식 높이 채우기 */
+.dash-tr-widget.hero-tr {
+    margin-bottom: 0;
+    height: 100%;
+}
+
+/* ── 발굴 유형 분포 스택바 (Hero 압축용) ── */
+.discovery-stackbar-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.discovery-stackbar-head {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+}
+.discovery-stackbar-total {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text);
+}
+.discovery-stackbar-total small {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-weight: 500;
+    margin-left: 4px;
+}
+.discovery-stackbar-track {
+    display: flex;
+    height: 14px;
+    border-radius: 7px;
+    overflow: hidden;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border);
+}
+.discovery-stackbar-seg {
+    transition: flex 0.4s ease;
+    cursor: help;
+}
+.discovery-stackbar-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 14px;
+    font-size: 12px;
+    color: var(--text-muted);
+}
+.discovery-legend-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+.discovery-legend-chip .legend-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+/* ── 섹터 칩 (Top 5) ── */
+.sector-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-content: flex-start;
+}
+.sector-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 16px;
+    background: rgba(79, 140, 255, 0.08);
+    border: 1px solid rgba(79, 140, 255, 0.25);
+    font-size: 13px;
+    color: var(--text);
+    transition: background 0.15s, border-color 0.15s;
+}
+.sector-chip[data-intensity="100"] {
+    background: rgba(79, 140, 255, 0.22);
+    border-color: rgba(79, 140, 255, 0.5);
+    font-weight: 600;
+}
+.sector-chip-name {
+    color: var(--text);
+}
+.sector-chip-count {
+    padding: 1px 7px;
+    border-radius: 10px;
+    background: rgba(255,255,255,0.08);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text);
+}
+
+/* ── Insight Card Compact (Hero Row 3) ── */
+.insight-card-compact {
+    padding: 14px 16px;
+}
+.insight-card-compact .insight-title {
+    margin-bottom: 10px;
+}
+
+/* ── Yield Curve 차트 ── */
+.yield-curve-chart { display: block; margin: 10px 0 4px; }
+
+/* ── Market Summary 접이식 ── */
+.market-summary-toggle {
+    display: none;
+    width: 100%;
+    text-align: center;
+    padding: 8px;
+    color: var(--accent);
+    cursor: pointer;
+    font-size: 13px;
+    background: transparent;
+    border: none;
+    border-top: 1px solid var(--border);
+    margin-top: 8px;
+}
+.market-summary.collapsed .summary-body {
+    max-height: 0;
+    overflow: hidden;
+    padding: 0;
+    margin: 0;
+}
+.market-summary .summary-body {
+    transition: max-height 0.3s ease;
+    max-height: 4000px;
+}
+
+/* ── 모바일 반응형 ── */
+@media (max-width: 768px) {
+    .dash-hero {
+        grid-template-columns: 1fr;
+    }
+    .hero-grid-2col,
+    .hero-grid-2col.hero-insights,
+    .hero-grid-3col,
+    .hero-row1 {
+        grid-template-columns: 1fr;
+    }
+    .kpi-strip .stat-card { padding: 10px 8px; }
+    .stat-grid-6 .stat-value {
+        font-size: 22px;
+    }
+    .stat-grid-6 .stat-label {
+        font-size: 11px;
+    }
+    .stat-grid-6 .sparkline {
+        display: none;
+    }
+    /* Top Picks 수평 캐러셀 */
+    .top-picks-grid {
+        display: flex !important;
+        overflow-x: auto;
+        scroll-snap-type: x mandatory;
+        gap: 12px;
+        padding-bottom: 12px;
+        -webkit-overflow-scrolling: touch;
+    }
+    .top-pick-card {
+        flex: 0 0 85vw;
+        scroll-snap-align: start;
+        max-width: 340px;
+    }
+    .top-picks-grid::-webkit-scrollbar { height: 4px; }
+    .top-picks-grid::-webkit-scrollbar-thumb {
+        background: var(--border);
+        border-radius: 2px;
+    }
+    /* 차트 축소 */
+    .risk-gauge { width: 100px; }
+    .tr-visual { flex-direction: column; align-items: center; gap: 10px; }
+    .discovery-donut-wrap { flex-direction: column; gap: 10px; }
+    /* Market Summary 접이식 버튼 노출 */
+    .market-summary-toggle { display: block; }
+    .market-summary.collapsed .summary-body {
+        padding: 0;
+    }
+}
+
+@media (max-width: 480px) {
+    .stat-grid-6 {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
 
 /* ======== 12_dashboard_rest.css ======== */
-/* 12_dashboard_rest — populated in later tasks */
+/* ===== Signals (Dashboard) ===== */
+.signals-section {
+    margin-bottom: 28px;
+}
+
+.signal-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.signal-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 18px;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 500;
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+}
+
+.signal-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    flex-shrink: 0;
+}
+
+.signal-new_buy .signal-icon { background: rgba(52,211,153,0.15); color: var(--green); }
+.signal-action_change .signal-icon { background: rgba(251,191,36,0.15); color: var(--orange); }
+.signal-confidence_up .signal-icon { background: rgba(79,140,255,0.15); color: var(--accent); }
+.signal-confidence_down .signal-icon { background: rgba(248,113,113,0.15); color: var(--red); }
+.signal-disappeared .signal-icon { background: rgba(139,143,163,0.15); color: var(--text-muted); }
+
+/* ===== News Section (Dashboard) ===== */
+.news-categories {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.news-category-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.news-category-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.15s;
+}
+
+.news-category-header:hover { background: var(--bg-card-hover); }
+
+.news-category-label {
+    font-weight: 600;
+    font-size: 15px;
+    margin-right: 10px;
+}
+
+.news-category-count {
+    font-size: 13px;
+    color: var(--text-muted);
+    background: rgba(79,140,255,0.08);
+    padding: 2px 10px;
+    border-radius: 10px;
+}
+
+.news-toggle {
+    font-size: 12px;
+    color: var(--text-muted);
+    transition: transform 0.2s;
+}
+
+.news-category-card.open .news-toggle { transform: rotate(180deg); }
+
+.news-category-body {
+    display: none;
+    border-top: 1px solid var(--border);
+    max-height: 800px;
+    overflow-y: auto;
+}
+
+.news-category-card.open .news-category-body { display: block; }
+
+.news-item {
+    padding: 12px 20px;
+    border-bottom: 1px solid rgba(42,46,58,0.4);
+    font-size: 14px;
+}
+
+.news-item:last-child { border-bottom: none; }
+
+.news-item-title {
+    font-weight: 500;
+    line-height: 1.5;
+    margin-bottom: 4px;
+}
+
+.news-item-title a { color: var(--text); }
+.news-item-title a:hover { color: var(--accent); }
+
+.news-item-meta {
+    display: flex;
+    gap: 12px;
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+}
+
+.news-source {
+    font-weight: 600;
+    color: var(--accent);
+    opacity: 0.8;
+}
+
+.news-item-summary {
+    font-size: 13px;
+    color: var(--text-muted);
+    line-height: 1.6;
+}
+
+/* ===== 워치리스트 토글 ===== */
+.watchlist-toggle {
+    cursor: pointer;
+    font-size: 18px;
+    color: var(--text-muted);
+    transition: color 0.15s;
+    user-select: none;
+}
+.watchlist-toggle:hover { color: #fbbf24; }
+.watchlist-toggle.watched { color: #fbbf24; }
+
+/* ===== Top Picks (대시보드 오늘의 추천) ===== */
+.top-picks-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 14px;
+    margin-bottom: 28px;
+}
+.top-pick-card {
+    background: var(--bg-card, #1a1d27);
+    border: 1px solid var(--border, #2a2e3a);
+    border-radius: 12px;
+    padding: 16px 18px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    position: relative;
+    transition: border-color 0.15s, transform 0.15s;
+}
+.top-pick-card:hover { border-color: rgba(79,140,255,0.55); transform: translateY(-1px); }
+.top-pick-watched {
+    border-color: rgba(251,191,36,0.55);
+    box-shadow: 0 0 0 1px rgba(251,191,36,0.18);
+}
+
+.top-pick-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+}
+.top-pick-rank-wrap { display: flex; align-items: center; gap: 6px; }
+.top-pick-rank {
+    font-size: 22px;
+    font-weight: 700;
+    color: #7aa8ff;
+    letter-spacing: 0.5px;
+}
+.top-pick-trophy { font-size: 16px; }
+
+.top-pick-badges { display: flex; flex-wrap: wrap; gap: 4px; }
+.top-pick-badge {
+    font-size: 11px;
+    padding: 2px 7px;
+    border-radius: 6px;
+    background: rgba(148,163,184,0.10);
+    color: var(--text-muted, #9ba0b4);
+    border: 1px solid rgba(148,163,184,0.18);
+    white-space: nowrap;
+}
+.top-pick-badge-stage2 { background: rgba(168,85,247,0.12); color: #c084fc; border-color: rgba(168,85,247,0.32); }
+.top-pick-badge-early { background: rgba(34,197,94,0.12); color: #4ade80; border-color: rgba(34,197,94,0.32); }
+.top-pick-badge-deepvalue { background: rgba(234,179,8,0.12); color: #facc15; border-color: rgba(234,179,8,0.32); }
+.top-pick-badge-contrarian { background: rgba(244,114,182,0.12); color: #f472b6; border-color: rgba(244,114,182,0.32); }
+.top-pick-badge-conviction { background: rgba(34,197,94,0.18); color: #4ade80; border-color: rgba(34,197,94,0.45); font-weight: 700; }
+.top-pick-badge-watched { background: rgba(251,191,36,0.15); color: #fbbf24; border-color: rgba(251,191,36,0.42); }
+.top-pick-badge-subscribed { background: rgba(79,140,255,0.12); color: #7aa8ff; border-color: rgba(79,140,255,0.32); }
+
+.top-pick-title { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.top-pick-name {
+    font-size: 17px;
+    font-weight: 600;
+    text-decoration: none;
+    color: var(--text, #e4e6eb);
+}
+.top-pick-name:hover { color: #7aa8ff; text-decoration: underline; }
+.top-pick-ticker { font-size: 12px; color: var(--text-muted, #9ba0b4); font-family: 'JetBrains Mono', monospace; }
+.top-pick-sector { font-size: 12px; color: var(--text-muted, #9ba0b4); }
+
+.top-pick-price-row {
+    display: flex;
+    gap: 14px;
+    padding: 8px 10px;
+    background: rgba(148,163,184,0.05);
+    border-radius: 8px;
+    flex-wrap: wrap;
+}
+.top-pick-price-item { display: flex; flex-direction: column; gap: 2px; }
+.top-pick-price-label { font-size: 10px; color: var(--text-muted, #9ba0b4); text-transform: uppercase; letter-spacing: 0.5px; }
+.top-pick-price-value { font-size: 14px; font-weight: 600; color: var(--text, #e4e6eb); font-variant-numeric: tabular-nums; }
+.top-pick-upside-pos { color: #4ade80; }
+.top-pick-upside-neg { color: #f87171; }
+
+.top-pick-theme {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    flex-wrap: wrap;
+    font-size: 12px;
+    min-height: 40px;
+    line-height: 1.4;
+}
+.top-pick-theme-label { color: var(--text-muted, #9ba0b4); flex-shrink: 0; }
+.top-pick-theme-name {
+    color: var(--text, #e4e6eb);
+    text-decoration: none;
+    font-weight: 500;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+.top-pick-theme-name:hover { color: #7aa8ff; text-decoration: underline; }
+.top-pick-theme-conf { color: var(--text-muted, #9ba0b4); font-size: 11px; margin-left: auto; }
+
+.top-pick-rationale {
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--text, #e4e6eb);
+    padding: 8px 10px;
+    background: rgba(79,140,255,0.05);
+    border-left: 3px solid rgba(79,140,255,0.4);
+    border-radius: 4px;
+}
+.top-pick-rationale-ai {
+    background: rgba(168,85,247,0.06);
+    border-left-color: rgba(168,85,247,0.5);
+}
+.top-pick-rationale-tag {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 1px 6px;
+    margin-right: 6px;
+    background: rgba(168,85,247,0.18);
+    color: #c084fc;
+    border-radius: 3px;
+    vertical-align: middle;
+}
+.top-pick-risk {
+    font-size: 12px;
+    color: #fbbf24;
+    line-height: 1.5;
+    padding: 6px 10px;
+    background: rgba(251,191,36,0.05);
+    border-left: 3px solid rgba(251,191,36,0.4);
+    border-radius: 4px;
+}
+.top-pick-risk-label { font-weight: 700; margin-right: 4px; }
+
+.top-pick-footer {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: auto;
+    padding-top: 8px;
+    border-top: 1px dashed rgba(148,163,184,0.15);
+}
+.top-pick-score {
+    font-size: 12px;
+    color: var(--text-muted, #9ba0b4);
+    cursor: pointer;
+    user-select: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    align-self: flex-start;
+}
+.top-pick-score:hover { color: var(--text, #e4e6eb); }
+.top-pick-score-sub { color: var(--text-muted, #9ba0b4); font-size: 11px; }
+.top-pick-score-toggle { font-size: 10px; transition: transform 0.15s; }
+.top-pick-breakdown {
+    display: none;
+    flex-direction: column;
+    gap: 3px;
+    padding: 8px 10px;
+    background: rgba(15,23,42,0.55);
+    border-radius: 6px;
+    font-size: 11px;
+}
+.top-pick-breakdown.open { display: flex; }
+.top-pick-breakdown-row { display: flex; justify-content: space-between; gap: 12px; }
+.top-pick-breakdown-key { color: var(--text-muted, #9ba0b4); }
+.top-pick-breakdown-val { color: #4ade80; font-variant-numeric: tabular-nums; }
+.top-pick-breakdown-neg { color: #f87171; }
+
+/* ----- Dashboard Track Record 위젯 — UI-11 ----- */
+.dash-tr-widget {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 16px 20px;
+    margin-bottom: 20px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    flex-wrap: wrap;
+}
+.dash-tr-left {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex: 1 1 260px;
+    min-width: 0;
+}
+.dash-tr-icon { font-size: 28px; flex-shrink: 0; }
+.dash-tr-title { font-weight: 700; font-size: 15px; }
+.dash-tr-summary {
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.5;
+    margin-top: 2px;
+}
+.dash-tr-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+}
+.dash-tr-tabs {
+    display: inline-flex;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    background: rgba(255,255,255,0.02);
+}
+.dash-tr-tab {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 12px;
+    font-weight: 600;
+    padding: 6px 12px;
+    cursor: pointer;
+    border-right: 1px solid var(--border);
+    min-height: 32px;
+    transition: color 0.15s, background 0.15s;
+}
+.dash-tr-tab:last-child { border-right: none; }
+.dash-tr-tab:hover { color: var(--text); background: var(--bg-card-hover); }
+.dash-tr-tab.active { color: var(--accent); background: rgba(79,140,255,0.12); }
+
+/* ----- 카드 잠금 오버레이 (Free Blur) — UI-11 ----- */
+.card-locked {
+    position: relative;
+    overflow: hidden;
+}
+.card-locked > *:not(.card-lock-overlay) {
+    filter: blur(4px);
+    opacity: 0.45;
+    pointer-events: none;
+    user-select: none;
+}
+.card-lock-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 20px;
+    text-align: center;
+    background: linear-gradient(180deg, rgba(26,29,39,0.55), rgba(26,29,39,0.85));
+    backdrop-filter: blur(2px);
+    z-index: 2;
+}
+.card-lock-icon { font-size: 26px; }
+.card-lock-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text);
+    margin: 0;
+}
+
+/* ── 워치리스트 요약 위젯 ── */
+.watchlist-widget {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+}
+.watchlist-widget .widget-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    font-size: 14px;
+    font-weight: 600;
+}
+.widget-more {
+    font-size: 12px;
+    color: var(--accent);
+    font-weight: 500;
+}
+.watchlist-quick {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 180px;
+    overflow-y: auto;
+}
+.wl-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 13px;
+    text-decoration: none;
+    color: inherit;
+    transition: background 0.15s;
+}
+.wl-item:hover { background: var(--bg-card-hover); }
+.wl-item-hot {
+    border-color: rgba(251, 191, 36, 0.4);
+    background: rgba(251, 191, 36, 0.08);
+}
+.wl-ticker { font-weight: 600; color: var(--text); }
+.wl-name {
+    color: var(--text-muted);
+    font-size: 12px;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.wl-price { font-size: 12px; color: var(--text); }
+.wl-badge-pick {
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: rgba(251, 191, 36, 0.2);
+    color: var(--orange);
+    font-weight: 600;
+}
+.wl-empty {
+    font-size: 12px;
+    color: var(--text-muted);
+    padding: 8px;
+    text-align: center;
+}
+
+/* ── Track Record 시각화 (도넛 + 바) ── */
+.tr-visual {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex: 1;
+}
+.tr-donut-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+.tr-donut circle:last-of-type {
+    transition: stroke-dasharray 0.5s ease;
+}
+.tr-return-block { flex: 1; min-width: 140px; }
+.tr-bar-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+}
+.tr-bar-track {
+    height: 8px;
+    background: var(--border);
+    border-radius: 4px;
+    position: relative;
+    overflow: hidden;
+}
+.tr-bar-zero {
+    position: absolute;
+    left: 50%;
+    width: 1px;
+    height: 100%;
+    background: var(--text-muted);
+    z-index: 1;
+}
+.tr-bar-fill {
+    position: absolute;
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.4s ease;
+}
+.tr-bar-pos { background: var(--color-positive); }
+.tr-bar-neg { background: var(--color-negative); }
+.tr-bar-value {
+    margin-top: 4px;
+    font-size: 14px;
+    font-weight: 600;
+}
+.tr-sample {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+.color-green { color: var(--color-positive) !important; }
+.color-red { color: var(--color-negative) !important; }
+
+/* ── Top Picks 불릿 차트 ── */
+.bullet-chart {
+    margin: 10px 0 6px;
+    min-height: 52px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+.bullet-chart-partial .bullet-labels {
+    justify-content: flex-start;
+    gap: 14px;
+}
+.bullet-track {
+    height: 6px;
+    background: var(--border);
+    border-radius: 3px;
+    position: relative;
+    margin: 12px 4px 6px;
+}
+.bullet-range {
+    height: 100%;
+    border-radius: 3px;
+    background: linear-gradient(90deg, rgba(79, 140, 255, 0.3) 0%, rgba(52, 211, 153, 0.5) 100%);
+}
+.bullet-marker {
+    position: absolute;
+    top: -5px;
+    width: 3px;
+    height: 16px;
+    background: var(--accent);
+    border-radius: 1px;
+    transform: translateX(-50%);
+    box-shadow: 0 0 0 1px var(--bg-card);
+}
+.bullet-target {
+    position: absolute;
+    top: -3px;
+    right: -1px;
+    width: 3px;
+    height: 12px;
+    background: var(--color-positive);
+    border-radius: 1px;
+}
+.bullet-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 4px;
+}
+.bullet-labels .bullet-upside {
+    font-weight: 700;
+    font-size: 13px;
+}
+
+/* ── Top Picks 3-Zone 카드 강화 ── */
+.top-pick-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: auto;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+}
+.action-btn {
+    flex: 1;
+    padding: 5px 8px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-muted);
+    text-align: center;
+    text-decoration: none;
+    transition: all 0.15s;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+}
+.action-btn:hover {
+    background: var(--bg-card-hover);
+    color: var(--text);
+    border-color: var(--accent);
+}
+.action-btn:disabled {
+    cursor: default;
+    opacity: 0.7;
+}
+.action-watched {
+    color: var(--orange);
+    border-color: rgba(251, 191, 36, 0.3);
+    background: rgba(251, 191, 36, 0.05);
+}
+.action-btn-signal {
+    color: var(--color-signal);
+    border-color: rgba(147, 130, 255, 0.3);
+}
+.top-pick-rationale.collapsible {
+    cursor: pointer;
+    padding: 0;
+    user-select: none;
+    line-height: 1.4;
+}
+.top-pick-rationale-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 10px;
+    height: 34px;
+    box-sizing: border-box;
+    font-size: 12px;
+    line-height: 1;
+    color: var(--text-muted, #9ba0b4);
+}
+.top-pick-rationale.collapsible .top-pick-rationale-tag {
+    margin-right: 0;
+    line-height: 1;
+    flex-shrink: 0;
+}
+.top-pick-rationale-hint,
+.top-pick-rationale-hint-open {
+    flex: 1;
+    line-height: 1;
+}
+.top-pick-rationale-hint-open { display: none; }
+.top-pick-rationale-arrow {
+    font-size: 9px;
+    line-height: 1;
+    transition: transform 0.2s;
+    color: var(--text-muted, #9ba0b4);
+    flex-shrink: 0;
+}
+.top-pick-rationale-body {
+    display: none;
+    padding: 8px 10px 10px;
+    border-top: 1px dashed rgba(148,163,184,0.15);
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--text, #e4e6eb);
+    user-select: text;
+}
+.top-pick-rationale.collapsible.expanded .top-pick-rationale-body { display: block; }
+.top-pick-rationale.collapsible.expanded .top-pick-rationale-hint { display: none; }
+.top-pick-rationale.collapsible.expanded .top-pick-rationale-hint-open { display: block; }
+.top-pick-rationale.collapsible.expanded .top-pick-rationale-arrow { transform: rotate(180deg); }
 
 /* ======== 13_stock_analysis.css ======== */
 /* 13_stock_analysis — populated in later tasks */
@@ -1747,46 +2716,6 @@ tbody tr:hover { background: var(--bg-card-hover); }
 .risk-temp-high .risk-temp-dot { background: var(--red); }
 .risk-temp-medium .risk-temp-dot { background: var(--orange); }
 .risk-temp-low .risk-temp-dot { background: var(--green); }
-
-/* ===== Signals (Dashboard) ===== */
-.signals-section {
-    margin-bottom: 28px;
-}
-
-.signal-list {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-
-.signal-item {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 12px 18px;
-    border-radius: 10px;
-    font-size: 15px;
-    font-weight: 500;
-    border: 1px solid var(--border);
-    background: var(--bg-card);
-}
-
-.signal-icon {
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 14px;
-    flex-shrink: 0;
-}
-
-.signal-new_buy .signal-icon { background: rgba(52,211,153,0.15); color: var(--green); }
-.signal-action_change .signal-icon { background: rgba(251,191,36,0.15); color: var(--orange); }
-.signal-confidence_up .signal-icon { background: rgba(79,140,255,0.15); color: var(--accent); }
-.signal-confidence_down .signal-icon { background: rgba(248,113,113,0.15); color: var(--red); }
-.signal-disappeared .signal-icon { background: rgba(139,143,163,0.15); color: var(--text-muted); }
 
 /* ===== History Timeline ===== */
 .history-entry {
@@ -2210,100 +3139,6 @@ tbody tr:hover { background: var(--bg-card-hover); }
     gap: 10px;
 }
 
-/* ===== News Section (Dashboard) ===== */
-.news-categories {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-
-.news-category-card {
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    overflow: hidden;
-}
-
-.news-category-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 14px 20px;
-    cursor: pointer;
-    user-select: none;
-    transition: background 0.15s;
-}
-
-.news-category-header:hover { background: var(--bg-card-hover); }
-
-.news-category-label {
-    font-weight: 600;
-    font-size: 15px;
-    margin-right: 10px;
-}
-
-.news-category-count {
-    font-size: 13px;
-    color: var(--text-muted);
-    background: rgba(79,140,255,0.08);
-    padding: 2px 10px;
-    border-radius: 10px;
-}
-
-.news-toggle {
-    font-size: 12px;
-    color: var(--text-muted);
-    transition: transform 0.2s;
-}
-
-.news-category-card.open .news-toggle { transform: rotate(180deg); }
-
-.news-category-body {
-    display: none;
-    border-top: 1px solid var(--border);
-    max-height: 800px;
-    overflow-y: auto;
-}
-
-.news-category-card.open .news-category-body { display: block; }
-
-.news-item {
-    padding: 12px 20px;
-    border-bottom: 1px solid rgba(42,46,58,0.4);
-    font-size: 14px;
-}
-
-.news-item:last-child { border-bottom: none; }
-
-.news-item-title {
-    font-weight: 500;
-    line-height: 1.5;
-    margin-bottom: 4px;
-}
-
-.news-item-title a { color: var(--text); }
-.news-item-title a:hover { color: var(--accent); }
-
-.news-item-meta {
-    display: flex;
-    gap: 12px;
-    font-size: 12px;
-    color: var(--text-muted);
-    margin-bottom: 4px;
-}
-
-.news-source {
-    font-weight: 600;
-    color: var(--accent);
-    opacity: 0.8;
-}
-
-.news-item-summary {
-    font-size: 13px;
-    color: var(--text-muted);
-    line-height: 1.6;
-}
-
 /* ===== Admin Page ===== */
 .admin-status {
     display: inline-block;
@@ -2383,192 +3218,6 @@ tbody tr:hover { background: var(--bg-card-hover); }
 .admin-log-error { color: var(--red); }
 .admin-log-success { color: var(--green); }
 .admin-log-info { color: var(--accent); }
-
-/* ===== 워치리스트 토글 ===== */
-.watchlist-toggle {
-    cursor: pointer;
-    font-size: 18px;
-    color: var(--text-muted);
-    transition: color 0.15s;
-    user-select: none;
-}
-.watchlist-toggle:hover { color: #fbbf24; }
-.watchlist-toggle.watched { color: #fbbf24; }
-
-/* ===== Top Picks (대시보드 오늘의 추천) ===== */
-.top-picks-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-    gap: 14px;
-    margin-bottom: 28px;
-}
-.top-pick-card {
-    background: var(--bg-card, #1a1d27);
-    border: 1px solid var(--border, #2a2e3a);
-    border-radius: 12px;
-    padding: 16px 18px 14px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    position: relative;
-    transition: border-color 0.15s, transform 0.15s;
-}
-.top-pick-card:hover { border-color: rgba(79,140,255,0.55); transform: translateY(-1px); }
-.top-pick-watched {
-    border-color: rgba(251,191,36,0.55);
-    box-shadow: 0 0 0 1px rgba(251,191,36,0.18);
-}
-
-.top-pick-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 8px;
-}
-.top-pick-rank-wrap { display: flex; align-items: center; gap: 6px; }
-.top-pick-rank {
-    font-size: 22px;
-    font-weight: 700;
-    color: #7aa8ff;
-    letter-spacing: 0.5px;
-}
-.top-pick-trophy { font-size: 16px; }
-
-.top-pick-badges { display: flex; flex-wrap: wrap; gap: 4px; }
-.top-pick-badge {
-    font-size: 11px;
-    padding: 2px 7px;
-    border-radius: 6px;
-    background: rgba(148,163,184,0.10);
-    color: var(--text-muted, #9ba0b4);
-    border: 1px solid rgba(148,163,184,0.18);
-    white-space: nowrap;
-}
-.top-pick-badge-stage2 { background: rgba(168,85,247,0.12); color: #c084fc; border-color: rgba(168,85,247,0.32); }
-.top-pick-badge-early { background: rgba(34,197,94,0.12); color: #4ade80; border-color: rgba(34,197,94,0.32); }
-.top-pick-badge-deepvalue { background: rgba(234,179,8,0.12); color: #facc15; border-color: rgba(234,179,8,0.32); }
-.top-pick-badge-contrarian { background: rgba(244,114,182,0.12); color: #f472b6; border-color: rgba(244,114,182,0.32); }
-.top-pick-badge-conviction { background: rgba(34,197,94,0.18); color: #4ade80; border-color: rgba(34,197,94,0.45); font-weight: 700; }
-.top-pick-badge-watched { background: rgba(251,191,36,0.15); color: #fbbf24; border-color: rgba(251,191,36,0.42); }
-.top-pick-badge-subscribed { background: rgba(79,140,255,0.12); color: #7aa8ff; border-color: rgba(79,140,255,0.32); }
-
-.top-pick-title { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-.top-pick-name {
-    font-size: 17px;
-    font-weight: 600;
-    text-decoration: none;
-    color: var(--text, #e4e6eb);
-}
-.top-pick-name:hover { color: #7aa8ff; text-decoration: underline; }
-.top-pick-ticker { font-size: 12px; color: var(--text-muted, #9ba0b4); font-family: 'JetBrains Mono', monospace; }
-.top-pick-sector { font-size: 12px; color: var(--text-muted, #9ba0b4); }
-
-.top-pick-price-row {
-    display: flex;
-    gap: 14px;
-    padding: 8px 10px;
-    background: rgba(148,163,184,0.05);
-    border-radius: 8px;
-    flex-wrap: wrap;
-}
-.top-pick-price-item { display: flex; flex-direction: column; gap: 2px; }
-.top-pick-price-label { font-size: 10px; color: var(--text-muted, #9ba0b4); text-transform: uppercase; letter-spacing: 0.5px; }
-.top-pick-price-value { font-size: 14px; font-weight: 600; color: var(--text, #e4e6eb); font-variant-numeric: tabular-nums; }
-.top-pick-upside-pos { color: #4ade80; }
-.top-pick-upside-neg { color: #f87171; }
-
-.top-pick-theme {
-    display: flex;
-    align-items: flex-start;
-    gap: 6px;
-    flex-wrap: wrap;
-    font-size: 12px;
-    min-height: 40px;
-    line-height: 1.4;
-}
-.top-pick-theme-label { color: var(--text-muted, #9ba0b4); flex-shrink: 0; }
-.top-pick-theme-name {
-    color: var(--text, #e4e6eb);
-    text-decoration: none;
-    font-weight: 500;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-}
-.top-pick-theme-name:hover { color: #7aa8ff; text-decoration: underline; }
-.top-pick-theme-conf { color: var(--text-muted, #9ba0b4); font-size: 11px; margin-left: auto; }
-
-.top-pick-rationale {
-    font-size: 13px;
-    line-height: 1.5;
-    color: var(--text, #e4e6eb);
-    padding: 8px 10px;
-    background: rgba(79,140,255,0.05);
-    border-left: 3px solid rgba(79,140,255,0.4);
-    border-radius: 4px;
-}
-.top-pick-rationale-ai {
-    background: rgba(168,85,247,0.06);
-    border-left-color: rgba(168,85,247,0.5);
-}
-.top-pick-rationale-tag {
-    display: inline-block;
-    font-size: 10px;
-    font-weight: 700;
-    padding: 1px 6px;
-    margin-right: 6px;
-    background: rgba(168,85,247,0.18);
-    color: #c084fc;
-    border-radius: 3px;
-    vertical-align: middle;
-}
-.top-pick-risk {
-    font-size: 12px;
-    color: #fbbf24;
-    line-height: 1.5;
-    padding: 6px 10px;
-    background: rgba(251,191,36,0.05);
-    border-left: 3px solid rgba(251,191,36,0.4);
-    border-radius: 4px;
-}
-.top-pick-risk-label { font-weight: 700; margin-right: 4px; }
-
-.top-pick-footer {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    margin-top: auto;
-    padding-top: 8px;
-    border-top: 1px dashed rgba(148,163,184,0.15);
-}
-.top-pick-score {
-    font-size: 12px;
-    color: var(--text-muted, #9ba0b4);
-    cursor: pointer;
-    user-select: none;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    align-self: flex-start;
-}
-.top-pick-score:hover { color: var(--text, #e4e6eb); }
-.top-pick-score-sub { color: var(--text-muted, #9ba0b4); font-size: 11px; }
-.top-pick-score-toggle { font-size: 10px; transition: transform 0.15s; }
-.top-pick-breakdown {
-    display: none;
-    flex-direction: column;
-    gap: 3px;
-    padding: 8px 10px;
-    background: rgba(15,23,42,0.55);
-    border-radius: 6px;
-    font-size: 11px;
-}
-.top-pick-breakdown.open { display: flex; }
-.top-pick-breakdown-row { display: flex; justify-content: space-between; gap: 12px; }
-.top-pick-breakdown-key { color: var(--text-muted, #9ba0b4); }
-.top-pick-breakdown-val { color: #4ade80; font-variant-numeric: tabular-nums; }
-.top-pick-breakdown-neg { color: #f87171; }
 
 /* =====================================================================
    구독 UI (티어 배지 / 업그레이드 모달 / 하단 탭바 / 면책 배너)
@@ -2678,96 +3327,6 @@ tbody tr:hover { background: var(--bg-card-hover); }
         padding-left: env(safe-area-inset-left, 0px);
         padding-right: env(safe-area-inset-right, 0px);
     }
-}
-
-/* ----- Dashboard Track Record 위젯 — UI-11 ----- */
-.dash-tr-widget {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 16px;
-    padding: 16px 20px;
-    margin-bottom: 20px;
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    flex-wrap: wrap;
-}
-.dash-tr-left {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    flex: 1 1 260px;
-    min-width: 0;
-}
-.dash-tr-icon { font-size: 28px; flex-shrink: 0; }
-.dash-tr-title { font-weight: 700; font-size: 15px; }
-.dash-tr-summary {
-    font-size: 12px;
-    color: var(--text-muted);
-    line-height: 1.5;
-    margin-top: 2px;
-}
-.dash-tr-right {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    flex-shrink: 0;
-}
-.dash-tr-tabs {
-    display: inline-flex;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    overflow: hidden;
-    background: rgba(255,255,255,0.02);
-}
-.dash-tr-tab {
-    background: transparent;
-    border: none;
-    color: var(--text-muted);
-    font-size: 12px;
-    font-weight: 600;
-    padding: 6px 12px;
-    cursor: pointer;
-    border-right: 1px solid var(--border);
-    min-height: 32px;
-    transition: color 0.15s, background 0.15s;
-}
-.dash-tr-tab:last-child { border-right: none; }
-.dash-tr-tab:hover { color: var(--text); background: var(--bg-card-hover); }
-.dash-tr-tab.active { color: var(--accent); background: rgba(79,140,255,0.12); }
-
-/* ----- 카드 잠금 오버레이 (Free Blur) — UI-11 ----- */
-.card-locked {
-    position: relative;
-    overflow: hidden;
-}
-.card-locked > *:not(.card-lock-overlay) {
-    filter: blur(4px);
-    opacity: 0.45;
-    pointer-events: none;
-    user-select: none;
-}
-.card-lock-overlay {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    padding: 20px;
-    text-align: center;
-    background: linear-gradient(180deg, rgba(26,29,39,0.55), rgba(26,29,39,0.85));
-    backdrop-filter: blur(2px);
-    z-index: 2;
-}
-.card-lock-icon { font-size: 26px; }
-.card-lock-title {
-    font-size: 14px;
-    font-weight: 700;
-    color: var(--text);
-    margin: 0;
 }
 
 /* ----- Free 광고 슬롯 — UI-17 ----- */
@@ -3230,14 +3789,6 @@ tbody tr:hover { background: var(--bg-card-hover); }
  * Dashboard Redesign (v23) — SVG/CSS 시각화 + 정보 계층 재배치
  * ============================================================ */
 
-/* ── Tier 1 Hero 레이아웃 ── */
-.dash-hero {
-    display: grid;
-    grid-template-columns: 1fr 1.8fr;
-    gap: 16px;
-    margin-bottom: 20px;
-}
-
 /* ── 리스크 온도 SVG 반원형 게이지 ── */
 .risk-gauge-wrap {
     display: inline-flex;
@@ -3252,564 +3803,9 @@ tbody tr:hover { background: var(--bg-card-hover); }
     letter-spacing: 0.5px;
 }
 
-/* ── 워치리스트 요약 위젯 ── */
-.watchlist-widget {
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 16px;
-    display: flex;
-    flex-direction: column;
-}
-.watchlist-widget .widget-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 10px;
-    font-size: 14px;
-    font-weight: 600;
-}
-.widget-more {
-    font-size: 12px;
-    color: var(--accent);
-    font-weight: 500;
-}
-.watchlist-quick {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    max-height: 180px;
-    overflow-y: auto;
-}
-.wl-item {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 6px 8px;
-    background: rgba(255, 255, 255, 0.02);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    font-size: 13px;
-    text-decoration: none;
-    color: inherit;
-    transition: background 0.15s;
-}
-.wl-item:hover { background: var(--bg-card-hover); }
-.wl-item-hot {
-    border-color: rgba(251, 191, 36, 0.4);
-    background: rgba(251, 191, 36, 0.08);
-}
-.wl-ticker { font-weight: 600; color: var(--text); }
-.wl-name {
-    color: var(--text-muted);
-    font-size: 12px;
-    flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-.wl-price { font-size: 12px; color: var(--text); }
-.wl-badge-pick {
-    font-size: 10px;
-    padding: 1px 6px;
-    border-radius: 4px;
-    background: rgba(251, 191, 36, 0.2);
-    color: var(--orange);
-    font-weight: 600;
-}
-.wl-empty {
-    font-size: 12px;
-    color: var(--text-muted);
-    padding: 8px;
-    text-align: center;
-}
-
 /* ════════════════════════════════════════════════════════════
    Dashboard Hero (Option B) — KPI Strip + 3-row 2×2 Grid
    ════════════════════════════════════════════════════════════ */
-
-/* Row 1: KPI Strip — stat-grid-6의 컴팩트 변형 */
-.kpi-strip {
-    margin-bottom: 16px;
-}
-.kpi-strip .stat-card {
-    padding: 14px 12px;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-}
-.kpi-strip .stat-value {
-    font-size: 28px;
-    margin-bottom: 2px;
-}
-.kpi-strip .stat-label {
-    font-size: 12px;
-}
-.kpi-strip .stat-sub {
-    font-size: 11px;
-}
-
-/* Row 1 — KPI + Track Record 통합 (2-col) */
-.hero-row1 {
-    display: grid;
-    grid-template-columns: 1.8fr 1fr;
-    gap: 16px;
-    margin-bottom: 16px;
-    align-items: stretch;
-}
-.hero-row1 > * { margin-bottom: 0; }
-
-/* KPI Strip Tight — Row 1 내부에서 더 압축 (sparkline 제거, 고정폭) */
-.kpi-strip.kpi-strip-tight .stat-card {
-    padding: 8px 10px;
-}
-.kpi-strip.kpi-strip-tight .stat-value {
-    font-size: 22px;
-    line-height: 1.1;
-    margin-bottom: 1px;
-}
-.kpi-strip.kpi-strip-tight .stat-label {
-    font-size: 11px;
-}
-.kpi-strip.kpi-strip-tight .stat-inline-sub {
-    color: var(--text-muted);
-    font-size: 10px;
-    font-weight: 500;
-}
-.kpi-strip.kpi-strip-tight .change-indicator {
-    font-size: 11px;
-    padding: 0 4px;
-    margin-left: 4px;
-}
-
-@media (max-width: 1280px) {
-    .hero-row1 {
-        grid-template-columns: 1fr;
-    }
-}
-
-/* Row 2/3 공통: 2-column grid (레거시, 다른 페이지용으로 유지) */
-.hero-grid-2col {
-    display: grid;
-    grid-template-columns: 1fr 1.4fr;
-    gap: 16px;
-    margin-bottom: 16px;
-    align-items: stretch;
-}
-.hero-grid-2col > * {
-    margin-bottom: 0;
-}
-.hero-grid-2col.hero-insights {
-    grid-template-columns: 1fr 1fr;
-    margin-bottom: 20px;
-}
-
-/* Row 2 (3-col 단일 행): 관심 + 발굴 + 섹터를 한 줄에 */
-.hero-grid-3col {
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
-    gap: 16px;
-    margin-bottom: 20px;
-    align-items: stretch;
-}
-.hero-grid-3col > * {
-    margin-bottom: 0;
-    min-width: 0;
-}
-/* 중간 너비에서는 그대로 3-col 유지 — 너무 좁으면 모바일 breakpoint에서 1-col */
-
-/* Hero 내부 Track Record 위젯 — 자식 높이 채우기 */
-.dash-tr-widget.hero-tr {
-    margin-bottom: 0;
-    height: 100%;
-}
-
-/* ── 발굴 유형 분포 스택바 (Hero 압축용) ── */
-.discovery-stackbar-wrap {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-.discovery-stackbar-head {
-    display: flex;
-    align-items: baseline;
-    gap: 6px;
-}
-.discovery-stackbar-total {
-    font-size: 22px;
-    font-weight: 700;
-    color: var(--text);
-}
-.discovery-stackbar-total small {
-    font-size: 11px;
-    color: var(--text-muted);
-    font-weight: 500;
-    margin-left: 4px;
-}
-.discovery-stackbar-track {
-    display: flex;
-    height: 14px;
-    border-radius: 7px;
-    overflow: hidden;
-    background: rgba(255,255,255,0.04);
-    border: 1px solid var(--border);
-}
-.discovery-stackbar-seg {
-    transition: flex 0.4s ease;
-    cursor: help;
-}
-.discovery-stackbar-legend {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px 14px;
-    font-size: 12px;
-    color: var(--text-muted);
-}
-.discovery-legend-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-}
-.discovery-legend-chip .legend-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    display: inline-block;
-}
-
-/* ── 섹터 칩 (Top 5) ── */
-.sector-chips {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    align-content: flex-start;
-}
-.sector-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 12px;
-    border-radius: 16px;
-    background: rgba(79, 140, 255, 0.08);
-    border: 1px solid rgba(79, 140, 255, 0.25);
-    font-size: 13px;
-    color: var(--text);
-    transition: background 0.15s, border-color 0.15s;
-}
-.sector-chip[data-intensity="100"] {
-    background: rgba(79, 140, 255, 0.22);
-    border-color: rgba(79, 140, 255, 0.5);
-    font-weight: 600;
-}
-.sector-chip-name {
-    color: var(--text);
-}
-.sector-chip-count {
-    padding: 1px 7px;
-    border-radius: 10px;
-    background: rgba(255,255,255,0.08);
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--text);
-}
-
-/* ── Insight Card Compact (Hero Row 3) ── */
-.insight-card-compact {
-    padding: 14px 16px;
-}
-.insight-card-compact .insight-title {
-    margin-bottom: 10px;
-}
-
-/* ── Track Record 시각화 (도넛 + 바) ── */
-.tr-visual {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    flex: 1;
-}
-.tr-donut-wrap {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-}
-.tr-donut circle:last-of-type {
-    transition: stroke-dasharray 0.5s ease;
-}
-.tr-return-block { flex: 1; min-width: 140px; }
-.tr-bar-label {
-    font-size: 11px;
-    color: var(--text-muted);
-    margin-bottom: 4px;
-}
-.tr-bar-track {
-    height: 8px;
-    background: var(--border);
-    border-radius: 4px;
-    position: relative;
-    overflow: hidden;
-}
-.tr-bar-zero {
-    position: absolute;
-    left: 50%;
-    width: 1px;
-    height: 100%;
-    background: var(--text-muted);
-    z-index: 1;
-}
-.tr-bar-fill {
-    position: absolute;
-    height: 100%;
-    border-radius: 4px;
-    transition: width 0.4s ease;
-}
-.tr-bar-pos { background: var(--color-positive); }
-.tr-bar-neg { background: var(--color-negative); }
-.tr-bar-value {
-    margin-top: 4px;
-    font-size: 14px;
-    font-weight: 600;
-}
-.tr-sample {
-    font-size: 11px;
-    color: var(--text-muted);
-    margin-top: 2px;
-}
-.color-green { color: var(--color-positive) !important; }
-.color-red { color: var(--color-negative) !important; }
-
-/* ── Top Picks 불릿 차트 ── */
-.bullet-chart {
-    margin: 10px 0 6px;
-    min-height: 52px;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-}
-.bullet-chart-partial .bullet-labels {
-    justify-content: flex-start;
-    gap: 14px;
-}
-.bullet-track {
-    height: 6px;
-    background: var(--border);
-    border-radius: 3px;
-    position: relative;
-    margin: 12px 4px 6px;
-}
-.bullet-range {
-    height: 100%;
-    border-radius: 3px;
-    background: linear-gradient(90deg, rgba(79, 140, 255, 0.3) 0%, rgba(52, 211, 153, 0.5) 100%);
-}
-.bullet-marker {
-    position: absolute;
-    top: -5px;
-    width: 3px;
-    height: 16px;
-    background: var(--accent);
-    border-radius: 1px;
-    transform: translateX(-50%);
-    box-shadow: 0 0 0 1px var(--bg-card);
-}
-.bullet-target {
-    position: absolute;
-    top: -3px;
-    right: -1px;
-    width: 3px;
-    height: 12px;
-    background: var(--color-positive);
-    border-radius: 1px;
-}
-.bullet-labels {
-    display: flex;
-    justify-content: space-between;
-    font-size: 11px;
-    color: var(--text-muted);
-    margin-top: 4px;
-}
-.bullet-labels .bullet-upside {
-    font-weight: 700;
-    font-size: 13px;
-}
-
-/* ── Top Picks 3-Zone 카드 강화 ── */
-.top-pick-actions {
-    display: flex;
-    gap: 6px;
-    margin-top: auto;
-    padding-top: 10px;
-    border-top: 1px solid var(--border);
-}
-.action-btn {
-    flex: 1;
-    padding: 5px 8px;
-    border-radius: 6px;
-    font-size: 12px;
-    font-weight: 500;
-    cursor: pointer;
-    border: 1px solid var(--border);
-    background: transparent;
-    color: var(--text-muted);
-    text-align: center;
-    text-decoration: none;
-    transition: all 0.15s;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 4px;
-}
-.action-btn:hover {
-    background: var(--bg-card-hover);
-    color: var(--text);
-    border-color: var(--accent);
-}
-.action-btn:disabled {
-    cursor: default;
-    opacity: 0.7;
-}
-.action-watched {
-    color: var(--orange);
-    border-color: rgba(251, 191, 36, 0.3);
-    background: rgba(251, 191, 36, 0.05);
-}
-.action-btn-signal {
-    color: var(--color-signal);
-    border-color: rgba(147, 130, 255, 0.3);
-}
-.top-pick-rationale.collapsible {
-    cursor: pointer;
-    padding: 0;
-    user-select: none;
-    line-height: 1.4;
-}
-.top-pick-rationale-head {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 8px 10px;
-    height: 34px;
-    box-sizing: border-box;
-    font-size: 12px;
-    line-height: 1;
-    color: var(--text-muted, #9ba0b4);
-}
-.top-pick-rationale.collapsible .top-pick-rationale-tag {
-    margin-right: 0;
-    line-height: 1;
-    flex-shrink: 0;
-}
-.top-pick-rationale-hint,
-.top-pick-rationale-hint-open {
-    flex: 1;
-    line-height: 1;
-}
-.top-pick-rationale-hint-open { display: none; }
-.top-pick-rationale-arrow {
-    font-size: 9px;
-    line-height: 1;
-    transition: transform 0.2s;
-    color: var(--text-muted, #9ba0b4);
-    flex-shrink: 0;
-}
-.top-pick-rationale-body {
-    display: none;
-    padding: 8px 10px 10px;
-    border-top: 1px dashed rgba(148,163,184,0.15);
-    font-size: 13px;
-    line-height: 1.5;
-    color: var(--text, #e4e6eb);
-    user-select: text;
-}
-.top-pick-rationale.collapsible.expanded .top-pick-rationale-body { display: block; }
-.top-pick-rationale.collapsible.expanded .top-pick-rationale-hint { display: none; }
-.top-pick-rationale.collapsible.expanded .top-pick-rationale-hint-open { display: block; }
-.top-pick-rationale.collapsible.expanded .top-pick-rationale-arrow { transform: rotate(180deg); }
-
-/* ── Yield Curve 차트 ── */
-.yield-curve-chart { display: block; margin: 10px 0 4px; }
-
-/* ── Market Summary 접이식 ── */
-.market-summary-toggle {
-    display: none;
-    width: 100%;
-    text-align: center;
-    padding: 8px;
-    color: var(--accent);
-    cursor: pointer;
-    font-size: 13px;
-    background: transparent;
-    border: none;
-    border-top: 1px solid var(--border);
-    margin-top: 8px;
-}
-.market-summary.collapsed .summary-body {
-    max-height: 0;
-    overflow: hidden;
-    padding: 0;
-    margin: 0;
-}
-.market-summary .summary-body {
-    transition: max-height 0.3s ease;
-    max-height: 4000px;
-}
-
-/* ── 모바일 반응형 ── */
-@media (max-width: 768px) {
-    .dash-hero {
-        grid-template-columns: 1fr;
-    }
-    .hero-grid-2col,
-    .hero-grid-2col.hero-insights,
-    .hero-grid-3col,
-    .hero-row1 {
-        grid-template-columns: 1fr;
-    }
-    .kpi-strip .stat-card { padding: 10px 8px; }
-    .stat-grid-6 .stat-value {
-        font-size: 22px;
-    }
-    .stat-grid-6 .stat-label {
-        font-size: 11px;
-    }
-    .stat-grid-6 .sparkline {
-        display: none;
-    }
-    /* Top Picks 수평 캐러셀 */
-    .top-picks-grid {
-        display: flex !important;
-        overflow-x: auto;
-        scroll-snap-type: x mandatory;
-        gap: 12px;
-        padding-bottom: 12px;
-        -webkit-overflow-scrolling: touch;
-    }
-    .top-pick-card {
-        flex: 0 0 85vw;
-        scroll-snap-align: start;
-        max-width: 340px;
-    }
-    .top-picks-grid::-webkit-scrollbar { height: 4px; }
-    .top-picks-grid::-webkit-scrollbar-thumb {
-        background: var(--border);
-        border-radius: 2px;
-    }
-    /* 차트 축소 */
-    .risk-gauge { width: 100px; }
-    .tr-visual { flex-direction: column; align-items: center; gap: 10px; }
-    .discovery-donut-wrap { flex-direction: column; gap: 10px; }
-    /* Market Summary 접이식 버튼 노출 */
-    .market-summary-toggle { display: block; }
-    .market-summary.collapsed .summary-body {
-        padding: 0;
-    }
-}
-
-@media (max-width: 480px) {
-    .stat-grid-6 {
-        grid-template-columns: repeat(2, 1fr);
-    }
-}
 
 /* ═══════════════════════════════════════════════
    Stock Analysis Page (종목 심층분석) — 가독성 강화
