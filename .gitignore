@@ -4,3 +4,5 @@ __pycache__/
 .env
 .claude/hooks/logs/
 _checkpoints/
+.superpowers/
+_baselines/
