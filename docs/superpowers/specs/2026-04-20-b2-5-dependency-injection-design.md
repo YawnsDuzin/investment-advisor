@@ -230,3 +230,28 @@ B1/B2와 동일:
 - **C**: UX/템플릿 통합
 - **A**: `shared/db.py` 분할
 - **D**: `analyzer/` 파이프라인 분해
+
+## 검증 완료 (2026-04-20)
+
+- **자동**: baseline diff `00-before-v2` vs `b25-99-final` = 0건 회귀 (27개 페이지 응답 byte-동일, STATUS_ONLY 3개 제외)
+- **중복 제거 결과**:
+  - `conn = get_connection(...) + try/finally + conn.close()` 패턴: 기존 ~75회 → admin.py SSE 라우트 예외만 잔존 (2회)
+  - `_base_ctx(request, ...)` 호출: 24회 → 0 (모두 `Depends(make_page_ctx(...))` 로 통합)
+  - `user_admin._get_db_cfg` alias → `_get_cfg` 로 통일 (Task 2)
+  - `admin.py` 직접 `DatabaseConfig()` 11곳 → `_get_cfg()` 통일 (Task 3)
+- **전역 패턴 검증**:
+  - `_base_ctx(request` in routes/: 0 matches ✓
+  - `DatabaseConfig()` in routes/: 0 matches ✓
+  - `_get_db_cfg` in routes/: 0 matches ✓
+  - `conn.close()` in routes/: admin.py SSE 2회만 ✓
+  - `get_connection()` in routes/: admin.py 1곳만 ✓
+- **커밋 해시**:
+  - Task 1: 9dc4de0
+  - Task 2: 07a13f5
+  - Task 3: 777caa3
+  - Task 4: 7b5f203
+  - Task 5: cc76833
+  - Task 6: 8992350
+  - Task 7: 7d91204
+  - Task 8: 48707a2
+  - Task 9: 5ef585d
