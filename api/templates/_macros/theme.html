@@ -1,0 +1,218 @@
+{#
+  Theme-related macros — 테마 헤더/시나리오/매크로/분포/버블/칩
+  이동 출처: api/templates/_macros.html (C2.1, 2026-04-20)
+
+  크로스 파일 의존: theme_header가 grade_badge(common.html)를 호출.
+#}
+{% from "_macros/common.html" import grade_badge %}
+
+{# ── 테마 헤더 (배지 + 신뢰도 바) ── #}
+{% macro theme_header(theme, tk=none) %}
+<div class="card-header">
+    <span style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <span class="card-title">{{ theme.theme_name }}</span>
+        {% if theme.analysis_date %}
+        <span style="font-size:14px;color:var(--text-muted);">{{ theme.analysis_date }}</span>
+        {% endif %}
+        {% if tk %}
+            {% if tk.appearances == 1 %}
+            <span class="tracking-badge tracking-badge-new">신규</span>
+            {% elif tk.streak_days >= 2 %}
+            <span class="tracking-badge tracking-badge-streak">{{ tk.streak_days }}일 연속{% if tk.appearances %} (총 {{ tk.appearances }}회){% endif %}</span>
+            {% endif %}
+            {% if tk.prev_confidence is not none and tk.latest_confidence is not none %}
+                {% set diff = tk.latest_confidence - tk.prev_confidence %}
+                {% if diff > 0.03 %}
+                <span class="confidence-change confidence-up">▲{{ "%.0f"|format(diff * 100) }}p</span>
+                {% elif diff < -0.03 %}
+                <span class="confidence-change confidence-down">▼{{ "%.0f"|format(diff|abs * 100) }}p</span>
+                {% endif %}
+            {% endif %}
+            {% if tk.appearances >= 2 and tk.theme_key %}
+            <a href="/pages/themes/history/{{ tk.theme_key }}" class="btn" style="padding:2px 10px;font-size:12px;">추이 보기</a>
+            {% endif %}
+        {% endif %}
+    </span>
+    <span style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        {% if theme.confidence_score is not none %}
+        {{ grade_badge(theme.confidence_score) }}
+        {% endif %}
+        {% if theme.theme_type %}
+        <span class="badge badge-{{ theme.theme_type }}">{{ theme.theme_type }}</span>
+        {% endif %}
+        {% if theme.theme_validity %}
+        <span class="badge badge-{{ theme.theme_validity }}">{{ theme.theme_validity }}</span>
+        {% endif %}
+        <span class="badge badge-{{ theme.time_horizon }}">{{ theme.time_horizon }}</span>
+        <span>
+            <span class="confidence-bar"><span class="confidence-bar-fill" style="width:{{ (theme.confidence_score|float * 100)|int }}%"></span></span>
+            {{ "%.0f"|format(theme.confidence_score|float * 100) }}%
+        </span>
+    </span>
+</div>
+{% endmacro %}
+
+
+{# ── 시나리오 그리드 ── #}
+{% macro scenario_grid(scenarios) %}
+{% if scenarios %}
+<div class="scenario-grid">
+    {% for sc in scenarios %}
+    <div class="scenario-card scenario-card-{{ sc.scenario_type }}">
+        <div class="scenario-header">
+            <span>{{ sc.scenario_type|upper }}</span>
+            {% if sc.probability %}<span class="scenario-prob">{{ sc.probability }}%</span>{% endif %}
+        </div>
+        <div class="scenario-body">{{ sc.description }}</div>
+        {% if sc.key_assumptions %}
+        <div style="margin-top:6px;font-size:13px;color:var(--text-muted);"><strong>가정:</strong> {{ sc.key_assumptions }}</div>
+        {% endif %}
+        {% if sc.market_impact %}<div class="scenario-impact">{{ sc.market_impact }}</div>{% endif %}
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+{% endmacro %}
+
+
+{# ── 핵심 지표 태그 ── #}
+{% macro indicator_tags(key_indicators) %}
+{% if key_indicators %}
+<div class="indicators">
+    {% for ind in key_indicators %}
+    <span class="indicator-tag">{{ ind }}</span>
+    {% endfor %}
+</div>
+{% endif %}
+{% endmacro %}
+
+
+{# ── 매크로 영향 테이블 ── #}
+{% macro macro_impact_table(macro_impacts) %}
+{% if macro_impacts %}
+<div class="macro-table table-wrap">
+    <table>
+        <thead><tr><th>변수</th><th>Base Case</th><th>Worse Case</th><th>Better Case</th><th>단위</th></tr></thead>
+        <tbody>
+            {% for m in macro_impacts %}
+            <tr>
+                <td style="font-weight:600;">{{ m.variable_name }}</td>
+                <td>{{ m.base_case or '-' }}</td>
+                <td style="color:var(--red);">{{ m.worse_case or '-' }}</td>
+                <td style="color:var(--green);">{{ m.better_case or '-' }}</td>
+                <td style="color:var(--text-muted);">{{ m.unit or '' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+{% endmacro %}
+
+{# ── 테마 신뢰도 프로그레스 링 (SVG) ── #}
+{% macro conf_ring(confidence, size=28) %}
+{% set pct = (confidence|float) %}
+{% set ring_color = 'var(--green)' if pct >= 0.7 else ('var(--accent)' if pct >= 0.5 else 'var(--orange)') %}
+<svg viewBox="0 0 36 36" width="{{ size }}" height="{{ size }}" class="conf-ring" aria-label="신뢰도 {{ (pct*100)|int }}%">
+    <circle cx="18" cy="18" r="15" fill="none" stroke="var(--border)" stroke-width="3"/>
+    <circle cx="18" cy="18" r="15" fill="none" stroke="{{ ring_color }}" stroke-width="3"
+            stroke-dasharray="{{ (pct * 94.2)|round(1) }} 94.2"
+            stroke-linecap="round" transform="rotate(-90 18 18)"/>
+    <text x="18" y="22" text-anchor="middle" fill="var(--text)" font-size="10" font-weight="600">
+        {{ (pct * 100)|int }}
+    </text>
+</svg>
+{% endmacro %}
+
+{# ── 발굴 유형 도넛 차트 (SVG) ── #}
+{% macro discovery_donut(discovery_counts) %}
+{% set total = discovery_counts.values()|sum %}
+{% set colors = {'early_signal': '#9382ff', 'consensus': '#4f8cff', 'contrarian': '#fbbf24', 'deep_value': '#34d399', 'unknown': '#9ba0b4'} %}
+{% set labels = {'early_signal': '얼리시그널', 'consensus': '컨센서스', 'contrarian': '컨트래리안', 'deep_value': '딥밸류', 'unknown': '기타'} %}
+<div class="discovery-donut-wrap">
+    <svg viewBox="0 0 100 100" width="110" height="110" class="discovery-donut" aria-label="발굴 유형 분포">
+        {% set ns = namespace(offset=0) %}
+        {% set circumference = 251.3 %}
+        {% for dt, cnt in discovery_counts.items() %}
+            {% set arc = (cnt / total * circumference)|round(2) %}
+            <circle cx="50" cy="50" r="40" fill="none"
+                    stroke="{{ colors.get(dt, colors['unknown']) }}"
+                    stroke-width="14"
+                    stroke-dasharray="{{ arc }} {{ (circumference - arc)|round(2) }}"
+                    stroke-dashoffset="{{ (-ns.offset)|round(2) }}"
+                    transform="rotate(-90 50 50)"/>
+            {% set ns.offset = ns.offset + arc %}
+        {% endfor %}
+        <circle cx="50" cy="50" r="28" fill="var(--bg-card)"/>
+        <text x="50" y="48" text-anchor="middle" fill="var(--text)" font-size="16" font-weight="700">{{ total }}</text>
+        <text x="50" y="60" text-anchor="middle" fill="var(--text-muted)" font-size="8">종목</text>
+    </svg>
+    <div class="donut-legend">
+        {% for dt, cnt in discovery_counts.items() %}
+        <div class="legend-item">
+            <span class="legend-dot" style="background:{{ colors.get(dt, colors['unknown']) }}"></span>
+            <span class="legend-label">{{ labels.get(dt, dt) }}</span>
+            <span class="legend-pct">{{ cnt }}건 · {{ (cnt / total * 100)|int }}%</span>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endmacro %}
+
+{# ── 섹터 버블 차트 ── #}
+{% macro sector_bubbles(top_sectors) %}
+<div class="sector-bubbles">
+    {% set max_cnt = (top_sectors|map(attribute=1)|max) if top_sectors else 1 %}
+    {% for sec, cnt in top_sectors %}
+        {% set size = 48 + (cnt / max_cnt * 40)|int %}
+        <div class="sector-bubble" style="width:{{ size }}px;height:{{ size }}px;font-size:{{ 10 + (cnt / max_cnt * 3)|int }}px;" title="{{ sec }}: {{ cnt }}건">
+            {{ sec[:4] }}<small>{{ cnt }}</small>
+        </div>
+    {% endfor %}
+</div>
+{% endmacro %}
+
+{# ── 발굴 유형 스택바 (Hero 압축용) ── #}
+{% macro discovery_stackbar(discovery_counts) %}
+{% set total = discovery_counts.values()|sum %}
+{% set colors = {'early_signal': '#9382ff', 'consensus': '#4f8cff', 'contrarian': '#fbbf24', 'deep_value': '#34d399', 'unknown': '#9ba0b4'} %}
+{% set labels = {'early_signal': '얼리', 'consensus': '컨센', 'contrarian': '컨트', 'deep_value': '딥밸', 'unknown': '기타'} %}
+{% if total > 0 %}
+<div class="discovery-stackbar-wrap">
+    <div class="discovery-stackbar-head">
+        <span class="discovery-stackbar-total">{{ total }}<small>종목</small></span>
+    </div>
+    <div class="discovery-stackbar-track" role="img" aria-label="발굴 유형 분포">
+        {% for dt, cnt in discovery_counts.items() %}
+        <span class="discovery-stackbar-seg"
+              style="flex:{{ cnt }};background:{{ colors.get(dt, colors['unknown']) }};"
+              title="{{ labels.get(dt, dt) }}: {{ cnt }}건 ({{ (cnt / total * 100)|int }}%)"></span>
+        {% endfor %}
+    </div>
+    <div class="discovery-stackbar-legend">
+        {% for dt, cnt in discovery_counts.items() %}
+        <span class="discovery-legend-chip">
+            <span class="legend-dot" style="background:{{ colors.get(dt, colors['unknown']) }}"></span>
+            {{ labels.get(dt, dt) }} {{ cnt }} · {{ (cnt / total * 100)|int }}%
+        </span>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+{% endmacro %}
+
+{# ── 섹터 칩 (Hero 압축용) ── #}
+{% macro sector_chips(top_sectors) %}
+{% if top_sectors %}
+{% set max_cnt = (top_sectors|map(attribute=1)|max) %}
+<div class="sector-chips">
+    {% for sec, cnt in top_sectors %}
+        {% set intensity = (cnt / max_cnt * 100)|int %}
+        <span class="sector-chip" data-intensity="{{ intensity }}" title="{{ sec }} · {{ cnt }}건">
+            <span class="sector-chip-name">{{ sec }}</span>
+            <span class="sector-chip-count">{{ cnt }}</span>
+        </span>
+    {% endfor %}
+</div>
+{% endif %}
+{% endmacro %}

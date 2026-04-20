@@ -1,0 +1,250 @@
+{#
+  Proposal-related macros — 투자 제안 카드/지표/차트
+  이동 출처: api/templates/_macros.html (C2.1, 2026-04-20)
+#}
+
+{# ── 제안 카드 (테마 내부용: 간결 모드) ── #}
+{% macro proposal_card_compact(p) %}
+<div class="proposal-card" style="margin-bottom:12px;">
+    <div class="proposal-card-header">
+        <span class="badge badge-{{ p.action }}">{{ p.action|upper }}</span>
+        <span class="asset-name">{{ p.asset_name }}</span>
+        <span class="ticker">
+            <a href="/pages/proposals/history/{{ p.ticker }}">{{ p.ticker }}</a> @ {{ p.market }}
+        </span>
+        {% if p.vendor_tier %}
+        <span class="badge badge-tier{{ p.vendor_tier }}">Tier {{ p.vendor_tier }}</span>
+        {% endif %}
+        <span class="badge badge-{{ p.conviction }}">{{ p.conviction }}</span>
+        <span style="font-size:14px;">
+            <span class="alloc-bar"><span class="alloc-bar-fill" style="width:{{ (p.target_allocation|float)|int }}%"></span></span>
+            {{ p.target_allocation }}%
+        </span>
+        {% if p.quant_score %}<span class="score-display">Q {{ p.quant_score }}/5</span>{% endif %}
+        {% if p.sentiment_score is not none and p.sentiment_score != None %}
+        <span class="score-display score-sentiment">S {{ p.sentiment_score }}</span>
+        {% endif %}
+    </div>
+    {% if p.target_price_low and p.target_price_high %}
+    <div class="price-target">
+        <span style="color:var(--text-muted);">목표가</span>
+        <span class="price-range">{{ p.currency or '' }}{{ p.target_price_low }} ~ {{ p.target_price_high }}</span>
+        {% if p.upside_pct %}
+        <span class="upside-badge {% if p.upside_pct > 0 %}upside-positive{% else %}upside-negative{% endif %}">
+            {% if p.upside_pct > 0 %}+{% endif %}{{ p.upside_pct }}%
+        </span>
+        {% endif %}
+    </div>
+    {% endif %}
+    {% if p.rationale or p.risk_factors %}
+    <div class="proposal-card-body">
+        {% if p.rationale %}
+        <div class="field-group"><div class="field-label">근거</div><div class="field-value">{{ p.rationale }}</div></div>
+        {% endif %}
+        {% if p.risk_factors %}
+        <div class="field-group"><div class="field-label">리스크</div><div class="field-value">{{ p.risk_factors }}</div></div>
+        {% endif %}
+    </div>
+    {% endif %}
+    {% if p.has_stock_analysis %}
+    <a href="/proposals/{{ p.id }}/stock-analysis" target="_blank" class="stock-analysis-link">종목 심층분석 보기</a>
+    {% endif %}
+</div>
+{% endmacro %}
+
+
+{# ── 제안 카드 (독립 목록용: 상세 모드) ── #}
+{% macro proposal_card_full(p) %}
+<div class="proposal-card">
+    <div class="proposal-card-header">
+        <span class="badge badge-{{ p.action }}">{{ p.action|upper }}</span>
+        <span class="asset-name">{{ p.asset_name }}</span>
+        <span class="ticker">
+            <a href="/pages/proposals/history/{{ p.ticker }}">{{ p.ticker }}</a> @ {{ p.market }}
+        </span>
+        {% if p.vendor_tier %}
+        <span class="badge badge-tier{{ p.vendor_tier }}">Tier {{ p.vendor_tier }}</span>
+        {% endif %}
+        {% if p.quant_score %}<span class="score-display">Q {{ p.quant_score }}/5</span>{% endif %}
+        {% if p.sentiment_score is not none and p.sentiment_score != None %}
+        <span class="score-display score-sentiment">S {{ p.sentiment_score }}</span>
+        {% endif %}
+    </div>
+
+    <div class="proposal-card-meta">
+        <span class="meta-item">
+            <span class="meta-label">날짜</span>
+            {{ p.analysis_date }}
+        </span>
+        <span class="meta-item">
+            <span class="meta-label">유형</span>
+            <span class="badge badge-category">{{ p.asset_type }}</span>
+        </span>
+        <span class="meta-item">
+            <span class="meta-label">확신도</span>
+            <span class="badge badge-{{ p.conviction }}">{{ p.conviction }}</span>
+        </span>
+        <span class="meta-item">
+            <span class="meta-label">비중</span>
+            <span class="alloc-bar"><span class="alloc-bar-fill" style="width:{{ (p.target_allocation|float)|int }}%"></span></span>
+            {{ p.target_allocation }}%
+        </span>
+        <span class="meta-item">
+            <span class="meta-label">테마</span>
+            {{ p.theme_name }}
+        </span>
+        {% if p.sector %}
+        <span class="meta-item">
+            <span class="meta-label">섹터</span>
+            {{ p.sector }}
+        </span>
+        {% endif %}
+        {% if p.supply_chain_position %}
+        <span class="meta-item">
+            <span class="meta-label">공급망</span>
+            {{ p.supply_chain_position }}
+        </span>
+        {% endif %}
+    </div>
+    {% if p.foreign_net_buy_signal or p.squeeze_risk or p.index_membership %}
+    <div class="proposal-card-meta" style="gap:6px;">
+        {{ krx_badges(p) }}
+    </div>
+    {% endif %}
+
+    {% if p.target_price_low and p.target_price_high %}
+    <div class="price-target" style="margin-bottom:12px;">
+        {% if p.current_price %}
+        <span style="color:var(--text-muted);">현재가</span>
+        <span style="font-weight:600;">{{ p.currency or '' }}{{ p.current_price }}</span>
+        <span style="color:var(--text-muted);margin:0 4px;">→</span>
+        {% endif %}
+        <span style="color:var(--text-muted);">목표가</span>
+        <span class="price-range">{{ p.currency or '' }}{{ p.target_price_low }} ~ {{ p.target_price_high }}</span>
+        {% if p.upside_pct %}
+        <span class="upside-badge {% if p.upside_pct > 0 %}upside-positive{% else %}upside-negative{% endif %}">
+            {% if p.upside_pct > 0 %}+{% endif %}{{ p.upside_pct }}%
+        </span>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <div class="proposal-card-body">
+        {% if p.rationale %}
+        <div class="field-group"><div class="field-label">근거</div><div class="field-value">{{ p.rationale }}</div></div>
+        {% endif %}
+        {% if p.risk_factors %}
+        <div class="field-group"><div class="field-label">리스크</div><div class="field-value">{{ p.risk_factors }}</div></div>
+        {% endif %}
+    </div>
+    {% if p.entry_condition or p.exit_condition %}
+    <div class="proposal-card-body" style="margin-top:10px;">
+        {% if p.entry_condition %}
+        <div class="field-group"><div class="field-label">진입 조건</div><div class="field-value">{{ p.entry_condition }}</div></div>
+        {% endif %}
+        {% if p.exit_condition %}
+        <div class="field-group"><div class="field-label">청산 조건</div><div class="field-value">{{ p.exit_condition }}</div></div>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+{% endmacro %}
+
+
+{# ── KRX 확장 데이터 뱃지 ── #}
+{% macro krx_badges(p) %}
+{% if p.foreign_net_buy_signal == 'strong_buy' %}
+<span class="meta-tag" style="background:var(--success);color:#fff;" title="외국인 5일+ 연속 순매수">🏦 외인 강력매수</span>
+{% elif p.foreign_net_buy_signal == 'buy' %}
+<span class="meta-tag" style="background:#2d6a4f;color:#fff;" title="외국인 3일+ 연속 순매수">🏦 외인 순매수</span>
+{% elif p.foreign_net_buy_signal == 'sell' %}
+<span class="meta-tag" style="background:var(--danger);color:#fff;" title="외국인 5일+ 연속 순매도">🏦 외인 순매도</span>
+{% endif %}
+{% if p.squeeze_risk == 'high' %}
+<span class="meta-tag" style="background:#d00;color:#fff;" title="공매도 잔고 10%+ 또는 급감 추세">⚡ 숏스퀴즈 위험</span>
+{% elif p.squeeze_risk == 'medium' %}
+<span class="meta-tag" style="background:#e85d04;color:#fff;" title="공매도 잔고 5%+">📊 공매도 과열</span>
+{% endif %}
+{% if p.index_membership %}
+{% for idx in p.index_membership %}
+<span class="meta-tag meta-tag-neutral" title="주요 지수 편입">📌 {{ idx }}</span>
+{% endfor %}
+{% endif %}
+{% if p.foreign_ownership_pct and p.foreign_ownership_pct > 30 %}
+<span class="meta-tag meta-tag-neutral" title="외국인 보유비율 {{ p.foreign_ownership_pct }}%">🌐 외인 {{ p.foreign_ownership_pct|round(1) }}%</span>
+{% endif %}
+{% endmacro %}
+
+{# ── 변화량 인디케이터 (▲▼ + %/숫자) ── #}
+{% macro change_indicator(delta, suffix='') %}
+{% if delta is none or delta == 0 %}
+<span class="change-indicator change-neutral">—</span>
+{% elif delta > 0 %}
+<span class="change-indicator change-up">&#9650;{{ delta }}{{ suffix }}</span>
+{% else %}
+<span class="change-indicator change-down">&#9660;{{ delta|abs }}{{ suffix }}</span>
+{% endif %}
+{% endmacro %}
+
+{# ── 리스크 온도 반원형 게이지 (SVG) ── #}
+{% macro risk_gauge(risk_pct, risk_label) %}
+<div class="risk-gauge-wrap">
+    <svg viewBox="0 0 120 75" width="120" height="75" class="risk-gauge" aria-label="리스크 온도">
+        <defs>
+            <linearGradient id="riskGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="var(--green)"/>
+                <stop offset="50%" stop-color="var(--orange)"/>
+                <stop offset="100%" stop-color="var(--red)"/>
+            </linearGradient>
+        </defs>
+        {# 반원: 길이 약 157 (π * 50) #}
+        <path d="M 10 65 A 50 50 0 0 1 110 65" fill="none"
+              stroke="var(--border)" stroke-width="8" stroke-linecap="round"/>
+        <path d="M 10 65 A 50 50 0 0 1 110 65" fill="none"
+              stroke="url(#riskGrad)" stroke-width="8" stroke-linecap="round"
+              stroke-dasharray="{{ (risk_pct * 1.57)|round(1) }} 157"/>
+        <text x="60" y="60" text-anchor="middle" fill="var(--text)" font-size="16" font-weight="700">
+            {{ (risk_label or '')|upper }}
+        </text>
+    </svg>
+    <span class="risk-gauge-label">RISK {{ risk_pct }}%</span>
+</div>
+{% endmacro %}
+
+{# ── Top Picks 불릿 차트 ── #}
+{% macro bullet_chart(current_price, target_price, upside_pct, currency, price_pct) %}
+{% if current_price and target_price %}
+<div class="bullet-chart">
+    <div class="bullet-track">
+        <div class="bullet-range" style="width:100%"></div>
+        <div class="bullet-marker" style="left:{{ price_pct or 0 }}%"
+             title="현재가: {{ current_price|fmt_price(currency) }}"></div>
+        <div class="bullet-target" title="목표가: {{ target_price|fmt_price(currency) }}"></div>
+    </div>
+    <div class="bullet-labels">
+        <span>{{ current_price|fmt_price(currency) }}</span>
+        {% if upside_pct is not none and upside_pct != 0 %}
+        <span class="bullet-upside {% if upside_pct > 0 %}color-green{% else %}color-red{% endif %}">
+            {% if upside_pct > 0 %}+{% endif %}{{ "%.1f"|format(upside_pct|float) }}%
+        </span>
+        {% endif %}
+        <span>목표 {{ target_price|fmt_price(currency) }}</span>
+    </div>
+</div>
+{% elif current_price or target_price %}
+<div class="bullet-chart bullet-chart-partial">
+    <div class="bullet-labels">
+        {% if current_price %}
+        <span>현재 {{ current_price|fmt_price(currency) }}</span>
+        {% else %}
+        <span style="color:var(--text-muted);">현재가 미제공</span>
+        {% endif %}
+        {% if target_price %}
+        <span>목표 {{ target_price|fmt_price(currency) }}</span>
+        {% else %}
+        <span style="color:var(--text-muted);">목표가 미제공</span>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+{% endmacro %}
