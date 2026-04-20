@@ -237,3 +237,42 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 - **C**: UX/템플릿 통합
 - **A**: `shared/db.py` 분할
 - **D**: `analyzer/` 파이프라인 분해
+
+## 10. 검증 완료 (2026-04-20)
+
+**전체 단계 실행 결과:**
+
+### 검증 지표
+
+| 항목 | 결과 | 메모 |
+|---|---|---|
+| `page_context.py` 자체 DB 연결 호출 | 0회 ✓ | `get_connection`, `_get_cfg` 제거됨 |
+| admin/user_admin의 `_base_ctx` 직접 호출 | 0회 ✓ | Pattern B 적용 완료 |
+| admin/user_admin의 `make_page_ctx` 사용 | 6회 ✓ | admin.py 3회 + user_admin.py 3회 |
+| baseline diff (`00-before-v3` vs `b3-99-final`) | 0건 회귀 ✓ | 응답 포맷 일관성 검증 완료 |
+
+### 구현 결과
+
+1. **B2.5 이월 항목 완료**:
+   - `page_context.base_ctx` 자체 DB 연결 제거 → 인증 페이지당 연결 2 → 1 (Important #1 해결)
+   - admin/user_admin 4개 페이지(`admin_page`, `diagnostics_page`, `user_list_page`, `audit_logs_page`)를 `Depends(make_page_ctx)`로 Pattern B 통일 (Minor #6 해결)
+
+2. **응답 포맷 일관성**:
+   - HTTPException 글로벌 핸들러: `{"error": <code>, "detail": <msg>}` 포맷 일관화
+   - RequestValidationError 글로벌 핸들러: 422 응답을 동일 포맷으로 변환
+   - 기존 라우트 코드 수정 없음 — 핸들러만 추가
+
+### 커밋 이력
+
+| Task | 커밋 SHA | 메시지 |
+|---|---|---|
+| 1 | 7258c32 | refactor(api): B3 T1 — base_ctx conn 파라미터 추가 + 자체 연결 제거 |
+| 2 | b5cfca7 | refactor(api): B3 T2 — make_page_ctx에 Depends(get_db_conn) 추가 + base_ctx conn 전달 |
+| 3 | 888eb4a | refactor(api): B3 T3 — admin/user_admin 4개 페이지 Pattern B 적용 |
+| 4 | 48e1f66 | refactor(api): B3 T4 — 글로벌 예외 핸들러 (HTTPException + RequestValidationError) |
+
+### 최종 상태
+
+- **새 baseline reference**: `00-before-v3` (이후 refactoring은 이 기준선 사용)
+- **회귀 테스트**: baseline diff 0건 → 안정성 확인
+- **통합 검증**: global pattern 3개 + baseline diff 1개 = 총 4개 지표 green
