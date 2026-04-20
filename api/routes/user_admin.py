@@ -13,10 +13,10 @@ from fastapi import APIRouter, Request, HTTPException, Depends, Query
 from fastapi.responses import RedirectResponse
 from psycopg2.extras import Json, RealDictCursor
 
-from shared.config import DatabaseConfig, AuthConfig
+from shared.config import AuthConfig
 from api.templates_provider import templates
-from api.deps import get_db_cfg as _get_cfg
-from shared.db import get_connection
+from api.deps import get_db_cfg as _get_cfg, get_db_conn
+
 from shared.tier_limits import VALID_TIERS, TIER_INFO, normalize_tier
 from api.serialization import serialize_row as _serialize_row
 from api.auth.dependencies import require_role, get_current_user, _get_auth_cfg
@@ -91,6 +91,7 @@ def user_list_page(
     tier: Optional[str] = Query(None, description="티어 필터"),
     user: Optional[UserInDB] = Depends(get_current_user),
     auth_cfg: AuthConfig = Depends(_get_auth_cfg),
+    conn=Depends(get_db_conn),
 ):
     """사용자 관리 페이지"""
     if auth_cfg.enabled:
@@ -99,7 +100,6 @@ def user_list_page(
         if user.role not in ("admin", "moderator"):
             raise HTTPException(status_code=403, detail="접근 권한이 없습니다")
 
-    db_cfg = _get_cfg()
     offset = (page - 1) * limit
 
     # 동적 WHERE 절 구성
@@ -120,30 +120,26 @@ def user_list_page(
         params.append(tier)
     where_sql = (" WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
 
-    conn = get_connection(db_cfg)
-    try:
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute(f"""
-                SELECT
-                    u.id, u.email, u.nickname, u.role, u.is_active,
-                    u.tier, u.tier_expires_at,
-                    u.created_at, u.last_login_at,
-                    COUNT(DISTINCT tcs.id) AS chat_session_count,
-                    COUNT(DISTINCT tcm.id) AS chat_message_count
-                FROM users u
-                LEFT JOIN theme_chat_sessions tcs ON tcs.user_id = u.id
-                LEFT JOIN theme_chat_messages tcm ON tcm.chat_session_id = tcs.id
-                {where_sql}
-                GROUP BY u.id
-                ORDER BY u.created_at DESC
-                LIMIT %s OFFSET %s
-            """, params + [limit, offset])
-            users = [_serialize_row(r) for r in cur.fetchall()]
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute(f"""
+            SELECT
+                u.id, u.email, u.nickname, u.role, u.is_active,
+                u.tier, u.tier_expires_at,
+                u.created_at, u.last_login_at,
+                COUNT(DISTINCT tcs.id) AS chat_session_count,
+                COUNT(DISTINCT tcm.id) AS chat_message_count
+            FROM users u
+            LEFT JOIN theme_chat_sessions tcs ON tcs.user_id = u.id
+            LEFT JOIN theme_chat_messages tcm ON tcm.chat_session_id = tcs.id
+            {where_sql}
+            GROUP BY u.id
+            ORDER BY u.created_at DESC
+            LIMIT %s OFFSET %s
+        """, params + [limit, offset])
+        users = [_serialize_row(r) for r in cur.fetchall()]
 
-            cur.execute(f"SELECT COUNT(*) AS cnt FROM users u {where_sql}", params)
-            total = cur.fetchone()["cnt"]
-    finally:
-        conn.close()
+        cur.execute(f"SELECT COUNT(*) AS cnt FROM users u {where_sql}", params)
+        total = cur.fetchone()["cnt"]
 
     # 페이지네이션 링크에 필터 파라미터 유지 (URL 인코딩)
     qs_params: Dict[str, Any] = {"limit": limit}
@@ -186,50 +182,46 @@ def change_role(
     role: str = Query(..., description="새 역할 (admin, moderator, user)"),
     reason: Optional[str] = Query(None, description="변경 사유(감사 로그용)"),
     actor: Optional[UserInDB] = Depends(require_role("admin", "moderator")),
-    db_cfg: DatabaseConfig = Depends(_get_cfg),
+    conn=Depends(get_db_conn),
 ):
     """사용자 역할 변경"""
     if role not in ("admin", "moderator", "user"):
         raise HTTPException(status_code=400, detail="유효하지 않은 역할입니다")
 
-    conn = get_connection(db_cfg)
-    try:
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute(
-                "SELECT id, email, role FROM users WHERE id = %s",
-                (user_id,),
-            )
-            target = cur.fetchone()
-            if not target:
-                raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute(
+            "SELECT id, email, role FROM users WHERE id = %s",
+            (user_id,),
+        )
+        target = cur.fetchone()
+        if not target:
+            raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
 
-            # Moderator 권한 제약
-            if actor and actor.role == "moderator":
-                if target["role"] == "admin":
-                    raise HTTPException(status_code=403, detail="Admin 계정의 역할을 변경할 수 없습니다")
-                if role == "admin":
-                    raise HTTPException(status_code=403, detail="Admin 역할을 부여할 수 없습니다")
+        # Moderator 권한 제약
+        if actor and actor.role == "moderator":
+            if target["role"] == "admin":
+                raise HTTPException(status_code=403, detail="Admin 계정의 역할을 변경할 수 없습니다")
+            if role == "admin":
+                raise HTTPException(status_code=403, detail="Admin 역할을 부여할 수 없습니다")
 
-            # 본인 역할 변경 금지 (권한 에스컬레이션 방지)
-            if actor and actor.id == user_id:
-                raise HTTPException(status_code=400, detail="자기 자신의 역할은 변경할 수 없습니다")
+        # 본인 역할 변경 금지 (권한 에스컬레이션 방지)
+        if actor and actor.id == user_id:
+            raise HTTPException(status_code=400, detail="자기 자신의 역할은 변경할 수 없습니다")
 
-            cur.execute("UPDATE users SET role = %s WHERE id = %s", (role, user_id))
+        cur.execute("UPDATE users SET role = %s WHERE id = %s", (role, user_id))
 
-            _log_admin_action(
-                cur,
-                actor=actor,
-                target_user_id=user_id,
-                target_email=target["email"],
-                action="role_change",
-                before={"role": target["role"]},
-                after={"role": role},
-                reason=reason,
-            )
-        conn.commit()
-        return {"message": f"역할이 {role}(으)로 변경되었습니다"}
-    finally:
-        conn.close()
+        _log_admin_action(
+            cur,
+            actor=actor,
+            target_user_id=user_id,
+            target_email=target["email"],
+            action="role_change",
+            before={"role": target["role"]},
+            after={"role": role},
+            reason=reason,
+        )
+    conn.commit()
+    return {"message": f"역할이 {role}(으)로 변경되었습니다"}
 
 
 # ── 계정 활성화/비활성화 ──────────────────────
@@ -241,46 +233,42 @@ def change_status(
     is_active: bool = Query(..., description="활성화 여부"),
     reason: Optional[str] = Query(None, description="변경 사유(감사 로그용)"),
     actor: Optional[UserInDB] = Depends(require_role("admin", "moderator")),
-    db_cfg: DatabaseConfig = Depends(_get_cfg),
+    conn=Depends(get_db_conn),
 ):
     """사용자 활성화/비활성화"""
-    conn = get_connection(db_cfg)
-    try:
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute(
-                "SELECT id, email, role, is_active FROM users WHERE id = %s",
-                (user_id,),
-            )
-            target = cur.fetchone()
-            if not target:
-                raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute(
+            "SELECT id, email, role, is_active FROM users WHERE id = %s",
+            (user_id,),
+        )
+        target = cur.fetchone()
+        if not target:
+            raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
 
-            # Moderator 제약: User만 비활성화 가능
-            if actor and actor.role == "moderator":
-                if target["role"] != "user":
-                    raise HTTPException(status_code=403, detail="User 역할의 계정만 비활성화할 수 있습니다")
+        # Moderator 제약: User만 비활성화 가능
+        if actor and actor.role == "moderator":
+            if target["role"] != "user":
+                raise HTTPException(status_code=403, detail="User 역할의 계정만 비활성화할 수 있습니다")
 
-            # Admin 자기 자신 비활성화 방지
-            if actor and actor.id == user_id and not is_active:
-                raise HTTPException(status_code=400, detail="자기 자신을 비활성화할 수 없습니다")
+        # Admin 자기 자신 비활성화 방지
+        if actor and actor.id == user_id and not is_active:
+            raise HTTPException(status_code=400, detail="자기 자신을 비활성화할 수 없습니다")
 
-            cur.execute("UPDATE users SET is_active = %s WHERE id = %s", (is_active, user_id))
+        cur.execute("UPDATE users SET is_active = %s WHERE id = %s", (is_active, user_id))
 
-            _log_admin_action(
-                cur,
-                actor=actor,
-                target_user_id=user_id,
-                target_email=target["email"],
-                action="status_change",
-                before={"is_active": target["is_active"]},
-                after={"is_active": is_active},
-                reason=reason,
-            )
-        conn.commit()
-        status_text = "활성화" if is_active else "비활성화"
-        return {"message": f"계정이 {status_text}되었습니다"}
-    finally:
-        conn.close()
+        _log_admin_action(
+            cur,
+            actor=actor,
+            target_user_id=user_id,
+            target_email=target["email"],
+            action="status_change",
+            before={"is_active": target["is_active"]},
+            after={"is_active": is_active},
+            reason=reason,
+        )
+    conn.commit()
+    status_text = "활성화" if is_active else "비활성화"
+    return {"message": f"계정이 {status_text}되었습니다"}
 
 
 # ── 티어 수동 부여/변경 (Admin 전용) ──────────
@@ -296,7 +284,7 @@ def change_tier(
     ),
     reason: Optional[str] = Query(None, description="부여 사유(감사 로그용)"),
     actor: Optional[UserInDB] = Depends(require_role("admin")),
-    db_cfg: DatabaseConfig = Depends(_get_cfg),
+    conn=Depends(get_db_conn),
 ):
     """구독 티어 수동 부여/변경 (Admin 전용).
 
@@ -327,50 +315,46 @@ def change_tier(
         if expires_dt is not None and expires_dt <= datetime.utcnow():
             raise HTTPException(status_code=400, detail="만료일은 현재 시각 이후여야 합니다")
 
-    conn = get_connection(db_cfg)
-    try:
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute(
-                "SELECT id, email, tier, tier_expires_at FROM users WHERE id = %s",
-                (user_id,),
-            )
-            target = cur.fetchone()
-            if not target:
-                raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute(
+            "SELECT id, email, tier, tier_expires_at FROM users WHERE id = %s",
+            (user_id,),
+        )
+        target = cur.fetchone()
+        if not target:
+            raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
 
-            cur.execute(
-                "UPDATE users SET tier = %s, tier_expires_at = %s WHERE id = %s",
-                (tier, expires_dt, user_id),
-            )
+        cur.execute(
+            "UPDATE users SET tier = %s, tier_expires_at = %s WHERE id = %s",
+            (tier, expires_dt, user_id),
+        )
 
-            before_expires = target["tier_expires_at"]
-            _log_admin_action(
-                cur,
-                actor=actor,
-                target_user_id=user_id,
-                target_email=target["email"],
-                action="tier_change",
-                before={
-                    "tier": target["tier"],
-                    "tier_expires_at": before_expires.isoformat() if before_expires else None,
-                },
-                after={
-                    "tier": tier,
-                    "tier_expires_at": expires_dt.isoformat() if expires_dt else None,
-                },
-                reason=reason,
-            )
-        conn.commit()
+        before_expires = target["tier_expires_at"]
+        _log_admin_action(
+            cur,
+            actor=actor,
+            target_user_id=user_id,
+            target_email=target["email"],
+            action="tier_change",
+            before={
+                "tier": target["tier"],
+                "tier_expires_at": before_expires.isoformat() if before_expires else None,
+            },
+            after={
+                "tier": tier,
+                "tier_expires_at": expires_dt.isoformat() if expires_dt else None,
+            },
+            reason=reason,
+        )
+    conn.commit()
 
-        label = TIER_INFO[normalize_tier(tier)].label_ko
-        exp_msg = f" (만료: {expires_dt.date()})" if expires_dt else ""
-        return {
-            "message": f"티어가 {label}(으)로 변경되었습니다{exp_msg}",
-            "tier": tier,
-            "tier_expires_at": expires_dt.isoformat() if expires_dt else None,
-        }
-    finally:
-        conn.close()
+    label = TIER_INFO[normalize_tier(tier)].label_ko
+    exp_msg = f" (만료: {expires_dt.date()})" if expires_dt else ""
+    return {
+        "message": f"티어가 {label}(으)로 변경되었습니다{exp_msg}",
+        "tier": tier,
+        "tier_expires_at": expires_dt.isoformat() if expires_dt else None,
+    }
 
 
 # ── 임시 비밀번호 발급 ────────────────────────
@@ -381,36 +365,32 @@ def reset_password(
     user_id: int,
     reason: Optional[str] = Query(None, description="초기화 사유(감사 로그용)"),
     actor: Optional[UserInDB] = Depends(require_role("admin")),
-    db_cfg: DatabaseConfig = Depends(_get_cfg),
+    conn=Depends(get_db_conn),
 ):
     """임시 비밀번호 발급 (Admin 전용)"""
     temp_pw = secrets.token_urlsafe(12)
     pw_hash = hash_password(temp_pw)
 
-    conn = get_connection(db_cfg)
-    try:
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("SELECT id, email FROM users WHERE id = %s", (user_id,))
-            target = cur.fetchone()
-            if not target:
-                raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute("SELECT id, email FROM users WHERE id = %s", (user_id,))
+        target = cur.fetchone()
+        if not target:
+            raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
 
-            cur.execute("UPDATE users SET password_hash = %s WHERE id = %s", (pw_hash, user_id))
+        cur.execute("UPDATE users SET password_hash = %s WHERE id = %s", (pw_hash, user_id))
 
-            _log_admin_action(
-                cur,
-                actor=actor,
-                target_user_id=user_id,
-                target_email=target["email"],
-                action="password_reset",
-                before=None,
-                after=None,  # 비밀번호 값은 절대 기록하지 않음
-                reason=reason,
-            )
-        conn.commit()
-        return {"message": "임시 비밀번호가 발급되었습니다", "temp_password": temp_pw}
-    finally:
-        conn.close()
+        _log_admin_action(
+            cur,
+            actor=actor,
+            target_user_id=user_id,
+            target_email=target["email"],
+            action="password_reset",
+            before=None,
+            after=None,  # 비밀번호 값은 절대 기록하지 않음
+            reason=reason,
+        )
+    conn.commit()
+    return {"message": "임시 비밀번호가 발급되었습니다", "temp_password": temp_pw}
 
 
 # ── 계정 삭제 ─────────────────────────────────
@@ -421,45 +401,41 @@ def delete_user(
     user_id: int,
     reason: Optional[str] = Query(None, description="삭제 사유(감사 로그용)"),
     actor: Optional[UserInDB] = Depends(require_role("admin")),
-    db_cfg: DatabaseConfig = Depends(_get_cfg),
+    conn=Depends(get_db_conn),
 ):
     """계정 삭제 (Admin 전용, 본인 삭제 금지)"""
     if actor and actor.id == user_id:
         raise HTTPException(status_code=400, detail="자기 자신을 삭제할 수 없습니다")
 
-    conn = get_connection(db_cfg)
-    try:
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute(
-                "SELECT id, email, role, tier FROM users WHERE id = %s",
-                (user_id,),
-            )
-            target = cur.fetchone()
-            if not target:
-                raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute(
+            "SELECT id, email, role, tier FROM users WHERE id = %s",
+            (user_id,),
+        )
+        target = cur.fetchone()
+        if not target:
+            raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
 
-            # 삭제 전에 감사 로그 먼저 기록 — ON DELETE SET NULL로 target_user_id만 NULL이 됨
-            # (target_email은 denormalize되어 유지)
-            _log_admin_action(
-                cur,
-                actor=actor,
-                target_user_id=user_id,
-                target_email=target["email"],
-                action="user_delete",
-                before={
-                    "email": target["email"],
-                    "role": target["role"],
-                    "tier": target["tier"],
-                },
-                after=None,
-                reason=reason,
-            )
+        # 삭제 전에 감사 로그 먼저 기록 — ON DELETE SET NULL로 target_user_id만 NULL이 됨
+        # (target_email은 denormalize되어 유지)
+        _log_admin_action(
+            cur,
+            actor=actor,
+            target_user_id=user_id,
+            target_email=target["email"],
+            action="user_delete",
+            before={
+                "email": target["email"],
+                "role": target["role"],
+                "tier": target["tier"],
+            },
+            after=None,
+            reason=reason,
+        )
 
-            cur.execute("DELETE FROM users WHERE id = %s", (user_id,))
-        conn.commit()
-        return {"message": "계정이 삭제되었습니다"}
-    finally:
-        conn.close()
+        cur.execute("DELETE FROM users WHERE id = %s", (user_id,))
+    conn.commit()
+    return {"message": "계정이 삭제되었습니다"}
 
 
 # ── 감사 로그 조회 (Admin 전용) ──────────────
@@ -474,6 +450,7 @@ def audit_logs_page(
     target_email: Optional[str] = Query(None),
     user: Optional[UserInDB] = Depends(get_current_user),
     auth_cfg: AuthConfig = Depends(_get_auth_cfg),
+    conn=Depends(get_db_conn),
 ):
     """관리자 작업 감사 로그 뷰어 (Admin 전용 페이지)"""
     if auth_cfg.enabled:
@@ -482,7 +459,6 @@ def audit_logs_page(
         if user.role != "admin":
             raise HTTPException(status_code=403, detail="Admin 전용 페이지입니다")
 
-    db_cfg = _get_cfg()
     offset = (page - 1) * limit
 
     where_clauses = []
@@ -495,32 +471,28 @@ def audit_logs_page(
         params.append(f"%{target_email}%")
     where_sql = (" WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
 
-    conn = get_connection(db_cfg)
-    try:
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute(
-                f"""
-                SELECT id, actor_id, actor_email, target_user_id, target_email,
-                       action, before_state, after_state, reason, created_at
-                FROM admin_audit_logs
-                {where_sql}
-                ORDER BY created_at DESC
-                LIMIT %s OFFSET %s
-                """,
-                params + [limit, offset],
-            )
-            rows = []
-            for r in cur.fetchall():
-                row = _serialize_row(r)
-                # JSONB 필드는 파이썬 dict로 이미 파싱되어 있지만 템플릿에서 쉽게 쓰도록 문자열도 제공
-                row["before_json"] = json.dumps(r["before_state"], ensure_ascii=False) if r["before_state"] else ""
-                row["after_json"] = json.dumps(r["after_state"], ensure_ascii=False) if r["after_state"] else ""
-                rows.append(row)
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute(
+            f"""
+            SELECT id, actor_id, actor_email, target_user_id, target_email,
+                   action, before_state, after_state, reason, created_at
+            FROM admin_audit_logs
+            {where_sql}
+            ORDER BY created_at DESC
+            LIMIT %s OFFSET %s
+            """,
+            params + [limit, offset],
+        )
+        rows = []
+        for r in cur.fetchall():
+            row = _serialize_row(r)
+            # JSONB 필드는 파이썬 dict로 이미 파싱되어 있지만 템플릿에서 쉽게 쓰도록 문자열도 제공
+            row["before_json"] = json.dumps(r["before_state"], ensure_ascii=False) if r["before_state"] else ""
+            row["after_json"] = json.dumps(r["after_state"], ensure_ascii=False) if r["after_state"] else ""
+            rows.append(row)
 
-            cur.execute(f"SELECT COUNT(*) AS cnt FROM admin_audit_logs {where_sql}", params)
-            total = cur.fetchone()["cnt"]
-    finally:
-        conn.close()
+        cur.execute(f"SELECT COUNT(*) AS cnt FROM admin_audit_logs {where_sql}", params)
+        total = cur.fetchone()["cnt"]
 
     return templates.TemplateResponse(request=request, name="admin_audit_logs.html", context={
         "request": request,

@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Optional
 from fastapi import APIRouter, Request, Query, Depends, Body, HTTPException
 from fastapi.responses import StreamingResponse, JSONResponse, PlainTextResponse, FileResponse
-from shared.config import DatabaseConfig, AnalyzerConfig, AuthConfig
+from shared.config import AnalyzerConfig, AuthConfig
 from api.templates_provider import templates
 from shared.db import get_untranslated_news, update_news_title_ko, update_news_translation, get_connection
 from shared.logger import (
@@ -18,7 +18,7 @@ from shared.logger import (
 )
 from api.auth.dependencies import require_role, get_current_user, _get_auth_cfg
 from api.auth.models import UserInDB
-from api.deps import get_db_cfg as _get_cfg
+from api.deps import get_db_cfg as _get_cfg, get_db_conn
 
 router = APIRouter(prefix="/admin", tags=["관리자"])
 
@@ -84,6 +84,7 @@ def get_logs(after: int = Query(default=0, ge=0), _admin: Optional[UserInDB] = D
 @router.post("/run")
 def run_analysis(_admin: Optional[UserInDB] = Depends(require_role("admin"))):
     """분석 파이프라인 실행 (SSE 스트리밍)"""
+    # SSE stream — B2.5 Pattern A 예외: stream lifecycle과 FastAPI Depends yield 충돌 회피
     global _running, _process, _log_lines
 
     if _running:
@@ -171,6 +172,7 @@ def run_analysis(_admin: Optional[UserInDB] = Depends(require_role("admin"))):
 @router.get("/stream")
 def stream_existing(_admin: Optional[UserInDB] = Depends(require_role("admin"))):
     """실행 중인 분석의 로그를 실시간 구독 (재접속용)"""
+    # SSE stream — B2.5 Pattern A 예외: stream lifecycle과 FastAPI Depends yield 충돌 회피
     if not _running:
         def not_running():
             yield "event: done\ndata: not_running\n\n"
@@ -240,6 +242,7 @@ def translate_status(_admin: Optional[UserInDB] = Depends(require_role("admin"))
 @router.post("/translate-news")
 def translate_existing_news(_admin: Optional[UserInDB] = Depends(require_role("admin"))):
     """기존 미번역 뉴스를 한글 번역 (SSE 스트리밍)"""
+    # SSE stream — B2.5 Pattern A 예외: stream lifecycle과 FastAPI Depends yield 충돌 회피
     global _translating
 
     if _translating:
@@ -375,10 +378,11 @@ def translate_existing_news(_admin: Optional[UserInDB] = Depends(require_role("a
 # ── 전체 데이터 삭제 ──────────────────────────────
 
 @router.post("/reset-all-data")
-def reset_all_data(_admin: Optional[UserInDB] = Depends(require_role("admin"))):
+def reset_all_data(
+    _admin: Optional[UserInDB] = Depends(require_role("admin")),
+    conn=Depends(get_db_conn),
+):
     """분석 데이터 전체 삭제 (CASCADE로 하위 테이블 포함)"""
-    cfg = _get_cfg()
-    conn = get_connection(cfg)
     try:
         with conn.cursor() as cur:
             # CASCADE 관계에 의해 하위 테이블 자동 삭제
@@ -401,8 +405,6 @@ def reset_all_data(_admin: Optional[UserInDB] = Depends(require_role("admin"))):
     except Exception as e:
         conn.rollback()
         return JSONResponse(status_code=500, content={"message": f"삭제 실패: {e}"})
-    finally:
-        conn.close()
 
 
 # ── 원격 DB → 로컬 DB 데이터 복사 ──────────────────
@@ -437,6 +439,7 @@ def copy_from_remote(
     _admin: Optional[UserInDB] = Depends(require_role("admin")),
 ):
     """원격 DB에서 분석 데이터를 로컬 DB로 복사 (SSE 스트리밍)"""
+    # SSE stream — B2.5 Pattern A 예외: stream lifecycle과 FastAPI Depends yield 충돌 회피
     import psycopg2
     from psycopg2.extras import Json, RealDictCursor
 
@@ -617,31 +620,28 @@ def api_list_runs(
 def api_run_detail(
     run_id: int,
     _admin: Optional[UserInDB] = Depends(require_role("admin")),
+    conn=Depends(get_db_conn),
 ):
     """단일 run 상세 (run + 사건보고서 + 통계)."""
     cfg = _get_cfg()
-    conn = get_connection(cfg)
-    try:
-        from psycopg2.extras import RealDictCursor
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("SELECT * FROM app_runs WHERE id = %s", (run_id,))
-            run = cur.fetchone()
-            if not run:
-                raise HTTPException(status_code=404, detail="run not found")
-            cur.execute(
-                """SELECT level, COUNT(*) AS cnt FROM app_logs
-                   WHERE run_id = %s GROUP BY level""",
-                (run_id,),
-            )
-            log_stats = {r["level"]: int(r["cnt"]) for r in cur.fetchall()}
-            cur.execute(
-                """SELECT parse_status, COUNT(*) AS cnt FROM ai_query_archive
-                   WHERE run_id = %s GROUP BY parse_status""",
-                (run_id,),
-            )
-            ai_stats = {r["parse_status"] or "unknown": int(r["cnt"]) for r in cur.fetchall()}
-    finally:
-        conn.close()
+    from psycopg2.extras import RealDictCursor
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute("SELECT * FROM app_runs WHERE id = %s", (run_id,))
+        run = cur.fetchone()
+        if not run:
+            raise HTTPException(status_code=404, detail="run not found")
+        cur.execute(
+            """SELECT level, COUNT(*) AS cnt FROM app_logs
+               WHERE run_id = %s GROUP BY level""",
+            (run_id,),
+        )
+        log_stats = {r["level"]: int(r["cnt"]) for r in cur.fetchall()}
+        cur.execute(
+            """SELECT parse_status, COUNT(*) AS cnt FROM ai_query_archive
+               WHERE run_id = %s GROUP BY parse_status""",
+            (run_id,),
+        )
+        ai_stats = {r["parse_status"] or "unknown": int(r["cnt"]) for r in cur.fetchall()}
 
     incident = get_incident_report(cfg, run_id)
 
@@ -847,33 +847,29 @@ def api_list_incidents(
     severity: Optional[str] = Query(default=None, description="info/warn/critical"),
     limit: int = Query(default=30, ge=1, le=200),
     _admin: Optional[UserInDB] = Depends(require_role("admin")),
+    conn=Depends(get_db_conn),
 ):
     """사건 보고서 목록 (최근 run들의 incident 요약)."""
-    cfg = _get_cfg()
-    conn = get_connection(cfg)
-    try:
-        from psycopg2.extras import RealDictCursor
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            if severity:
-                cur.execute(
-                    """SELECT ir.*, ar.run_type, ar.started_at, ar.status
-                       FROM incident_reports ir
-                       JOIN app_runs ar ON ar.id = ir.run_id
-                       WHERE ir.severity = %s
-                       ORDER BY ir.created_at DESC LIMIT %s""",
-                    (severity, limit),
-                )
-            else:
-                cur.execute(
-                    """SELECT ir.*, ar.run_type, ar.started_at, ar.status
-                       FROM incident_reports ir
-                       JOIN app_runs ar ON ar.id = ir.run_id
-                       ORDER BY ir.created_at DESC LIMIT %s""",
-                    (limit,),
-                )
-            rows = [dict(r) for r in cur.fetchall()]
-    finally:
-        conn.close()
+    from psycopg2.extras import RealDictCursor
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        if severity:
+            cur.execute(
+                """SELECT ir.*, ar.run_type, ar.started_at, ar.status
+                   FROM incident_reports ir
+                   JOIN app_runs ar ON ar.id = ir.run_id
+                   WHERE ir.severity = %s
+                   ORDER BY ir.created_at DESC LIMIT %s""",
+                (severity, limit),
+            )
+        else:
+            cur.execute(
+                """SELECT ir.*, ar.run_type, ar.started_at, ar.status
+                   FROM incident_reports ir
+                   JOIN app_runs ar ON ar.id = ir.run_id
+                   ORDER BY ir.created_at DESC LIMIT %s""",
+                (limit,),
+            )
+        rows = [dict(r) for r in cur.fetchall()]
 
     for r in rows:
         for k, v in list(r.items()):
