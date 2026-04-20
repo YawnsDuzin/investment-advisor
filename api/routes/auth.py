@@ -3,7 +3,6 @@ from typing import Optional
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Request, Form, Depends, HTTPException
 from fastapi.responses import RedirectResponse, HTMLResponse, JSONResponse
-from fastapi.templating import Jinja2Templates
 from shared.config import AuthConfig, DatabaseConfig
 from shared.db import get_connection
 from psycopg2.extras import RealDictCursor
@@ -13,18 +12,14 @@ from api.auth.jwt_handler import (
 )
 from api.auth.dependencies import get_current_user_required
 from api.auth.models import UserInDB
+from api.templates_provider import templates
+from api.deps import get_db_cfg as _get_db_cfg
 
 router = APIRouter(prefix="/auth", tags=["인증"])
-
-templates = Jinja2Templates(directory="api/templates")
 
 
 def _get_auth_cfg() -> AuthConfig:
     return AuthConfig()
-
-
-def _get_db_cfg() -> DatabaseConfig:
-    return DatabaseConfig()
 
 
 def _set_auth_cookies(response, access_token: str, refresh_token: str, auth_cfg: AuthConfig):
