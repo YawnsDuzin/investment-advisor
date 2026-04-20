@@ -15,7 +15,7 @@ from psycopg2.extras import Json, RealDictCursor
 
 from shared.config import DatabaseConfig, AuthConfig
 from api.templates_provider import templates
-from api.deps import get_db_cfg as _get_db_cfg
+from api.deps import get_db_cfg as _get_cfg
 from shared.db import get_connection
 from shared.tier_limits import VALID_TIERS, TIER_INFO, normalize_tier
 from api.serialization import serialize_row as _serialize_row
@@ -99,7 +99,7 @@ def user_list_page(
         if user.role not in ("admin", "moderator"):
             raise HTTPException(status_code=403, detail="접근 권한이 없습니다")
 
-    db_cfg = _get_db_cfg()
+    db_cfg = _get_cfg()
     offset = (page - 1) * limit
 
     # 동적 WHERE 절 구성
@@ -186,7 +186,7 @@ def change_role(
     role: str = Query(..., description="새 역할 (admin, moderator, user)"),
     reason: Optional[str] = Query(None, description="변경 사유(감사 로그용)"),
     actor: Optional[UserInDB] = Depends(require_role("admin", "moderator")),
-    db_cfg: DatabaseConfig = Depends(_get_db_cfg),
+    db_cfg: DatabaseConfig = Depends(_get_cfg),
 ):
     """사용자 역할 변경"""
     if role not in ("admin", "moderator", "user"):
@@ -241,7 +241,7 @@ def change_status(
     is_active: bool = Query(..., description="활성화 여부"),
     reason: Optional[str] = Query(None, description="변경 사유(감사 로그용)"),
     actor: Optional[UserInDB] = Depends(require_role("admin", "moderator")),
-    db_cfg: DatabaseConfig = Depends(_get_db_cfg),
+    db_cfg: DatabaseConfig = Depends(_get_cfg),
 ):
     """사용자 활성화/비활성화"""
     conn = get_connection(db_cfg)
@@ -296,7 +296,7 @@ def change_tier(
     ),
     reason: Optional[str] = Query(None, description="부여 사유(감사 로그용)"),
     actor: Optional[UserInDB] = Depends(require_role("admin")),
-    db_cfg: DatabaseConfig = Depends(_get_db_cfg),
+    db_cfg: DatabaseConfig = Depends(_get_cfg),
 ):
     """구독 티어 수동 부여/변경 (Admin 전용).
 
@@ -381,7 +381,7 @@ def reset_password(
     user_id: int,
     reason: Optional[str] = Query(None, description="초기화 사유(감사 로그용)"),
     actor: Optional[UserInDB] = Depends(require_role("admin")),
-    db_cfg: DatabaseConfig = Depends(_get_db_cfg),
+    db_cfg: DatabaseConfig = Depends(_get_cfg),
 ):
     """임시 비밀번호 발급 (Admin 전용)"""
     temp_pw = secrets.token_urlsafe(12)
@@ -421,7 +421,7 @@ def delete_user(
     user_id: int,
     reason: Optional[str] = Query(None, description="삭제 사유(감사 로그용)"),
     actor: Optional[UserInDB] = Depends(require_role("admin")),
-    db_cfg: DatabaseConfig = Depends(_get_db_cfg),
+    db_cfg: DatabaseConfig = Depends(_get_cfg),
 ):
     """계정 삭제 (Admin 전용, 본인 삭제 금지)"""
     if actor and actor.id == user_id:
@@ -482,7 +482,7 @@ def audit_logs_page(
         if user.role != "admin":
             raise HTTPException(status_code=403, detail="Admin 전용 페이지입니다")
 
-    db_cfg = _get_db_cfg()
+    db_cfg = _get_cfg()
     offset = (page - 1) * limit
 
     where_clauses = []
