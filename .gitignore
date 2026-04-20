@@ -5,3 +5,4 @@ __pycache__/
 .claude/hooks/logs/
 _checkpoints/
 .superpowers/
+_baselines/
