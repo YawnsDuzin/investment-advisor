@@ -166,13 +166,13 @@ class TestSchemaMigrationV16:
         assert db.SCHEMA_VERSION >= 16
 
     def test_migrate_v16_function_exists(self):
-        from shared.db import _migrate_to_v16
+        from shared.db.migrations.versions import _migrate_to_v16
 
         assert callable(_migrate_to_v16)
 
     def test_migrate_v16_executes_expected_sql(self):
         """_migrate_to_v16 호출 시 tier 컬럼 ALTER + schema_version INSERT 확인"""
-        from shared.db import _migrate_to_v16
+        from shared.db.migrations.versions import _migrate_to_v16
         from unittest.mock import MagicMock
 
         cur = MagicMock()
