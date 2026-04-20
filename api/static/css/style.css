@@ -345,54 +345,6 @@ a:hover { color: var(--accent-hover); }
 .content-body { padding: 28px 36px; }
 
 /* ======== 04_cards_grids.css ======== */
-/* 04_cards_grids — populated in later tasks */
-
-/* ======== 05_badges.css ======== */
-/* 05_badges — populated in later tasks */
-
-/* ======== 06_tables_bars.css ======== */
-/* 06_tables_bars — populated in later tasks */
-
-/* ======== 07_modals.css ======== */
-/* 07_modals — populated in later tasks */
-
-/* ======== 08_buttons_forms.css ======== */
-/* 08_buttons_forms — populated in later tasks */
-
-/* ======== 09_proposals.css ======== */
-/* 09_proposals — populated in later tasks */
-
-/* ======== 10_themes.css ======== */
-/* 10_themes — populated in later tasks */
-
-/* ======== 11_dashboard_hero.css ======== */
-/* 11_dashboard_hero — populated in later tasks */
-
-/* ======== 12_dashboard_rest.css ======== */
-/* 12_dashboard_rest — populated in later tasks */
-
-/* ======== 13_stock_analysis.css ======== */
-/* 13_stock_analysis — populated in later tasks */
-
-/* ======== 14_chat.css ======== */
-/* 14_chat — populated in later tasks */
-
-/* ======== 15_admin.css ======== */
-/* 15_admin — populated in later tasks */
-
-/* ======== 16_inquiry.css ======== */
-/* 16_inquiry — populated in later tasks */
-
-/* ======== 17_history.css ======== */
-/* 17_history — populated in later tasks */
-
-/* ======== 18_mobile_features.css ======== */
-/* 18_mobile_features — populated in later tasks */
-
-/* ======== 19_responsive.css ======== */
-/* 19_responsive — populated in later tasks */
-
-/* ======== 00_legacy.css ======== */
 /* ===== Cards ===== */
 .card {
     background: var(--bg-card);
@@ -654,6 +606,7 @@ a:hover { color: var(--accent-hover); }
     color: var(--accent);
 }
 
+/* ======== 05_badges.css ======== */
 /* ===== Badges ===== */
 .badge {
     display: inline-block;
@@ -693,6 +646,103 @@ a:hover { color: var(--accent-hover); }
 /* ===== Importance Stars ===== */
 .stars { color: var(--orange); font-size: 14px; letter-spacing: 1px; }
 
+/* ----- 티어 배지 (Plan badge) ----- */
+.badge-plan,
+.header-tier-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 22px;
+    padding: 3px 10px;
+    border-radius: 9999px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+    border: 1px solid transparent;
+    text-decoration: none;
+    white-space: nowrap;
+}
+.header-tier-badge { margin-right: 4px; }
+.header-tier-badge:hover { filter: brightness(1.12); }
+
+.badge-plan-free {
+    background: rgba(155, 160, 180, 0.14);
+    color: var(--text-muted);
+    border-color: rgba(155, 160, 180, 0.32);
+}
+.badge-plan-pro {
+    background: rgba(79, 140, 255, 0.18);
+    color: var(--accent);
+    border-color: rgba(79, 140, 255, 0.42);
+}
+.badge-plan-premium {
+    background: linear-gradient(135deg, rgba(147,130,255,0.25), rgba(251,191,36,0.2));
+    color: #e4e6eb;
+    border-color: rgba(147, 130, 255, 0.5);
+}
+
+.user-dropdown-header-tier { margin-top: 6px; }
+
+/* ----- 등급 배지 (S/A/B/C/D) — UI-14 ----- */
+.grade-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 26px;
+    height: 22px;
+    padding: 0 8px;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    border-radius: 6px;
+    border: 1px solid transparent;
+    font-family: inherit;
+}
+.grade-badge-label {
+    margin-left: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    opacity: 0.85;
+}
+.grade-badge-s {
+    background: linear-gradient(135deg, rgba(251,191,36,0.22), rgba(147,130,255,0.18));
+    color: #fbbf24;
+    border-color: rgba(251,191,36,0.45);
+}
+.grade-badge-a {
+    background: rgba(79,140,255,0.18);
+    color: var(--accent);
+    border-color: rgba(79,140,255,0.4);
+}
+.grade-badge-b {
+    background: rgba(52,211,153,0.18);
+    color: var(--green);
+    border-color: rgba(52,211,153,0.38);
+}
+.grade-badge-c {
+    background: rgba(251,191,36,0.14);
+    color: var(--orange);
+    border-color: rgba(251,191,36,0.32);
+}
+.grade-badge-d {
+    background: rgba(248,113,113,0.15);
+    color: var(--red);
+    border-color: rgba(248,113,113,0.32);
+}
+.grade-badge-none {
+    background: rgba(155,160,180,0.12);
+    color: var(--text-muted);
+    border-color: rgba(155,160,180,0.26);
+}
+
+/* ----- Role / Status Badges ----- */
+.badge-admin { background: rgba(147,130,255,0.15); color: var(--purple); border-color: rgba(147,130,255,0.25); }
+.badge-moderator { background: rgba(251,191,36,0.15); color: var(--orange); border-color: rgba(251,191,36,0.25); }
+.badge-role-user { background: rgba(79,140,255,0.15); color: var(--accent); border-color: rgba(79,140,255,0.25); }
+.badge-active { background: rgba(52,211,153,0.15); color: var(--green); border-color: rgba(52,211,153,0.25); }
+.badge-inactive { background: rgba(248,113,113,0.15); color: var(--red); border-color: rgba(248,113,113,0.25); }
+
+/* ======== 06_tables_bars.css ======== */
 /* ===== Tables ===== */
 .table-wrap { overflow-x: auto; }
 
@@ -783,6 +833,75 @@ tbody tr:hover { background: var(--bg-card-hover); }
     border: 1px solid var(--border);
 }
 
+/* ── 변화량 인디케이터 (통일) ── */
+.change-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 4px;
+    vertical-align: middle;
+    margin-left: 6px;
+}
+.change-up {
+    color: var(--color-positive);
+    background: rgba(52, 211, 153, 0.1);
+}
+.change-down {
+    color: var(--color-negative);
+    background: rgba(248, 113, 113, 0.1);
+}
+.change-neutral { color: var(--text-muted); }
+
+/* ── Sparkline (stat-card 내부) ── */
+.sparkline {
+    display: block;
+    margin-top: 6px;
+    opacity: 0.85;
+}
+
+/* ======== 07_modals.css ======== */
+/* 07_modals — populated in later tasks */
+
+/* ======== 08_buttons_forms.css ======== */
+/* 08_buttons_forms — populated in later tasks */
+
+/* ======== 09_proposals.css ======== */
+/* 09_proposals — populated in later tasks */
+
+/* ======== 10_themes.css ======== */
+/* 10_themes — populated in later tasks */
+
+/* ======== 11_dashboard_hero.css ======== */
+/* 11_dashboard_hero — populated in later tasks */
+
+/* ======== 12_dashboard_rest.css ======== */
+/* 12_dashboard_rest — populated in later tasks */
+
+/* ======== 13_stock_analysis.css ======== */
+/* 13_stock_analysis — populated in later tasks */
+
+/* ======== 14_chat.css ======== */
+/* 14_chat — populated in later tasks */
+
+/* ======== 15_admin.css ======== */
+/* 15_admin — populated in later tasks */
+
+/* ======== 16_inquiry.css ======== */
+/* 16_inquiry — populated in later tasks */
+
+/* ======== 17_history.css ======== */
+/* 17_history — populated in later tasks */
+
+/* ======== 18_mobile_features.css ======== */
+/* 18_mobile_features — populated in later tasks */
+
+/* ======== 19_responsive.css ======== */
+/* 19_responsive — populated in later tasks */
+
+/* ======== 00_legacy.css ======== */
 /* ===== Detail Sections ===== */
 .detail-text {
     font-size: 15px;
@@ -1985,43 +2104,6 @@ tbody tr:hover { background: var(--bg-card-hover); }
    2026-04-17 개편안 P0 UI-01, UI-02, UI-03, UI-06, UI-07, UI-09
    ===================================================================== */
 
-/* ----- 티어 배지 (Plan badge) ----- */
-.badge-plan,
-.header-tier-badge {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 22px;
-    padding: 3px 10px;
-    border-radius: 9999px;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.4px;
-    border: 1px solid transparent;
-    text-decoration: none;
-    white-space: nowrap;
-}
-.header-tier-badge { margin-right: 4px; }
-.header-tier-badge:hover { filter: brightness(1.12); }
-
-.badge-plan-free {
-    background: rgba(155, 160, 180, 0.14);
-    color: var(--text-muted);
-    border-color: rgba(155, 160, 180, 0.32);
-}
-.badge-plan-pro {
-    background: rgba(79, 140, 255, 0.18);
-    color: var(--accent);
-    border-color: rgba(79, 140, 255, 0.42);
-}
-.badge-plan-premium {
-    background: linear-gradient(135deg, rgba(147,130,255,0.25), rgba(251,191,36,0.2));
-    color: #e4e6eb;
-    border-color: rgba(147, 130, 255, 0.5);
-}
-
-.user-dropdown-header-tier { margin-top: 6px; }
-
 /* ----- 업그레이드 모달 ----- */
 .modal-backdrop {
     display: none;
@@ -2457,58 +2539,6 @@ tbody tr:hover { background: var(--bg-card-hover); }
     margin: 0;
 }
 
-/* ----- 등급 배지 (S/A/B/C/D) — UI-14 ----- */
-.grade-badge {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 26px;
-    height: 22px;
-    padding: 0 8px;
-    font-size: 12px;
-    font-weight: 800;
-    letter-spacing: 0.5px;
-    border-radius: 6px;
-    border: 1px solid transparent;
-    font-family: inherit;
-}
-.grade-badge-label {
-    margin-left: 4px;
-    font-size: 10px;
-    font-weight: 600;
-    opacity: 0.85;
-}
-.grade-badge-s {
-    background: linear-gradient(135deg, rgba(251,191,36,0.22), rgba(147,130,255,0.18));
-    color: #fbbf24;
-    border-color: rgba(251,191,36,0.45);
-}
-.grade-badge-a {
-    background: rgba(79,140,255,0.18);
-    color: var(--accent);
-    border-color: rgba(79,140,255,0.4);
-}
-.grade-badge-b {
-    background: rgba(52,211,153,0.18);
-    color: var(--green);
-    border-color: rgba(52,211,153,0.38);
-}
-.grade-badge-c {
-    background: rgba(251,191,36,0.14);
-    color: var(--orange);
-    border-color: rgba(251,191,36,0.32);
-}
-.grade-badge-d {
-    background: rgba(248,113,113,0.15);
-    color: var(--red);
-    border-color: rgba(248,113,113,0.32);
-}
-.grade-badge-none {
-    background: rgba(155,160,180,0.12);
-    color: var(--text-muted);
-    border-color: rgba(155,160,180,0.26);
-}
-
 /* ----- Free 광고 슬롯 — UI-17 ----- */
 .ad-slot {
     display: flex;
@@ -2707,13 +2737,6 @@ tbody tr:hover { background: var(--bg-card-hover); }
 /* =====================================================================
    사용자 관리 공용 컴포넌트 (User Admin)
    ===================================================================== */
-
-/* ----- Role / Status Badges ----- */
-.badge-admin { background: rgba(147,130,255,0.15); color: var(--purple); border-color: rgba(147,130,255,0.25); }
-.badge-moderator { background: rgba(251,191,36,0.15); color: var(--orange); border-color: rgba(251,191,36,0.25); }
-.badge-role-user { background: rgba(79,140,255,0.15); color: var(--accent); border-color: rgba(79,140,255,0.25); }
-.badge-active { background: rgba(52,211,153,0.15); color: var(--green); border-color: rgba(52,211,153,0.25); }
-.badge-inactive { background: rgba(248,113,113,0.15); color: var(--red); border-color: rgba(248,113,113,0.25); }
 
 /* ----- Button Variants ----- */
 .btn-sm { padding: 5px 12px; font-size: 12px; border-radius: 6px; }
@@ -3150,35 +3173,6 @@ tbody tr:hover { background: var(--bg-card-hover); }
     grid-template-columns: 1fr 1.8fr;
     gap: 16px;
     margin-bottom: 20px;
-}
-
-/* ── 변화량 인디케이터 (통일) ── */
-.change-indicator {
-    display: inline-flex;
-    align-items: center;
-    gap: 2px;
-    font-size: 12px;
-    font-weight: 600;
-    padding: 1px 6px;
-    border-radius: 4px;
-    vertical-align: middle;
-    margin-left: 6px;
-}
-.change-up {
-    color: var(--color-positive);
-    background: rgba(52, 211, 153, 0.1);
-}
-.change-down {
-    color: var(--color-negative);
-    background: rgba(248, 113, 113, 0.1);
-}
-.change-neutral { color: var(--text-muted); }
-
-/* ── Sparkline (stat-card 내부) ── */
-.sparkline {
-    display: block;
-    margin-top: 6px;
-    opacity: 0.85;
 }
 
 /* ── 리스크 온도 SVG 반원형 게이지 ── */

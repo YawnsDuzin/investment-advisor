@@ -1,1 +1,134 @@
-/* 05_badges — populated in later tasks */
+/* ===== Badges ===== */
+.badge {
+    display: inline-block;
+    padding: 3px 12px;
+    border-radius: 9999px;
+    font-size: 13px;
+    font-weight: 600;
+    border: 1px solid transparent;
+}
+
+.badge-buy { background: rgba(52,211,153,0.15); color: var(--green); border-color: rgba(52,211,153,0.25); }
+.badge-sell { background: rgba(248,113,113,0.15); color: var(--red); border-color: rgba(248,113,113,0.25); }
+.badge-hold { background: rgba(251,191,36,0.15); color: var(--orange); border-color: rgba(251,191,36,0.25); }
+.badge-watch { background: rgba(139,143,163,0.15); color: var(--text-muted); border-color: rgba(139,143,163,0.2); }
+
+.badge-high { background: rgba(52,211,153,0.15); color: var(--green); border-color: rgba(52,211,153,0.25); }
+.badge-medium { background: rgba(251,191,36,0.15); color: var(--orange); border-color: rgba(251,191,36,0.25); }
+.badge-low { background: rgba(139,143,163,0.15); color: var(--text-muted); border-color: rgba(139,143,163,0.2); }
+
+.badge-short { background: rgba(248,113,113,0.15); color: var(--red); border-color: rgba(248,113,113,0.25); }
+.badge-mid { background: rgba(251,191,36,0.15); color: var(--orange); border-color: rgba(251,191,36,0.25); }
+.badge-long { background: rgba(52,211,153,0.15); color: var(--green); border-color: rgba(52,211,153,0.25); }
+
+.badge-category { background: rgba(155,160,180,0.12); color: var(--text-muted); border-color: rgba(155,160,180,0.2); }
+
+/* ===== Vendor Tier Badges ===== */
+.badge-tier1 { background: rgba(79,140,255,0.15); color: var(--accent); border-color: rgba(79,140,255,0.25); }
+.badge-tier2 { background: rgba(251,191,36,0.15); color: var(--orange); border-color: rgba(251,191,36,0.25); }
+.badge-tier3 { background: rgba(147,130,255,0.15); color: var(--purple); border-color: rgba(147,130,255,0.25); }
+
+/* ===== Theme Type / Validity Badges ===== */
+.badge-structural { background: rgba(147,130,255,0.15); color: var(--purple); border-color: rgba(147,130,255,0.25); }
+.badge-cyclical { background: rgba(56,189,248,0.15); color: #38bdf8; border-color: rgba(56,189,248,0.25); }
+.badge-strong { background: rgba(52,211,153,0.15); color: var(--green); border-color: rgba(52,211,153,0.25); }
+.badge-weak { background: rgba(248,113,113,0.15); color: var(--red); border-color: rgba(248,113,113,0.25); }
+
+/* ===== Importance Stars ===== */
+.stars { color: var(--orange); font-size: 14px; letter-spacing: 1px; }
+
+/* ----- 티어 배지 (Plan badge) ----- */
+.badge-plan,
+.header-tier-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 22px;
+    padding: 3px 10px;
+    border-radius: 9999px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+    border: 1px solid transparent;
+    text-decoration: none;
+    white-space: nowrap;
+}
+.header-tier-badge { margin-right: 4px; }
+.header-tier-badge:hover { filter: brightness(1.12); }
+
+.badge-plan-free {
+    background: rgba(155, 160, 180, 0.14);
+    color: var(--text-muted);
+    border-color: rgba(155, 160, 180, 0.32);
+}
+.badge-plan-pro {
+    background: rgba(79, 140, 255, 0.18);
+    color: var(--accent);
+    border-color: rgba(79, 140, 255, 0.42);
+}
+.badge-plan-premium {
+    background: linear-gradient(135deg, rgba(147,130,255,0.25), rgba(251,191,36,0.2));
+    color: #e4e6eb;
+    border-color: rgba(147, 130, 255, 0.5);
+}
+
+.user-dropdown-header-tier { margin-top: 6px; }
+
+/* ----- 등급 배지 (S/A/B/C/D) — UI-14 ----- */
+.grade-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 26px;
+    height: 22px;
+    padding: 0 8px;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    border-radius: 6px;
+    border: 1px solid transparent;
+    font-family: inherit;
+}
+.grade-badge-label {
+    margin-left: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    opacity: 0.85;
+}
+.grade-badge-s {
+    background: linear-gradient(135deg, rgba(251,191,36,0.22), rgba(147,130,255,0.18));
+    color: #fbbf24;
+    border-color: rgba(251,191,36,0.45);
+}
+.grade-badge-a {
+    background: rgba(79,140,255,0.18);
+    color: var(--accent);
+    border-color: rgba(79,140,255,0.4);
+}
+.grade-badge-b {
+    background: rgba(52,211,153,0.18);
+    color: var(--green);
+    border-color: rgba(52,211,153,0.38);
+}
+.grade-badge-c {
+    background: rgba(251,191,36,0.14);
+    color: var(--orange);
+    border-color: rgba(251,191,36,0.32);
+}
+.grade-badge-d {
+    background: rgba(248,113,113,0.15);
+    color: var(--red);
+    border-color: rgba(248,113,113,0.32);
+}
+.grade-badge-none {
+    background: rgba(155,160,180,0.12);
+    color: var(--text-muted);
+    border-color: rgba(155,160,180,0.26);
+}
+
+/* ----- Role / Status Badges ----- */
+.badge-admin { background: rgba(147,130,255,0.15); color: var(--purple); border-color: rgba(147,130,255,0.25); }
+.badge-moderator { background: rgba(251,191,36,0.15); color: var(--orange); border-color: rgba(251,191,36,0.25); }
+.badge-role-user { background: rgba(79,140,255,0.15); color: var(--accent); border-color: rgba(79,140,255,0.25); }
+.badge-active { background: rgba(52,211,153,0.15); color: var(--green); border-color: rgba(52,211,153,0.25); }
+.badge-inactive { background: rgba(248,113,113,0.15); color: var(--red); border-color: rgba(248,113,113,0.25); }
