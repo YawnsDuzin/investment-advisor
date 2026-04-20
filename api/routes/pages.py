@@ -1010,15 +1010,6 @@ def education_chat_room_page(request: Request, session_id: int, user: Optional[U
 
 # ──────────────────────────────────────────────
 # Track Record & Pricing — 공개 페이지
-# ──────────────────────────────────────────────
-@router.get("/pages/track-record")
-def track_record_page(request: Request, user: Optional[UserInDB] = Depends(get_current_user), auth_cfg: AuthConfig = Depends(_get_auth_cfg)):
-    """트랙레코드 공개 페이지 — 비로그인도 접근 가능."""
-    ctx = _base_ctx(request, "track_record", user, auth_cfg)
-    # 클라이언트에서 /api/track-record/summary fetch하여 렌더
-    return templates.TemplateResponse(request=request, name="track_record.html", context=ctx)
-
-
 # ── 고객 문의 페이지 ──────────────────────────────
 
 

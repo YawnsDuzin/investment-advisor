@@ -5,12 +5,22 @@ v19부터 `post_return_*_pct` (추천 후 실제 수익률)를 메인 성과 지
 데이터가 아직 축적되지 않은 기간은 "측정 중"으로 표시.
 """
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends
-from shared.config import DatabaseConfig
+from typing import Optional
+from fastapi import APIRouter, Depends, Request
+from fastapi.templating import Jinja2Templates
+from shared.config import DatabaseConfig, AuthConfig
 from shared.db import get_connection
 from psycopg2.extras import RealDictCursor
+from api.page_context import base_ctx as _base_ctx
+from api.template_filters import register as _register_filters
+from api.auth.dependencies import get_current_user, _get_auth_cfg
+from api.auth.models import UserInDB
 
 router = APIRouter(prefix="/api/track-record", tags=["트랙레코드"])
+pages_router = APIRouter(prefix="/pages/track-record", tags=["트랙레코드 페이지"])
+
+templates = Jinja2Templates(directory="api/templates")
+_register_filters(templates.env)
 
 
 def _get_cfg() -> DatabaseConfig:
@@ -227,3 +237,14 @@ def get_track_record_summary(cfg: DatabaseConfig = Depends(_get_cfg)):
             "latest_date": meta_row.get("latest").isoformat() if meta_row.get("latest") else None,
         },
     }
+
+
+# ── 트랙레코드 HTML 페이지 ──────────────────────────────
+
+
+@pages_router.get("")
+def track_record_page(request: Request, user: Optional[UserInDB] = Depends(get_current_user), auth_cfg: AuthConfig = Depends(_get_auth_cfg)):
+    """트랙레코드 공개 페이지 — 비로그인도 접근 가능."""
+    ctx = _base_ctx(request, "track_record", user, auth_cfg)
+    # 클라이언트에서 /api/track-record/summary fetch하여 렌더
+    return templates.TemplateResponse(request=request, name="track_record.html", context=ctx)
