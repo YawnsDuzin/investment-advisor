@@ -27,25 +27,30 @@ def get_db_conn(cfg: DatabaseConfig = Depends(get_db_cfg)) -> Iterator[Any]:
 
 
 def make_page_ctx(active_page: str):
-    """페이지별 컨텍스트 빌더 dependency 팩토리 (B2.5).
+    """페이지별 컨텍스트 빌더 dependency 팩토리 (B2.5 + B3).
 
     사용: `def route(ctx: dict = Depends(make_page_ctx("dashboard")))`.
 
     반환 dict:
     - base_ctx가 채우는 모든 키 (current_user, auth_enabled, tier, unread_notifications 등)
-    - 편의 키: `ctx["_user"]` (UserInDB|None), `ctx["_auth_cfg"]` (AuthConfig)
-      - `ctx["request"]`는 base_ctx가 이미 넣음
+    - 편의 키:
+      - `ctx["_user"]`: Optional[UserInDB]
+      - `ctx["_auth_cfg"]`: AuthConfig
+      - `ctx["_conn"]`: DB 연결 (페이지 라우트가 추가 쿼리 시 재사용 가능)
+    - `ctx["request"]`: base_ctx가 이미 넣음
     """
     def _dep(
         request: Request,
+        conn = Depends(get_db_conn),
         user: Optional[UserInDB] = Depends(get_current_user),
         auth_cfg: AuthConfig = Depends(_get_auth_cfg),
     ) -> dict:
         # 순환 임포트 회피: 함수 내부에서 import
         from api.page_context import base_ctx
 
-        ctx = base_ctx(request, active_page, user, auth_cfg)
+        ctx = base_ctx(request, active_page, user, auth_cfg, conn=conn)
         ctx["_user"] = user
         ctx["_auth_cfg"] = auth_cfg
+        ctx["_conn"] = conn
         return ctx
     return _dep
