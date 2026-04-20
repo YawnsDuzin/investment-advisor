@@ -18,6 +18,7 @@ from shared.logger import (
 )
 from api.auth.dependencies import require_role, get_current_user, _get_auth_cfg
 from api.auth.models import UserInDB
+from api.deps import get_db_cfg as _get_cfg
 
 router = APIRouter(prefix="/admin", tags=["관리자"])
 
@@ -231,7 +232,7 @@ _translating = False
 @router.get("/translate-news/status")
 def translate_status(_admin: Optional[UserInDB] = Depends(require_role("admin"))):
     """미번역 뉴스 건수 조회"""
-    cfg = DatabaseConfig()
+    cfg = _get_cfg()
     articles = get_untranslated_news(cfg)
     return {"untranslated_count": len(articles), "translating": _translating}
 
@@ -247,7 +248,7 @@ def translate_existing_news(_admin: Optional[UserInDB] = Depends(require_role("a
             yield "event: done\ndata: already\n\n"
         return StreamingResponse(already(), media_type="text/event-stream")
 
-    cfg = DatabaseConfig()
+    cfg = _get_cfg()
     articles = get_untranslated_news(cfg)
 
     if not articles:
@@ -376,7 +377,7 @@ def translate_existing_news(_admin: Optional[UserInDB] = Depends(require_role("a
 @router.post("/reset-all-data")
 def reset_all_data(_admin: Optional[UserInDB] = Depends(require_role("admin"))):
     """분석 데이터 전체 삭제 (CASCADE로 하위 테이블 포함)"""
-    cfg = DatabaseConfig()
+    cfg = _get_cfg()
     conn = get_connection(cfg)
     try:
         with conn.cursor() as cur:
@@ -440,7 +441,7 @@ def copy_from_remote(
     from psycopg2.extras import Json, RealDictCursor
 
     def stream():
-        local_cfg = DatabaseConfig()
+        local_cfg = _get_cfg()
         remote_conn = None
         local_conn = None
 
@@ -597,7 +598,7 @@ def api_list_runs(
     _admin: Optional[UserInDB] = Depends(require_role("admin")),
 ):
     """최근 실행(app_runs) 목록."""
-    cfg = DatabaseConfig()
+    cfg = _get_cfg()
     runs = get_recent_runs(cfg, run_type=run_type, limit=limit)
     # datetime/Decimal 직렬화
     for r in runs:
@@ -618,7 +619,7 @@ def api_run_detail(
     _admin: Optional[UserInDB] = Depends(require_role("admin")),
 ):
     """단일 run 상세 (run + 사건보고서 + 통계)."""
-    cfg = DatabaseConfig()
+    cfg = _get_cfg()
     conn = get_connection(cfg)
     try:
         from psycopg2.extras import RealDictCursor
@@ -674,7 +675,7 @@ def api_run_logs(
     _admin: Optional[UserInDB] = Depends(require_role("admin")),
 ):
     """run의 app_logs 조회."""
-    cfg = DatabaseConfig()
+    cfg = _get_cfg()
     logs = get_run_logs(cfg, run_id, level=level, limit=limit)
     for r in logs:
         for k, v in list(r.items()):
@@ -691,7 +692,7 @@ def api_run_queries(
     _admin: Optional[UserInDB] = Depends(require_role("admin")),
 ):
     """run의 ai_query_archive 목록 (raw 응답은 제외)."""
-    cfg = DatabaseConfig()
+    cfg = _get_cfg()
     queries = get_run_ai_queries(cfg, run_id, failed_only=failed_only, limit=limit)
     for r in queries:
         for k, v in list(r.items()):
@@ -711,7 +712,7 @@ def api_query_detail(
     _admin: Optional[UserInDB] = Depends(require_role("admin")),
 ):
     """단일 AI 쿼리 상세 (프롬프트·응답 전문 포함)."""
-    cfg = DatabaseConfig()
+    cfg = _get_cfg()
     row = get_ai_query_raw(cfg, query_id)
     if not row:
         raise HTTPException(status_code=404, detail="query not found")
@@ -732,7 +733,7 @@ def api_query_raw_text(
     _admin: Optional[UserInDB] = Depends(require_role("admin")),
 ):
     """AI 쿼리 raw 응답 전문을 plain text로 다운로드."""
-    cfg = DatabaseConfig()
+    cfg = _get_cfg()
     row = get_ai_query_raw(cfg, query_id)
     if not row:
         raise HTTPException(status_code=404, detail="query not found")
@@ -848,7 +849,7 @@ def api_list_incidents(
     _admin: Optional[UserInDB] = Depends(require_role("admin")),
 ):
     """사건 보고서 목록 (최근 run들의 incident 요약)."""
-    cfg = DatabaseConfig()
+    cfg = _get_cfg()
     conn = get_connection(cfg)
     try:
         from psycopg2.extras import RealDictCursor
