@@ -7,7 +7,7 @@ from shared.db import init_db
 from api.routes import (
     sessions, themes, proposals, pages, chat, admin,
     auth as auth_routes, user_admin, watchlist, track_record,
-    stocks, education, inquiry,
+    stocks, education, inquiry, marketing,
 )
 
 
@@ -51,6 +51,9 @@ app.include_router(track_record.router)
 app.include_router(stocks.router)
 app.include_router(education.router)
 app.include_router(inquiry.router)
+
+# 도메인 콜로케이션된 페이지 라우터들 (B1 진행 중)
+app.include_router(marketing.pages_router)
 
 # HTML 페이지 라우트 (/, /pages/*)
 app.include_router(pages.router)
