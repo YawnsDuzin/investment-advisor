@@ -6,6 +6,7 @@ from shared.db import get_connection
 from psycopg2.extras import RealDictCursor
 from api.auth.dependencies import get_current_user_required
 from api.auth.models import UserInDB
+from api.serialization import serialize_row as _serialize_row
 
 router = APIRouter(prefix="/sessions", tags=["세션"])
 
@@ -129,16 +130,3 @@ def get_session_by_date(analysis_date: str, _user: Optional[UserInDB] = Depends(
     return get_session(row["id"])
 
 
-def _serialize_row(row: dict) -> dict:
-    """RealDictRow의 date/datetime/Decimal 타입을 JSON 직렬화 가능하도록 변환"""
-    from datetime import date, datetime
-    from decimal import Decimal
-    result = {}
-    for k, v in row.items():
-        if isinstance(v, (date, datetime)):
-            result[k] = v.isoformat()
-        elif isinstance(v, Decimal):
-            result[k] = float(v)
-        else:
-            result[k] = v
-    return result

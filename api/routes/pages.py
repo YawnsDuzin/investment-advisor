@@ -1,13 +1,12 @@
-"""Jinja2 템플릿 기반 웹 페이지 라우트"""
-import re
+"""Jinja2 템플릿 기반 웹 페이지 라우트 — B1 진행 중 (단계적 도메인 이전)."""
 from datetime import date
 from typing import Optional
-import markdown as _markdown
-import bleach
+
 from fastapi import APIRouter, Request, Query, Depends
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
-from markupsafe import Markup
+from psycopg2.extras import RealDictCursor
+
 from shared.config import DatabaseConfig, AuthConfig
 from shared.db import get_connection
 from shared.tier_limits import (
@@ -21,179 +20,19 @@ from shared.tier_limits import (
     get_subscription_limit,
     get_chat_daily_limit,
 )
-from psycopg2.extras import RealDictCursor
-from api.routes.sessions import _serialize_row
+from api.serialization import serialize_row as _serialize_row
+from api.page_context import base_ctx as _base_ctx
+from api.template_filters import register as _register_filters
 from api.auth.dependencies import get_current_user, _get_auth_cfg
 from api.auth.models import UserInDB
 
 router = APIRouter(tags=["페이지"])
-
 templates = Jinja2Templates(directory="api/templates")
-
-
-def _nl_numbered(text: str) -> Markup:
-    """①②③ 또는 1. 2. 3. 형태의 번호 리스트를 줄바꿈으로 분리"""
-    if not text:
-        return Markup("")
-    # ① ② ③ … ⑳ 원문자 앞에 <br> 삽입
-    parts = re.split(r'\s*(?=[①-⑳])', text)
-    if len(parts) > 1:
-        # 각 파트의 양쪽 공백 제거 후 결합
-        stripped = [p.strip() for p in parts if p.strip()]
-        result = '<br>'.join(stripped)
-        return Markup(result)
-    # 1. 2. 3. 형태 처리
-    result = re.sub(r'(?<=\S)\s+(\d+)\.\s', r'<br>\1. ', text)
-    return Markup(result)
-
-
-templates.env.filters["nl_numbered"] = _nl_numbered
-
-
-_CURRENCY_SYMBOLS = {"KRW": "₩", "USD": "$", "EUR": "€", "JPY": "¥", "GBP": "£", "CNY": "¥"}
-
-
-def _fmt_price(value, currency: str = "") -> str:
-    """가격을 통화 기호 + 천 단위 쉼표로 포맷팅 (정수 통화는 소수점 제거)"""
-    if value is None:
-        return "-"
-    try:
-        num = float(value)
-    except (ValueError, TypeError):
-        return str(value)
-    if num == 0:
-        return "-"
-    symbol = _CURRENCY_SYMBOLS.get((currency or "").upper(), "")
-    # KRW, JPY 등은 소수점 없이 표시
-    if (currency or "").upper() in ("KRW", "JPY"):
-        return f"{symbol}{num:,.0f}"
-    return f"{symbol}{num:,.2f}"
-
-
-templates.env.filters["fmt_price"] = _fmt_price
-
-
-# ── Markdown → HTML 렌더링 (sanitize) ───────────────────────────
-# 심층분석 리포트(report_markdown)와 같이 AI가 생성한 마크다운 본문을 안전한 HTML로 변환
-_MD_ALLOWED_TAGS = [
-    "h1", "h2", "h3", "h4", "h5", "h6",
-    "p", "br", "hr",
-    "strong", "em", "b", "i", "u", "s", "del", "mark", "sub", "sup",
-    "blockquote", "code", "pre",
-    "ul", "ol", "li",
-    "a",
-    "table", "thead", "tbody", "tr", "th", "td",
-    "img",
-    "span", "div",
-]
-_MD_ALLOWED_ATTRS = {
-    "a": ["href", "title", "target", "rel"],
-    "img": ["src", "alt", "title"],
-    "th": ["align", "colspan", "rowspan"],
-    "td": ["align", "colspan", "rowspan"],
-    "code": ["class"],
-    "pre": ["class"],
-    "span": ["class"],
-    "div": ["class"],
-}
-_MD_ALLOWED_PROTOCOLS = ["http", "https", "mailto"]
-
-
-def _markdown_to_html(text) -> Markup:
-    """AI가 생성한 마크다운 원문을 sanitize된 HTML로 렌더링.
-
-    - extensions: tables(|표|), fenced_code(```), nl2br(줄바꿈→<br>), sane_lists
-    - bleach로 화이트리스트 태그/속성만 허용 → XSS 방지
-    - 모든 링크에 target="_blank" + rel="noopener" 부여
-    """
-    if not text:
-        return Markup("")
-    html = _markdown.markdown(
-        str(text),
-        extensions=["tables", "fenced_code", "nl2br", "sane_lists"],
-        output_format="html",
-    )
-    cleaned = bleach.clean(
-        html,
-        tags=_MD_ALLOWED_TAGS,
-        attributes=_MD_ALLOWED_ATTRS,
-        protocols=_MD_ALLOWED_PROTOCOLS,
-        strip=True,
-    )
-    cleaned = re.sub(
-        r'<a\s+([^>]*?)>',
-        lambda m: f'<a {m.group(1)} target="_blank" rel="noopener noreferrer">',
-        cleaned,
-    )
-    return Markup(cleaned)
-
-
-templates.env.filters["markdown_to_html"] = _markdown_to_html
+_register_filters(templates.env)
 
 
 def _get_cfg() -> DatabaseConfig:
     return DatabaseConfig()
-
-
-def _base_ctx(request: Request, active_page: str, user: Optional[UserInDB], auth_cfg: AuthConfig) -> dict:
-    """모든 템플릿에 공통으로 전달할 컨텍스트.
-
-    tier 정보와 사용량/한도는 업그레이드 CTA/사용량 배지 표시에 쓰인다.
-    """
-    effective_tier = user.effective_tier() if user else "free"
-
-    tier_info = TIER_INFO.get(effective_tier)
-
-    ctx = {
-        "request": request,
-        "active_page": active_page,
-        "current_user": user,
-        "auth_enabled": auth_cfg.enabled,
-        "unread_notifications": 0,
-        # 티어 UI 표시용
-        "tier": effective_tier,
-        "tier_label": tier_info.label_ko if tier_info else None,
-        "tier_badge_color": tier_info.badge_color if tier_info else "free",
-        # 한도 (템플릿에서 직접 참조 가능)
-        "watchlist_limit": get_watchlist_limit(effective_tier),
-        "subscription_limit": get_subscription_limit(effective_tier),
-        "chat_daily_limit": get_chat_daily_limit(effective_tier),
-        # 현재 사용량 (로그인 시 채워짐)
-        "watchlist_usage": 0,
-        "subscription_usage": 0,
-    }
-    if user and auth_cfg.enabled:
-        try:
-            conn = get_connection(_get_cfg())
-            try:
-                with conn.cursor() as cur:
-                    # 세 쿼리를 UNION ALL 단일 호출로 묶어 DB 왕복 1회로 처리
-                    cur.execute(
-                        """
-                        SELECT 'noti'   AS k, COUNT(*) FROM user_notifications
-                            WHERE user_id = %s AND is_read = FALSE
-                        UNION ALL
-                        SELECT 'watch'  AS k, COUNT(*) FROM user_watchlist
-                            WHERE user_id = %s
-                        UNION ALL
-                        SELECT 'sub'    AS k, COUNT(*) FROM user_subscriptions
-                            WHERE user_id = %s
-                        """,
-                        (user.id, user.id, user.id),
-                    )
-                    for key, cnt in cur.fetchall():
-                        if key == "noti":
-                            ctx["unread_notifications"] = cnt
-                        elif key == "watch":
-                            ctx["watchlist_usage"] = cnt
-                        elif key == "sub":
-                            ctx["subscription_usage"] = cnt
-            finally:
-                conn.close()
-        except Exception as e:
-            # 메뉴·배지는 0으로 폴백하되 운영자가 알 수 있도록 로그
-            print(f"[pages._base_ctx] 사용량 조회 실패 (user_id={user.id}): {e}")
-    return ctx
 
 
 # ──────────────────────────────────────────────
