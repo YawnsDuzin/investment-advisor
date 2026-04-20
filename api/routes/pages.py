@@ -157,26 +157,6 @@ def session_detail_page(request: Request, session_id: int, user: Optional[UserIn
 
 
 # ──────────────────────────────────────────────
-# Stock Fundamentals (종목 기초정보)
-# ──────────────────────────────────────────────
-@router.get("/pages/stocks/{ticker}")
-def stock_fundamentals_page(
-    request: Request,
-    ticker: str,
-    market: str = Query(default="", description="시장 코드"),
-    user: Optional[UserInDB] = Depends(get_current_user),
-    auth_cfg: AuthConfig = Depends(_get_auth_cfg),
-):
-    """종목 기초정보 페이지 — 온디맨드 yfinance 조회"""
-    ctx = _base_ctx(request, "proposals", user, auth_cfg)
-    return templates.TemplateResponse(request=request, name="stock_fundamentals.html", context={
-        **ctx,
-        "ticker": ticker.upper(),
-        "market": market.upper(),
-    })
-
-
-# ──────────────────────────────────────────────
 # Theme History (신규)
 # ──────────────────────────────────────────────
 @router.get("/pages/themes/history/{theme_key}")
