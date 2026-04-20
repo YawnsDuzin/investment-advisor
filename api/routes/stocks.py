@@ -1,14 +1,11 @@
 """종목 기초정보 조회 API + 종목 페이지"""
-from typing import Optional
-
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from analyzer.stock_data import fetch_fundamentals
-from api.auth.dependencies import _get_auth_cfg, get_current_user
+from api.auth.dependencies import get_current_user_required
 from api.auth.models import UserInDB
-from api.page_context import base_ctx as _base_ctx
 from api.templates_provider import templates
-from shared.config import AuthConfig
+from api.deps import make_page_ctx
 
 router = APIRouter(prefix="/api/stocks", tags=["종목 기초정보"])
 
@@ -35,15 +32,12 @@ def get_fundamentals(
 # ──────────────────────────────────────────────
 @pages_router.get("/{ticker}")
 def stock_fundamentals_page(
-    request: Request,
     ticker: str,
     market: str = Query(default="", description="시장 코드"),
-    user: Optional[UserInDB] = Depends(get_current_user),
-    auth_cfg: AuthConfig = Depends(_get_auth_cfg),
+    ctx: dict = Depends(make_page_ctx("proposals")),
 ):
     """종목 기초정보 페이지 — 온디맨드 yfinance 조회"""
-    ctx = _base_ctx(request, "proposals", user, auth_cfg)
-    return templates.TemplateResponse(request=request, name="stock_fundamentals.html", context={
+    return templates.TemplateResponse(request=ctx["request"], name="stock_fundamentals.html", context={
         **ctx,
         "ticker": ticker.upper(),
         "market": market.upper(),

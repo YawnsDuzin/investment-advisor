@@ -3,21 +3,14 @@
 복잡도: dashboard 함수는 약 300줄 — 어제 대비 변화·테마 요약·발굴유형 분포·
 sector 카운트·all_proposals 정렬 등 단일 페이지 다수 쿼리. 본문은 무변경 이전.
 """
-from datetime import date
-from typing import Optional
-
-from fastapi import APIRouter, Request, Depends
+from fastapi import APIRouter, Depends
 from fastapi.responses import RedirectResponse
 from psycopg2.extras import RealDictCursor
 
-from shared.config import AuthConfig
 from shared.tier_limits import TIER_INFO
 from api.serialization import serialize_row as _serialize_row
-from api.page_context import base_ctx as _base_ctx
 from api.templates_provider import templates
-from api.deps import get_db_conn
-from api.auth.dependencies import get_current_user, _get_auth_cfg
-from api.auth.models import UserInDB
+from api.deps import get_db_conn, make_page_ctx
 
 pages_router = APIRouter(tags=["대시보드"])
 
@@ -26,19 +19,19 @@ pages_router = APIRouter(tags=["대시보드"])
 # Dashboard (Home) — 어제 대비 변화 + 투자 신호
 # ──────────────────────────────────────────────
 @pages_router.get("/")
-def dashboard(request: Request, conn = Depends(get_db_conn), user: Optional[UserInDB] = Depends(get_current_user), auth_cfg: AuthConfig = Depends(_get_auth_cfg)):
+def dashboard(conn = Depends(get_db_conn), ctx: dict = Depends(make_page_ctx("dashboard"))):
     # 인증 활성 + 비로그인 → 랜딩 페이지로 안내 (UI-16)
-    if auth_cfg.enabled and user is None:
+    if ctx["auth_enabled"] and ctx["_user"] is None:
         return RedirectResponse(url="/pages/landing", status_code=302)
 
-    ctx = _base_ctx(request, "dashboard", user, auth_cfg)
+    user = ctx["_user"]
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         # 최신 세션
         cur.execute("SELECT * FROM analysis_sessions ORDER BY analysis_date DESC LIMIT 1")
         session = cur.fetchone()
         if not session:
             return templates.TemplateResponse(
-                request=request, name="dashboard.html",
+                request=ctx["request"], name="dashboard.html",
                 context={**ctx, "session": None},
             )
 
@@ -285,7 +278,7 @@ def dashboard(request: Request, conn = Depends(get_db_conn), user: Optional[User
     from shared.tier_limits import THEME_VIEW_LIMITS, normalize_tier
     theme_view_limit = THEME_VIEW_LIMITS.get(normalize_tier(ctx.get("tier")), None)
 
-    return templates.TemplateResponse(request=request, name="dashboard.html", context={
+    return templates.TemplateResponse(request=ctx["request"], name="dashboard.html", context={
         **ctx,
         "session": _serialize_row(session),
         "themes": [_serialize_row(t) for t in themes],

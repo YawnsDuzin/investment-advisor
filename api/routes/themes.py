@@ -1,13 +1,11 @@
 """투자 테마 조회 API + 테마 페이지 라우트"""
 from typing import Optional
-from fastapi import APIRouter, Query, Depends, Request
-from shared.config import AuthConfig
+from fastapi import APIRouter, Query, Depends
 from psycopg2.extras import RealDictCursor
 from api.serialization import serialize_row as _serialize_row
-from api.page_context import base_ctx as _base_ctx
 from api.templates_provider import templates
-from api.deps import get_db_conn
-from api.auth.dependencies import get_current_user, get_current_user_required, _get_auth_cfg
+from api.deps import get_db_conn, make_page_ctx
+from api.auth.dependencies import get_current_user_required
 from api.auth.models import UserInDB
 
 router = APIRouter(prefix="/themes", tags=["테마"])
@@ -104,15 +102,14 @@ def search_themes(
 # ──────────────────────────────────────────────
 
 @pages_router.get("/history/{theme_key}")
-def theme_history_page(request: Request, theme_key: str, conn = Depends(get_db_conn), user: Optional[UserInDB] = Depends(get_current_user), auth_cfg: AuthConfig = Depends(_get_auth_cfg)):
+def theme_history_page(theme_key: str, conn = Depends(get_db_conn), ctx: dict = Depends(make_page_ctx("themes"))):
     """특정 테마의 일자별 추이"""
-    ctx = _base_ctx(request, "themes", user, auth_cfg)
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         # 추적 정보
         cur.execute("SELECT * FROM theme_tracking WHERE theme_key = %s", (theme_key,))
         tracking = cur.fetchone()
         if not tracking:
-            return templates.TemplateResponse(request=request, name="theme_history.html",
+            return templates.TemplateResponse(request=ctx["request"], name="theme_history.html",
                 context={**ctx, "tracking": None, "history": []})
 
         # 일자별 테마 데이터 (이름이 유사한 것 모두)
@@ -140,7 +137,7 @@ def theme_history_page(request: Request, theme_key: str, conn = Depends(get_db_c
             )
             entry["scenarios"] = [_serialize_row(s) for s in cur.fetchall()]
 
-    return templates.TemplateResponse(request=request, name="theme_history.html", context={
+    return templates.TemplateResponse(request=ctx["request"], name="theme_history.html", context={
         **ctx,
         "tracking": _serialize_row(tracking),
         "history": [_serialize_row(h) for h in history],
@@ -149,16 +146,13 @@ def theme_history_page(request: Request, theme_key: str, conn = Depends(get_db_c
 
 @pages_router.get("")
 def themes_page(
-    request: Request,
     conn = Depends(get_db_conn),
     horizon: str | None = Query(default=None),
     min_confidence: float = Query(default=0.0),
     q: str | None = Query(default=None),
     limit: int = Query(default=20, ge=1, le=100),
-    user: Optional[UserInDB] = Depends(get_current_user),
-    auth_cfg: AuthConfig = Depends(_get_auth_cfg),
+    ctx: dict = Depends(make_page_ctx("themes")),
 ):
-    ctx = _base_ctx(request, "themes", user, auth_cfg)
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         query = """
             SELECT t.*, s.analysis_date
@@ -206,7 +200,7 @@ def themes_page(
         for row in cur.fetchall():
             tracking_map[row["theme_key"]] = _serialize_row(row)
 
-    return templates.TemplateResponse(request=request, name="themes.html", context={
+    return templates.TemplateResponse(request=ctx["request"], name="themes.html", context={
         **ctx,
         "themes": [_serialize_row(t) for t in themes],
         "tracking_map": tracking_map,

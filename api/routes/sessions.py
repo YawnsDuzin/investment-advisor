@@ -1,15 +1,13 @@
 """분석 세션 조회 API"""
 from typing import Optional
-from fastapi import APIRouter, HTTPException, Query, Request, Depends
+from fastapi import APIRouter, HTTPException, Query, Depends
 from fastapi.responses import RedirectResponse
-from shared.config import AuthConfig
 from psycopg2.extras import RealDictCursor
-from api.auth.dependencies import get_current_user, get_current_user_required, _get_auth_cfg
+from api.auth.dependencies import get_current_user_required
 from api.auth.models import UserInDB
 from api.serialization import serialize_row as _serialize_row
-from api.page_context import base_ctx as _base_ctx
 from api.templates_provider import templates
-from api.deps import get_db_conn
+from api.deps import get_db_conn, make_page_ctx
 
 router = APIRouter(prefix="/sessions", tags=["세션"])
 
@@ -124,8 +122,7 @@ def get_session_by_date(analysis_date: str, conn = Depends(get_db_conn), _user: 
 # ──────────────────────────────────────────────
 
 @pages_router.get("")
-def sessions_page(request: Request, conn = Depends(get_db_conn), limit: int = Query(default=30, ge=1, le=100), user: Optional[UserInDB] = Depends(get_current_user), auth_cfg: AuthConfig = Depends(_get_auth_cfg)):
-    ctx = _base_ctx(request, "sessions", user, auth_cfg)
+def sessions_page(conn = Depends(get_db_conn), limit: int = Query(default=30, ge=1, le=100), ctx: dict = Depends(make_page_ctx("sessions"))):
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute("""
             SELECT s.id, s.analysis_date, s.market_summary,
@@ -138,7 +135,7 @@ def sessions_page(request: Request, conn = Depends(get_db_conn), limit: int = Qu
         """, (limit,))
         sessions = cur.fetchall()
 
-    return templates.TemplateResponse(request=request, name="sessions.html", context={
+    return templates.TemplateResponse(request=ctx["request"], name="sessions.html", context={
         **ctx,
         "sessions": [_serialize_row(s) for s in sessions],
     })
@@ -159,13 +156,13 @@ def session_by_date_page(analysis_date: str, conn = Depends(get_db_conn)):
 
 
 @pages_router.get("/{session_id}")
-def session_detail_page(request: Request, session_id: int, conn = Depends(get_db_conn), user: Optional[UserInDB] = Depends(get_current_user), auth_cfg: AuthConfig = Depends(_get_auth_cfg)):
+def session_detail_page(session_id: int, conn = Depends(get_db_conn), ctx: dict = Depends(make_page_ctx("sessions"))):
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute("SELECT * FROM analysis_sessions WHERE id = %s", (session_id,))
         session = cur.fetchone()
         if not session:
             return templates.TemplateResponse("dashboard.html", {
-                "request": request, "active_page": "sessions", "session": None,
+                "request": ctx["request"], "active_page": "sessions", "session": None,
             })
 
         cur.execute(
@@ -218,8 +215,7 @@ def session_detail_page(request: Request, session_id: int, conn = Depends(get_db
         for row in cur.fetchall():
             tracking_map[row["theme_key"]] = _serialize_row(row)
 
-    ctx = _base_ctx(request, "sessions", user, auth_cfg)
-    return templates.TemplateResponse(request=request, name="session_detail.html", context={
+    return templates.TemplateResponse(request=ctx["request"], name="session_detail.html", context={
         **ctx,
         "session": _serialize_row(session),
         "issues": [_serialize_row(i) for i in issues],

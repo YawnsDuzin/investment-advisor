@@ -5,15 +5,10 @@ v19부터 `post_return_*_pct` (추천 후 실제 수익률)를 메인 성과 지
 데이터가 아직 축적되지 않은 기간은 "측정 중"으로 표시.
 """
 from datetime import datetime, timezone
-from typing import Optional
-from fastapi import APIRouter, Depends, Request
-from shared.config import AuthConfig
+from fastapi import APIRouter, Depends
 from psycopg2.extras import RealDictCursor
-from api.page_context import base_ctx as _base_ctx
 from api.templates_provider import templates
-from api.deps import get_db_conn
-from api.auth.dependencies import get_current_user, _get_auth_cfg
-from api.auth.models import UserInDB
+from api.deps import get_db_conn, make_page_ctx
 
 router = APIRouter(prefix="/api/track-record", tags=["트랙레코드"])
 pages_router = APIRouter(prefix="/pages/track-record", tags=["트랙레코드 페이지"])
@@ -230,8 +225,7 @@ def get_track_record_summary(conn = Depends(get_db_conn)):
 
 
 @pages_router.get("")
-def track_record_page(request: Request, user: Optional[UserInDB] = Depends(get_current_user), auth_cfg: AuthConfig = Depends(_get_auth_cfg)):
+def track_record_page(ctx: dict = Depends(make_page_ctx("track_record"))):
     """트랙레코드 공개 페이지 — 비로그인도 접근 가능."""
-    ctx = _base_ctx(request, "track_record", user, auth_cfg)
     # 클라이언트에서 /api/track-record/summary fetch하여 렌더
-    return templates.TemplateResponse(request=request, name="track_record.html", context=ctx)
+    return templates.TemplateResponse(request=ctx["request"], name="track_record.html", context=ctx)

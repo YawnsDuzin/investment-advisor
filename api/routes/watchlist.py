@@ -1,9 +1,8 @@
 """関심 종목 워치리스트 + 알림 구독 + 제안 메모 API + 개인화 페이지"""
 from typing import Optional
-from fastapi import APIRouter, HTTPException, Depends, Body, Request
+from fastapi import APIRouter, HTTPException, Depends, Body
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
-from shared.config import AuthConfig
 from shared.tier_limits import (
     get_watchlist_limit,
     get_subscription_limit,
@@ -11,11 +10,10 @@ from shared.tier_limits import (
 )
 from psycopg2.extras import RealDictCursor
 from api.serialization import serialize_row as _serialize_row
-from api.page_context import base_ctx as _base_ctx
-from api.auth.dependencies import get_current_user, get_current_user_required, quota_exceeded_detail, _get_auth_cfg
+from api.auth.dependencies import get_current_user_required, quota_exceeded_detail
 from api.auth.models import UserInDB
 from api.templates_provider import templates
-from api.deps import get_db_conn
+from api.deps import get_db_conn, make_page_ctx
 
 router = APIRouter(tags=["개인화"])
 pages_router = APIRouter(tags=["개인화 페이지"])  # prefix 없음 — path는 라우트별 명시
@@ -317,12 +315,12 @@ def delete_memo(
 
 # ── Watchlist (관심 종목) ──────────────────────
 @pages_router.get("/pages/watchlist")
-def watchlist_page(request: Request, conn=Depends(get_db_conn), user: Optional[UserInDB] = Depends(get_current_user), auth_cfg: AuthConfig = Depends(_get_auth_cfg)):
+def watchlist_page(conn=Depends(get_db_conn), ctx: dict = Depends(make_page_ctx("watchlist"))):
     """관심 종목 워치리스트 — 로그인 사용자만"""
-    if not auth_cfg.enabled or user is None:
+    if not ctx["auth_enabled"] or ctx["_user"] is None:
         return RedirectResponse("/auth/login?next=/pages/watchlist", status_code=302)
 
-    ctx = _base_ctx(request, "watchlist", user, auth_cfg)
+    user = ctx["_user"]
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute(
             "SELECT * FROM user_watchlist WHERE user_id = %s ORDER BY created_at DESC",
@@ -349,7 +347,7 @@ def watchlist_page(request: Request, conn=Depends(get_db_conn), user: Optional[U
         )
         subscriptions = [_serialize_row(r) for r in cur.fetchall()]
 
-    return templates.TemplateResponse(request=request, name="watchlist.html", context={
+    return templates.TemplateResponse(request=ctx["request"], name="watchlist.html", context={
         **ctx,
         "watchlist": watchlist,
         "subscriptions": subscriptions,
@@ -358,12 +356,12 @@ def watchlist_page(request: Request, conn=Depends(get_db_conn), user: Optional[U
 
 # ── Notifications (알림) ───────────────────────
 @pages_router.get("/pages/notifications")
-def notifications_page(request: Request, conn=Depends(get_db_conn), user: Optional[UserInDB] = Depends(get_current_user), auth_cfg: AuthConfig = Depends(_get_auth_cfg)):
+def notifications_page(conn=Depends(get_db_conn), ctx: dict = Depends(make_page_ctx("notifications"))):
     """알림 목록 — 로그인 사용자만"""
-    if not auth_cfg.enabled or user is None:
+    if not ctx["auth_enabled"] or ctx["_user"] is None:
         return RedirectResponse("/auth/login?next=/pages/notifications", status_code=302)
 
-    ctx = _base_ctx(request, "notifications", user, auth_cfg)
+    user = ctx["_user"]
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute(
             "SELECT * FROM user_notifications WHERE user_id = %s ORDER BY created_at DESC LIMIT 100",
@@ -372,7 +370,7 @@ def notifications_page(request: Request, conn=Depends(get_db_conn), user: Option
         notifications = [_serialize_row(r) for r in cur.fetchall()]
         unread_count = sum(1 for n in notifications if not n.get("is_read"))
 
-    return templates.TemplateResponse(request=request, name="notifications.html", context={
+    return templates.TemplateResponse(request=ctx["request"], name="notifications.html", context={
         **ctx,
         "notifications": notifications,
         "unread_count": unread_count,
@@ -381,12 +379,11 @@ def notifications_page(request: Request, conn=Depends(get_db_conn), user: Option
 
 # ── Profile (비밀번호 변경) ────────────────────
 @pages_router.get("/pages/profile")
-def profile_page(request: Request, user: Optional[UserInDB] = Depends(get_current_user), auth_cfg: AuthConfig = Depends(_get_auth_cfg)):
+def profile_page(ctx: dict = Depends(make_page_ctx("profile"))):
     """프로필 페이지 — 로그인 사용자만"""
-    if not auth_cfg.enabled or user is None:
+    if not ctx["auth_enabled"] or ctx["_user"] is None:
         return RedirectResponse("/auth/login?next=/pages/profile", status_code=302)
-    ctx = _base_ctx(request, "profile", user, auth_cfg)
-    return templates.TemplateResponse(request=request, name="profile.html", context={
+    return templates.TemplateResponse(request=ctx["request"], name="profile.html", context={
         **ctx,
         "error": "",
         "success": "",
