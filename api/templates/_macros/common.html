@@ -1,0 +1,197 @@
+{#
+  Common display primitives — 도메인 독립적 매크로
+  이동 출처: api/templates/_macros.html (C2.1, 2026-04-20)
+#}
+
+{# ── 시장 요약 본문 (구조화 렌더링)
+   입력 형식: [시장 환경] / [핵심 이슈] / [투자 시사점] / [주의] + ★/- 불릿
+   - 섹션 타이틀은 색상 강조, `[주의]`/`[경고]`/`[리스크]`는 red 테마로 래핑
+   - ★ / - 불릿은 left-border 하이라이트, `라벨: 내용` 의 라벨을 강조
+── #}
+{% macro market_summary_body(text, fallback="(분석 요약 없음)") -%}
+{%- if text -%}
+{%- set has_sections = '[' in text and ']' in text -%}
+{%- if has_sections -%}
+{%- for line in text.split('\n') -%}
+{%- set trimmed = line.strip() -%}
+{%- if trimmed == '' -%}
+{%- elif trimmed.startswith('[') and ']' in trimmed -%}
+    {%- set section_title = trimmed.split(']')[0][1:] -%}
+    {%- set section_content = trimmed.split(']', 1)[1].strip() -%}
+    {%- set is_warn = ('주의' in section_title) or ('경고' in section_title) or ('리스크' in section_title) -%}
+    <div class="summary-section{% if is_warn %} summary-section-warn{% endif %}">
+        <div class="summary-section-title">{{ section_title }}</div>
+        {%- if section_content -%}
+        <div class="summary-section-content">{{ section_content }}</div>
+        {%- endif -%}
+    </div>
+{%- elif trimmed.startswith('★') -%}
+    {%- set rest = trimmed[1:].strip() -%}
+    <div class="summary-highlight summary-highlight-star">
+        <span class="summary-bullet">★</span>
+        {%- if ':' in rest -%}
+        <strong class="summary-label">{{ rest.split(':',1)[0].strip() }}</strong><span class="summary-sep">:</span> <span class="summary-text">{{ rest.split(':',1)[1].strip() }}</span>
+        {%- else -%}
+        <span class="summary-text">{{ rest }}</span>
+        {%- endif -%}
+    </div>
+{%- elif trimmed.startswith('-') -%}
+    {%- set rest = trimmed[1:].strip() -%}
+    <div class="summary-highlight summary-highlight-dash">
+        <span class="summary-bullet summary-bullet-green">▸</span>
+        {%- if ':' in rest -%}
+        <strong class="summary-label summary-label-green">{{ rest.split(':',1)[0].strip() }}</strong><span class="summary-sep">:</span> <span class="summary-text">{{ rest.split(':',1)[1].strip() }}</span>
+        {%- else -%}
+        <span class="summary-text">{{ rest }}</span>
+        {%- endif -%}
+    </div>
+{%- elif trimmed.startswith('▸') -%}
+    <div class="summary-highlight summary-highlight-theme">{{ trimmed }}</div>
+{%- elif trimmed.startswith('⚠') -%}
+    <div class="summary-highlight summary-highlight-warn">{{ trimmed }}</div>
+{%- else -%}
+    <div class="summary-section-content">{{ trimmed }}</div>
+{%- endif -%}
+{%- endfor -%}
+{%- else -%}
+<div style="white-space: pre-line;">{{ text }}</div>
+{%- endif -%}
+{%- else -%}
+{{ fallback }}
+{%- endif -%}
+{%- endmacro %}
+
+{# ── 신뢰도/확신도 기반 등급 배지 (S/A/B/C/D) ── #}
+{#
+ * 점수를 S/A/B/C/D 5단계로 환산하는 헬퍼 매크로.
+ * - score: 0.0 ~ 1.0 범위의 float (theme.confidence_score, proposal 등급 등)
+ * - S(≥0.85) A(≥0.70) B(≥0.55) C(≥0.40) D(그 외)
+ * 사용 예: {{ grade_badge(theme.confidence_score) }}
+#}
+{% macro grade_badge(score, label=None) -%}
+{%- if score is none -%}
+{%- set letter = '—' -%}
+{%- set level = 'none' -%}
+{%- else -%}
+{%- set s = score|float -%}
+{%- if s >= 0.85 -%}
+{%- set letter = 'S' -%}{% set level = 's' %}
+{%- elif s >= 0.70 -%}
+{%- set letter = 'A' -%}{% set level = 'a' %}
+{%- elif s >= 0.55 -%}
+{%- set letter = 'B' -%}{% set level = 'b' %}
+{%- elif s >= 0.40 -%}
+{%- set letter = 'C' -%}{% set level = 'c' %}
+{%- else -%}
+{%- set letter = 'D' -%}{% set level = 'd' %}
+{%- endif -%}
+{%- endif -%}
+<span class="grade-badge grade-badge-{{ level }}" title="신뢰도 {{ (score|float * 100)|round|int if score is not none else '' }}%">{{ letter }}{% if label %} <span class="grade-badge-label">{{ label }}</span>{% endif %}</span>
+{%- endmacro %}
+
+{# ── 외부 사이트 링크 (종목 정보 바로가기) ── #}
+{#
+ * ticker: 종목 티커 (예: NVDA, 005930)
+ * market: 시장 코드 (예: KRX, NASDAQ, NYSE). 없으면 해외로 간주
+ * mode: 'icon' (아이콘만, 인라인), 'full' (아이콘+사이트명, 블록)
+ * 한국 주식(KRX/KOSPI/KOSDAQ): 네이버증권, Yahoo Finance(.KS), KRX 정보
+ * 해외 주식: Yahoo Finance, Finviz, Seeking Alpha, Simply Wall St
+ #}
+{% macro external_links(ticker, market='', mode='icon') %}
+{%- set m = (market or '')|upper -%}
+{%- set is_krx = m in ('KRX', 'KOSPI', 'KOSDAQ') -%}
+<span class="ext-links ext-links-{{ mode }}" data-ticker="{{ ticker }}">
+    {% if is_krx %}
+    {%- set code = ticker|replace('.KS','')|replace('.KQ','') -%}
+    <a href="https://finance.naver.com/item/main.nhn?code={{ code }}" target="_blank" rel="noopener" class="ext-link" title="네이버 증권">
+        <span class="ext-link-icon">N</span>{% if mode == 'full' %}<span class="ext-link-name">네이버증권</span>{% endif %}
+    </a>
+    <a href="https://finance.yahoo.com/quote/{{ code }}.KS" target="_blank" rel="noopener" class="ext-link" title="Yahoo Finance">
+        <span class="ext-link-icon">Y</span>{% if mode == 'full' %}<span class="ext-link-name">Yahoo</span>{% endif %}
+    </a>
+    <a href="https://data.krx.co.kr/contents/MDC/MDI/mdiLoader/index.cmd?menuId=MDC0201020101" target="_blank" rel="noopener" class="ext-link" title="KRX 정보데이터">
+        <span class="ext-link-icon">K</span>{% if mode == 'full' %}<span class="ext-link-name">KRX</span>{% endif %}
+    </a>
+    {% else %}
+    <a href="https://finance.yahoo.com/quote/{{ ticker }}" target="_blank" rel="noopener" class="ext-link" title="Yahoo Finance">
+        <span class="ext-link-icon">Y</span>{% if mode == 'full' %}<span class="ext-link-name">Yahoo</span>{% endif %}
+    </a>
+    <a href="https://finviz.com/quote.ashx?t={{ ticker }}" target="_blank" rel="noopener" class="ext-link" title="Finviz">
+        <span class="ext-link-icon">F</span>{% if mode == 'full' %}<span class="ext-link-name">Finviz</span>{% endif %}
+    </a>
+    <a href="https://seekingalpha.com/symbol/{{ ticker }}" target="_blank" rel="noopener" class="ext-link" title="Seeking Alpha">
+        <span class="ext-link-icon">S</span>{% if mode == 'full' %}<span class="ext-link-name">SeekingAlpha</span>{% endif %}
+    </a>
+    <a href="https://simplywall.st/stocks/search?q={{ ticker }}" target="_blank" rel="noopener" class="ext-link" title="Simply Wall St">
+        <span class="ext-link-icon">W</span>{% if mode == 'full' %}<span class="ext-link-name">SimplyWallSt</span>{% endif %}
+    </a>
+    {% endif %}
+</span>
+{% endmacro %}
+
+{# ── 스파크라인 (최근 7일 추이) ── #}
+{% macro sparkline(points, color='var(--accent)') %}
+{% if points %}
+<svg class="sparkline" viewBox="0 0 60 18" width="60" height="18" preserveAspectRatio="none">
+    <polyline points="{{ points }}" fill="none" stroke="{{ color }}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
+{% endif %}
+{% endmacro %}
+
+{# ── Yield Curve 라인 차트 ── #}
+{% macro yield_curve(bond_yields) %}
+{% set tenors = [('kr_1y', '1Y'), ('kr_3y', '3Y'), ('kr_5y', '5Y'), ('kr_10y', '10Y'), ('kr_30y', '30Y')] %}
+{% set vals = [] %}
+{% for k, _ in tenors %}
+    {% if bond_yields.get(k) %}{% set _ = vals.append(bond_yields[k]|float) %}{% endif %}
+{% endfor %}
+{% if vals|length >= 2 %}
+    {% set mn = vals|min %}
+    {% set mx = vals|max %}
+    {% set rng = (mx - mn) if mx != mn else 1 %}
+    {% set curve_status = bond_yields.get('yield_curve_status') %}
+    {% set line_color = 'var(--green)' if curve_status == 'normal' else ('var(--orange)' if curve_status == 'flat' else 'var(--red)') %}
+<svg viewBox="0 0 320 130" class="yield-curve-chart" width="100%" height="140" preserveAspectRatio="none">
+    {# 그리드 #}
+    <line x1="40" y1="15" x2="40" y2="100" stroke="var(--border)" stroke-width="0.5"/>
+    <line x1="40" y1="100" x2="305" y2="100" stroke="var(--border)" stroke-width="0.5"/>
+    <line x1="40" y1="57" x2="305" y2="57" stroke="var(--border)" stroke-width="0.5" stroke-dasharray="2,3" opacity="0.5"/>
+    {# Y축 라벨 #}
+    <text x="36" y="18" text-anchor="end" fill="var(--text-muted)" font-size="9">{{ "%.2f"|format(mx) }}</text>
+    <text x="36" y="60" text-anchor="end" fill="var(--text-muted)" font-size="9">{{ "%.2f"|format((mx+mn)/2) }}</text>
+    <text x="36" y="103" text-anchor="end" fill="var(--text-muted)" font-size="9">{{ "%.2f"|format(mn) }}</text>
+    {# X축 라벨 #}
+    {% set idx = namespace(i=0) %}
+    {% set step = 265 / ((vals|length - 1) if vals|length > 1 else 1) %}
+    {% for k, lbl in tenors %}
+        {% if bond_yields.get(k) %}
+        <text x="{{ 40 + idx.i * step }}" y="118" text-anchor="middle" fill="var(--text-muted)" font-size="10">{{ lbl }}</text>
+        {% set idx.i = idx.i + 1 %}
+        {% endif %}
+    {% endfor %}
+    {# 커브 라인 #}
+    {% set pts = [] %}
+    {% set jdx = namespace(j=0) %}
+    {% for k, _ in tenors %}
+        {% if bond_yields.get(k) %}
+            {% set x = 40 + jdx.j * step %}
+            {% set y = 100 - ((bond_yields[k]|float) - mn) / rng * 85 %}
+            {% set _ = pts.append(x|round(1) ~ ',' ~ y|round(1)) %}
+            {% set jdx.j = jdx.j + 1 %}
+        {% endif %}
+    {% endfor %}
+    <polyline points="{{ pts|join(' ') }}" fill="none" stroke="{{ line_color }}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+    {# 데이터 포인트 #}
+    {% set kdx = namespace(k=0) %}
+    {% for k, _ in tenors %}
+        {% if bond_yields.get(k) %}
+            {% set x = 40 + kdx.k * step %}
+            {% set y = 100 - ((bond_yields[k]|float) - mn) / rng * 85 %}
+            <circle cx="{{ x|round(1) }}" cy="{{ y|round(1) }}" r="3.5" fill="var(--bg-card)" stroke="{{ line_color }}" stroke-width="2"/>
+            <text x="{{ x|round(1) }}" y="{{ (y - 8)|round(1) }}" text-anchor="middle" fill="var(--text)" font-size="10" font-weight="600">{{ bond_yields[k] }}</text>
+            {% set kdx.k = kdx.k + 1 %}
+        {% endif %}
+    {% endfor %}
+</svg>
+{% endif %}
+{% endmacro %}
