@@ -6,3 +6,5 @@ __pycache__/
 _checkpoints/
 .superpowers/
 _baselines/
+server.log
+server.pid

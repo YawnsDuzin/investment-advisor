@@ -1,0 +1,97 @@
+INFO:     Started server process [1892]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+[DB] 테이블 초기화 완료
+[AUTH] 인증 비활성화 (AUTH_ENABLED=false)
+INFO:     127.0.0.1:64792 - "GET /pages/landing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56512 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56512 - "GET /pages/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56512 - "GET /pages/sessions/date/2026-04-20 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:56512 - "GET /pages/sessions/1 HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "D:\_dzp\VIBE_CODING\investment-advisor\venv\lib\site-packages\uvicorn\protocols\http\httptools_impl.py", line 420, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+  File "D:\_dzp\VIBE_CODING\investment-advisor\venv\lib\site-packages\uvicorn\middleware\proxy_headers.py", line 60, in __call__
+    return await self.app(scope, receive, send)
+  File "D:\_dzp\VIBE_CODING\investment-advisor\venv\lib\site-packages\fastapi\applications.py", line 1163, in __call__
+    await super().__call__(scope, receive, send)
+  File "D:\_dzp\VIBE_CODING\investment-advisor\venv\lib\site-packages\starlette\applications.py", line 90, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "D:\_dzp\VIBE_CODING\investment-advisor\venv\lib\site-packages\starlette\middleware\errors.py", line 186, in __call__
+    raise exc
+  File "D:\_dzp\VIBE_CODING\investment-advisor\venv\lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "D:\_dzp\VIBE_CODING\investment-advisor\venv\lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "D:\_dzp\VIBE_CODING\investment-advisor\venv\lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "D:\_dzp\VIBE_CODING\investment-advisor\venv\lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "D:\_dzp\VIBE_CODING\investment-advisor\venv\lib\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "D:\_dzp\VIBE_CODING\investment-advisor\venv\lib\site-packages\starlette\routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "D:\_dzp\VIBE_CODING\investment-advisor\venv\lib\site-packages\starlette\routing.py", line 680, in app
+    await route.handle(scope, receive, send)
+  File "D:\_dzp\VIBE_CODING\investment-advisor\venv\lib\site-packages\starlette\routing.py", line 276, in handle
+    await self.app(scope, receive, send)
+  File "D:\_dzp\VIBE_CODING\investment-advisor\venv\lib\site-packages\fastapi\routing.py", line 134, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "D:\_dzp\VIBE_CODING\investment-advisor\venv\lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "D:\_dzp\VIBE_CODING\investment-advisor\venv\lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "D:\_dzp\VIBE_CODING\investment-advisor\venv\lib\site-packages\fastapi\routing.py", line 120, in app
+    response = await f(request)
+  File "D:\_dzp\VIBE_CODING\investment-advisor\venv\lib\site-packages\fastapi\routing.py", line 674, in app
+    raw_response = await run_endpoint_function(
+  File "D:\_dzp\VIBE_CODING\investment-advisor\venv\lib\site-packages\fastapi\routing.py", line 330, in run_endpoint_function
+    return await run_in_threadpool(dependant.call, **values)
+  File "D:\_dzp\VIBE_CODING\investment-advisor\venv\lib\site-packages\starlette\concurrency.py", line 32, in run_in_threadpool
+    return await anyio.to_thread.run_sync(func)
+  File "D:\_dzp\VIBE_CODING\investment-advisor\venv\lib\site-packages\anyio\to_thread.py", line 63, in run_sync
+    return await get_async_backend().run_sync_in_worker_thread(
+  File "D:\_dzp\VIBE_CODING\investment-advisor\venv\lib\site-packages\anyio\_backends\_asyncio.py", line 2518, in run_sync_in_worker_thread
+    return await future
+  File "D:\_dzp\VIBE_CODING\investment-advisor\venv\lib\site-packages\anyio\_backends\_asyncio.py", line 1002, in run
+    result = context.run(func, *args)
+  File "D:\_dzp\VIBE_CODING\investment-advisor\api\routes\sessions.py", line 190, in session_detail_page
+    return templates.TemplateResponse("dashboard.html", {
+  File "D:\_dzp\VIBE_CODING\investment-advisor\venv\lib\site-packages\starlette\templating.py", line 148, in TemplateResponse
+    template = self.get_template(name)
+  File "D:\_dzp\VIBE_CODING\investment-advisor\venv\lib\site-packages\starlette\templating.py", line 115, in get_template
+    return self.env.get_template(name)
+  File "D:\_dzp\VIBE_CODING\investment-advisor\venv\lib\site-packages\jinja2\environment.py", line 1016, in get_template
+    return self._load_template(name, globals)
+  File "D:\_dzp\VIBE_CODING\investment-advisor\venv\lib\site-packages\jinja2\environment.py", line 964, in _load_template
+    template = self.cache.get(cache_key)
+  File "D:\_dzp\VIBE_CODING\investment-advisor\venv\lib\site-packages\jinja2\utils.py", line 477, in get
+    return self[key]
+  File "D:\_dzp\VIBE_CODING\investment-advisor\venv\lib\site-packages\jinja2\utils.py", line 515, in __getitem__
+    rv = self._mapping[key]
+TypeError: unhashable type: 'dict'
+INFO:     127.0.0.1:56518 - "GET /pages/stocks/AAPL HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56518 - "GET /pages/themes HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56518 - "GET /pages/themes/history/test_key HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56518 - "GET /pages/proposals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56518 - "GET /pages/proposals/history/AAPL HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56518 - "GET /proposals/1/stock-analysis HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56518 - "GET /pages/watchlist HTTP/1.1" 302 Found
+INFO:     127.0.0.1:56518 - "GET /pages/notifications HTTP/1.1" 302 Found
+INFO:     127.0.0.1:56518 - "GET /pages/profile HTTP/1.1" 302 Found
+INFO:     127.0.0.1:56518 - "GET /pages/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56518 - "GET /pages/chat/new/1 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:56518 - "GET /pages/chat/1 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:56518 - "GET /pages/education HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56518 - "GET /pages/education/topic/intro HTTP/1.1" 302 Found
+INFO:     127.0.0.1:56518 - "GET /pages/education/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56518 - "GET /pages/education/chat/new/1 HTTP/1.1" 302 Found
+INFO:     127.0.0.1:56518 - "GET /pages/education/chat/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56518 - "GET /pages/track-record HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56518 - "GET /pages/landing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56518 - "GET /pages/pricing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56518 - "GET /pages/inquiry HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56518 - "GET /pages/inquiry/new HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56518 - "GET /pages/inquiry/1 HTTP/1.1" 302 Found
