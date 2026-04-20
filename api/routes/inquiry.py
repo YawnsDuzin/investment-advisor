@@ -1,15 +1,23 @@
-"""고객 문의/개선요청 API — 게시판 CRUD + 답변"""
+"""고객 문의/개선요청 API — 게시판 CRUD + 답변 + 페이지 라우트"""
 from typing import Optional
-from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi import APIRouter, HTTPException, Depends, Query, Request
+from fastapi.responses import RedirectResponse
+from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
-from shared.config import DatabaseConfig
+from shared.config import DatabaseConfig, AuthConfig
 from shared.db import get_connection
 from psycopg2.extras import RealDictCursor
-from api.routes.sessions import _serialize_row
-from api.auth.dependencies import get_current_user_required, require_role
+from api.serialization import serialize_row as _serialize_row
+from api.page_context import base_ctx as _base_ctx
+from api.template_filters import register as _register_filters
+from api.auth.dependencies import get_current_user, get_current_user_required, require_role, _get_auth_cfg
 from api.auth.models import UserInDB
 
 router = APIRouter(prefix="/inquiry", tags=["문의"])
+pages_router = APIRouter(prefix="/pages/inquiry", tags=["문의 페이지"])
+
+templates = Jinja2Templates(directory="api/templates")
+_register_filters(templates.env)
 
 VALID_CATEGORIES = ("general", "bug", "feature")
 VALID_STATUSES = ("open", "answered", "closed")
@@ -283,3 +291,156 @@ def update_inquiry_status(
         return {"ok": True, "status": body.status}
     finally:
         conn.close()
+
+
+# ── 문의 페이지 라우트 ──────────────────────────────
+
+
+@pages_router.get("")
+def inquiry_list_page(
+    request: Request,
+    category: Optional[str] = Query(default=None),
+    status: Optional[str] = Query(default=None),
+    page: int = Query(default=1, ge=1),
+    user: Optional[UserInDB] = Depends(get_current_user),
+    auth_cfg: AuthConfig = Depends(_get_auth_cfg),
+):
+    """문의 게시판 목록 페이지"""
+    # 유효하지 않은 필터값 무시
+    if category and category not in ("general", "bug", "feature"):
+        category = None
+    if status and status not in ("open", "answered", "closed"):
+        status = None
+
+    ctx = _base_ctx(request, "inquiry", user, auth_cfg)
+
+    per_page = 20
+    offset = (page - 1) * per_page
+    can_view_private = user is not None and user.role in ("admin", "moderator")
+
+    conn = get_connection(_get_cfg())
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            conditions = []
+            params = []
+
+            if not can_view_private:
+                if user:
+                    conditions.append("(i.is_private = FALSE OR i.user_id = %s)")
+                    params.append(user.id)
+                else:
+                    conditions.append("i.is_private = FALSE")
+
+            if category:
+                conditions.append("i.category = %s")
+                params.append(category)
+            if status:
+                conditions.append("i.status = %s")
+                params.append(status)
+
+            where = "WHERE " + " AND ".join(conditions) if conditions else ""
+
+            cur.execute(
+                f"""
+                SELECT i.*, u.nickname AS user_nickname,
+                       (SELECT COUNT(*) FROM inquiry_replies r WHERE r.inquiry_id = i.id) AS reply_count
+                FROM inquiries i
+                LEFT JOIN users u ON u.id = i.user_id
+                {where}
+                ORDER BY i.created_at DESC
+                LIMIT %s OFFSET %s
+                """,
+                (*params, per_page, offset),
+            )
+            inquiries = [_serialize_row(dict(r)) for r in cur.fetchall()]
+
+            cur.execute(f"SELECT COUNT(*) FROM inquiries i {where}", tuple(params))
+            total = cur.fetchone()["count"]
+    finally:
+        conn.close()
+
+    total_pages = max(1, (total + per_page - 1) // per_page)
+
+    return templates.TemplateResponse(request=request, name="inquiry_list.html", context={
+        **ctx,
+        "inquiries": inquiries,
+        "total": total,
+        "page": page,
+        "total_pages": total_pages,
+        "selected_category": category,
+        "selected_status": status,
+    })
+
+
+@pages_router.get("/new")
+def inquiry_new_page(
+    request: Request,
+    user: Optional[UserInDB] = Depends(get_current_user),
+    auth_cfg: AuthConfig = Depends(_get_auth_cfg),
+):
+    """문의 작성 페이지 — 로그인 필수"""
+    if auth_cfg.enabled and not user:
+        return RedirectResponse(url="/auth/login?next=/pages/inquiry/new", status_code=302)
+    ctx = _base_ctx(request, "inquiry", user, auth_cfg)
+    return templates.TemplateResponse(request=request, name="inquiry_new.html", context=ctx)
+
+
+@pages_router.get("/{inquiry_id}")
+def inquiry_detail_page(
+    request: Request,
+    inquiry_id: int,
+    user: Optional[UserInDB] = Depends(get_current_user),
+    auth_cfg: AuthConfig = Depends(_get_auth_cfg),
+):
+    """문의 상세 페이지"""
+    ctx = _base_ctx(request, "inquiry", user, auth_cfg)
+
+    conn = get_connection(_get_cfg())
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT i.*, u.nickname AS user_nickname
+                FROM inquiries i
+                LEFT JOIN users u ON u.id = i.user_id
+                WHERE i.id = %s
+                """,
+                (inquiry_id,),
+            )
+            inquiry = cur.fetchone()
+            if not inquiry:
+                return RedirectResponse(url="/pages/inquiry", status_code=302)
+
+            # 비공개 접근 제어
+            if inquiry["is_private"]:
+                is_author = user and inquiry["user_id"] == user.id
+                can_view = user and user.role in ("admin", "moderator")
+                if not is_author and not can_view:
+                    return RedirectResponse(url="/pages/inquiry", status_code=302)
+
+            # 답변 목록
+            cur.execute(
+                """
+                SELECT r.*, u.nickname AS user_nickname
+                FROM inquiry_replies r
+                LEFT JOIN users u ON u.id = r.user_id
+                WHERE r.inquiry_id = %s
+                ORDER BY r.created_at ASC
+                """,
+                (inquiry_id,),
+            )
+            replies = [_serialize_row(dict(r)) for r in cur.fetchall()]
+    finally:
+        conn.close()
+
+    inquiry = _serialize_row(dict(inquiry))
+    is_author = user and inquiry.get("user_id") == user.id
+    is_staff = user and user.role in ("admin", "moderator")
+
+    return templates.TemplateResponse(request=request, name="inquiry_detail.html", context={
+        **ctx,
+        "inquiry": inquiry,
+        "replies": replies,
+        "is_author": is_author,
+        "is_staff": is_staff,
+    })
