@@ -54,6 +54,7 @@ app.include_router(track_record.pages_router)
 app.include_router(stocks.router)
 app.include_router(stocks.pages_router)
 app.include_router(education.router)
+app.include_router(education.pages_router)
 app.include_router(inquiry.router)
 
 # 도메인 콜로케이션된 페이지 라우터들 (B1 진행 중)
