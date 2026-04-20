@@ -1,1 +1,279 @@
-/* 18_mobile_features — populated in later tasks */
+/* ===== Risk Temperature ===== */
+.risk-temp {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 14px;
+    font-weight: 700;
+    padding: 5px 14px;
+    border-radius: 9999px;
+    border: 1px solid transparent;
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+.risk-temp-high { background: rgba(248,113,113,0.18); color: var(--red); border-color: rgba(248,113,113,0.35); }
+.risk-temp-medium { background: rgba(251,191,36,0.18); color: var(--orange); border-color: rgba(251,191,36,0.35); }
+.risk-temp-low { background: rgba(52,211,153,0.18); color: var(--green); border-color: rgba(52,211,153,0.35); }
+.risk-temp-dot { width: 8px; height: 8px; border-radius: 50%; }
+.risk-temp-high .risk-temp-dot { background: var(--red); }
+.risk-temp-medium .risk-temp-dot { background: var(--orange); }
+.risk-temp-low .risk-temp-dot { background: var(--green); }
+
+/* ===== Mobile Menu Button ===== */
+.mobile-menu-btn {
+    display: none;
+    position: fixed;
+    top: 14px;
+    left: 14px;
+    z-index: 1100;
+    width: 40px;
+    height: 40px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg-card);
+    cursor: pointer;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+}
+.mobile-menu-btn span {
+    display: block;
+    width: 20px;
+    height: 2px;
+    background: var(--text);
+    border-radius: 2px;
+    transition: all 0.2s;
+}
+.sidebar-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 999;
+}
+
+/* =====================================================================
+   구독 UI (티어 배지 / 업그레이드 모달 / 하단 탭바 / 면책 배너)
+   2026-04-17 개편안 P0 UI-01, UI-02, UI-03, UI-06, UI-07, UI-09
+   ===================================================================== */
+
+/* ----- 면책 배너 (footer) ----- */
+.global-disclaimer {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 40px;
+    padding: 12px 18px;
+    border-top: 1px solid var(--border);
+    background: rgba(15, 17, 23, 0.4);
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.6;
+}
+.global-disclaimer .disclaimer-icon {
+    color: var(--orange);
+    font-size: 14px;
+    flex-shrink: 0;
+}
+.global-disclaimer .disclaimer-text { flex: 1 1 280px; }
+.global-disclaimer strong { color: var(--text); }
+.global-disclaimer .disclaimer-link {
+    color: var(--accent);
+    text-decoration: none;
+    font-weight: 500;
+    padding: 6px 10px;
+    border-radius: 6px;
+    border: 1px solid rgba(79, 140, 255, 0.25);
+    min-height: 32px;
+    display: inline-flex;
+    align-items: center;
+}
+.global-disclaimer .disclaimer-link:hover {
+    background: rgba(79, 140, 255, 0.08);
+}
+
+/* ----- 하단 탭바 (모바일 전용) ----- */
+.bottom-tabbar {
+    display: none;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 56px;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    background: var(--bg-card);
+    border-top: 1px solid var(--border);
+    z-index: 900;
+    justify-content: space-around;
+    align-items: stretch;
+}
+.bottom-tab {
+    flex: 1 1 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    padding: 6px 4px;
+    min-height: 44px;
+    color: var(--text-muted);
+    text-decoration: none;
+    font-size: 10px;
+    font-weight: 500;
+    position: relative;
+    transition: color 0.15s;
+}
+.bottom-tab:hover { color: var(--text); }
+.bottom-tab.active { color: var(--accent); }
+.bottom-tab.active::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 30%;
+    right: 30%;
+    height: 3px;
+    background: var(--accent);
+    border-radius: 0 0 3px 3px;
+}
+.bottom-tab-icon {
+    font-size: 20px;
+    line-height: 1;
+}
+.bottom-tab-label {
+    font-size: 10px;
+    letter-spacing: 0.2px;
+}
+
+/* ----- 터치 타겟 44px (UI-07) — 컨텍스트 한정 ----- */
+/* 전역 .btn에 min-height 44px를 일괄 적용하면 헤더·인라인 소형 버튼 레이아웃이
+   깨지므로, (a) 모달 액션, (b) 하단 탭바, (c) 모바일 뷰포트 본문에서만 보장. */
+.modal-actions .btn,
+.pricing-cta,
+.bottom-tab {
+    min-height: 44px;
+}
+
+/* ----- 세이프 에어리어 (iOS notch 대응, UI-09) ----- */
+@supports (padding: max(0px)) {
+    body {
+        padding-left: env(safe-area-inset-left, 0px);
+        padding-right: env(safe-area-inset-right, 0px);
+    }
+}
+
+/* ----- Free 광고 슬롯 — UI-17 ----- */
+.ad-slot {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 18px;
+    margin-bottom: 18px;
+    background: linear-gradient(135deg, rgba(79,140,255,0.08), rgba(147,130,255,0.06));
+    border: 1px solid rgba(79,140,255,0.25);
+    border-radius: 12px;
+    position: relative;
+}
+.ad-slot::before {
+    content: "AD";
+    position: absolute;
+    top: 6px;
+    right: 10px;
+    font-size: 9px;
+    font-weight: 700;
+    color: var(--text-muted);
+    letter-spacing: 0.8px;
+    opacity: 0.55;
+}
+.ad-slot-icon {
+    font-size: 28px;
+    flex-shrink: 0;
+}
+.ad-slot-body {
+    flex: 1 1 240px;
+    min-width: 0;
+}
+.ad-slot-title {
+    font-weight: 700;
+    font-size: 14px;
+    color: var(--text);
+    line-height: 1.4;
+}
+.ad-slot-desc {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 2px;
+    line-height: 1.5;
+}
+.ad-slot-cta { white-space: nowrap; }
+
+.ad-slot-compact {
+    flex-direction: column;
+    align-items: stretch;
+    text-align: center;
+    gap: 8px;
+    padding: 14px;
+}
+.ad-slot-compact .ad-slot-icon { font-size: 22px; }
+.ad-slot-compact .ad-slot-title { font-size: 13px; }
+.ad-slot-compact .ad-slot-desc { font-size: 11px; }
+
+/* ----- 모바일 테이블 → 라벨 스택 변환 (UI-15) ----- */
+/* screener-table에 .table-stack-mobile 클래스를 붙인 테이블은 모바일에서
+   각 셀이 data-label 값을 좌측 라벨로, 셀 내용을 우측 값으로 하는 세로 스택으로 변환. */
+@media (max-width: 768px) {
+    .table-stack-mobile thead { display: none; }
+    .table-stack-mobile,
+    .table-stack-mobile tbody,
+    .table-stack-mobile tr,
+    .table-stack-mobile td { display: block; width: 100%; }
+    .table-stack-mobile tr {
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 10px 12px;
+        margin-bottom: 10px;
+        background: var(--bg-card);
+    }
+    .table-stack-mobile td {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        padding: 6px 0;
+        border: none;
+        font-size: 13px;
+        line-height: 1.5;
+        text-align: left;
+    }
+    .table-stack-mobile td::before {
+        content: attr(data-label);
+        flex: 0 0 86px;
+        color: var(--text-muted);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+    }
+    .table-stack-mobile td:empty,
+    .table-stack-mobile td[data-label=""] { display: none; }
+    /* 테이블 래퍼 마진 상쇄 복구 */
+    .table-stack-mobile-wrap { margin: 0; padding: 0; overflow: visible; }
+}
+
+/* ============================================================
+ * Dashboard Redesign (v23) — SVG/CSS 시각화 + 정보 계층 재배치
+ * ============================================================ */
+
+/* ── 리스크 온도 SVG 반원형 게이지 ── */
+.risk-gauge-wrap {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+}
+.risk-gauge { display: block; }
+.risk-gauge-label {
+    font-size: 10px;
+    color: var(--text-muted);
+    letter-spacing: 0.5px;
+}

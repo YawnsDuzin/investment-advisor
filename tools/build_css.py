@@ -10,12 +10,7 @@ HEADER = "/* AUTO-GENERATED — edit files in src/ and run `python -m tools.buil
 
 
 def main() -> int:
-    # 00_legacy.css는 이전 전체 CSS의 잔여분. 분할 완료 전까지 임시로 마지막에 처리.
-    # 번호 prefix(01_~19_)가 로드 순서(cascade)를 결정하며, 00_legacy.css는 점진적으로 비워진다.
-    all_files = sorted(SRC.glob("*.css"))
-    legacy = [f for f in all_files if f.name == "00_legacy.css"]
-    numbered = [f for f in all_files if f.name != "00_legacy.css"]
-    files = numbered + legacy
+    files = sorted(SRC.glob("*.css"))
     if not files:
         print(f"[css] no source files in {SRC}")
         return 1
