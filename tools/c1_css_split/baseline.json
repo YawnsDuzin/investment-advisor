@@ -1,0 +1,4319 @@
+{
+  "total_rules": 719,
+  "rules": [
+    {
+      "position": 0,
+      "selector": "*, *::before, *::after",
+      "decls_hash": "131733f24cdb89a8",
+      "decl_count": 3
+    },
+    {
+      "position": 1,
+      "selector": ":root",
+      "decls_hash": "9eb5276ba4c7a60c",
+      "decl_count": 21
+    },
+    {
+      "position": 2,
+      "selector": "body",
+      "decls_hash": "cbbb209806e23a07",
+      "decl_count": 7
+    },
+    {
+      "position": 3,
+      "selector": "a",
+      "decls_hash": "962edf6cc9c4a971",
+      "decl_count": 2
+    },
+    {
+      "position": 4,
+      "selector": "a:hover",
+      "decls_hash": "959acdbeef11d3af",
+      "decl_count": 1
+    },
+    {
+      "position": 5,
+      "selector": ".sidebar",
+      "decls_hash": "1a9fdbf7f6acc7aa",
+      "decl_count": 9
+    },
+    {
+      "position": 6,
+      "selector": ".sidebar-header",
+      "decls_hash": "9585573ee7ff61b8",
+      "decl_count": 5
+    },
+    {
+      "position": 7,
+      "selector": ".sidebar-header h1",
+      "decls_hash": "e024f0684ffd3e2a",
+      "decl_count": 4
+    },
+    {
+      "position": 8,
+      "selector": ".sidebar-logo",
+      "decls_hash": "427bf02f729c1a34",
+      "decl_count": 3
+    },
+    {
+      "position": 9,
+      "selector": ".sidebar-close-btn",
+      "decls_hash": "81c13d4a9a569493",
+      "decl_count": 12
+    },
+    {
+      "position": 10,
+      "selector": ".sidebar-close-btn:hover",
+      "decls_hash": "d71b9592ae065bd6",
+      "decl_count": 2
+    },
+    {
+      "position": 11,
+      "selector": ".nav-menu",
+      "decls_hash": "8b2e8489eed03bb3",
+      "decl_count": 7
+    },
+    {
+      "position": 12,
+      "selector": ".nav-menu:hover",
+      "decls_hash": "d1d1b00a4a6c5c34",
+      "decl_count": 1
+    },
+    {
+      "position": 13,
+      "selector": ".nav-menu::-webkit-scrollbar",
+      "decls_hash": "d8821d81e4754749",
+      "decl_count": 1
+    },
+    {
+      "position": 14,
+      "selector": ".nav-menu::-webkit-scrollbar-track",
+      "decls_hash": "fbf451e900314109",
+      "decl_count": 1
+    },
+    {
+      "position": 15,
+      "selector": ".nav-menu::-webkit-scrollbar-thumb",
+      "decls_hash": "65cc220d2f10fe8c",
+      "decl_count": 2
+    },
+    {
+      "position": 16,
+      "selector": ".nav-menu:hover::-webkit-scrollbar-thumb",
+      "decls_hash": "50f874dc019839fd",
+      "decl_count": 1
+    },
+    {
+      "position": 17,
+      "selector": ".nav-menu::-webkit-scrollbar-thumb:hover",
+      "decls_hash": "9d171fa121966b1d",
+      "decl_count": 1
+    },
+    {
+      "position": 18,
+      "selector": ".nav-menu li a",
+      "decls_hash": "b9eeed62ac6847cd",
+      "decl_count": 6
+    },
+    {
+      "position": 19,
+      "selector": ".nav-menu li a:hover",
+      "decls_hash": "fc16196115394992",
+      "decl_count": 2
+    },
+    {
+      "position": 20,
+      "selector": ".nav-menu li a.active",
+      "decls_hash": "f0aa398ba55d6295",
+      "decl_count": 3
+    },
+    {
+      "position": 21,
+      "selector": ".nav-menu .nav-group-title",
+      "decls_hash": "19312f7c98b7fe3a",
+      "decl_count": 7
+    },
+    {
+      "position": 22,
+      "selector": ".nav-menu .nav-group-title:first-child",
+      "decls_hash": "9a70b4c05dd8a238",
+      "decl_count": 1
+    },
+    {
+      "position": 23,
+      "selector": ".nav-menu .nav-badge",
+      "decls_hash": "7d83f85bee4f2ab9",
+      "decl_count": 12
+    },
+    {
+      "position": 24,
+      "selector": ".sidebar-footer",
+      "decls_hash": "0a989c78a73ded60",
+      "decl_count": 3
+    },
+    {
+      "position": 25,
+      "selector": ".content",
+      "decls_hash": "a3e1bb16c73d1a34",
+      "decl_count": 3
+    },
+    {
+      "position": 26,
+      "selector": ".content-header",
+      "decls_hash": "ab477f5798a592d4",
+      "decl_count": 10
+    },
+    {
+      "position": 27,
+      "selector": ".content-header h2",
+      "decls_hash": "37e0d0ab26f87db1",
+      "decl_count": 2
+    },
+    {
+      "position": 28,
+      "selector": ".header-right",
+      "decls_hash": "73da9fb5505cc8e2",
+      "decl_count": 4
+    },
+    {
+      "position": 29,
+      "selector": ".header-noti",
+      "decls_hash": "144aa209afe9b27f",
+      "decl_count": 7
+    },
+    {
+      "position": 30,
+      "selector": ".header-noti:hover",
+      "decls_hash": "fc16196115394992",
+      "decl_count": 2
+    },
+    {
+      "position": 31,
+      "selector": ".header-noti-badge",
+      "decls_hash": "4124ae793a1a6be7",
+      "decl_count": 13
+    },
+    {
+      "position": 32,
+      "selector": ".user-dropdown",
+      "decls_hash": "d7b34a57e05ace96",
+      "decl_count": 1
+    },
+    {
+      "position": 33,
+      "selector": ".user-dropdown-trigger",
+      "decls_hash": "0eb20e6c84d14c37",
+      "decl_count": 11
+    },
+    {
+      "position": 34,
+      "selector": ".user-dropdown-trigger:hover, .user-dropdown.open .user-dropdown-trigger",
+      "decls_hash": "e14162261389d006",
+      "decl_count": 2
+    },
+    {
+      "position": 35,
+      "selector": ".user-avatar",
+      "decls_hash": "2d6e7eca2fbc3c26",
+      "decl_count": 11
+    },
+    {
+      "position": 36,
+      "selector": ".user-dropdown-name",
+      "decls_hash": "176911b7b29c2081",
+      "decl_count": 4
+    },
+    {
+      "position": 37,
+      "selector": ".user-dropdown-arrow",
+      "decls_hash": "6bbf9b1411103f42",
+      "decl_count": 2
+    },
+    {
+      "position": 38,
+      "selector": ".user-dropdown.open .user-dropdown-arrow",
+      "decls_hash": "baaaf84798ebd101",
+      "decl_count": 1
+    },
+    {
+      "position": 39,
+      "selector": ".user-dropdown-menu",
+      "decls_hash": "252d7b21a1483f4e",
+      "decl_count": 12
+    },
+    {
+      "position": 40,
+      "selector": ".user-dropdown.open .user-dropdown-menu",
+      "decls_hash": "d05f0fd0ce0bfa95",
+      "decl_count": 1
+    },
+    {
+      "position": 41,
+      "selector": "@keyframes dropdown-in",
+      "decls_hash": "cc1a7850dea36096",
+      "decl_count": 3
+    },
+    {
+      "position": 42,
+      "selector": ".user-dropdown-header",
+      "decls_hash": "e51ab3dc3ca4942d",
+      "decl_count": 1
+    },
+    {
+      "position": 43,
+      "selector": ".user-dropdown-header-name",
+      "decls_hash": "fc5001a0d6be9e78",
+      "decl_count": 2
+    },
+    {
+      "position": 44,
+      "selector": ".user-dropdown-header-email",
+      "decls_hash": "5cfbb3f3439c19d2",
+      "decl_count": 3
+    },
+    {
+      "position": 45,
+      "selector": ".user-dropdown-divider",
+      "decls_hash": "6ba13fd03ce97b2f",
+      "decl_count": 3
+    },
+    {
+      "position": 46,
+      "selector": ".user-dropdown-item",
+      "decls_hash": "0ee730ef7178a73c",
+      "decl_count": 13
+    },
+    {
+      "position": 47,
+      "selector": ".user-dropdown-item:hover",
+      "decls_hash": "bcb1324bf4c45840",
+      "decl_count": 1
+    },
+    {
+      "position": 48,
+      "selector": ".user-dropdown-logout",
+      "decls_hash": "07907a5bdf5174e7",
+      "decl_count": 2
+    },
+    {
+      "position": 49,
+      "selector": ".user-dropdown-badge",
+      "decls_hash": "b606d64fd1524eb6",
+      "decl_count": 6
+    },
+    {
+      "position": 50,
+      "selector": ".content-body",
+      "decls_hash": "3d162d42134a9fba",
+      "decl_count": 1
+    },
+    {
+      "position": 51,
+      "selector": ".card",
+      "decls_hash": "6ed48c983ca8ee85",
+      "decl_count": 5
+    },
+    {
+      "position": 52,
+      "selector": ".card:hover",
+      "decls_hash": "073da31bbfb6d3e1",
+      "decl_count": 1
+    },
+    {
+      "position": 53,
+      "selector": ".card-header",
+      "decls_hash": "176e45d6eb0488fb",
+      "decl_count": 6
+    },
+    {
+      "position": 54,
+      "selector": ".card-title",
+      "decls_hash": "7da8f2a33970bfb9",
+      "decl_count": 2
+    },
+    {
+      "position": 55,
+      "selector": ".stat-grid",
+      "decls_hash": "eefa8d251c98f99f",
+      "decl_count": 4
+    },
+    {
+      "position": 56,
+      "selector": ".stat-card",
+      "decls_hash": "66ec2074424db6dc",
+      "decl_count": 5
+    },
+    {
+      "position": 57,
+      "selector": ".stat-value",
+      "decls_hash": "a1f8187c8e186784",
+      "decl_count": 4
+    },
+    {
+      "position": 58,
+      "selector": ".stat-label",
+      "decls_hash": "4ef214648cfe8b13",
+      "decl_count": 2
+    },
+    {
+      "position": 59,
+      "selector": ".market-summary",
+      "decls_hash": "9496afe310584edd",
+      "decl_count": 8
+    },
+    {
+      "position": 60,
+      "selector": ".market-summary .label",
+      "decls_hash": "04aac57220f55393",
+      "decl_count": 5
+    },
+    {
+      "position": 61,
+      "selector": ".summary-body",
+      "decls_hash": "ec9e6830613a09b9",
+      "decl_count": 1
+    },
+    {
+      "position": 62,
+      "selector": ".summary-section",
+      "decls_hash": "b6489a5dd286381e",
+      "decl_count": 1
+    },
+    {
+      "position": 63,
+      "selector": ".summary-section:last-child",
+      "decls_hash": "f34dc68c71d9c5bd",
+      "decl_count": 1
+    },
+    {
+      "position": 64,
+      "selector": ".summary-section-title",
+      "decls_hash": "6897d65c1affcc0c",
+      "decl_count": 8
+    },
+    {
+      "position": 65,
+      "selector": ".summary-section-content",
+      "decls_hash": "a367a4388076976e",
+      "decl_count": 4
+    },
+    {
+      "position": 66,
+      "selector": ".summary-highlight",
+      "decls_hash": "acc3bed3aed9f092",
+      "decl_count": 5
+    },
+    {
+      "position": 67,
+      "selector": ".summary-highlight-star",
+      "decls_hash": "b14858e186a62d06",
+      "decl_count": 3
+    },
+    {
+      "position": 68,
+      "selector": ".summary-highlight-theme",
+      "decls_hash": "7614d2df39eb1c9f",
+      "decl_count": 3
+    },
+    {
+      "position": 69,
+      "selector": ".summary-highlight-warn",
+      "decls_hash": "e0435e567938f2f9",
+      "decl_count": 3
+    },
+    {
+      "position": 70,
+      "selector": ".summary-highlight-dash",
+      "decls_hash": "7d1520bbb07ab73d",
+      "decl_count": 3
+    },
+    {
+      "position": 71,
+      "selector": ".summary-bullet",
+      "decls_hash": "615765764f1d3e45",
+      "decl_count": 4
+    },
+    {
+      "position": 72,
+      "selector": ".summary-bullet-green",
+      "decls_hash": "6d2ee3f9e2d70568",
+      "decl_count": 1
+    },
+    {
+      "position": 73,
+      "selector": ".summary-label",
+      "decls_hash": "b7096f180a2f610e",
+      "decl_count": 2
+    },
+    {
+      "position": 74,
+      "selector": ".summary-label-green",
+      "decls_hash": "6d2ee3f9e2d70568",
+      "decl_count": 1
+    },
+    {
+      "position": 75,
+      "selector": ".summary-sep",
+      "decls_hash": "f2e49aed892ab6d0",
+      "decl_count": 2
+    },
+    {
+      "position": 76,
+      "selector": ".summary-text",
+      "decls_hash": "3541b1f8dcbbfa5b",
+      "decl_count": 1
+    },
+    {
+      "position": 77,
+      "selector": ".summary-section-warn .summary-section-title",
+      "decls_hash": "04abab77f82986fb",
+      "decl_count": 2
+    },
+    {
+      "position": 78,
+      "selector": ".summary-section-warn .summary-section-content",
+      "decls_hash": "2d02152f88ad2c38",
+      "decl_count": 5
+    },
+    {
+      "position": 79,
+      "selector": ".stat-grid-6",
+      "decls_hash": "7e3e7d0286fd491a",
+      "decl_count": 1
+    },
+    {
+      "position": 80,
+      "selector": ".stat-sub",
+      "decls_hash": "5cfbb3f3439c19d2",
+      "decl_count": 3
+    },
+    {
+      "position": 81,
+      "selector": ".stat-card-accent .stat-value",
+      "decls_hash": "6d2ee3f9e2d70568",
+      "decl_count": 1
+    },
+    {
+      "position": 82,
+      "selector": ".stat-card-signal .stat-value",
+      "decls_hash": "490d2151f3521078",
+      "decl_count": 1
+    },
+    {
+      "position": 83,
+      "selector": ".summary-insights",
+      "decls_hash": "e0cc84e098e5b4dc",
+      "decl_count": 4
+    },
+    {
+      "position": 84,
+      "selector": ".insight-card",
+      "decls_hash": "56d48cc2eceedeb6",
+      "decl_count": 4
+    },
+    {
+      "position": 85,
+      "selector": ".insight-title",
+      "decls_hash": "29d4a781b8511d42",
+      "decl_count": 6
+    },
+    {
+      "position": 86,
+      "selector": ".insight-bars",
+      "decls_hash": "9bed0c2a7820914d",
+      "decl_count": 3
+    },
+    {
+      "position": 87,
+      "selector": ".insight-bar-row",
+      "decls_hash": "32f58ea464f98005",
+      "decl_count": 3
+    },
+    {
+      "position": 88,
+      "selector": ".insight-bar-label",
+      "decls_hash": "fc6787f51fda81e2",
+      "decl_count": 4
+    },
+    {
+      "position": 89,
+      "selector": ".insight-bar-track",
+      "decls_hash": "e3b8e3a9c6e32757",
+      "decl_count": 5
+    },
+    {
+      "position": 90,
+      "selector": ".insight-bar-fill",
+      "decls_hash": "cc7f3e95d2e663e8",
+      "decl_count": 3
+    },
+    {
+      "position": 91,
+      "selector": ".insight-bar-early_signal",
+      "decls_hash": "413246864384a87f",
+      "decl_count": 1
+    },
+    {
+      "position": 92,
+      "selector": ".insight-bar-consensus",
+      "decls_hash": "7f019c21a4797e77",
+      "decl_count": 1
+    },
+    {
+      "position": 93,
+      "selector": ".insight-bar-contrarian",
+      "decls_hash": "d80333526e6c58ed",
+      "decl_count": 1
+    },
+    {
+      "position": 94,
+      "selector": ".insight-bar-deep_value",
+      "decls_hash": "dc8b2680f5b39a7f",
+      "decl_count": 1
+    },
+    {
+      "position": 95,
+      "selector": ".insight-bar-unknown",
+      "decls_hash": "e9e856fd2ab05378",
+      "decl_count": 1
+    },
+    {
+      "position": 96,
+      "selector": ".insight-bar-count",
+      "decls_hash": "4dc76164e718b10d",
+      "decl_count": 5
+    },
+    {
+      "position": 97,
+      "selector": ".insight-tags",
+      "decls_hash": "803466bc6d5c306d",
+      "decl_count": 3
+    },
+    {
+      "position": 98,
+      "selector": ".insight-tag",
+      "decls_hash": "549597acd3480d87",
+      "decl_count": 9
+    },
+    {
+      "position": 99,
+      "selector": ".insight-tag-count",
+      "decls_hash": "93803a342ad179a8",
+      "decl_count": 3
+    },
+    {
+      "position": 100,
+      "selector": ".badge",
+      "decls_hash": "74b5ba0caf6dc8f9",
+      "decl_count": 6
+    },
+    {
+      "position": 101,
+      "selector": ".badge-buy",
+      "decls_hash": "35e8229a0f2c8d5b",
+      "decl_count": 3
+    },
+    {
+      "position": 102,
+      "selector": ".badge-sell",
+      "decls_hash": "4895bbf7fb1951a0",
+      "decl_count": 3
+    },
+    {
+      "position": 103,
+      "selector": ".badge-hold",
+      "decls_hash": "953fef3ad765cfb7",
+      "decl_count": 3
+    },
+    {
+      "position": 104,
+      "selector": ".badge-watch",
+      "decls_hash": "1c1ffdaa208dc421",
+      "decl_count": 3
+    },
+    {
+      "position": 105,
+      "selector": ".badge-high",
+      "decls_hash": "35e8229a0f2c8d5b",
+      "decl_count": 3
+    },
+    {
+      "position": 106,
+      "selector": ".badge-medium",
+      "decls_hash": "953fef3ad765cfb7",
+      "decl_count": 3
+    },
+    {
+      "position": 107,
+      "selector": ".badge-low",
+      "decls_hash": "1c1ffdaa208dc421",
+      "decl_count": 3
+    },
+    {
+      "position": 108,
+      "selector": ".badge-short",
+      "decls_hash": "4895bbf7fb1951a0",
+      "decl_count": 3
+    },
+    {
+      "position": 109,
+      "selector": ".badge-mid",
+      "decls_hash": "953fef3ad765cfb7",
+      "decl_count": 3
+    },
+    {
+      "position": 110,
+      "selector": ".badge-long",
+      "decls_hash": "35e8229a0f2c8d5b",
+      "decl_count": 3
+    },
+    {
+      "position": 111,
+      "selector": ".badge-category",
+      "decls_hash": "5bb337880ea33d24",
+      "decl_count": 3
+    },
+    {
+      "position": 112,
+      "selector": ".badge-tier1",
+      "decls_hash": "dc1716a165f76da0",
+      "decl_count": 3
+    },
+    {
+      "position": 113,
+      "selector": ".badge-tier2",
+      "decls_hash": "953fef3ad765cfb7",
+      "decl_count": 3
+    },
+    {
+      "position": 114,
+      "selector": ".badge-tier3",
+      "decls_hash": "e0a42bd0ee76698a",
+      "decl_count": 3
+    },
+    {
+      "position": 115,
+      "selector": ".badge-structural",
+      "decls_hash": "e0a42bd0ee76698a",
+      "decl_count": 3
+    },
+    {
+      "position": 116,
+      "selector": ".badge-cyclical",
+      "decls_hash": "ad30b70497cf0015",
+      "decl_count": 3
+    },
+    {
+      "position": 117,
+      "selector": ".badge-strong",
+      "decls_hash": "35e8229a0f2c8d5b",
+      "decl_count": 3
+    },
+    {
+      "position": 118,
+      "selector": ".badge-weak",
+      "decls_hash": "4895bbf7fb1951a0",
+      "decl_count": 3
+    },
+    {
+      "position": 119,
+      "selector": ".stars",
+      "decls_hash": "7d9e057377200340",
+      "decl_count": 3
+    },
+    {
+      "position": 120,
+      "selector": ".table-wrap",
+      "decls_hash": "def7d7c07aa7846e",
+      "decl_count": 1
+    },
+    {
+      "position": 121,
+      "selector": "table",
+      "decls_hash": "3848e6d8a8c3ea94",
+      "decl_count": 3
+    },
+    {
+      "position": 122,
+      "selector": "thead th",
+      "decls_hash": "2c1dbce3a9282fbf",
+      "decl_count": 8
+    },
+    {
+      "position": 123,
+      "selector": "tbody td",
+      "decls_hash": "7c042e654100af5e",
+      "decl_count": 3
+    },
+    {
+      "position": 124,
+      "selector": ".screener-table tbody tr",
+      "decls_hash": "81807c27c34c1209",
+      "decl_count": 1
+    },
+    {
+      "position": 125,
+      "selector": ".screener-table tbody tr:hover",
+      "decls_hash": "bcb1324bf4c45840",
+      "decl_count": 1
+    },
+    {
+      "position": 126,
+      "selector": ".screener-table tbody tr.row-selected",
+      "decls_hash": "efa458bf042e2108",
+      "decl_count": 1
+    },
+    {
+      "position": 127,
+      "selector": ".screener-table td",
+      "decls_hash": "698260bfcc23a96b",
+      "decl_count": 3
+    },
+    {
+      "position": 128,
+      "selector": ".screener-table th",
+      "decls_hash": "1414df502fc13c7b",
+      "decl_count": 1
+    },
+    {
+      "position": 129,
+      "selector": "tbody tr:hover",
+      "decls_hash": "bcb1324bf4c45840",
+      "decl_count": 1
+    },
+    {
+      "position": 130,
+      "selector": ".confidence-bar",
+      "decls_hash": "4e7f2b4d9180b017",
+      "decl_count": 8
+    },
+    {
+      "position": 131,
+      "selector": ".confidence-bar-fill",
+      "decls_hash": "a4298d9c32bb8842",
+      "decl_count": 4
+    },
+    {
+      "position": 132,
+      "selector": ".alloc-bar",
+      "decls_hash": "79ca6bf1e96fa04c",
+      "decl_count": 8
+    },
+    {
+      "position": 133,
+      "selector": ".alloc-bar-fill",
+      "decls_hash": "e58f5fbefe9e663f",
+      "decl_count": 4
+    },
+    {
+      "position": 134,
+      "selector": ".indicators",
+      "decls_hash": "7560f71067d5c1c3",
+      "decl_count": 4
+    },
+    {
+      "position": 135,
+      "selector": ".indicator-tag",
+      "decls_hash": "cd5c71028de3bd15",
+      "decl_count": 6
+    },
+    {
+      "position": 136,
+      "selector": ".detail-text",
+      "decls_hash": "ef17f0d7fa34c518",
+      "decl_count": 5
+    },
+    {
+      "position": 137,
+      "selector": ".proposal-card",
+      "decls_hash": "209c6afff74f68d0",
+      "decl_count": 6
+    },
+    {
+      "position": 138,
+      "selector": ".proposal-card:hover",
+      "decls_hash": "073da31bbfb6d3e1",
+      "decl_count": 1
+    },
+    {
+      "position": 139,
+      "selector": ".proposal-card-header",
+      "decls_hash": "8adaaf0de1b0de23",
+      "decl_count": 5
+    },
+    {
+      "position": 140,
+      "selector": ".proposal-card-header .asset-name",
+      "decls_hash": "90e7b545885c1e77",
+      "decl_count": 2
+    },
+    {
+      "position": 141,
+      "selector": ".proposal-card-header .ticker",
+      "decls_hash": "4ef214648cfe8b13",
+      "decl_count": 2
+    },
+    {
+      "position": 142,
+      "selector": ".proposal-card-meta",
+      "decls_hash": "f9f71df6c60b73c5",
+      "decl_count": 6
+    },
+    {
+      "position": 143,
+      "selector": ".proposal-card-meta .meta-item",
+      "decls_hash": "56703f7032f22dfb",
+      "decl_count": 3
+    },
+    {
+      "position": 144,
+      "selector": ".proposal-card-meta .meta-label",
+      "decls_hash": "5eddf7f9cccc0065",
+      "decl_count": 4
+    },
+    {
+      "position": 145,
+      "selector": ".proposal-card-body",
+      "decls_hash": "1acc545a375fa78c",
+      "decl_count": 3
+    },
+    {
+      "position": 146,
+      "selector": ".proposal-card-body .field-group",
+      "decls_hash": "12bf8c5b6255c971",
+      "decl_count": 2
+    },
+    {
+      "position": 147,
+      "selector": ".proposal-card-body .field-label",
+      "decls_hash": "863ff1aeba3d0dc6",
+      "decl_count": 6
+    },
+    {
+      "position": 148,
+      "selector": ".proposal-card-body .field-value",
+      "decls_hash": "bdc4dfa226b384a5",
+      "decl_count": 2
+    },
+    {
+      "position": 149,
+      "selector": "@media (max-width: 768px)",
+      "decls_hash": "0c60fbe1bd7b4c4d",
+      "decl_count": 1
+    },
+    {
+      "position": 150,
+      "selector": ".section-title",
+      "decls_hash": "ec0cd08a792aa25f",
+      "decl_count": 5
+    },
+    {
+      "position": 151,
+      "selector": ".filters",
+      "decls_hash": "aad5ddc07f44817a",
+      "decl_count": 4
+    },
+    {
+      "position": 152,
+      "selector": ".filter-select",
+      "decls_hash": "3ce19703534f0305",
+      "decl_count": 7
+    },
+    {
+      "position": 153,
+      "selector": ".filter-select:focus",
+      "decls_hash": "33e44473d0db7a3c",
+      "decl_count": 2
+    },
+    {
+      "position": 154,
+      "selector": ".filter-input",
+      "decls_hash": "2dc94c8f56efb122",
+      "decl_count": 7
+    },
+    {
+      "position": 155,
+      "selector": ".filter-input:focus",
+      "decls_hash": "33e44473d0db7a3c",
+      "decl_count": 2
+    },
+    {
+      "position": 156,
+      "selector": ".btn",
+      "decls_hash": "b1da2c5c4d1e38e1",
+      "decl_count": 10
+    },
+    {
+      "position": 157,
+      "selector": ".btn:hover",
+      "decls_hash": "fc16196115394992",
+      "decl_count": 2
+    },
+    {
+      "position": 158,
+      "selector": ".btn-primary",
+      "decls_hash": "af31636b77397c02",
+      "decl_count": 4
+    },
+    {
+      "position": 159,
+      "selector": ".btn-primary:hover",
+      "decls_hash": "e6108f5fcd8c3500",
+      "decl_count": 3
+    },
+    {
+      "position": 160,
+      "selector": ".proposal-row",
+      "decls_hash": "5be27272c71290af",
+      "decl_count": 6
+    },
+    {
+      "position": 161,
+      "selector": ".proposal-row:last-child",
+      "decls_hash": "964adad85ad0a568",
+      "decl_count": 1
+    },
+    {
+      "position": 162,
+      "selector": ".proposal-name",
+      "decls_hash": "666cd6a3c540cd89",
+      "decl_count": 2
+    },
+    {
+      "position": 163,
+      "selector": ".proposal-ticker",
+      "decls_hash": "bb56490a6af40618",
+      "decl_count": 2
+    },
+    {
+      "position": 164,
+      "selector": ".proposal-alloc",
+      "decls_hash": "5ebac9170925ef0e",
+      "decl_count": 2
+    },
+    {
+      "position": 165,
+      "selector": ".empty-state",
+      "decls_hash": "0360951ede5638ad",
+      "decl_count": 3
+    },
+    {
+      "position": 166,
+      "selector": ".empty-state h3",
+      "decls_hash": "9b0e6f8ea5dd869c",
+      "decl_count": 1
+    },
+    {
+      "position": 167,
+      "selector": ".empty-state p",
+      "decls_hash": "b33e8e13bb6ef1aa",
+      "decl_count": 2
+    },
+    {
+      "position": 168,
+      "selector": ".risk-temp",
+      "decls_hash": "36a0d843f7e311ce",
+      "decl_count": 10
+    },
+    {
+      "position": 169,
+      "selector": ".risk-temp-high",
+      "decls_hash": "056b1ffe95483e53",
+      "decl_count": 3
+    },
+    {
+      "position": 170,
+      "selector": ".risk-temp-medium",
+      "decls_hash": "756e5543e8bb0ffa",
+      "decl_count": 3
+    },
+    {
+      "position": 171,
+      "selector": ".risk-temp-low",
+      "decls_hash": "2aaa07015d476b94",
+      "decl_count": 3
+    },
+    {
+      "position": 172,
+      "selector": ".risk-temp-dot",
+      "decls_hash": "074829d13ea3abdc",
+      "decl_count": 3
+    },
+    {
+      "position": 173,
+      "selector": ".risk-temp-high .risk-temp-dot",
+      "decls_hash": "a463e465a8348d10",
+      "decl_count": 1
+    },
+    {
+      "position": 174,
+      "selector": ".risk-temp-medium .risk-temp-dot",
+      "decls_hash": "d80333526e6c58ed",
+      "decl_count": 1
+    },
+    {
+      "position": 175,
+      "selector": ".risk-temp-low .risk-temp-dot",
+      "decls_hash": "dc8b2680f5b39a7f",
+      "decl_count": 1
+    },
+    {
+      "position": 176,
+      "selector": ".scenario-grid",
+      "decls_hash": "c707a0a7a9c1d83d",
+      "decl_count": 4
+    },
+    {
+      "position": 177,
+      "selector": ".scenario-card",
+      "decls_hash": "e1d4b86503f09f71",
+      "decl_count": 5
+    },
+    {
+      "position": 178,
+      "selector": ".scenario-card-bull",
+      "decls_hash": "b90e9b97af729235",
+      "decl_count": 1
+    },
+    {
+      "position": 179,
+      "selector": ".scenario-card-base",
+      "decls_hash": "59999599c4ba3697",
+      "decl_count": 1
+    },
+    {
+      "position": 180,
+      "selector": ".scenario-card-bear",
+      "decls_hash": "061087f70dfd694b",
+      "decl_count": 1
+    },
+    {
+      "position": 181,
+      "selector": ".scenario-card .scenario-header",
+      "decls_hash": "ee45c49a7e45ab7a",
+      "decl_count": 6
+    },
+    {
+      "position": 182,
+      "selector": ".scenario-card .scenario-prob",
+      "decls_hash": "d8d7d004afc411aa",
+      "decl_count": 4
+    },
+    {
+      "position": 183,
+      "selector": ".scenario-card-bull .scenario-prob",
+      "decls_hash": "35e8229a0f2c8d5b",
+      "decl_count": 3
+    },
+    {
+      "position": 184,
+      "selector": ".scenario-card-base .scenario-prob",
+      "decls_hash": "953fef3ad765cfb7",
+      "decl_count": 3
+    },
+    {
+      "position": 185,
+      "selector": ".scenario-card-bear .scenario-prob",
+      "decls_hash": "4895bbf7fb1951a0",
+      "decl_count": 3
+    },
+    {
+      "position": 186,
+      "selector": ".scenario-card .scenario-body",
+      "decls_hash": "4ef214648cfe8b13",
+      "decl_count": 2
+    },
+    {
+      "position": 187,
+      "selector": ".scenario-card .scenario-impact",
+      "decls_hash": "12872b8afb1fb7fc",
+      "decl_count": 4
+    },
+    {
+      "position": 188,
+      "selector": ".macro-table",
+      "decls_hash": "e8b0890fa7200b06",
+      "decl_count": 1
+    },
+    {
+      "position": 189,
+      "selector": ".macro-table th",
+      "decls_hash": "be405674d49d4a44",
+      "decl_count": 2
+    },
+    {
+      "position": 190,
+      "selector": ".macro-table td",
+      "decls_hash": "d49cccdda0848f2d",
+      "decl_count": 2
+    },
+    {
+      "position": 191,
+      "selector": ".impact-timeline",
+      "decls_hash": "82049379038de0b5",
+      "decl_count": 4
+    },
+    {
+      "position": 192,
+      "selector": ".impact-item",
+      "decls_hash": "e38d0e94bd2f75aa",
+      "decl_count": 6
+    },
+    {
+      "position": 193,
+      "selector": ".impact-item .impact-label",
+      "decls_hash": "c11296bbbb0aea8f",
+      "decl_count": 5
+    },
+    {
+      "position": 194,
+      "selector": ".impact-label-short",
+      "decls_hash": "643b4debcf1ed6b9",
+      "decl_count": 1
+    },
+    {
+      "position": 195,
+      "selector": ".impact-label-mid",
+      "decls_hash": "c71d069741a6f597",
+      "decl_count": 1
+    },
+    {
+      "position": 196,
+      "selector": ".impact-label-long",
+      "decls_hash": "6d2ee3f9e2d70568",
+      "decl_count": 1
+    },
+    {
+      "position": 197,
+      "selector": ".historical-analogue",
+      "decls_hash": "156e616c90543123",
+      "decl_count": 7
+    },
+    {
+      "position": 198,
+      "selector": ".price-target",
+      "decls_hash": "d311ed8e5c8e4e48",
+      "decl_count": 5
+    },
+    {
+      "position": 199,
+      "selector": ".price-range",
+      "decls_hash": "563d7d5e6c2813d6",
+      "decl_count": 2
+    },
+    {
+      "position": 200,
+      "selector": ".upside-badge",
+      "decls_hash": "111100195b8b090a",
+      "decl_count": 5
+    },
+    {
+      "position": 201,
+      "selector": ".upside-positive",
+      "decls_hash": "35e8229a0f2c8d5b",
+      "decl_count": 3
+    },
+    {
+      "position": 202,
+      "selector": ".upside-negative",
+      "decls_hash": "4895bbf7fb1951a0",
+      "decl_count": 3
+    },
+    {
+      "position": 203,
+      "selector": ".score-display",
+      "decls_hash": "21a8aca65b82206b",
+      "decl_count": 10
+    },
+    {
+      "position": 204,
+      "selector": ".score-sentiment",
+      "decls_hash": "69ed061d57f1fa67",
+      "decl_count": 2
+    },
+    {
+      "position": 205,
+      "selector": ".stock-analysis-link",
+      "decls_hash": "49047f3a8da135cb",
+      "decl_count": 10
+    },
+    {
+      "position": 206,
+      "selector": ".stock-analysis-link:hover",
+      "decls_hash": "356c798eee6d9701",
+      "decl_count": 2
+    },
+    {
+      "position": 207,
+      "selector": ".signals-section",
+      "decls_hash": "7ab13ffa4375afe3",
+      "decl_count": 1
+    },
+    {
+      "position": 208,
+      "selector": ".signal-list",
+      "decls_hash": "9bed0c2a7820914d",
+      "decl_count": 3
+    },
+    {
+      "position": 209,
+      "selector": ".signal-item",
+      "decls_hash": "8568535800e01ba1",
+      "decl_count": 9
+    },
+    {
+      "position": 210,
+      "selector": ".signal-icon",
+      "decls_hash": "6c25f8ce9a98dc1b",
+      "decl_count": 8
+    },
+    {
+      "position": 211,
+      "selector": ".signal-new_buy .signal-icon",
+      "decls_hash": "3daac5818a26ea2b",
+      "decl_count": 2
+    },
+    {
+      "position": 212,
+      "selector": ".signal-action_change .signal-icon",
+      "decls_hash": "3e5c416c46c43872",
+      "decl_count": 2
+    },
+    {
+      "position": 213,
+      "selector": ".signal-confidence_up .signal-icon",
+      "decls_hash": "0d7f39ac73457ebe",
+      "decl_count": 2
+    },
+    {
+      "position": 214,
+      "selector": ".signal-confidence_down .signal-icon",
+      "decls_hash": "6e38f685231d3b2e",
+      "decl_count": 2
+    },
+    {
+      "position": 215,
+      "selector": ".signal-disappeared .signal-icon",
+      "decls_hash": "859666efdfcc55bf",
+      "decl_count": 2
+    },
+    {
+      "position": 216,
+      "selector": ".tracking-badge",
+      "decls_hash": "6a643b2a6537fd13",
+      "decl_count": 8
+    },
+    {
+      "position": 217,
+      "selector": ".tracking-badge-streak",
+      "decls_hash": "5b24c750e1466e3c",
+      "decl_count": 3
+    },
+    {
+      "position": 218,
+      "selector": ".tracking-badge-new",
+      "decls_hash": "35e8229a0f2c8d5b",
+      "decl_count": 3
+    },
+    {
+      "position": 219,
+      "selector": ".tracking-badge-gone",
+      "decls_hash": "24d92b2b3050f636",
+      "decl_count": 3
+    },
+    {
+      "position": 220,
+      "selector": ".confidence-change",
+      "decls_hash": "0c73fd2c0b58b181",
+      "decl_count": 3
+    },
+    {
+      "position": 221,
+      "selector": ".confidence-up",
+      "decls_hash": "6d2ee3f9e2d70568",
+      "decl_count": 1
+    },
+    {
+      "position": 222,
+      "selector": ".confidence-down",
+      "decls_hash": "643b4debcf1ed6b9",
+      "decl_count": 1
+    },
+    {
+      "position": 223,
+      "selector": ".history-entry",
+      "decls_hash": "a1a8de3ddd676ef6",
+      "decl_count": 6
+    },
+    {
+      "position": 224,
+      "selector": ".history-entry::before",
+      "decls_hash": "d1fafa668210886a",
+      "decl_count": 9
+    },
+    {
+      "position": 225,
+      "selector": ".history-date",
+      "decls_hash": "a8dc764f01fe07ae",
+      "decl_count": 4
+    },
+    {
+      "position": 226,
+      "selector": ".history-timeline",
+      "decls_hash": "524fe7f969a493dc",
+      "decl_count": 3
+    },
+    {
+      "position": 227,
+      "selector": ".mobile-menu-btn",
+      "decls_hash": "3dc8f87f8e96b406",
+      "decl_count": 15
+    },
+    {
+      "position": 228,
+      "selector": ".mobile-menu-btn span",
+      "decls_hash": "fc89219868ea5670",
+      "decl_count": 6
+    },
+    {
+      "position": 229,
+      "selector": ".sidebar-overlay",
+      "decls_hash": "5babcb86f93e3eb5",
+      "decl_count": 5
+    },
+    {
+      "position": 230,
+      "selector": ".session-card-top",
+      "decls_hash": "cf3677999a17b97e",
+      "decl_count": 4
+    },
+    {
+      "position": 231,
+      "selector": ".session-card-row1",
+      "decls_hash": "e070f2ce80ad7527",
+      "decl_count": 4
+    },
+    {
+      "position": 232,
+      "selector": ".session-card-date",
+      "decls_hash": "4a9867e1f11b2894",
+      "decl_count": 2
+    },
+    {
+      "position": 233,
+      "selector": ".session-card-row2",
+      "decls_hash": "64ed499432afc1e4",
+      "decl_count": 5
+    },
+    {
+      "position": 234,
+      "selector": "@media (max-width: 768px)",
+      "decls_hash": "e48e04850a6d4ed6",
+      "decl_count": 75
+    },
+    {
+      "position": 235,
+      "selector": ".chat-container",
+      "decls_hash": "71c1b6c45a8ad7d2",
+      "decl_count": 3
+    },
+    {
+      "position": 236,
+      "selector": ".chat-messages",
+      "decls_hash": "89f8987009066fbe",
+      "decl_count": 6
+    },
+    {
+      "position": 237,
+      "selector": ".chat-bubble",
+      "decls_hash": "1c0f87b5271480e8",
+      "decl_count": 6
+    },
+    {
+      "position": 238,
+      "selector": ".chat-bubble-user",
+      "decls_hash": "8760ad12089082cd",
+      "decl_count": 5
+    },
+    {
+      "position": 239,
+      "selector": ".chat-bubble-assistant",
+      "decls_hash": "313a4182b5e55f17",
+      "decl_count": 4
+    },
+    {
+      "position": 240,
+      "selector": ".chat-bubble-assistant p",
+      "decls_hash": "66ddb1ea7e6daf96",
+      "decl_count": 1
+    },
+    {
+      "position": 241,
+      "selector": ".chat-bubble-assistant p:last-child",
+      "decls_hash": "f34dc68c71d9c5bd",
+      "decl_count": 1
+    },
+    {
+      "position": 242,
+      "selector": ".chat-bubble-assistant ul, .chat-bubble-assistant ol",
+      "decls_hash": "3f16af19cfc49ed9",
+      "decl_count": 1
+    },
+    {
+      "position": 243,
+      "selector": ".chat-bubble-assistant strong",
+      "decls_hash": "04126202be586af0",
+      "decl_count": 1
+    },
+    {
+      "position": 244,
+      "selector": ".chat-bubble-assistant code",
+      "decls_hash": "5a18100307318d7e",
+      "decl_count": 4
+    },
+    {
+      "position": 245,
+      "selector": ".chat-bubble-assistant pre",
+      "decls_hash": "5b232ba109712ce0",
+      "decl_count": 5
+    },
+    {
+      "position": 246,
+      "selector": ".chat-bubble-assistant pre code",
+      "decls_hash": "4014245f5c47a582",
+      "decl_count": 2
+    },
+    {
+      "position": 247,
+      "selector": ".chat-bubble-time",
+      "decls_hash": "c499e81a3694407d",
+      "decl_count": 4
+    },
+    {
+      "position": 248,
+      "selector": ".chat-bubble-user .chat-bubble-time",
+      "decls_hash": "1ff9d4cb55ae8e30",
+      "decl_count": 1
+    },
+    {
+      "position": 249,
+      "selector": ".chat-input-bar",
+      "decls_hash": "3b9db7f82277503b",
+      "decl_count": 8
+    },
+    {
+      "position": 250,
+      "selector": ".chat-input-bar textarea",
+      "decls_hash": "94f32862cb6e3d7f",
+      "decl_count": 13
+    },
+    {
+      "position": 251,
+      "selector": ".chat-input-bar textarea:focus",
+      "decls_hash": "33e44473d0db7a3c",
+      "decl_count": 2
+    },
+    {
+      "position": 252,
+      "selector": ".chat-input-bar .btn-send",
+      "decls_hash": "569737d94a2e18e9",
+      "decl_count": 10
+    },
+    {
+      "position": 253,
+      "selector": ".chat-input-bar .btn-send:hover",
+      "decls_hash": "c27e7ac15bd65d49",
+      "decl_count": 2
+    },
+    {
+      "position": 254,
+      "selector": ".chat-input-bar .btn-send:disabled",
+      "decls_hash": "72b225812ff7443a",
+      "decl_count": 2
+    },
+    {
+      "position": 255,
+      "selector": ".chat-loading",
+      "decls_hash": "4ada109b1d7b5634",
+      "decl_count": 9
+    },
+    {
+      "position": 256,
+      "selector": ".chat-loading.active",
+      "decls_hash": "d05f0fd0ce0bfa95",
+      "decl_count": 1
+    },
+    {
+      "position": 257,
+      "selector": ".chat-loading-dots span",
+      "decls_hash": "d28ca0b314a1a3d3",
+      "decl_count": 2
+    },
+    {
+      "position": 258,
+      "selector": ".chat-loading-dots span:nth-child(2)",
+      "decls_hash": "4ef169cf9edfaeb5",
+      "decl_count": 1
+    },
+    {
+      "position": 259,
+      "selector": ".chat-loading-dots span:nth-child(3)",
+      "decls_hash": "ece294587cf12adb",
+      "decl_count": 1
+    },
+    {
+      "position": 260,
+      "selector": "@keyframes chatDot",
+      "decls_hash": "dc46db8018f57467",
+      "decl_count": 2
+    },
+    {
+      "position": 261,
+      "selector": ".chat-session-card",
+      "decls_hash": "c5e8a97ad172f820",
+      "decl_count": 12
+    },
+    {
+      "position": 262,
+      "selector": ".chat-session-card:hover",
+      "decls_hash": "533d013a5dcfd223",
+      "decl_count": 2
+    },
+    {
+      "position": 263,
+      "selector": ".chat-session-info",
+      "decls_hash": "13d4945b9b25bfc3",
+      "decl_count": 1
+    },
+    {
+      "position": 264,
+      "selector": ".chat-session-title",
+      "decls_hash": "769cea1dd259c57c",
+      "decl_count": 3
+    },
+    {
+      "position": 265,
+      "selector": ".chat-session-meta",
+      "decls_hash": "09bd47378798ac03",
+      "decl_count": 4
+    },
+    {
+      "position": 266,
+      "selector": ".chat-session-count",
+      "decls_hash": "e1623c81b7d50cad",
+      "decl_count": 5
+    },
+    {
+      "position": 267,
+      "selector": ".chat-empty",
+      "decls_hash": "c3097d6d70b209a0",
+      "decl_count": 3
+    },
+    {
+      "position": 268,
+      "selector": ".chat-theme-header",
+      "decls_hash": "3095309a04cc4592",
+      "decl_count": 11
+    },
+    {
+      "position": 269,
+      "selector": ".news-categories",
+      "decls_hash": "364571d7a25faa5c",
+      "decl_count": 3
+    },
+    {
+      "position": 270,
+      "selector": ".news-category-card",
+      "decls_hash": "b76ce746c1966883",
+      "decl_count": 4
+    },
+    {
+      "position": 271,
+      "selector": ".news-category-header",
+      "decls_hash": "3b4ddd0540d00cc4",
+      "decl_count": 7
+    },
+    {
+      "position": 272,
+      "selector": ".news-category-header:hover",
+      "decls_hash": "bcb1324bf4c45840",
+      "decl_count": 1
+    },
+    {
+      "position": 273,
+      "selector": ".news-category-label",
+      "decls_hash": "2d9664cd73eab60f",
+      "decl_count": 3
+    },
+    {
+      "position": 274,
+      "selector": ".news-category-count",
+      "decls_hash": "b2832b78a520950e",
+      "decl_count": 5
+    },
+    {
+      "position": 275,
+      "selector": ".news-toggle",
+      "decls_hash": "f0509a41a7ba4dcd",
+      "decl_count": 3
+    },
+    {
+      "position": 276,
+      "selector": ".news-category-card.open .news-toggle",
+      "decls_hash": "baaaf84798ebd101",
+      "decl_count": 1
+    },
+    {
+      "position": 277,
+      "selector": ".news-category-body",
+      "decls_hash": "954ab6df059b675c",
+      "decl_count": 4
+    },
+    {
+      "position": 278,
+      "selector": ".news-category-card.open .news-category-body",
+      "decls_hash": "d05f0fd0ce0bfa95",
+      "decl_count": 1
+    },
+    {
+      "position": 279,
+      "selector": ".news-item",
+      "decls_hash": "776a5b185739a4fe",
+      "decl_count": 3
+    },
+    {
+      "position": 280,
+      "selector": ".news-item:last-child",
+      "decls_hash": "964adad85ad0a568",
+      "decl_count": 1
+    },
+    {
+      "position": 281,
+      "selector": ".news-item-title",
+      "decls_hash": "0d90071d8af66454",
+      "decl_count": 3
+    },
+    {
+      "position": 282,
+      "selector": ".news-item-title a",
+      "decls_hash": "3541b1f8dcbbfa5b",
+      "decl_count": 1
+    },
+    {
+      "position": 283,
+      "selector": ".news-item-title a:hover",
+      "decls_hash": "04126202be586af0",
+      "decl_count": 1
+    },
+    {
+      "position": 284,
+      "selector": ".news-item-meta",
+      "decls_hash": "4831f835d8e2ecc2",
+      "decl_count": 5
+    },
+    {
+      "position": 285,
+      "selector": ".news-source",
+      "decls_hash": "2a30eaf21ed2e22e",
+      "decl_count": 3
+    },
+    {
+      "position": 286,
+      "selector": ".news-item-summary",
+      "decls_hash": "a2773f3294cfe95a",
+      "decl_count": 3
+    },
+    {
+      "position": 287,
+      "selector": ".admin-status",
+      "decls_hash": "18b8e3cd1870edff",
+      "decl_count": 6
+    },
+    {
+      "position": 288,
+      "selector": ".admin-status-idle",
+      "decls_hash": "1c1ffdaa208dc421",
+      "decl_count": 3
+    },
+    {
+      "position": 289,
+      "selector": ".admin-status-running",
+      "decls_hash": "b5ba65fb71841173",
+      "decl_count": 4
+    },
+    {
+      "position": 290,
+      "selector": "@keyframes adminPulse",
+      "decls_hash": "258263622e83260c",
+      "decl_count": 2
+    },
+    {
+      "position": 291,
+      "selector": ".admin-progress-bar",
+      "decls_hash": "b54522b4868babe5",
+      "decl_count": 5
+    },
+    {
+      "position": 292,
+      "selector": ".admin-progress-fill",
+      "decls_hash": "6328a365f14b0a62",
+      "decl_count": 5
+    },
+    {
+      "position": 293,
+      "selector": ".admin-progress-label",
+      "decls_hash": "101f766c3d099744",
+      "decl_count": 2
+    },
+    {
+      "position": 294,
+      "selector": ".admin-log-viewer",
+      "decls_hash": "7f010a9a35b9d8dd",
+      "decl_count": 10
+    },
+    {
+      "position": 295,
+      "selector": ".admin-log-empty",
+      "decls_hash": "31a44b7c96fb4b14",
+      "decl_count": 4
+    },
+    {
+      "position": 296,
+      "selector": ".admin-log-line",
+      "decls_hash": "2917103611242917",
+      "decl_count": 4
+    },
+    {
+      "position": 297,
+      "selector": ".admin-log-error",
+      "decls_hash": "643b4debcf1ed6b9",
+      "decl_count": 1
+    },
+    {
+      "position": 298,
+      "selector": ".admin-log-success",
+      "decls_hash": "6d2ee3f9e2d70568",
+      "decl_count": 1
+    },
+    {
+      "position": 299,
+      "selector": ".admin-log-info",
+      "decls_hash": "04126202be586af0",
+      "decl_count": 1
+    },
+    {
+      "position": 300,
+      "selector": ".watchlist-toggle",
+      "decls_hash": "bb51fe0afbdbdf4f",
+      "decl_count": 5
+    },
+    {
+      "position": 301,
+      "selector": ".watchlist-toggle:hover",
+      "decls_hash": "80d2322a4a2c3021",
+      "decl_count": 1
+    },
+    {
+      "position": 302,
+      "selector": ".watchlist-toggle.watched",
+      "decls_hash": "80d2322a4a2c3021",
+      "decl_count": 1
+    },
+    {
+      "position": 303,
+      "selector": ".top-picks-grid",
+      "decls_hash": "37d8a47b7622d05f",
+      "decl_count": 4
+    },
+    {
+      "position": 304,
+      "selector": ".top-pick-card",
+      "decls_hash": "2e29e38ce4f95a2e",
+      "decl_count": 9
+    },
+    {
+      "position": 305,
+      "selector": ".top-pick-card:hover",
+      "decls_hash": "5187b9d3c55eecb6",
+      "decl_count": 2
+    },
+    {
+      "position": 306,
+      "selector": ".top-pick-watched",
+      "decls_hash": "08fd622285bbc276",
+      "decl_count": 2
+    },
+    {
+      "position": 307,
+      "selector": ".top-pick-header",
+      "decls_hash": "caddc3da0b748307",
+      "decl_count": 4
+    },
+    {
+      "position": 308,
+      "selector": ".top-pick-rank-wrap",
+      "decls_hash": "56703f7032f22dfb",
+      "decl_count": 3
+    },
+    {
+      "position": 309,
+      "selector": ".top-pick-rank",
+      "decls_hash": "e9467a657582213a",
+      "decl_count": 4
+    },
+    {
+      "position": 310,
+      "selector": ".top-pick-trophy",
+      "decls_hash": "0c688c65841b16cc",
+      "decl_count": 1
+    },
+    {
+      "position": 311,
+      "selector": ".top-pick-badges",
+      "decls_hash": "4b0df9cc50538889",
+      "decl_count": 3
+    },
+    {
+      "position": 312,
+      "selector": ".top-pick-badge",
+      "decls_hash": "a8dd04b9ee7ccfa9",
+      "decl_count": 7
+    },
+    {
+      "position": 313,
+      "selector": ".top-pick-badge-stage2",
+      "decls_hash": "8ebcd084ef2edefe",
+      "decl_count": 3
+    },
+    {
+      "position": 314,
+      "selector": ".top-pick-badge-early",
+      "decls_hash": "34d52e34a27d5d6b",
+      "decl_count": 3
+    },
+    {
+      "position": 315,
+      "selector": ".top-pick-badge-deepvalue",
+      "decls_hash": "ed0eb71f66dfe17b",
+      "decl_count": 3
+    },
+    {
+      "position": 316,
+      "selector": ".top-pick-badge-contrarian",
+      "decls_hash": "ac897254e12b53be",
+      "decl_count": 3
+    },
+    {
+      "position": 317,
+      "selector": ".top-pick-badge-conviction",
+      "decls_hash": "d823e6c7c71df24e",
+      "decl_count": 4
+    },
+    {
+      "position": 318,
+      "selector": ".top-pick-badge-watched",
+      "decls_hash": "a0f45f64a35586f3",
+      "decl_count": 3
+    },
+    {
+      "position": 319,
+      "selector": ".top-pick-badge-subscribed",
+      "decls_hash": "c03fe0313776e255",
+      "decl_count": 3
+    },
+    {
+      "position": 320,
+      "selector": ".top-pick-title",
+      "decls_hash": "3f6c6304857a8cb8",
+      "decl_count": 4
+    },
+    {
+      "position": 321,
+      "selector": ".top-pick-name",
+      "decls_hash": "0daf096c083ce5d0",
+      "decl_count": 4
+    },
+    {
+      "position": 322,
+      "selector": ".top-pick-name:hover",
+      "decls_hash": "601d75b69d8328d6",
+      "decl_count": 2
+    },
+    {
+      "position": 323,
+      "selector": ".top-pick-ticker",
+      "decls_hash": "07547bb342e45b94",
+      "decl_count": 3
+    },
+    {
+      "position": 324,
+      "selector": ".top-pick-sector",
+      "decls_hash": "d36fe62dcdbe8ec4",
+      "decl_count": 2
+    },
+    {
+      "position": 325,
+      "selector": ".top-pick-price-row",
+      "decls_hash": "55f1ee74c1208f99",
+      "decl_count": 6
+    },
+    {
+      "position": 326,
+      "selector": ".top-pick-price-item",
+      "decls_hash": "a53751420ff98a0b",
+      "decl_count": 3
+    },
+    {
+      "position": 327,
+      "selector": ".top-pick-price-label",
+      "decls_hash": "0ada3a688d33ef05",
+      "decl_count": 4
+    },
+    {
+      "position": 328,
+      "selector": ".top-pick-price-value",
+      "decls_hash": "2733d8915994cdd3",
+      "decl_count": 4
+    },
+    {
+      "position": 329,
+      "selector": ".top-pick-upside-pos",
+      "decls_hash": "971332306e5addca",
+      "decl_count": 1
+    },
+    {
+      "position": 330,
+      "selector": ".top-pick-upside-neg",
+      "decls_hash": "d9956d2fa2546dc6",
+      "decl_count": 1
+    },
+    {
+      "position": 331,
+      "selector": ".top-pick-theme",
+      "decls_hash": "1af4396360bd248a",
+      "decl_count": 7
+    },
+    {
+      "position": 332,
+      "selector": ".top-pick-theme-label",
+      "decls_hash": "77e5a25dc0d32233",
+      "decl_count": 2
+    },
+    {
+      "position": 333,
+      "selector": ".top-pick-theme-name",
+      "decls_hash": "e6d50cde87647be5",
+      "decl_count": 7
+    },
+    {
+      "position": 334,
+      "selector": ".top-pick-theme-name:hover",
+      "decls_hash": "601d75b69d8328d6",
+      "decl_count": 2
+    },
+    {
+      "position": 335,
+      "selector": ".top-pick-theme-conf",
+      "decls_hash": "0eaaa70a4da94f75",
+      "decl_count": 3
+    },
+    {
+      "position": 336,
+      "selector": ".top-pick-rationale",
+      "decls_hash": "41216214e832fecc",
+      "decl_count": 7
+    },
+    {
+      "position": 337,
+      "selector": ".top-pick-rationale-ai",
+      "decls_hash": "42ea1e256d940cec",
+      "decl_count": 2
+    },
+    {
+      "position": 338,
+      "selector": ".top-pick-rationale-tag",
+      "decls_hash": "b5417f3acb9eff37",
+      "decl_count": 9
+    },
+    {
+      "position": 339,
+      "selector": ".top-pick-risk",
+      "decls_hash": "9493245b75f3ae15",
+      "decl_count": 7
+    },
+    {
+      "position": 340,
+      "selector": ".top-pick-risk-label",
+      "decls_hash": "779dd51a7f53b9ca",
+      "decl_count": 2
+    },
+    {
+      "position": 341,
+      "selector": ".top-pick-footer",
+      "decls_hash": "e271afd6e1b6bf82",
+      "decl_count": 6
+    },
+    {
+      "position": 342,
+      "selector": ".top-pick-score",
+      "decls_hash": "f0a10be993c4a5a1",
+      "decl_count": 8
+    },
+    {
+      "position": 343,
+      "selector": ".top-pick-score:hover",
+      "decls_hash": "0e6e8a9d12fbcf99",
+      "decl_count": 1
+    },
+    {
+      "position": 344,
+      "selector": ".top-pick-score-sub",
+      "decls_hash": "095dc563affe0ecc",
+      "decl_count": 2
+    },
+    {
+      "position": 345,
+      "selector": ".top-pick-score-toggle",
+      "decls_hash": "3bdf1270c02b5568",
+      "decl_count": 2
+    },
+    {
+      "position": 346,
+      "selector": ".top-pick-breakdown",
+      "decls_hash": "36f1f0162a5447fb",
+      "decl_count": 7
+    },
+    {
+      "position": 347,
+      "selector": ".top-pick-breakdown.open",
+      "decls_hash": "579ee07fe1f939d1",
+      "decl_count": 1
+    },
+    {
+      "position": 348,
+      "selector": ".top-pick-breakdown-row",
+      "decls_hash": "085f9dbe72f08f38",
+      "decl_count": 3
+    },
+    {
+      "position": 349,
+      "selector": ".top-pick-breakdown-key",
+      "decls_hash": "0549acf6adc0dce3",
+      "decl_count": 1
+    },
+    {
+      "position": 350,
+      "selector": ".top-pick-breakdown-val",
+      "decls_hash": "83796d42fe958cfd",
+      "decl_count": 2
+    },
+    {
+      "position": 351,
+      "selector": ".top-pick-breakdown-neg",
+      "decls_hash": "d9956d2fa2546dc6",
+      "decl_count": 1
+    },
+    {
+      "position": 352,
+      "selector": ".badge-plan, .header-tier-badge",
+      "decls_hash": "b97b7043f8c00721",
+      "decl_count": 12
+    },
+    {
+      "position": 353,
+      "selector": ".header-tier-badge",
+      "decls_hash": "6e5c0aeea9af563d",
+      "decl_count": 1
+    },
+    {
+      "position": 354,
+      "selector": ".header-tier-badge:hover",
+      "decls_hash": "f2ee4bc3c639a2f7",
+      "decl_count": 1
+    },
+    {
+      "position": 355,
+      "selector": ".badge-plan-free",
+      "decls_hash": "5a0417e5efb4deaa",
+      "decl_count": 3
+    },
+    {
+      "position": 356,
+      "selector": ".badge-plan-pro",
+      "decls_hash": "8029782d2ec656ac",
+      "decl_count": 3
+    },
+    {
+      "position": 357,
+      "selector": ".badge-plan-premium",
+      "decls_hash": "044608e7175c0555",
+      "decl_count": 3
+    },
+    {
+      "position": 358,
+      "selector": ".user-dropdown-header-tier",
+      "decls_hash": "cf50db0fa0844924",
+      "decl_count": 1
+    },
+    {
+      "position": 359,
+      "selector": ".modal-backdrop",
+      "decls_hash": "5917de3ffb9478ba",
+      "decl_count": 9
+    },
+    {
+      "position": 360,
+      "selector": ".modal-backdrop.open",
+      "decls_hash": "579ee07fe1f939d1",
+      "decl_count": 1
+    },
+    {
+      "position": 361,
+      "selector": ".modal-box",
+      "decls_hash": "25ff9fd58da13ca2",
+      "decl_count": 10
+    },
+    {
+      "position": 362,
+      "selector": ".modal-close",
+      "decls_hash": "8f721270b0429859",
+      "decl_count": 11
+    },
+    {
+      "position": 363,
+      "selector": ".modal-close:hover",
+      "decls_hash": "3541b1f8dcbbfa5b",
+      "decl_count": 1
+    },
+    {
+      "position": 364,
+      "selector": ".modal-icon",
+      "decls_hash": "84e6ec7de4ba6e24",
+      "decl_count": 2
+    },
+    {
+      "position": 365,
+      "selector": ".modal-title",
+      "decls_hash": "a5182910f00941a9",
+      "decl_count": 4
+    },
+    {
+      "position": 366,
+      "selector": ".modal-body",
+      "decls_hash": "315321e9382d4ca4",
+      "decl_count": 4
+    },
+    {
+      "position": 367,
+      "selector": ".modal-meta",
+      "decls_hash": "433732baa8c3c026",
+      "decl_count": 9
+    },
+    {
+      "position": 368,
+      "selector": ".modal-meta strong",
+      "decls_hash": "b8eeaa7b5f0a8bbc",
+      "decl_count": 2
+    },
+    {
+      "position": 369,
+      "selector": ".modal-actions",
+      "decls_hash": "89924613e81aff87",
+      "decl_count": 4
+    },
+    {
+      "position": 370,
+      "selector": ".modal-actions .btn",
+      "decls_hash": "ebfe7e4cdb61a00e",
+      "decl_count": 4
+    },
+    {
+      "position": 371,
+      "selector": ".common-modal-compact",
+      "decls_hash": "3002cb914b79d8a6",
+      "decl_count": 3
+    },
+    {
+      "position": 372,
+      "selector": ".cm-header",
+      "decls_hash": "aab993ca2a3b7471",
+      "decl_count": 4
+    },
+    {
+      "position": 373,
+      "selector": ".cm-badge",
+      "decls_hash": "4c60c22cf885e2e3",
+      "decl_count": 11
+    },
+    {
+      "position": 374,
+      "selector": ".cm-title",
+      "decls_hash": "edb60fafda8f312f",
+      "decl_count": 3
+    },
+    {
+      "position": 375,
+      "selector": ".cm-message",
+      "decls_hash": "b7e9e2bdb4744807",
+      "decl_count": 4
+    },
+    {
+      "position": 376,
+      "selector": ".common-modal-compact .modal-actions",
+      "decls_hash": "98ea163118212508",
+      "decl_count": 1
+    },
+    {
+      "position": 377,
+      "selector": ".common-modal-compact .modal-actions .btn",
+      "decls_hash": "59ce643c41ec05b5",
+      "decl_count": 2
+    },
+    {
+      "position": 378,
+      "selector": ".global-disclaimer",
+      "decls_hash": "384bcfd8751c060a",
+      "decl_count": 11
+    },
+    {
+      "position": 379,
+      "selector": ".global-disclaimer .disclaimer-icon",
+      "decls_hash": "e92b45110039d30a",
+      "decl_count": 3
+    },
+    {
+      "position": 380,
+      "selector": ".global-disclaimer .disclaimer-text",
+      "decls_hash": "41cbd50ea901ba75",
+      "decl_count": 1
+    },
+    {
+      "position": 381,
+      "selector": ".global-disclaimer strong",
+      "decls_hash": "3541b1f8dcbbfa5b",
+      "decl_count": 1
+    },
+    {
+      "position": 382,
+      "selector": ".global-disclaimer .disclaimer-link",
+      "decls_hash": "8791b5b657d2297d",
+      "decl_count": 9
+    },
+    {
+      "position": 383,
+      "selector": ".global-disclaimer .disclaimer-link:hover",
+      "decls_hash": "6b4a03bc50c2c9d1",
+      "decl_count": 1
+    },
+    {
+      "position": 384,
+      "selector": ".bottom-tabbar",
+      "decls_hash": "6e10625841bc5ff1",
+      "decl_count": 12
+    },
+    {
+      "position": 385,
+      "selector": ".bottom-tab",
+      "decls_hash": "8994d170074c3a09",
+      "decl_count": 14
+    },
+    {
+      "position": 386,
+      "selector": ".bottom-tab:hover",
+      "decls_hash": "3541b1f8dcbbfa5b",
+      "decl_count": 1
+    },
+    {
+      "position": 387,
+      "selector": ".bottom-tab.active",
+      "decls_hash": "04126202be586af0",
+      "decl_count": 1
+    },
+    {
+      "position": 388,
+      "selector": ".bottom-tab.active::before",
+      "decls_hash": "ddde1cb1a2eaa6c6",
+      "decl_count": 8
+    },
+    {
+      "position": 389,
+      "selector": ".bottom-tab-icon",
+      "decls_hash": "5627663d59195e62",
+      "decl_count": 2
+    },
+    {
+      "position": 390,
+      "selector": ".bottom-tab-label",
+      "decls_hash": "650bbcc918c8023f",
+      "decl_count": 2
+    },
+    {
+      "position": 391,
+      "selector": ".modal-actions .btn, .pricing-cta, .bottom-tab",
+      "decls_hash": "7de12a6770c96e88",
+      "decl_count": 1
+    },
+    {
+      "position": 392,
+      "selector": "@supports (padding: max(0px))",
+      "decls_hash": "727496c9376a15fd",
+      "decl_count": 2
+    },
+    {
+      "position": 393,
+      "selector": ".detail-panel",
+      "decls_hash": "e8f44531e2a14cd9",
+      "decl_count": 5
+    },
+    {
+      "position": 394,
+      "selector": ".detail-sticky-cta",
+      "decls_hash": "8dea6bae36a6cca8",
+      "decl_count": 6
+    },
+    {
+      "position": 395,
+      "selector": ".detail-cta-btn",
+      "decls_hash": "89b2556202f919dc",
+      "decl_count": 15
+    },
+    {
+      "position": 396,
+      "selector": ".detail-cta-btn:hover",
+      "decls_hash": "b7e56a42662afcdd",
+      "decl_count": 2
+    },
+    {
+      "position": 397,
+      "selector": ".detail-section",
+      "decls_hash": "6810c6ee57760b2e",
+      "decl_count": 3
+    },
+    {
+      "position": 398,
+      "selector": ".detail-section:last-child",
+      "decls_hash": "caf6248cef0e7e17",
+      "decl_count": 2
+    },
+    {
+      "position": 399,
+      "selector": ".detail-section-title",
+      "decls_hash": "4061e8fa3afd1f0c",
+      "decl_count": 6
+    },
+    {
+      "position": 400,
+      "selector": ".detail-meta-tags",
+      "decls_hash": "803466bc6d5c306d",
+      "decl_count": 3
+    },
+    {
+      "position": 401,
+      "selector": ".meta-tag",
+      "decls_hash": "94830075e3c85d0e",
+      "decl_count": 4
+    },
+    {
+      "position": 402,
+      "selector": ".meta-tag-sector",
+      "decls_hash": "ed8e146bff294915",
+      "decl_count": 3
+    },
+    {
+      "position": 403,
+      "selector": ".meta-tag-discovery",
+      "decls_hash": "8f1fec99061d5671",
+      "decl_count": 3
+    },
+    {
+      "position": 404,
+      "selector": ".meta-tag-momentum",
+      "decls_hash": "5c8ebef8ce67335c",
+      "decl_count": 3
+    },
+    {
+      "position": 405,
+      "selector": ".meta-tag-supply",
+      "decls_hash": "3304536e63f3c9ec",
+      "decl_count": 3
+    },
+    {
+      "position": 406,
+      "selector": ".meta-tag-neutral",
+      "decls_hash": "d06effb0fcc6f826",
+      "decl_count": 1
+    },
+    {
+      "position": 407,
+      "selector": ".detail-return-grid",
+      "decls_hash": "015c527d2fe9196e",
+      "decl_count": 3
+    },
+    {
+      "position": 408,
+      "selector": ".detail-return-chip",
+      "decls_hash": "c4487ea57566dad7",
+      "decl_count": 7
+    },
+    {
+      "position": 409,
+      "selector": ".detail-return-chip.positive",
+      "decls_hash": "74b82c694091fd20",
+      "decl_count": 3
+    },
+    {
+      "position": 410,
+      "selector": ".detail-return-chip.negative",
+      "decls_hash": "f573d7135232c6d2",
+      "decl_count": 3
+    },
+    {
+      "position": 411,
+      "selector": ".detail-return-label",
+      "decls_hash": "1ddbc23ac85c0d90",
+      "decl_count": 3
+    },
+    {
+      "position": 412,
+      "selector": ".detail-return-value",
+      "decls_hash": "7fc639bebecb29bc",
+      "decl_count": 3
+    },
+    {
+      "position": 413,
+      "selector": ".detail-block",
+      "decls_hash": "925c1cff44f9384a",
+      "decl_count": 1
+    },
+    {
+      "position": 414,
+      "selector": ".detail-label",
+      "decls_hash": "38e4eeca1bc22262",
+      "decl_count": 6
+    },
+    {
+      "position": 415,
+      "selector": ".detail-cond-grid",
+      "decls_hash": "f5c51150e5971c6b",
+      "decl_count": 4
+    },
+    {
+      "position": 416,
+      "selector": ".dash-tr-widget",
+      "decls_hash": "e83a5decd19fe95e",
+      "decl_count": 10
+    },
+    {
+      "position": 417,
+      "selector": ".dash-tr-left",
+      "decls_hash": "e402b6d736de6dbe",
+      "decl_count": 5
+    },
+    {
+      "position": 418,
+      "selector": ".dash-tr-icon",
+      "decls_hash": "6b85b6ec17da3235",
+      "decl_count": 2
+    },
+    {
+      "position": 419,
+      "selector": ".dash-tr-title",
+      "decls_hash": "8f251248c80a5e85",
+      "decl_count": 2
+    },
+    {
+      "position": 420,
+      "selector": ".dash-tr-summary",
+      "decls_hash": "9f1e63918ffa32a7",
+      "decl_count": 4
+    },
+    {
+      "position": 421,
+      "selector": ".dash-tr-right",
+      "decls_hash": "348aa258e72a75e2",
+      "decl_count": 4
+    },
+    {
+      "position": 422,
+      "selector": ".dash-tr-tabs",
+      "decls_hash": "8b1ea46d4cf07d39",
+      "decl_count": 5
+    },
+    {
+      "position": 423,
+      "selector": ".dash-tr-tab",
+      "decls_hash": "85554d4d01cbb8a0",
+      "decl_count": 10
+    },
+    {
+      "position": 424,
+      "selector": ".dash-tr-tab:last-child",
+      "decls_hash": "e76477b5bc085484",
+      "decl_count": 1
+    },
+    {
+      "position": 425,
+      "selector": ".dash-tr-tab:hover",
+      "decls_hash": "fc16196115394992",
+      "decl_count": 2
+    },
+    {
+      "position": 426,
+      "selector": ".dash-tr-tab.active",
+      "decls_hash": "f58229a024ab4cd1",
+      "decl_count": 2
+    },
+    {
+      "position": 427,
+      "selector": ".card-locked",
+      "decls_hash": "0742e55d1d89935e",
+      "decl_count": 2
+    },
+    {
+      "position": 428,
+      "selector": ".card-locked > *:not(.card-lock-overlay)",
+      "decls_hash": "51394283653b52bd",
+      "decl_count": 4
+    },
+    {
+      "position": 429,
+      "selector": ".card-lock-overlay",
+      "decls_hash": "724af319f15063d9",
+      "decl_count": 12
+    },
+    {
+      "position": 430,
+      "selector": ".card-lock-icon",
+      "decls_hash": "d8de6d19479f89a4",
+      "decl_count": 1
+    },
+    {
+      "position": 431,
+      "selector": ".card-lock-title",
+      "decls_hash": "227193d361496784",
+      "decl_count": 4
+    },
+    {
+      "position": 432,
+      "selector": ".grade-badge",
+      "decls_hash": "9323116faca50913",
+      "decl_count": 12
+    },
+    {
+      "position": 433,
+      "selector": ".grade-badge-label",
+      "decls_hash": "bfab6d1565bd03ed",
+      "decl_count": 4
+    },
+    {
+      "position": 434,
+      "selector": ".grade-badge-s",
+      "decls_hash": "4ce479735d2c01fa",
+      "decl_count": 3
+    },
+    {
+      "position": 435,
+      "selector": ".grade-badge-a",
+      "decls_hash": "cf506b81b0a5aa35",
+      "decl_count": 3
+    },
+    {
+      "position": 436,
+      "selector": ".grade-badge-b",
+      "decls_hash": "194a253247424e61",
+      "decl_count": 3
+    },
+    {
+      "position": 437,
+      "selector": ".grade-badge-c",
+      "decls_hash": "b0f9bb8357ea6652",
+      "decl_count": 3
+    },
+    {
+      "position": 438,
+      "selector": ".grade-badge-d",
+      "decls_hash": "a0025ee3b721e85b",
+      "decl_count": 3
+    },
+    {
+      "position": 439,
+      "selector": ".grade-badge-none",
+      "decls_hash": "6c2aad3ae0f356a8",
+      "decl_count": 3
+    },
+    {
+      "position": 440,
+      "selector": ".ad-slot",
+      "decls_hash": "c889884fcf52a8b5",
+      "decl_count": 9
+    },
+    {
+      "position": 441,
+      "selector": ".ad-slot::before",
+      "decls_hash": "8cfe99bfc0edafb0",
+      "decl_count": 9
+    },
+    {
+      "position": 442,
+      "selector": ".ad-slot-icon",
+      "decls_hash": "6b85b6ec17da3235",
+      "decl_count": 2
+    },
+    {
+      "position": 443,
+      "selector": ".ad-slot-body",
+      "decls_hash": "ae86459d709a82e5",
+      "decl_count": 2
+    },
+    {
+      "position": 444,
+      "selector": ".ad-slot-title",
+      "decls_hash": "caba5ea97381a096",
+      "decl_count": 4
+    },
+    {
+      "position": 445,
+      "selector": ".ad-slot-desc",
+      "decls_hash": "9f1e63918ffa32a7",
+      "decl_count": 4
+    },
+    {
+      "position": 446,
+      "selector": ".ad-slot-cta",
+      "decls_hash": "9213399392b83ae7",
+      "decl_count": 1
+    },
+    {
+      "position": 447,
+      "selector": ".ad-slot-compact",
+      "decls_hash": "94b89cc4881e27b7",
+      "decl_count": 5
+    },
+    {
+      "position": 448,
+      "selector": ".ad-slot-compact .ad-slot-icon",
+      "decls_hash": "87da3668b0eaed6d",
+      "decl_count": 1
+    },
+    {
+      "position": 449,
+      "selector": ".ad-slot-compact .ad-slot-title",
+      "decls_hash": "f5d83fd8657ea0ab",
+      "decl_count": 1
+    },
+    {
+      "position": 450,
+      "selector": ".ad-slot-compact .ad-slot-desc",
+      "decls_hash": "daaa01e50fcf84e1",
+      "decl_count": 1
+    },
+    {
+      "position": 451,
+      "selector": "@media (min-width: 769px) and (max-width: 1024px)",
+      "decls_hash": "a542da66280d8b02",
+      "decl_count": 9
+    },
+    {
+      "position": 452,
+      "selector": "@media (max-width: 768px)",
+      "decls_hash": "be6b91d5af4f83c3",
+      "decl_count": 23
+    },
+    {
+      "position": 453,
+      "selector": "@media (max-width: 768px)",
+      "decls_hash": "19aeadceeb2062f1",
+      "decl_count": 41
+    },
+    {
+      "position": 454,
+      "selector": ".badge-admin",
+      "decls_hash": "e0a42bd0ee76698a",
+      "decl_count": 3
+    },
+    {
+      "position": 455,
+      "selector": ".badge-moderator",
+      "decls_hash": "953fef3ad765cfb7",
+      "decl_count": 3
+    },
+    {
+      "position": 456,
+      "selector": ".badge-role-user",
+      "decls_hash": "dc1716a165f76da0",
+      "decl_count": 3
+    },
+    {
+      "position": 457,
+      "selector": ".badge-active",
+      "decls_hash": "35e8229a0f2c8d5b",
+      "decl_count": 3
+    },
+    {
+      "position": 458,
+      "selector": ".badge-inactive",
+      "decls_hash": "4895bbf7fb1951a0",
+      "decl_count": 3
+    },
+    {
+      "position": 459,
+      "selector": ".btn-sm",
+      "decls_hash": "ee9c35f6518a8662",
+      "decl_count": 3
+    },
+    {
+      "position": 460,
+      "selector": ".btn-danger",
+      "decls_hash": "b9755f7641e89827",
+      "decl_count": 3
+    },
+    {
+      "position": 461,
+      "selector": ".btn-danger:hover",
+      "decls_hash": "81f5271be4e4a803",
+      "decl_count": 2
+    },
+    {
+      "position": 462,
+      "selector": ".btn-danger-fill",
+      "decls_hash": "fb7ee5557af4c31a",
+      "decl_count": 4
+    },
+    {
+      "position": 463,
+      "selector": ".btn-danger-fill:hover",
+      "decls_hash": "e3a6f3a211d24208",
+      "decl_count": 1
+    },
+    {
+      "position": 464,
+      "selector": ".pagination",
+      "decls_hash": "0dcde3d596bd7f5d",
+      "decl_count": 2
+    },
+    {
+      "position": 465,
+      "selector": ".pagination a, .pagination span",
+      "decls_hash": "d5b649afcbe44e33",
+      "decl_count": 8
+    },
+    {
+      "position": 466,
+      "selector": ".pagination a:hover",
+      "decls_hash": "10675537d9aba178",
+      "decl_count": 3
+    },
+    {
+      "position": 467,
+      "selector": ".pagination .current",
+      "decls_hash": "6a3f82696395b3e1",
+      "decl_count": 4
+    },
+    {
+      "position": 468,
+      "selector": ".pagination .ellipsis",
+      "decls_hash": "c6b62c4e12b07d09",
+      "decl_count": 3
+    },
+    {
+      "position": 469,
+      "selector": ".toast-msg",
+      "decls_hash": "2c04cd551571df43",
+      "decl_count": 6
+    },
+    {
+      "position": 470,
+      "selector": ".toast-msg.success",
+      "decls_hash": "7ba851db246c90d9",
+      "decl_count": 4
+    },
+    {
+      "position": 471,
+      "selector": ".toast-msg.error",
+      "decls_hash": "916b3c51350f241b",
+      "decl_count": 4
+    },
+    {
+      "position": 472,
+      "selector": ".confirm-modal-body",
+      "decls_hash": "5d1d75685015d5e2",
+      "decl_count": 2
+    },
+    {
+      "position": 473,
+      "selector": ".confirm-modal-body .modal-icon",
+      "decls_hash": "a56a371f019569c6",
+      "decl_count": 3
+    },
+    {
+      "position": 474,
+      "selector": ".confirm-modal-body .modal-title",
+      "decls_hash": "85db08c91e3d3e7e",
+      "decl_count": 3
+    },
+    {
+      "position": 475,
+      "selector": ".confirm-modal-body .modal-desc",
+      "decls_hash": "a4baea9cf8bb604d",
+      "decl_count": 4
+    },
+    {
+      "position": 476,
+      "selector": ".confirm-modal-body .modal-reason",
+      "decls_hash": "1882ecf6ab832af0",
+      "decl_count": 9
+    },
+    {
+      "position": 477,
+      "selector": ".confirm-modal-body .modal-reason:focus",
+      "decls_hash": "33e44473d0db7a3c",
+      "decl_count": 2
+    },
+    {
+      "position": 478,
+      "selector": ".confirm-modal-body .modal-actions",
+      "decls_hash": "a711b3858f4a14ad",
+      "decl_count": 3
+    },
+    {
+      "position": 479,
+      "selector": ".confirm-modal-body .modal-actions .btn",
+      "decls_hash": "d24de6ab7914ea59",
+      "decl_count": 1
+    },
+    {
+      "position": 480,
+      "selector": ".user-expand-row",
+      "decls_hash": "659973232fa3cb7e",
+      "decl_count": 1
+    },
+    {
+      "position": 481,
+      "selector": ".user-expand-row.open",
+      "decls_hash": "807bac63c568afbb",
+      "decl_count": 1
+    },
+    {
+      "position": 482,
+      "selector": ".user-expand-cell",
+      "decls_hash": "787f9190ad3a408f",
+      "decl_count": 3
+    },
+    {
+      "position": 483,
+      "selector": ".user-expand-inner",
+      "decls_hash": "6055371ed1b6f410",
+      "decl_count": 7
+    },
+    {
+      "position": 484,
+      "selector": ".user-expand-section h4",
+      "decls_hash": "e615ecc0c28e9f40",
+      "decl_count": 7
+    },
+    {
+      "position": 485,
+      "selector": ".user-expand-section .field-row",
+      "decls_hash": "f8c23a815c4e14de",
+      "decl_count": 5
+    },
+    {
+      "position": 486,
+      "selector": ".user-expand-section .field-label",
+      "decls_hash": "168950d3c8b17aa6",
+      "decl_count": 3
+    },
+    {
+      "position": 487,
+      "selector": ".user-expand-section select, .user-expand-section input[type=\"date\"]",
+      "decls_hash": "94ff908331c9388b",
+      "decl_count": 6
+    },
+    {
+      "position": 488,
+      "selector": ".user-expand-section select:focus, .user-expand-section input[type=\"date\"]:focus",
+      "decls_hash": "33e44473d0db7a3c",
+      "decl_count": 2
+    },
+    {
+      "position": 489,
+      "selector": ".user-expand-actions",
+      "decls_hash": "941c55fab2cea373",
+      "decl_count": 4
+    },
+    {
+      "position": 490,
+      "selector": "@media (max-width: 768px)",
+      "decls_hash": "7f1948d4e43e4141",
+      "decl_count": 15
+    },
+    {
+      "position": 491,
+      "selector": ".ext-links",
+      "decls_hash": "1e3387dc4f4c8834",
+      "decl_count": 4
+    },
+    {
+      "position": 492,
+      "selector": ".ext-links-full",
+      "decls_hash": "58fe29e2d89d6ba5",
+      "decl_count": 2
+    },
+    {
+      "position": 493,
+      "selector": ".ext-link",
+      "decls_hash": "9c2895850430fafd",
+      "decl_count": 11
+    },
+    {
+      "position": 494,
+      "selector": ".ext-link:hover",
+      "decls_hash": "31789dded037e068",
+      "decl_count": 3
+    },
+    {
+      "position": 495,
+      "selector": ".ext-link-icon",
+      "decls_hash": "e3956e495566e092",
+      "decl_count": 4
+    },
+    {
+      "position": 496,
+      "selector": ".ext-link-name",
+      "decls_hash": "8e49eeb9ad09d556",
+      "decl_count": 2
+    },
+    {
+      "position": 497,
+      "selector": ".ext-links-full .ext-link",
+      "decls_hash": "a865b22c895c41ef",
+      "decl_count": 3
+    },
+    {
+      "position": 498,
+      "selector": ".ext-links-full .ext-link-icon",
+      "decls_hash": "bf41c17e2b1d4eea",
+      "decl_count": 1
+    },
+    {
+      "position": 499,
+      "selector": ".ext-links-full .ext-link-name",
+      "decls_hash": "bf41c17e2b1d4eea",
+      "decl_count": 1
+    },
+    {
+      "position": 500,
+      "selector": ".inquiry-list",
+      "decls_hash": "a53751420ff98a0b",
+      "decl_count": 3
+    },
+    {
+      "position": 501,
+      "selector": ".inquiry-row",
+      "decls_hash": "0c40ff7ba9d86e6d",
+      "decl_count": 11
+    },
+    {
+      "position": 502,
+      "selector": ".inquiry-row:hover",
+      "decls_hash": "ac3787b27e5459c7",
+      "decl_count": 2
+    },
+    {
+      "position": 503,
+      "selector": ".inquiry-row-main",
+      "decls_hash": "52e5577446ac8800",
+      "decl_count": 2
+    },
+    {
+      "position": 504,
+      "selector": ".inquiry-row-title",
+      "decls_hash": "23739382be42dbc5",
+      "decl_count": 8
+    },
+    {
+      "position": 505,
+      "selector": ".inquiry-row-meta",
+      "decls_hash": "952ccbfe0b269974",
+      "decl_count": 5
+    },
+    {
+      "position": 506,
+      "selector": ".badge-status-open",
+      "decls_hash": "dc1716a165f76da0",
+      "decl_count": 3
+    },
+    {
+      "position": 507,
+      "selector": ".badge-status-answered",
+      "decls_hash": "35e8229a0f2c8d5b",
+      "decl_count": 3
+    },
+    {
+      "position": 508,
+      "selector": ".badge-status-closed",
+      "decls_hash": "5bb337880ea33d24",
+      "decl_count": 3
+    },
+    {
+      "position": 509,
+      "selector": ".badge-category-general",
+      "decls_hash": "5b24c750e1466e3c",
+      "decl_count": 3
+    },
+    {
+      "position": 510,
+      "selector": ".badge-category-bug",
+      "decls_hash": "4895bbf7fb1951a0",
+      "decl_count": 3
+    },
+    {
+      "position": 511,
+      "selector": ".badge-category-feature",
+      "decls_hash": "953fef3ad765cfb7",
+      "decl_count": 3
+    },
+    {
+      "position": 512,
+      "selector": ".badge-private",
+      "decls_hash": "545b84ab2f8208d9",
+      "decl_count": 3
+    },
+    {
+      "position": 513,
+      "selector": ".badge-staff",
+      "decls_hash": "35b2d9e9df145f66",
+      "decl_count": 4
+    },
+    {
+      "position": 514,
+      "selector": ".inquiry-pagination",
+      "decls_hash": "a19edaac67777b64",
+      "decl_count": 5
+    },
+    {
+      "position": 515,
+      "selector": ".inquiry-pagination-info",
+      "decls_hash": "4ef214648cfe8b13",
+      "decl_count": 2
+    },
+    {
+      "position": 516,
+      "selector": ".inquiry-form-group",
+      "decls_hash": "1a34d6738c308ebe",
+      "decl_count": 1
+    },
+    {
+      "position": 517,
+      "selector": ".inquiry-form-label",
+      "decls_hash": "db0cd3ffd9ea09b4",
+      "decl_count": 7
+    },
+    {
+      "position": 518,
+      "selector": ".inquiry-textarea",
+      "decls_hash": "b0be7525978d684a",
+      "decl_count": 10
+    },
+    {
+      "position": 519,
+      "selector": ".inquiry-textarea:focus",
+      "decls_hash": "33e44473d0db7a3c",
+      "decl_count": 2
+    },
+    {
+      "position": 520,
+      "selector": ".inquiry-detail-header",
+      "decls_hash": "9f4aaa714993d2dd",
+      "decl_count": 5
+    },
+    {
+      "position": 521,
+      "selector": ".inquiry-detail-meta",
+      "decls_hash": "b17b1d9fa81c5717",
+      "decl_count": 4
+    },
+    {
+      "position": 522,
+      "selector": ".inquiry-detail-content",
+      "decls_hash": "0ed2f917136a18dc",
+      "decl_count": 4
+    },
+    {
+      "position": 523,
+      "selector": ".inquiry-reply",
+      "decls_hash": "55d110c91116134c",
+      "decl_count": 1
+    },
+    {
+      "position": 524,
+      "selector": ".inquiry-reply-staff",
+      "decls_hash": "0d538fbb96e8435a",
+      "decl_count": 1
+    },
+    {
+      "position": 525,
+      "selector": ".inquiry-reply-header",
+      "decls_hash": "b8078c631856b108",
+      "decl_count": 4
+    },
+    {
+      "position": 526,
+      "selector": ".inquiry-reply-author",
+      "decls_hash": "43f14b44a856471b",
+      "decl_count": 5
+    },
+    {
+      "position": 527,
+      "selector": ".inquiry-reply-time",
+      "decls_hash": "101f766c3d099744",
+      "decl_count": 2
+    },
+    {
+      "position": 528,
+      "selector": ".inquiry-reply-content",
+      "decls_hash": "afb75426d51d3274",
+      "decl_count": 3
+    },
+    {
+      "position": 529,
+      "selector": "@media (max-width: 768px)",
+      "decls_hash": "9b88ae97c4939e41",
+      "decl_count": 5
+    },
+    {
+      "position": 530,
+      "selector": ".dash-hero",
+      "decls_hash": "b6e2c1ecba636167",
+      "decl_count": 4
+    },
+    {
+      "position": 531,
+      "selector": ".change-indicator",
+      "decls_hash": "77ea5a295c585a08",
+      "decl_count": 9
+    },
+    {
+      "position": 532,
+      "selector": ".change-up",
+      "decls_hash": "0e3e44213d1e5276",
+      "decl_count": 2
+    },
+    {
+      "position": 533,
+      "selector": ".change-down",
+      "decls_hash": "448fa2f4e9b37096",
+      "decl_count": 2
+    },
+    {
+      "position": 534,
+      "selector": ".change-neutral",
+      "decls_hash": "e624f84460708b7e",
+      "decl_count": 1
+    },
+    {
+      "position": 535,
+      "selector": ".sparkline",
+      "decls_hash": "0dd1a2062a3720f6",
+      "decl_count": 3
+    },
+    {
+      "position": 536,
+      "selector": ".risk-gauge-wrap",
+      "decls_hash": "3bc973bc8fc8aeb1",
+      "decl_count": 4
+    },
+    {
+      "position": 537,
+      "selector": ".risk-gauge",
+      "decls_hash": "d05f0fd0ce0bfa95",
+      "decl_count": 1
+    },
+    {
+      "position": 538,
+      "selector": ".risk-gauge-label",
+      "decls_hash": "bfe50e6dcdc47cad",
+      "decl_count": 3
+    },
+    {
+      "position": 539,
+      "selector": ".watchlist-widget",
+      "decls_hash": "38464bc298321ede",
+      "decl_count": 6
+    },
+    {
+      "position": 540,
+      "selector": ".watchlist-widget .widget-header",
+      "decls_hash": "382d6ad40298d857",
+      "decl_count": 6
+    },
+    {
+      "position": 541,
+      "selector": ".widget-more",
+      "decls_hash": "37b810dca9b4e439",
+      "decl_count": 3
+    },
+    {
+      "position": 542,
+      "selector": ".watchlist-quick",
+      "decls_hash": "5b527613e40eb05f",
+      "decl_count": 5
+    },
+    {
+      "position": 543,
+      "selector": ".wl-item",
+      "decls_hash": "58a2b5d6f7c83a7a",
+      "decl_count": 11
+    },
+    {
+      "position": 544,
+      "selector": ".wl-item:hover",
+      "decls_hash": "bcb1324bf4c45840",
+      "decl_count": 1
+    },
+    {
+      "position": 545,
+      "selector": ".wl-item-hot",
+      "decls_hash": "6cac231f3d438888",
+      "decl_count": 2
+    },
+    {
+      "position": 546,
+      "selector": ".wl-ticker",
+      "decls_hash": "b8eeaa7b5f0a8bbc",
+      "decl_count": 2
+    },
+    {
+      "position": 547,
+      "selector": ".wl-name",
+      "decls_hash": "0bc4581675a1e041",
+      "decl_count": 6
+    },
+    {
+      "position": 548,
+      "selector": ".wl-price",
+      "decls_hash": "0972c931e0c1d12e",
+      "decl_count": 2
+    },
+    {
+      "position": 549,
+      "selector": ".wl-badge-pick",
+      "decls_hash": "a967fa09b9f65fa3",
+      "decl_count": 6
+    },
+    {
+      "position": 550,
+      "selector": ".wl-empty",
+      "decls_hash": "9601f7efd6f60ded",
+      "decl_count": 4
+    },
+    {
+      "position": 551,
+      "selector": ".kpi-strip",
+      "decls_hash": "f9ac4ab6ccb20810",
+      "decl_count": 1
+    },
+    {
+      "position": 552,
+      "selector": ".kpi-strip .stat-card",
+      "decls_hash": "37590392eb421983",
+      "decl_count": 4
+    },
+    {
+      "position": 553,
+      "selector": ".kpi-strip .stat-value",
+      "decls_hash": "471d5c874e5a9a2b",
+      "decl_count": 2
+    },
+    {
+      "position": 554,
+      "selector": ".kpi-strip .stat-label",
+      "decls_hash": "bf41c17e2b1d4eea",
+      "decl_count": 1
+    },
+    {
+      "position": 555,
+      "selector": ".kpi-strip .stat-sub",
+      "decls_hash": "daaa01e50fcf84e1",
+      "decl_count": 1
+    },
+    {
+      "position": 556,
+      "selector": ".hero-row1",
+      "decls_hash": "6719eda0eafefefe",
+      "decl_count": 5
+    },
+    {
+      "position": 557,
+      "selector": ".hero-row1 > *",
+      "decls_hash": "f34dc68c71d9c5bd",
+      "decl_count": 1
+    },
+    {
+      "position": 558,
+      "selector": ".kpi-strip.kpi-strip-tight .stat-card",
+      "decls_hash": "573f2efa5284676c",
+      "decl_count": 1
+    },
+    {
+      "position": 559,
+      "selector": ".kpi-strip.kpi-strip-tight .stat-value",
+      "decls_hash": "7d0eb7af8bd8ea1c",
+      "decl_count": 3
+    },
+    {
+      "position": 560,
+      "selector": ".kpi-strip.kpi-strip-tight .stat-label",
+      "decls_hash": "daaa01e50fcf84e1",
+      "decl_count": 1
+    },
+    {
+      "position": 561,
+      "selector": ".kpi-strip.kpi-strip-tight .stat-inline-sub",
+      "decls_hash": "991a20d8a3d66b0a",
+      "decl_count": 3
+    },
+    {
+      "position": 562,
+      "selector": ".kpi-strip.kpi-strip-tight .change-indicator",
+      "decls_hash": "e15d3f2bc71d1ddc",
+      "decl_count": 3
+    },
+    {
+      "position": 563,
+      "selector": "@media (max-width: 1280px)",
+      "decls_hash": "1fc25eee496bc484",
+      "decl_count": 1
+    },
+    {
+      "position": 564,
+      "selector": ".hero-grid-2col",
+      "decls_hash": "e163fe74c1383f33",
+      "decl_count": 5
+    },
+    {
+      "position": 565,
+      "selector": ".hero-grid-2col > *",
+      "decls_hash": "f34dc68c71d9c5bd",
+      "decl_count": 1
+    },
+    {
+      "position": 566,
+      "selector": ".hero-grid-2col.hero-insights",
+      "decls_hash": "0cf1c095272a0ca5",
+      "decl_count": 2
+    },
+    {
+      "position": 567,
+      "selector": ".hero-grid-3col",
+      "decls_hash": "9177a3925558c515",
+      "decl_count": 5
+    },
+    {
+      "position": 568,
+      "selector": ".hero-grid-3col > *",
+      "decls_hash": "22f29816ae93cec3",
+      "decl_count": 2
+    },
+    {
+      "position": 569,
+      "selector": ".dash-tr-widget.hero-tr",
+      "decls_hash": "161199f2cc11759f",
+      "decl_count": 2
+    },
+    {
+      "position": 570,
+      "selector": ".discovery-stackbar-wrap",
+      "decls_hash": "364571d7a25faa5c",
+      "decl_count": 3
+    },
+    {
+      "position": 571,
+      "selector": ".discovery-stackbar-head",
+      "decls_hash": "5f3d9153f59993e6",
+      "decl_count": 3
+    },
+    {
+      "position": 572,
+      "selector": ".discovery-stackbar-total",
+      "decls_hash": "86acc55649bdd474",
+      "decl_count": 3
+    },
+    {
+      "position": 573,
+      "selector": ".discovery-stackbar-total small",
+      "decls_hash": "9c5486d8e1cadec9",
+      "decl_count": 4
+    },
+    {
+      "position": 574,
+      "selector": ".discovery-stackbar-track",
+      "decls_hash": "c7d0e06a499efea6",
+      "decl_count": 6
+    },
+    {
+      "position": 575,
+      "selector": ".discovery-stackbar-seg",
+      "decls_hash": "5e4f124ba8e88048",
+      "decl_count": 2
+    },
+    {
+      "position": 576,
+      "selector": ".discovery-stackbar-legend",
+      "decls_hash": "71ca7e502d93016a",
+      "decl_count": 5
+    },
+    {
+      "position": 577,
+      "selector": ".discovery-legend-chip",
+      "decls_hash": "c7f06b1cba1a3bfa",
+      "decl_count": 3
+    },
+    {
+      "position": 578,
+      "selector": ".discovery-legend-chip .legend-dot",
+      "decls_hash": "46312ac006002fc8",
+      "decl_count": 4
+    },
+    {
+      "position": 579,
+      "selector": ".sector-chips",
+      "decls_hash": "e28c27922ba5fdda",
+      "decl_count": 4
+    },
+    {
+      "position": 580,
+      "selector": ".sector-chip",
+      "decls_hash": "39306935a525f6b0",
+      "decl_count": 10
+    },
+    {
+      "position": 581,
+      "selector": ".sector-chip[data-intensity=\"100\"]",
+      "decls_hash": "c3ee0cf2c4bcd651",
+      "decl_count": 3
+    },
+    {
+      "position": 582,
+      "selector": ".sector-chip-name",
+      "decls_hash": "3541b1f8dcbbfa5b",
+      "decl_count": 1
+    },
+    {
+      "position": 583,
+      "selector": ".sector-chip-count",
+      "decls_hash": "eece03e4a241e26e",
+      "decl_count": 6
+    },
+    {
+      "position": 584,
+      "selector": ".insight-card-compact",
+      "decls_hash": "b676c791fc4587ce",
+      "decl_count": 1
+    },
+    {
+      "position": 585,
+      "selector": ".insight-card-compact .insight-title",
+      "decls_hash": "bad8a0582a5ead18",
+      "decl_count": 1
+    },
+    {
+      "position": 586,
+      "selector": ".tr-visual",
+      "decls_hash": "11c77b25a65e064d",
+      "decl_count": 4
+    },
+    {
+      "position": 587,
+      "selector": ".tr-donut-wrap",
+      "decls_hash": "a8e2f8499dfa2a51",
+      "decl_count": 3
+    },
+    {
+      "position": 588,
+      "selector": ".tr-donut circle:last-of-type",
+      "decls_hash": "3c96aee052ad8b55",
+      "decl_count": 1
+    },
+    {
+      "position": 589,
+      "selector": ".tr-return-block",
+      "decls_hash": "49b7483a87f8de3f",
+      "decl_count": 2
+    },
+    {
+      "position": 590,
+      "selector": ".tr-bar-label",
+      "decls_hash": "7ae79e1e7ba670be",
+      "decl_count": 3
+    },
+    {
+      "position": 591,
+      "selector": ".tr-bar-track",
+      "decls_hash": "97cd1b13a3458acb",
+      "decl_count": 5
+    },
+    {
+      "position": 592,
+      "selector": ".tr-bar-zero",
+      "decls_hash": "4852a1b35a45d570",
+      "decl_count": 6
+    },
+    {
+      "position": 593,
+      "selector": ".tr-bar-fill",
+      "decls_hash": "0f989fca0b5b6465",
+      "decl_count": 4
+    },
+    {
+      "position": 594,
+      "selector": ".tr-bar-pos",
+      "decls_hash": "51e97a77a0554d75",
+      "decl_count": 1
+    },
+    {
+      "position": 595,
+      "selector": ".tr-bar-neg",
+      "decls_hash": "a2f92609a026fe05",
+      "decl_count": 1
+    },
+    {
+      "position": 596,
+      "selector": ".tr-bar-value",
+      "decls_hash": "26207248c3ff2c1b",
+      "decl_count": 3
+    },
+    {
+      "position": 597,
+      "selector": ".tr-sample",
+      "decls_hash": "a75b97ad16c60ae7",
+      "decl_count": 3
+    },
+    {
+      "position": 598,
+      "selector": ".color-green",
+      "decls_hash": "315f0d2974ad6f7a",
+      "decl_count": 1
+    },
+    {
+      "position": 599,
+      "selector": ".color-red",
+      "decls_hash": "9ad386c6f55c6cf8",
+      "decl_count": 1
+    },
+    {
+      "position": 600,
+      "selector": ".bullet-chart",
+      "decls_hash": "d24940eb5c20623b",
+      "decl_count": 5
+    },
+    {
+      "position": 601,
+      "selector": ".bullet-chart-partial .bullet-labels",
+      "decls_hash": "a682934f3d6c3325",
+      "decl_count": 2
+    },
+    {
+      "position": 602,
+      "selector": ".bullet-track",
+      "decls_hash": "519a4935feda66ef",
+      "decl_count": 5
+    },
+    {
+      "position": 603,
+      "selector": ".bullet-range",
+      "decls_hash": "e0f93de78b99183a",
+      "decl_count": 3
+    },
+    {
+      "position": 604,
+      "selector": ".bullet-marker",
+      "decls_hash": "8a41dc0ef7ae90d8",
+      "decl_count": 8
+    },
+    {
+      "position": 605,
+      "selector": ".bullet-target",
+      "decls_hash": "3e3c094154b41c38",
+      "decl_count": 7
+    },
+    {
+      "position": 606,
+      "selector": ".bullet-labels",
+      "decls_hash": "c4005f42f2bc727c",
+      "decl_count": 5
+    },
+    {
+      "position": 607,
+      "selector": ".bullet-labels .bullet-upside",
+      "decls_hash": "7256b515d81c6e1f",
+      "decl_count": 2
+    },
+    {
+      "position": 608,
+      "selector": ".top-pick-actions",
+      "decls_hash": "c325ce82dbf46c77",
+      "decl_count": 5
+    },
+    {
+      "position": 609,
+      "selector": ".action-btn",
+      "decls_hash": "25eca8f80d91b866",
+      "decl_count": 16
+    },
+    {
+      "position": 610,
+      "selector": ".action-btn:hover",
+      "decls_hash": "c41b0bf815d44299",
+      "decl_count": 3
+    },
+    {
+      "position": 611,
+      "selector": ".action-btn:disabled",
+      "decls_hash": "117fb1fcab6f5316",
+      "decl_count": 2
+    },
+    {
+      "position": 612,
+      "selector": ".action-watched",
+      "decls_hash": "817232e48a41b44d",
+      "decl_count": 3
+    },
+    {
+      "position": 613,
+      "selector": ".action-btn-signal",
+      "decls_hash": "d17654d6686b2353",
+      "decl_count": 2
+    },
+    {
+      "position": 614,
+      "selector": ".top-pick-rationale.collapsible",
+      "decls_hash": "706a3d9bc16d8395",
+      "decl_count": 4
+    },
+    {
+      "position": 615,
+      "selector": ".top-pick-rationale-head",
+      "decls_hash": "b36a41e511f33e5c",
+      "decl_count": 9
+    },
+    {
+      "position": 616,
+      "selector": ".top-pick-rationale.collapsible .top-pick-rationale-tag",
+      "decls_hash": "0b3ad40d5538dd14",
+      "decl_count": 3
+    },
+    {
+      "position": 617,
+      "selector": ".top-pick-rationale-hint, .top-pick-rationale-hint-open",
+      "decls_hash": "d5f7ca513221feb7",
+      "decl_count": 2
+    },
+    {
+      "position": 618,
+      "selector": ".top-pick-rationale-hint-open",
+      "decls_hash": "659973232fa3cb7e",
+      "decl_count": 1
+    },
+    {
+      "position": 619,
+      "selector": ".top-pick-rationale-arrow",
+      "decls_hash": "6ad155a7c1c2f6b1",
+      "decl_count": 5
+    },
+    {
+      "position": 620,
+      "selector": ".top-pick-rationale-body",
+      "decls_hash": "b2dcd4aeacbdcb2c",
+      "decl_count": 7
+    },
+    {
+      "position": 621,
+      "selector": ".top-pick-rationale.collapsible.expanded .top-pick-rationale-body",
+      "decls_hash": "d05f0fd0ce0bfa95",
+      "decl_count": 1
+    },
+    {
+      "position": 622,
+      "selector": ".top-pick-rationale.collapsible.expanded .top-pick-rationale-hint",
+      "decls_hash": "659973232fa3cb7e",
+      "decl_count": 1
+    },
+    {
+      "position": 623,
+      "selector": ".top-pick-rationale.collapsible.expanded .top-pick-rationale-hint-open",
+      "decls_hash": "d05f0fd0ce0bfa95",
+      "decl_count": 1
+    },
+    {
+      "position": 624,
+      "selector": ".top-pick-rationale.collapsible.expanded .top-pick-rationale-arrow",
+      "decls_hash": "baaaf84798ebd101",
+      "decl_count": 1
+    },
+    {
+      "position": 625,
+      "selector": ".conf-ring",
+      "decls_hash": "e7ed55f7048ab671",
+      "decl_count": 2
+    },
+    {
+      "position": 626,
+      "selector": ".conf-ring circle:last-of-type",
+      "decls_hash": "3c96aee052ad8b55",
+      "decl_count": 1
+    },
+    {
+      "position": 627,
+      "selector": ".discovery-donut-wrap",
+      "decls_hash": "fc9aed3a9a61da01",
+      "decl_count": 3
+    },
+    {
+      "position": 628,
+      "selector": ".discovery-donut",
+      "decls_hash": "ca5bd26a6e1589dc",
+      "decl_count": 1
+    },
+    {
+      "position": 629,
+      "selector": ".donut-legend",
+      "decls_hash": "6b951434ca75796a",
+      "decl_count": 4
+    },
+    {
+      "position": 630,
+      "selector": ".legend-item",
+      "decls_hash": "126cfd297a94c77d",
+      "decl_count": 4
+    },
+    {
+      "position": 631,
+      "selector": ".legend-dot",
+      "decls_hash": "f68e8dd489cd1800",
+      "decl_count": 4
+    },
+    {
+      "position": 632,
+      "selector": ".legend-label",
+      "decls_hash": "57709a35ce5f4c3a",
+      "decl_count": 2
+    },
+    {
+      "position": 633,
+      "selector": ".legend-pct",
+      "decls_hash": "466ec1c888644af8",
+      "decl_count": 3
+    },
+    {
+      "position": 634,
+      "selector": ".sector-bubbles",
+      "decls_hash": "0fa8445132adb437",
+      "decl_count": 6
+    },
+    {
+      "position": 635,
+      "selector": ".sector-bubble",
+      "decls_hash": "1a8841baf37c8902",
+      "decl_count": 15
+    },
+    {
+      "position": 636,
+      "selector": ".sector-bubble:hover",
+      "decls_hash": "eafd6c93393f8cf5",
+      "decl_count": 1
+    },
+    {
+      "position": 637,
+      "selector": ".sector-bubble small",
+      "decls_hash": "65b4dd0ee7d6ccbf",
+      "decl_count": 3
+    },
+    {
+      "position": 638,
+      "selector": ".yield-curve-chart",
+      "decls_hash": "e7fe1ed89cec8756",
+      "decl_count": 2
+    },
+    {
+      "position": 639,
+      "selector": ".market-summary-toggle",
+      "decls_hash": "322e55ef14292228",
+      "decl_count": 11
+    },
+    {
+      "position": 640,
+      "selector": ".market-summary.collapsed .summary-body",
+      "decls_hash": "35b14c256465bf38",
+      "decl_count": 4
+    },
+    {
+      "position": 641,
+      "selector": ".market-summary .summary-body",
+      "decls_hash": "5c52fc80c4ce1ab1",
+      "decl_count": 2
+    },
+    {
+      "position": 642,
+      "selector": "@media (max-width: 768px)",
+      "decls_hash": "de457e4971b0b16b",
+      "decl_count": 23
+    },
+    {
+      "position": 643,
+      "selector": "@media (max-width: 480px)",
+      "decls_hash": "0c3eb3d8b178def9",
+      "decl_count": 1
+    },
+    {
+      "position": 644,
+      "selector": ".sa-page",
+      "decls_hash": "0ad7c3740ec4b2d0",
+      "decl_count": 2
+    },
+    {
+      "position": 645,
+      "selector": ".sa-hero",
+      "decls_hash": "7ad65271a0d32eac",
+      "decl_count": 5
+    },
+    {
+      "position": 646,
+      "selector": ".sa-hero-row",
+      "decls_hash": "9ab8034094fd8369",
+      "decl_count": 5
+    },
+    {
+      "position": 647,
+      "selector": ".sa-hero-title",
+      "decls_hash": "636677781313eb58",
+      "decl_count": 4
+    },
+    {
+      "position": 648,
+      "selector": ".sa-hero-asset",
+      "decls_hash": "5c2cdc3d35b35cc8",
+      "decl_count": 4
+    },
+    {
+      "position": 649,
+      "selector": ".sa-hero-ticker",
+      "decls_hash": "a49858bd039a2bb3",
+      "decl_count": 6
+    },
+    {
+      "position": 650,
+      "selector": ".sa-hero-badges",
+      "decls_hash": "739727da2a242d6a",
+      "decl_count": 4
+    },
+    {
+      "position": 651,
+      "selector": ".sa-price-flow",
+      "decls_hash": "3f8175035e01f3b0",
+      "decl_count": 4
+    },
+    {
+      "position": 652,
+      "selector": ".sa-price-box",
+      "decls_hash": "4d05218b4f8fe164",
+      "decl_count": 8
+    },
+    {
+      "position": 653,
+      "selector": ".sa-price-label",
+      "decls_hash": "4a3e9be1538dd229",
+      "decl_count": 4
+    },
+    {
+      "position": 654,
+      "selector": ".sa-price-value",
+      "decls_hash": "693853192a77cf69",
+      "decl_count": 4
+    },
+    {
+      "position": 655,
+      "selector": ".sa-price-value-target",
+      "decls_hash": "04126202be586af0",
+      "decl_count": 1
+    },
+    {
+      "position": 656,
+      "selector": ".sa-arrow",
+      "decls_hash": "683df8bada40c724",
+      "decl_count": 2
+    },
+    {
+      "position": 657,
+      "selector": ".sa-upside-chip",
+      "decls_hash": "9e2211bc47e80110",
+      "decl_count": 9
+    },
+    {
+      "position": 658,
+      "selector": ".sa-upside-chip-up",
+      "decls_hash": "ed9dd726e9e4d775",
+      "decl_count": 3
+    },
+    {
+      "position": 659,
+      "selector": ".sa-upside-chip-down",
+      "decls_hash": "53506e5740bda14d",
+      "decl_count": 3
+    },
+    {
+      "position": 660,
+      "selector": ".sa-upside-value",
+      "decls_hash": "52bcdbd10eb3dd7f",
+      "decl_count": 3
+    },
+    {
+      "position": 661,
+      "selector": ".sa-upside-label",
+      "decls_hash": "389de4a4ec7a0e3e",
+      "decl_count": 4
+    },
+    {
+      "position": 662,
+      "selector": ".sa-meta-bar",
+      "decls_hash": "e3b104ec981f6565",
+      "decl_count": 6
+    },
+    {
+      "position": 663,
+      "selector": ".sa-meta-chip",
+      "decls_hash": "c847e03994730e0d",
+      "decl_count": 9
+    },
+    {
+      "position": 664,
+      "selector": ".sa-meta-chip-label",
+      "decls_hash": "13b80b01f2f88f62",
+      "decl_count": 2
+    },
+    {
+      "position": 665,
+      "selector": ".sa-meta-chip a",
+      "decls_hash": "04126202be586af0",
+      "decl_count": 1
+    },
+    {
+      "position": 666,
+      "selector": ".sa-toc",
+      "decls_hash": "3de58d619934c4fd",
+      "decl_count": 12
+    },
+    {
+      "position": 667,
+      "selector": ".sa-toc-label",
+      "decls_hash": "9a7b7c945e4a10ce",
+      "decl_count": 6
+    },
+    {
+      "position": 668,
+      "selector": ".sa-toc a",
+      "decls_hash": "5ce25b0f73d35de6",
+      "decl_count": 7
+    },
+    {
+      "position": 669,
+      "selector": ".sa-toc a:hover",
+      "decls_hash": "aa7a84fcff770f3b",
+      "decl_count": 3
+    },
+    {
+      "position": 670,
+      "selector": ".sa-section",
+      "decls_hash": "290a0350b7e0dfa5",
+      "decl_count": 2
+    },
+    {
+      "position": 671,
+      "selector": ".sa-section .card-title",
+      "decls_hash": "e048ac5f5f95f458",
+      "decl_count": 1
+    },
+    {
+      "position": 672,
+      "selector": ".sa-body-text",
+      "decls_hash": "404eff73c7e3c668",
+      "decl_count": 4
+    },
+    {
+      "position": 673,
+      "selector": ".sa-kv-table",
+      "decls_hash": "e212e8c88ed3da8e",
+      "decl_count": 1
+    },
+    {
+      "position": 674,
+      "selector": ".sa-kv-table td",
+      "decls_hash": "a12e297747443be5",
+      "decl_count": 3
+    },
+    {
+      "position": 675,
+      "selector": ".sa-kv-table tr:last-child td",
+      "decls_hash": "964adad85ad0a568",
+      "decl_count": 1
+    },
+    {
+      "position": 676,
+      "selector": ".sa-kv-table td:first-child",
+      "decls_hash": "bcb34b3236bc47df",
+      "decl_count": 2
+    },
+    {
+      "position": 677,
+      "selector": ".sa-kv-table td:last-child",
+      "decls_hash": "8675322f88c9bb28",
+      "decl_count": 4
+    },
+    {
+      "position": 678,
+      "selector": ".sa-bull-card",
+      "decls_hash": "45502ed31cde366a",
+      "decl_count": 3
+    },
+    {
+      "position": 679,
+      "selector": ".sa-bear-card",
+      "decls_hash": "3be93f9bcd2fc27d",
+      "decl_count": 3
+    },
+    {
+      "position": 680,
+      "selector": ".sa-risk-card",
+      "decls_hash": "4c9218940eefeda2",
+      "decl_count": 2
+    },
+    {
+      "position": 681,
+      "selector": ".sa-risk-card .card-title",
+      "decls_hash": "643b4debcf1ed6b9",
+      "decl_count": 1
+    },
+    {
+      "position": 682,
+      "selector": ".sa-condition-grid",
+      "decls_hash": "e962c4203bbb624b",
+      "decl_count": 3
+    },
+    {
+      "position": 683,
+      "selector": ".sa-condition-card",
+      "decls_hash": "30909a275d16f698",
+      "decl_count": 4
+    },
+    {
+      "position": 684,
+      "selector": ".sa-condition-card-entry",
+      "decls_hash": "b90e9b97af729235",
+      "decl_count": 1
+    },
+    {
+      "position": 685,
+      "selector": ".sa-condition-card-exit",
+      "decls_hash": "061087f70dfd694b",
+      "decl_count": 1
+    },
+    {
+      "position": 686,
+      "selector": ".sa-condition-label",
+      "decls_hash": "11cf5dd76101ecec",
+      "decl_count": 5
+    },
+    {
+      "position": 687,
+      "selector": ".sa-condition-label-entry",
+      "decls_hash": "6d2ee3f9e2d70568",
+      "decl_count": 1
+    },
+    {
+      "position": 688,
+      "selector": ".sa-condition-label-exit",
+      "decls_hash": "643b4debcf1ed6b9",
+      "decl_count": 1
+    },
+    {
+      "position": 689,
+      "selector": ".sa-condition-text",
+      "decls_hash": "cc86adb154084da4",
+      "decl_count": 3
+    },
+    {
+      "position": 690,
+      "selector": ".sa-report-pre",
+      "decls_hash": "032e948266721804",
+      "decl_count": 13
+    },
+    {
+      "position": 691,
+      "selector": ".sa-report-md",
+      "decls_hash": "1fc03ad050d3b4b9",
+      "decl_count": 9
+    },
+    {
+      "position": 692,
+      "selector": ".sa-report-md h1, .sa-report-md h2, .sa-report-md h3, .sa-report-md h4, .sa-report-md h5, .sa-report-md h6",
+      "decls_hash": "7981dfadda2a5055",
+      "decl_count": 4
+    },
+    {
+      "position": 693,
+      "selector": ".sa-report-md h1",
+      "decls_hash": "6f3760781c0b3beb",
+      "decl_count": 5
+    },
+    {
+      "position": 694,
+      "selector": ".sa-report-md h2",
+      "decls_hash": "091712d11d7f2640",
+      "decl_count": 4
+    },
+    {
+      "position": 695,
+      "selector": ".sa-report-md h3",
+      "decls_hash": "0e27b607f32744cb",
+      "decl_count": 2
+    },
+    {
+      "position": 696,
+      "selector": ".sa-report-md h4",
+      "decls_hash": "b7cb293859fb7075",
+      "decl_count": 4
+    },
+    {
+      "position": 697,
+      "selector": ".sa-report-md p",
+      "decls_hash": "895edd983422164e",
+      "decl_count": 1
+    },
+    {
+      "position": 698,
+      "selector": ".sa-report-md strong, .sa-report-md b",
+      "decls_hash": "241bcfa53d879a54",
+      "decl_count": 2
+    },
+    {
+      "position": 699,
+      "selector": ".sa-report-md em, .sa-report-md i",
+      "decls_hash": "1df308ac4db5a764",
+      "decl_count": 2
+    },
+    {
+      "position": 700,
+      "selector": ".sa-report-md a",
+      "decls_hash": "20478f18a27138a9",
+      "decl_count": 2
+    },
+    {
+      "position": 701,
+      "selector": ".sa-report-md a:hover",
+      "decls_hash": "959acdbeef11d3af",
+      "decl_count": 1
+    },
+    {
+      "position": 702,
+      "selector": ".sa-report-md hr",
+      "decls_hash": "b69fb643156c5405",
+      "decl_count": 4
+    },
+    {
+      "position": 703,
+      "selector": ".sa-report-md ul, .sa-report-md ol",
+      "decls_hash": "800db560e5b99a89",
+      "decl_count": 2
+    },
+    {
+      "position": 704,
+      "selector": ".sa-report-md li",
+      "decls_hash": "925c1cff44f9384a",
+      "decl_count": 1
+    },
+    {
+      "position": 705,
+      "selector": ".sa-report-md li::marker",
+      "decls_hash": "04126202be586af0",
+      "decl_count": 1
+    },
+    {
+      "position": 706,
+      "selector": ".sa-report-md blockquote",
+      "decls_hash": "ef6b9c7c4bee5316",
+      "decl_count": 6
+    },
+    {
+      "position": 707,
+      "selector": ".sa-report-md blockquote p:last-child",
+      "decls_hash": "f34dc68c71d9c5bd",
+      "decl_count": 1
+    },
+    {
+      "position": 708,
+      "selector": ".sa-report-md code",
+      "decls_hash": "3c535a06bd267ecf",
+      "decl_count": 6
+    },
+    {
+      "position": 709,
+      "selector": ".sa-report-md pre",
+      "decls_hash": "b1170d2065f64ee8",
+      "decl_count": 8
+    },
+    {
+      "position": 710,
+      "selector": ".sa-report-md pre code",
+      "decls_hash": "a475859f2ada6f71",
+      "decl_count": 3
+    },
+    {
+      "position": 711,
+      "selector": ".sa-report-md table",
+      "decls_hash": "bf54ca14cc484eeb",
+      "decl_count": 8
+    },
+    {
+      "position": 712,
+      "selector": ".sa-report-md thead",
+      "decls_hash": "dd2b0f002e63a0b4",
+      "decl_count": 1
+    },
+    {
+      "position": 713,
+      "selector": ".sa-report-md th",
+      "decls_hash": "89944bc540cb19e0",
+      "decl_count": 6
+    },
+    {
+      "position": 714,
+      "selector": ".sa-report-md td",
+      "decls_hash": "7a2fe663e273f4d8",
+      "decl_count": 4
+    },
+    {
+      "position": 715,
+      "selector": ".sa-report-md tr:last-child td",
+      "decls_hash": "964adad85ad0a568",
+      "decl_count": 1
+    },
+    {
+      "position": 716,
+      "selector": ".sa-report-md tr:hover td",
+      "decls_hash": "46457f761efd871b",
+      "decl_count": 1
+    },
+    {
+      "position": 717,
+      "selector": "@media (max-width: 768px)",
+      "decls_hash": "1f793e43eaba36fe",
+      "decl_count": 7
+    },
+    {
+      "position": 718,
+      "selector": "@media (max-width: 768px)",
+      "decls_hash": "cceeff18759bf279",
+      "decl_count": 13
+    }
+  ]
+}
