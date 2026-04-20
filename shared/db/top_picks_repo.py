@@ -1,6 +1,5 @@
 """Top Picks 저장 + AI 재정렬 갱신."""
 import json
-from psycopg2.extras import execute_values
 
 from shared.config import DatabaseConfig
 from shared.db.connection import get_connection

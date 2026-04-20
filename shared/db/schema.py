@@ -90,5 +90,8 @@ def init_db(cfg: DatabaseConfig) -> None:
 
         conn.commit()
         print("[DB] 테이블 초기화 완료")
+    except Exception:
+        conn.rollback()
+        raise
     finally:
         conn.close()

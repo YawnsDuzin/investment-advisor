@@ -1,7 +1,6 @@
 """분석 세션 저장 pipeline — save_analysis + 검증/알림/추적 private 유틸."""
 import json
-
-from psycopg2.extras import execute_values
+import re
 
 from shared.config import DatabaseConfig
 from shared.db.connection import get_connection
@@ -306,7 +305,6 @@ def _generate_notifications(cur, session_id: int, themes: list) -> None:
 
 def _normalize_theme_key(name: str) -> str:
     """테마명 정규화 — 동일 테마 매칭용 키 생성 (폴백용)"""
-    import re
     key = name.strip().lower()
     key = re.sub(r'[·\-/\s]+', '', key)  # 공백, 하이픈, 가운뎃점 제거
     return key
@@ -314,7 +312,6 @@ def _normalize_theme_key(name: str) -> str:
 
 def _resolve_theme_key(theme: dict) -> str:
     """AI 제공 theme_key 우선 사용, 유효하지 않으면 한국어 정규화 폴백"""
-    import re
     raw_key = (theme.get("theme_key") or "").strip()
     if raw_key and re.match(r'^[a-z][a-z0-9_]{2,60}$', raw_key):
         return raw_key

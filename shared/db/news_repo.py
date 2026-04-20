@@ -1,5 +1,5 @@
 """뉴스 기사 저장/조회/번역 업데이트."""
-from psycopg2.extras import RealDictCursor, execute_values
+from psycopg2.extras import RealDictCursor
 
 from shared.config import DatabaseConfig
 from shared.db.connection import get_connection

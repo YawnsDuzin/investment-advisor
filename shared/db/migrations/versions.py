@@ -5,9 +5,6 @@
 2. `shared/db/migrations/__init__.py`의 `_MIGRATIONS` dict에 한 줄 추가
 3. `shared/db/schema.py`의 `SCHEMA_VERSION` 상수 증가
 """
-import json  # noqa: F401
-import psycopg2  # noqa: F401
-from psycopg2.extras import execute_values, RealDictCursor  # noqa: F401
 from shared.db.migrations.seeds import _seed_admin_user, _seed_education_topics  # noqa: F401
 
 
