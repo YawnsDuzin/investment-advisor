@@ -7,24 +7,17 @@ v19부터 `post_return_*_pct` (추천 후 실제 수익률)를 메인 성과 지
 from datetime import datetime, timezone
 from typing import Optional
 from fastapi import APIRouter, Depends, Request
-from fastapi.templating import Jinja2Templates
 from shared.config import DatabaseConfig, AuthConfig
 from shared.db import get_connection
 from psycopg2.extras import RealDictCursor
 from api.page_context import base_ctx as _base_ctx
-from api.template_filters import register as _register_filters
+from api.templates_provider import templates
+from api.deps import get_db_cfg as _get_cfg
 from api.auth.dependencies import get_current_user, _get_auth_cfg
 from api.auth.models import UserInDB
 
 router = APIRouter(prefix="/api/track-record", tags=["트랙레코드"])
 pages_router = APIRouter(prefix="/pages/track-record", tags=["트랙레코드 페이지"])
-
-templates = Jinja2Templates(directory="api/templates")
-_register_filters(templates.env)
-
-
-def _get_cfg() -> DatabaseConfig:
-    return DatabaseConfig()
 
 
 def _float(value):
