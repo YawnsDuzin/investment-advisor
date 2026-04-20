@@ -76,12 +76,20 @@ def capture(label: str) -> None:
         json.dumps({"label": label, "captured_at": datetime.now().isoformat(), "routes": results}, indent=2, ensure_ascii=False),
         encoding="utf-8",
     )
-    print(f"[OK] {len(results)}개 라우트 캡처 → {out}")
+    errors = [r for r in results if "error" in r]
+    status_note = f" ({len(errors)}개 오류)" if errors else ""
+    print(f"[OK] {len(results)}개 라우트 캡처{status_note} → {out}")
 
 
 def diff(label_a: str, label_b: str) -> int:
-    a = json.loads((OUT_DIR / f"route_baseline_{label_a}.json").read_text(encoding="utf-8"))
-    b = json.loads((OUT_DIR / f"route_baseline_{label_b}.json").read_text(encoding="utf-8"))
+    path_a = OUT_DIR / f"route_baseline_{label_a}.json"
+    path_b = OUT_DIR / f"route_baseline_{label_b}.json"
+    for p, lbl in [(path_a, label_a), (path_b, label_b)]:
+        if not p.exists():
+            print(f"[ERROR] baseline 파일 없음: {p}  (먼저 capture --label {lbl} 실행)")
+            return 2
+    a = json.loads(path_a.read_text(encoding="utf-8"))
+    b = json.loads(path_b.read_text(encoding="utf-8"))
     by_url_a = {r["url"]: r for r in a["routes"]}
     by_url_b = {r["url"]: r for r in b["routes"]}
 
