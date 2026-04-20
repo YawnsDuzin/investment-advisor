@@ -4,26 +4,24 @@ from typing import Optional
 from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, HTTPException, Depends, Request
 from fastapi.responses import RedirectResponse
-from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
-from shared.config import DatabaseConfig, AuthConfig
+from shared.config import AuthConfig
 from shared.db import get_connection
 from shared.tier_limits import get_edu_chat_daily_limit, is_unlimited
 from psycopg2.extras import RealDictCursor
 from api.serialization import serialize_row as _serialize_row
 from api.page_context import base_ctx as _base_ctx
-from api.template_filters import register as _register_filters
 from api.education_engine import build_topic_context, query_edu_chat_sync
 from api.auth.dependencies import get_current_user, get_current_user_required, quota_exceeded_detail, _get_auth_cfg
 from api.auth.models import UserInDB
+from api.templates_provider import templates
+from api.deps import get_db_cfg as _get_cfg
 
 _KST = timezone(timedelta(hours=9))
 
 router = APIRouter(prefix="/education", tags=["교육"])
 
 pages_router = APIRouter(prefix="/pages/education", tags=["교육 페이지"])
-_templates = Jinja2Templates(directory="api/templates")
-_register_filters(_templates.env)
 
 _EDU_CATEGORIES = {
     "basics": "기초 개념",
@@ -32,10 +30,6 @@ _EDU_CATEGORIES = {
     "macro": "매크로 경제",
     "practical": "실전 활용",
 }
-
-
-def _get_cfg() -> DatabaseConfig:
-    return DatabaseConfig()
 
 
 class CreateEduSessionRequest(BaseModel):
@@ -309,7 +303,7 @@ def education_page(request: Request, category: str | None = None, user: Optional
             grouped[cat] = {"label": _EDU_CATEGORIES.get(cat, cat), "topics": []}
         grouped[cat]["topics"].append(_serialize_row(t))
 
-    return _templates.TemplateResponse(request=request, name="education.html", context={
+    return templates.TemplateResponse(request=request, name="education.html", context={
         **ctx,
         "grouped_topics": grouped,
         "selected_category": category,
@@ -357,7 +351,7 @@ def education_topic_page(request: Request, slug: str, user: Optional[UserInDB] =
         except (ValueError, TypeError):
             topic_data["examples"] = []
 
-    return _templates.TemplateResponse(request=request, name="education_topic.html", context={
+    return templates.TemplateResponse(request=request, name="education_topic.html", context={
         **ctx,
         "topic": topic_data,
         "category_label": _EDU_CATEGORIES.get(topic["category"], topic["category"]),
@@ -398,7 +392,7 @@ def education_chat_list_page(request: Request, user: Optional[UserInDB] = Depend
     finally:
         conn.close()
 
-    return _templates.TemplateResponse(request=request, name="education_chat_list.html", context={
+    return templates.TemplateResponse(request=request, name="education_chat_list.html", context={
         **ctx,
         "chat_sessions": [_serialize_row(s) for s in sessions],
         "topics": [_serialize_row(t) for t in topics],
@@ -468,7 +462,7 @@ def education_chat_room_page(request: Request, session_id: int, user: Optional[U
         conn.close()
 
     ctx = _base_ctx(request, "education_chat", user, auth_cfg)
-    return _templates.TemplateResponse(request=request, name="education_chat_room.html", context={
+    return templates.TemplateResponse(request=request, name="education_chat_room.html", context={
         **ctx,
         "session": _serialize_row(session),
         "messages": [_serialize_row(m) for m in messages],

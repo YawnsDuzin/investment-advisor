@@ -2,7 +2,6 @@
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Depends, Body, Request
 from fastapi.responses import RedirectResponse
-from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 from shared.config import DatabaseConfig, AuthConfig
 from shared.db import get_connection
@@ -14,19 +13,13 @@ from shared.tier_limits import (
 from psycopg2.extras import RealDictCursor
 from api.serialization import serialize_row as _serialize_row
 from api.page_context import base_ctx as _base_ctx
-from api.template_filters import register as _register_filters
 from api.auth.dependencies import get_current_user, get_current_user_required, quota_exceeded_detail, _get_auth_cfg
 from api.auth.models import UserInDB
+from api.templates_provider import templates
+from api.deps import get_db_cfg as _get_cfg
 
 router = APIRouter(tags=["개인화"])
 pages_router = APIRouter(tags=["개인화 페이지"])  # prefix 없음 — path는 라우트별 명시
-
-_templates = Jinja2Templates(directory="api/templates")
-_register_filters(_templates.env)
-
-
-def _get_cfg() -> DatabaseConfig:
-    return DatabaseConfig()
 
 
 def _require_user(user: Optional[UserInDB] = Depends(get_current_user_required)) -> UserInDB:
@@ -405,7 +398,7 @@ def watchlist_page(request: Request, user: Optional[UserInDB] = Depends(get_curr
     finally:
         conn.close()
 
-    return _templates.TemplateResponse(request=request, name="watchlist.html", context={
+    return templates.TemplateResponse(request=request, name="watchlist.html", context={
         **ctx,
         "watchlist": watchlist,
         "subscriptions": subscriptions,
@@ -432,7 +425,7 @@ def notifications_page(request: Request, user: Optional[UserInDB] = Depends(get_
     finally:
         conn.close()
 
-    return _templates.TemplateResponse(request=request, name="notifications.html", context={
+    return templates.TemplateResponse(request=request, name="notifications.html", context={
         **ctx,
         "notifications": notifications,
         "unread_count": unread_count,
@@ -446,7 +439,7 @@ def profile_page(request: Request, user: Optional[UserInDB] = Depends(get_curren
     if not auth_cfg.enabled or user is None:
         return RedirectResponse("/auth/login?next=/pages/profile", status_code=302)
     ctx = _base_ctx(request, "profile", user, auth_cfg)
-    return _templates.TemplateResponse(request=request, name="profile.html", context={
+    return templates.TemplateResponse(request=request, name="profile.html", context={
         **ctx,
         "error": "",
         "success": "",

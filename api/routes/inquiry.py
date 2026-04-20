@@ -2,29 +2,22 @@
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Depends, Query, Request
 from fastapi.responses import RedirectResponse
-from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
-from shared.config import DatabaseConfig, AuthConfig
+from shared.config import AuthConfig
 from shared.db import get_connection
 from psycopg2.extras import RealDictCursor
 from api.serialization import serialize_row as _serialize_row
 from api.page_context import base_ctx as _base_ctx
-from api.template_filters import register as _register_filters
 from api.auth.dependencies import get_current_user, get_current_user_required, require_role, _get_auth_cfg
 from api.auth.models import UserInDB
+from api.templates_provider import templates
+from api.deps import get_db_cfg as _get_cfg
 
 router = APIRouter(prefix="/inquiry", tags=["문의"])
 pages_router = APIRouter(prefix="/pages/inquiry", tags=["문의 페이지"])
 
-templates = Jinja2Templates(directory="api/templates")
-_register_filters(templates.env)
-
 VALID_CATEGORIES = ("general", "bug", "feature")
 VALID_STATUSES = ("open", "answered", "closed")
-
-
-def _get_cfg() -> DatabaseConfig:
-    return DatabaseConfig()
 
 
 def _can_view_private(user: Optional[UserInDB]) -> bool:
