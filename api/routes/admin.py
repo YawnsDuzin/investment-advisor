@@ -9,8 +9,8 @@ from pathlib import Path
 from typing import Optional
 from fastapi import APIRouter, Request, Query, Depends, Body, HTTPException
 from fastapi.responses import StreamingResponse, JSONResponse, PlainTextResponse, FileResponse
-from fastapi.templating import Jinja2Templates
 from shared.config import DatabaseConfig, AnalyzerConfig, AuthConfig
+from api.templates_provider import templates
 from shared.db import get_untranslated_news, update_news_title_ko, update_news_translation, get_connection
 from shared.logger import (
     get_recent_runs, get_run_logs, get_run_ai_queries,
@@ -20,8 +20,6 @@ from api.auth.dependencies import require_role, get_current_user, _get_auth_cfg
 from api.auth.models import UserInDB
 
 router = APIRouter(prefix="/admin", tags=["관리자"])
-
-templates = Jinja2Templates(directory="api/templates")
 
 # ── 실행 상태 + 로그 보관 (메모리) ──────────────
 _running = False

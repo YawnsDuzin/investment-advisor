@@ -6,7 +6,7 @@ from typing import Optional
 
 from fastapi import Request
 
-from shared.config import DatabaseConfig, AuthConfig
+from shared.config import AuthConfig
 from shared.db import get_connection
 from shared.tier_limits import (
     TIER_INFO,
@@ -15,10 +15,7 @@ from shared.tier_limits import (
     get_chat_daily_limit,
 )
 from api.auth.models import UserInDB
-
-
-def _get_cfg() -> DatabaseConfig:
-    return DatabaseConfig()
+from api.deps import get_db_cfg as _get_cfg
 
 
 def base_ctx(

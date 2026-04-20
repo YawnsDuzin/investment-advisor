@@ -2,25 +2,19 @@
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Query, Request, Depends
 from fastapi.responses import RedirectResponse
-from fastapi.templating import Jinja2Templates
-from shared.config import DatabaseConfig, AuthConfig
+from shared.config import AuthConfig
 from shared.db import get_connection
 from psycopg2.extras import RealDictCursor
 from api.auth.dependencies import get_current_user, get_current_user_required, _get_auth_cfg
 from api.auth.models import UserInDB
 from api.serialization import serialize_row as _serialize_row
 from api.page_context import base_ctx as _base_ctx
-from api.template_filters import register as _register_filters
+from api.templates_provider import templates
+from api.deps import get_db_cfg as _get_cfg
 
 router = APIRouter(prefix="/sessions", tags=["세션"])
 
 pages_router = APIRouter(prefix="/pages/sessions", tags=["세션 페이지"])
-_templates = Jinja2Templates(directory="api/templates")
-_register_filters(_templates.env)
-
-
-def _get_cfg() -> DatabaseConfig:
-    return DatabaseConfig()
 
 
 @router.get("")
@@ -161,7 +155,7 @@ def sessions_page(request: Request, limit: int = Query(default=30, ge=1, le=100)
     finally:
         conn.close()
 
-    return _templates.TemplateResponse(request=request, name="sessions.html", context={
+    return templates.TemplateResponse(request=request, name="sessions.html", context={
         **ctx,
         "sessions": [_serialize_row(s) for s in sessions],
     })
@@ -193,7 +187,7 @@ def session_detail_page(request: Request, session_id: int, user: Optional[UserIn
             cur.execute("SELECT * FROM analysis_sessions WHERE id = %s", (session_id,))
             session = cur.fetchone()
             if not session:
-                return _templates.TemplateResponse("dashboard.html", {
+                return templates.TemplateResponse("dashboard.html", {
                     "request": request, "active_page": "sessions", "session": None,
                 })
 
@@ -251,7 +245,7 @@ def session_detail_page(request: Request, session_id: int, user: Optional[UserIn
         conn.close()
 
     ctx = _base_ctx(request, "sessions", user, auth_cfg)
-    return _templates.TemplateResponse(request=request, name="session_detail.html", context={
+    return templates.TemplateResponse(request=request, name="session_detail.html", context={
         **ctx,
         "session": _serialize_row(session),
         "issues": [_serialize_row(i) for i in issues],

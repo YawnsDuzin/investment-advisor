@@ -8,25 +8,19 @@ from typing import Optional
 
 from fastapi import APIRouter, Request, Depends
 from fastapi.responses import RedirectResponse
-from fastapi.templating import Jinja2Templates
 from psycopg2.extras import RealDictCursor
 
-from shared.config import DatabaseConfig, AuthConfig
+from shared.config import AuthConfig
 from shared.db import get_connection
 from shared.tier_limits import TIER_INFO
 from api.serialization import serialize_row as _serialize_row
 from api.page_context import base_ctx as _base_ctx
-from api.template_filters import register as _register_filters
+from api.templates_provider import templates
+from api.deps import get_db_cfg as _get_cfg
 from api.auth.dependencies import get_current_user, _get_auth_cfg
 from api.auth.models import UserInDB
 
 pages_router = APIRouter(tags=["대시보드"])
-templates = Jinja2Templates(directory="api/templates")
-_register_filters(templates.env)
-
-
-def _get_cfg() -> DatabaseConfig:
-    return DatabaseConfig()
 
 
 # ──────────────────────────────────────────────

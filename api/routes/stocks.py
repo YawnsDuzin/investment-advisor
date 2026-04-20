@@ -2,21 +2,17 @@
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from fastapi.templating import Jinja2Templates
 
 from analyzer.stock_data import fetch_fundamentals
 from api.auth.dependencies import _get_auth_cfg, get_current_user
 from api.auth.models import UserInDB
 from api.page_context import base_ctx as _base_ctx
-from api.template_filters import register as _register_filters
+from api.templates_provider import templates
 from shared.config import AuthConfig
 
 router = APIRouter(prefix="/api/stocks", tags=["종목 기초정보"])
 
 pages_router = APIRouter(prefix="/pages/stocks", tags=["종목 페이지"])
-
-templates = Jinja2Templates(directory="api/templates")
-_register_filters(templates.env)
 
 
 @router.get("/{ticker}/fundamentals")

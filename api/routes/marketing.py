@@ -2,7 +2,6 @@
 from typing import Optional
 
 from fastapi import APIRouter, Request, Depends
-from fastapi.templating import Jinja2Templates
 
 from shared.config import AuthConfig
 from shared.tier_limits import (
@@ -14,13 +13,11 @@ from shared.tier_limits import (
     HISTORY_DAYS_LIMITS,
 )
 from api.page_context import base_ctx as _base_ctx
-from api.template_filters import register as _register_filters
+from api.templates_provider import templates
 from api.auth.dependencies import get_current_user, _get_auth_cfg
 from api.auth.models import UserInDB
 
 pages_router = APIRouter(tags=["마케팅 페이지"])
-templates = Jinja2Templates(directory="api/templates")
-_register_filters(templates.env)
 
 
 @pages_router.get("/pages/landing")
