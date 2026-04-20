@@ -1,19 +1,17 @@
 """테마 채팅 API — 대화 세션 CRUD + 메시지 전송"""
 from typing import Optional
 from datetime import datetime, timezone, timedelta
-from fastapi import APIRouter, HTTPException, Depends, Request, Query
+from fastapi import APIRouter, HTTPException, Depends, Query
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
-from shared.config import AuthConfig
 from shared.tier_limits import get_chat_daily_limit, is_unlimited
 from psycopg2.extras import RealDictCursor
 from api.chat_engine import build_theme_context, query_theme_chat_sync
-from api.auth.dependencies import get_current_user_required, get_current_user, _get_auth_cfg, quota_exceeded_detail
+from api.auth.dependencies import get_current_user_required, quota_exceeded_detail
 from api.auth.models import UserInDB
-from api.page_context import base_ctx as _base_ctx
 from api.serialization import serialize_row as _serialize_row
 from api.templates_provider import templates
-from api.deps import get_db_conn
+from api.deps import get_db_conn, make_page_ctx
 
 # 서비스 운영 타임존 — 일일 한도는 KST 기준으로 리셋
 _KST = timezone(timedelta(hours=9))
@@ -288,9 +286,10 @@ def send_message(session_id: int, body: ChatMessageRequest, conn=Depends(get_db_
 
 
 @pages_router.get("")
-def chat_list_page(request: Request, conn=Depends(get_db_conn), theme_id: int | None = Query(default=None), user: Optional[UserInDB] = Depends(get_current_user), auth_cfg: AuthConfig = Depends(_get_auth_cfg)):
+def chat_list_page(ctx: dict = Depends(make_page_ctx("chat")), conn=Depends(get_db_conn), theme_id: int | None = Query(default=None)):
     """채팅 세션 목록 — 로그인 필수, Pro 이상 티어 (admin/moderator는 무조건 허용)"""
-    if auth_cfg.enabled:
+    user = ctx["_user"]
+    if ctx["auth_enabled"]:
         if user is None:
             return RedirectResponse("/auth/login?next=/pages/chat", status_code=302)
         if user.role not in ("admin", "moderator"):
@@ -298,7 +297,6 @@ def chat_list_page(request: Request, conn=Depends(get_db_conn), theme_id: int | 
             if daily_limit is not None and daily_limit <= 0:
                 from fastapi import HTTPException
                 raise HTTPException(status_code=402, detail="AI 채팅은 Pro 이상 플랜에서 이용 가능합니다.")
-    ctx = _base_ctx(request, "chat", user, auth_cfg)
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         # 테마 목록 (드롭다운용)
         cur.execute("""
@@ -336,7 +334,7 @@ def chat_list_page(request: Request, conn=Depends(get_db_conn), theme_id: int | 
         cur.execute(query, params)
         chat_sessions = cur.fetchall()
 
-    return templates.TemplateResponse(request=request, name="chat_list.html", context={
+    return templates.TemplateResponse(request=ctx["request"], name="chat_list.html", context={
         **ctx,
         "themes": [_serialize_row(t) for t in themes],
         "chat_sessions": [_serialize_row(s) for s in chat_sessions],
@@ -345,9 +343,10 @@ def chat_list_page(request: Request, conn=Depends(get_db_conn), theme_id: int | 
 
 
 @pages_router.get("/new/{theme_id}")
-def chat_new_redirect(request: Request, theme_id: int, conn=Depends(get_db_conn), user: Optional[UserInDB] = Depends(get_current_user), auth_cfg: AuthConfig = Depends(_get_auth_cfg)):
+def chat_new_redirect(theme_id: int, ctx: dict = Depends(make_page_ctx("chat")), conn=Depends(get_db_conn)):
     """새 채팅 세션 생성 → 채팅방으로 리다이렉트 (Pro 이상 티어)"""
-    if auth_cfg.enabled:
+    user = ctx["_user"]
+    if ctx["auth_enabled"]:
         if user is None:
             return RedirectResponse(f"/auth/login?next=/pages/chat/new/{theme_id}", status_code=302)
         if user.role not in ("admin", "moderator"):
@@ -375,9 +374,10 @@ def chat_new_redirect(request: Request, theme_id: int, conn=Depends(get_db_conn)
 
 
 @pages_router.get("/{chat_session_id}")
-def chat_room_page(request: Request, chat_session_id: int, conn=Depends(get_db_conn), user: Optional[UserInDB] = Depends(get_current_user), auth_cfg: AuthConfig = Depends(_get_auth_cfg)):
+def chat_room_page(chat_session_id: int, ctx: dict = Depends(make_page_ctx("chat")), conn=Depends(get_db_conn)):
     """채팅 대화 화면 — 로그인 필수, Pro 이상 티어, 본인 세션만 (Admin은 전체)"""
-    if auth_cfg.enabled:
+    user = ctx["_user"]
+    if ctx["auth_enabled"]:
         if user is None:
             return RedirectResponse(f"/auth/login?next=/pages/chat/{chat_session_id}", status_code=302)
         if user.role not in ("admin", "moderator"):
@@ -401,7 +401,7 @@ def chat_room_page(request: Request, chat_session_id: int, conn=Depends(get_db_c
             return RedirectResponse(url="/pages/chat", status_code=302)
 
         # 소유권 검증 (Admin은 모든 세션 접근 가능)
-        if auth_cfg.enabled and user and user.role != "admin" and session.get("user_id") != user.id:
+        if ctx["auth_enabled"] and user and user.role != "admin" and session.get("user_id") != user.id:
             return RedirectResponse(url="/pages/chat", status_code=302)
 
         # 메시지 이력
@@ -413,8 +413,7 @@ def chat_room_page(request: Request, chat_session_id: int, conn=Depends(get_db_c
         """, (chat_session_id,))
         messages = cur.fetchall()
 
-    ctx = _base_ctx(request, "chat", user, auth_cfg)
-    return templates.TemplateResponse(request=request, name="chat_room.html", context={
+    return templates.TemplateResponse(request=ctx["request"], name="chat_room.html", context={
         **ctx,
         "session": _serialize_row(session),
         "messages": [_serialize_row(m) for m in messages],

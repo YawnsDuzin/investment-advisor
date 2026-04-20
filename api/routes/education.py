@@ -2,19 +2,17 @@
 import json as _json
 from typing import Optional
 from datetime import datetime, timezone, timedelta
-from fastapi import APIRouter, HTTPException, Depends, Request
+from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
-from shared.config import AuthConfig
 from shared.tier_limits import get_edu_chat_daily_limit, is_unlimited
 from psycopg2.extras import RealDictCursor
 from api.serialization import serialize_row as _serialize_row
-from api.page_context import base_ctx as _base_ctx
 from api.education_engine import build_topic_context, query_edu_chat_sync
-from api.auth.dependencies import get_current_user, get_current_user_required, quota_exceeded_detail, _get_auth_cfg
+from api.auth.dependencies import get_current_user_required, quota_exceeded_detail
 from api.auth.models import UserInDB
 from api.templates_provider import templates
-from api.deps import get_db_conn
+from api.deps import get_db_conn, make_page_ctx
 
 _KST = timezone(timedelta(hours=9))
 
@@ -247,9 +245,8 @@ def send_edu_message(session_id: int, body: EduMessageRequest, conn=Depends(get_
 
 
 @pages_router.get("")
-def education_page(request: Request, conn=Depends(get_db_conn), category: str | None = None, user: Optional[UserInDB] = Depends(get_current_user), auth_cfg: AuthConfig = Depends(_get_auth_cfg)):
+def education_page(ctx: dict = Depends(make_page_ctx("education")), conn=Depends(get_db_conn), category: str | None = None):
     """투자 교육 토픽 목록 페이지"""
-    ctx = _base_ctx(request, "education", user, auth_cfg)
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         query = "SELECT id, category, slug, title, summary, difficulty, sort_order FROM education_topics"
         params = []
@@ -268,7 +265,7 @@ def education_page(request: Request, conn=Depends(get_db_conn), category: str | 
             grouped[cat] = {"label": _EDU_CATEGORIES.get(cat, cat), "topics": []}
         grouped[cat]["topics"].append(_serialize_row(t))
 
-    return templates.TemplateResponse(request=request, name="education.html", context={
+    return templates.TemplateResponse(request=ctx["request"], name="education.html", context={
         **ctx,
         "grouped_topics": grouped,
         "selected_category": category,
@@ -277,9 +274,8 @@ def education_page(request: Request, conn=Depends(get_db_conn), category: str | 
 
 
 @pages_router.get("/topic/{slug}")
-def education_topic_page(request: Request, slug: str, conn=Depends(get_db_conn), user: Optional[UserInDB] = Depends(get_current_user), auth_cfg: AuthConfig = Depends(_get_auth_cfg)):
+def education_topic_page(slug: str, ctx: dict = Depends(make_page_ctx("education")), conn=Depends(get_db_conn)):
     """교육 토픽 상세 페이지"""
-    ctx = _base_ctx(request, "education", user, auth_cfg)
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute("SELECT * FROM education_topics WHERE slug = %s", (slug,))
         topic = cur.fetchone()
@@ -312,7 +308,7 @@ def education_topic_page(request: Request, slug: str, conn=Depends(get_db_conn),
         except (ValueError, TypeError):
             topic_data["examples"] = []
 
-    return templates.TemplateResponse(request=request, name="education_topic.html", context={
+    return templates.TemplateResponse(request=ctx["request"], name="education_topic.html", context={
         **ctx,
         "topic": topic_data,
         "category_label": _EDU_CATEGORIES.get(topic["category"], topic["category"]),
@@ -322,12 +318,12 @@ def education_topic_page(request: Request, slug: str, conn=Depends(get_db_conn),
 
 
 @pages_router.get("/chat")
-def education_chat_list_page(request: Request, conn=Depends(get_db_conn), user: Optional[UserInDB] = Depends(get_current_user), auth_cfg: AuthConfig = Depends(_get_auth_cfg)):
+def education_chat_list_page(ctx: dict = Depends(make_page_ctx("education_chat")), conn=Depends(get_db_conn)):
     """AI 튜터 채팅 목록 페이지"""
-    if auth_cfg.enabled and user is None:
+    user = ctx["_user"]
+    if ctx["auth_enabled"] and user is None:
         return RedirectResponse("/auth/login?next=/pages/education/chat", status_code=302)
 
-    ctx = _base_ctx(request, "education_chat", user, auth_cfg)
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         # 세션 목록
         q = """
@@ -349,7 +345,7 @@ def education_chat_list_page(request: Request, conn=Depends(get_db_conn), user: 
         cur.execute("SELECT id, title, category FROM education_topics ORDER BY sort_order, id")
         topics = cur.fetchall()
 
-    return templates.TemplateResponse(request=request, name="education_chat_list.html", context={
+    return templates.TemplateResponse(request=ctx["request"], name="education_chat_list.html", context={
         **ctx,
         "chat_sessions": [_serialize_row(s) for s in sessions],
         "topics": [_serialize_row(t) for t in topics],
@@ -357,9 +353,10 @@ def education_chat_list_page(request: Request, conn=Depends(get_db_conn), user: 
 
 
 @pages_router.get("/chat/new/{topic_id}")
-def education_chat_new_redirect(request: Request, topic_id: int, conn=Depends(get_db_conn), user: Optional[UserInDB] = Depends(get_current_user), auth_cfg: AuthConfig = Depends(_get_auth_cfg)):
+def education_chat_new_redirect(topic_id: int, ctx: dict = Depends(make_page_ctx("education_chat")), conn=Depends(get_db_conn)):
     """AI 튜터 새 채팅 세션 생성 → 채팅방으로 리다이렉트"""
-    if auth_cfg.enabled and user is None:
+    user = ctx["_user"]
+    if ctx["auth_enabled"] and user is None:
         return RedirectResponse(f"/auth/login?next=/pages/education/chat/new/{topic_id}", status_code=302)
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute("SELECT id, title FROM education_topics WHERE id = %s", (topic_id,))
@@ -380,9 +377,10 @@ def education_chat_new_redirect(request: Request, topic_id: int, conn=Depends(ge
 
 
 @pages_router.get("/chat/{session_id}")
-def education_chat_room_page(request: Request, session_id: int, conn=Depends(get_db_conn), user: Optional[UserInDB] = Depends(get_current_user), auth_cfg: AuthConfig = Depends(_get_auth_cfg)):
+def education_chat_room_page(session_id: int, ctx: dict = Depends(make_page_ctx("education_chat")), conn=Depends(get_db_conn)):
     """AI 튜터 채팅방 페이지"""
-    if auth_cfg.enabled and user is None:
+    user = ctx["_user"]
+    if ctx["auth_enabled"] and user is None:
         return RedirectResponse(f"/auth/login?next=/pages/education/chat/{session_id}", status_code=302)
 
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -398,7 +396,7 @@ def education_chat_room_page(request: Request, session_id: int, conn=Depends(get
             return RedirectResponse(url="/pages/education/chat", status_code=302)
 
         # 소유권 검증
-        if auth_cfg.enabled and user and user.role != "admin" and session.get("user_id") != user.id:
+        if ctx["auth_enabled"] and user and user.role != "admin" and session.get("user_id") != user.id:
             return RedirectResponse(url="/pages/education/chat", status_code=302)
 
         cur.execute("""
@@ -409,8 +407,7 @@ def education_chat_room_page(request: Request, session_id: int, conn=Depends(get
         """, (session_id,))
         messages = cur.fetchall()
 
-    ctx = _base_ctx(request, "education_chat", user, auth_cfg)
-    return templates.TemplateResponse(request=request, name="education_chat_room.html", context={
+    return templates.TemplateResponse(request=ctx["request"], name="education_chat_room.html", context={
         **ctx,
         "session": _serialize_row(session),
         "messages": [_serialize_row(m) for m in messages],

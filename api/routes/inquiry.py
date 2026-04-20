@@ -1,16 +1,14 @@
 """고객 문의/개선요청 API — 게시판 CRUD + 답변 + 페이지 라우트"""
 from typing import Optional
-from fastapi import APIRouter, HTTPException, Depends, Query, Request
+from fastapi import APIRouter, HTTPException, Depends, Query
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
-from shared.config import AuthConfig
 from psycopg2.extras import RealDictCursor
 from api.serialization import serialize_row as _serialize_row
-from api.page_context import base_ctx as _base_ctx
 from api.auth.dependencies import get_current_user, get_current_user_required, require_role, _get_auth_cfg
 from api.auth.models import UserInDB
 from api.templates_provider import templates
-from api.deps import get_db_conn
+from api.deps import get_db_conn, make_page_ctx
 
 router = APIRouter(prefix="/inquiry", tags=["문의"])
 pages_router = APIRouter(prefix="/pages/inquiry", tags=["문의 페이지"])
@@ -272,22 +270,19 @@ def update_inquiry_status(
 
 @pages_router.get("")
 def inquiry_list_page(
-    request: Request,
+    ctx: dict = Depends(make_page_ctx("inquiry")),
     conn=Depends(get_db_conn),
     category: Optional[str] = Query(default=None),
     status: Optional[str] = Query(default=None),
     page: int = Query(default=1, ge=1),
-    user: Optional[UserInDB] = Depends(get_current_user),
-    auth_cfg: AuthConfig = Depends(_get_auth_cfg),
 ):
     """문의 게시판 목록 페이지"""
+    user = ctx["_user"]
     # 유효하지 않은 필터값 무시
     if category and category not in ("general", "bug", "feature"):
         category = None
     if status and status not in ("open", "answered", "closed"):
         status = None
-
-    ctx = _base_ctx(request, "inquiry", user, auth_cfg)
 
     per_page = 20
     offset = (page - 1) * per_page
@@ -332,7 +327,7 @@ def inquiry_list_page(
 
     total_pages = max(1, (total + per_page - 1) // per_page)
 
-    return templates.TemplateResponse(request=request, name="inquiry_list.html", context={
+    return templates.TemplateResponse(request=ctx["request"], name="inquiry_list.html", context={
         **ctx,
         "inquiries": inquiries,
         "total": total,
@@ -344,29 +339,21 @@ def inquiry_list_page(
 
 
 @pages_router.get("/new")
-def inquiry_new_page(
-    request: Request,
-    user: Optional[UserInDB] = Depends(get_current_user),
-    auth_cfg: AuthConfig = Depends(_get_auth_cfg),
-):
+def inquiry_new_page(ctx: dict = Depends(make_page_ctx("inquiry"))):
     """문의 작성 페이지 — 로그인 필수"""
-    if auth_cfg.enabled and not user:
+    if ctx["auth_enabled"] and not ctx["_user"]:
         return RedirectResponse(url="/auth/login?next=/pages/inquiry/new", status_code=302)
-    ctx = _base_ctx(request, "inquiry", user, auth_cfg)
-    return templates.TemplateResponse(request=request, name="inquiry_new.html", context=ctx)
+    return templates.TemplateResponse(request=ctx["request"], name="inquiry_new.html", context=ctx)
 
 
 @pages_router.get("/{inquiry_id}")
 def inquiry_detail_page(
-    request: Request,
     inquiry_id: int,
+    ctx: dict = Depends(make_page_ctx("inquiry")),
     conn=Depends(get_db_conn),
-    user: Optional[UserInDB] = Depends(get_current_user),
-    auth_cfg: AuthConfig = Depends(_get_auth_cfg),
 ):
     """문의 상세 페이지"""
-    ctx = _base_ctx(request, "inquiry", user, auth_cfg)
-
+    user = ctx["_user"]
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute(
             """
@@ -405,7 +392,7 @@ def inquiry_detail_page(
     is_author = user and inquiry.get("user_id") == user.id
     is_staff = user and user.role in ("admin", "moderator")
 
-    return templates.TemplateResponse(request=request, name="inquiry_detail.html", context={
+    return templates.TemplateResponse(request=ctx["request"], name="inquiry_detail.html", context={
         **ctx,
         "inquiry": inquiry,
         "replies": replies,

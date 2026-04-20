@@ -1,15 +1,13 @@
 """투자 제안 조회 API"""
 from datetime import date
 from typing import Optional
-from fastapi import APIRouter, HTTPException, Query, Request, Depends
+from fastapi import APIRouter, HTTPException, Query, Depends
 from fastapi.responses import HTMLResponse
-from shared.config import AuthConfig
 from psycopg2.extras import RealDictCursor
 from api.serialization import serialize_row as _serialize_row
-from api.page_context import base_ctx as _base_ctx
 from api.templates_provider import templates
-from api.deps import get_db_conn
-from api.auth.dependencies import get_current_user, get_current_user_required, _get_auth_cfg
+from api.deps import get_db_conn, make_page_ctx
+from api.auth.dependencies import get_current_user_required
 from api.auth.models import UserInDB
 
 router = APIRouter(prefix="/proposals", tags=["투자 제안"])
@@ -181,14 +179,11 @@ def get_stock_analysis(proposal_id: int, conn=Depends(get_db_conn), _user: Optio
 
 @router.get("/{proposal_id}/stock-analysis", response_class=HTMLResponse)
 def stock_analysis_page(
-    request: Request,
     proposal_id: int,
+    ctx: dict = Depends(make_page_ctx("proposals")),
     conn=Depends(get_db_conn),
-    user: Optional[UserInDB] = Depends(get_current_user),
-    auth_cfg: AuthConfig = Depends(_get_auth_cfg),
 ):
     """투자 제안 종목의 심층분석 리포트 페이지"""
-    ctx = _base_ctx(request, "proposals", user, auth_cfg)
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute("""
             SELECT sa.*,
@@ -208,7 +203,7 @@ def stock_analysis_page(
         """, (proposal_id,))
         row = cur.fetchone()
 
-    return templates.TemplateResponse(request=request, name="stock_analysis.html", context={
+    return templates.TemplateResponse(request=ctx["request"], name="stock_analysis.html", context={
         **ctx,
         "proposal_id": proposal_id,
         "analysis": _serialize_row(row) if row else None,
@@ -216,9 +211,8 @@ def stock_analysis_page(
 
 
 @pages_router.get("/history/{ticker}")
-def ticker_history_page(request: Request, ticker: str, conn=Depends(get_db_conn), user: Optional[UserInDB] = Depends(get_current_user), auth_cfg: AuthConfig = Depends(_get_auth_cfg)):
+def ticker_history_page(ticker: str, ctx: dict = Depends(make_page_ctx("proposals")), conn=Depends(get_db_conn)):
     """특정 종목의 일자별 추천 이력"""
-    ctx = _base_ctx(request, "proposals", user, auth_cfg)
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         # 추적 정보
         cur.execute("""
@@ -266,7 +260,7 @@ def ticker_history_page(request: Request, ticker: str, conn=Depends(get_db_conn)
             "latest_currency": currency,
         }
 
-    return templates.TemplateResponse(request=request, name="ticker_history.html", context={
+    return templates.TemplateResponse(request=ctx["request"], name="ticker_history.html", context={
         **ctx,
         "ticker": ticker.upper(),
         "tracking": tracking,
@@ -276,7 +270,7 @@ def ticker_history_page(request: Request, ticker: str, conn=Depends(get_db_conn)
 
 @pages_router.get("")
 def proposals_page(
-    request: Request,
+    ctx: dict = Depends(make_page_ctx("proposals")),
     conn=Depends(get_db_conn),
     action: str | None = Query(default=None),
     asset_type: str | None = Query(default=None),
@@ -290,9 +284,8 @@ def proposals_page(
     time_horizon: str | None = Query(default=None, description="투자기간"),
     sort: str | None = Query(default=None, description="정렬 기준"),
     limit: int = Query(default=50, ge=1, le=200),
-    user: Optional[UserInDB] = Depends(get_current_user),
-    auth_cfg: AuthConfig = Depends(_get_auth_cfg),
 ):
+    user = ctx["_user"]
     # 날짜 기본값: 오늘
     today = date.today().isoformat()
     if not date_from:
@@ -391,8 +384,7 @@ def proposals_page(
                 )
                 user_memos = {r["proposal_id"]: r["content"] for r in cur.fetchall()}
 
-    ctx = _base_ctx(request, "proposals", user, auth_cfg)
-    return templates.TemplateResponse(request=request, name="proposals.html", context={
+    return templates.TemplateResponse(request=ctx["request"], name="proposals.html", context={
         **ctx,
         "proposals": [_serialize_row(p) for p in proposals],
         "prop_tracking": prop_tracking,
