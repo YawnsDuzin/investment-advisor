@@ -79,6 +79,7 @@ def _create_base_schema(cur) -> None:
 def init_db(cfg: DatabaseConfig) -> None:
     """PostgreSQL 설치 확인 → 데이터베이스 생성 → 스키마 마이그레이션"""
     from shared.pg_setup import ensure_postgresql
+    from shared.db.migrations import run_migrations
     if not ensure_postgresql(cfg.host, cfg.port):
         raise RuntimeError("PostgreSQL을 사용할 수 없습니다. 설치 후 다시 실행하세요.")
     _ensure_database(cfg)
@@ -90,72 +91,9 @@ def init_db(cfg: DatabaseConfig) -> None:
             if current < 1:
                 _create_base_schema(cur)
                 print("[DB] v1 기본 스키마 생성 완료")
+                current = 1
 
-            if current < 2:
-                _migrate_to_v2(cur)
-
-            if current < 3:
-                _migrate_to_v3(cur)
-
-            if current < 4:
-                _migrate_to_v4(cur)
-
-            if current < 5:
-                _migrate_to_v5(cur)
-
-            if current < 6:
-                _migrate_to_v6(cur)
-
-            if current < 7:
-                _migrate_to_v7(cur)
-
-            if current < 8:
-                _migrate_to_v8(cur)
-
-            if current < 9:
-                _migrate_to_v9(cur)
-
-            if current < 10:
-                _migrate_to_v10(cur)
-
-            if current < 11:
-                _migrate_to_v11(cur)
-
-            if current < 12:
-                _migrate_to_v12(cur)
-
-            if current < 13:
-                _migrate_to_v13(cur)
-
-            if current < 14:
-                _migrate_to_v14(cur)
-
-            if current < 15:
-                _migrate_to_v15(cur)
-
-            if current < 16:
-                _migrate_to_v16(cur)
-
-            if current < 17:
-                _migrate_to_v17(cur)
-
-            if current < 18:
-                _migrate_to_v18(cur)
-
-            if current < 19:
-                _migrate_to_v19(cur)
-
-            if current < 20:
-                _migrate_to_v20(cur)
-
-            if current < 21:
-                _migrate_to_v21(cur)
-
-            if current < 22:
-                _migrate_to_v22(cur)
-
-            if current < 23:
-                _migrate_to_v23(cur)
+            run_migrations(cur, current, SCHEMA_VERSION)
 
         conn.commit()
         print("[DB] 테이블 초기화 완료")
