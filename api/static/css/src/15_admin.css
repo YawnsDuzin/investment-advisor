@@ -1,0 +1,202 @@
+/* ===== Session Card Top ===== */
+.session-card-top {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.session-card-row1 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.session-card-date {
+    font-weight: 700;
+    font-size: 16px;
+}
+
+.session-card-row2 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+    flex-wrap: nowrap;
+}
+
+/* ===== Admin Page ===== */
+.admin-status {
+    display: inline-block;
+    padding: 4px 14px;
+    border-radius: 9999px;
+    font-size: 13px;
+    font-weight: 600;
+    border: 1px solid transparent;
+}
+
+.admin-status-idle {
+    background: rgba(139,143,163,0.15);
+    color: var(--text-muted);
+    border-color: rgba(139,143,163,0.2);
+}
+
+.admin-status-running {
+    background: rgba(79,140,255,0.15);
+    color: var(--accent);
+    border-color: rgba(79,140,255,0.25);
+    animation: adminPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes adminPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+}
+
+.admin-progress-bar {
+    height: 6px;
+    background: var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 6px;
+}
+
+.admin-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--green));
+    border-radius: 4px;
+    width: 0%;
+    transition: width 0.5s ease;
+}
+
+.admin-progress-label {
+    font-size: 13px;
+    color: var(--text-muted);
+}
+
+.admin-log-viewer {
+    background: #0a0c10;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 13px;
+    line-height: 1.7;
+    max-height: 500px;
+    overflow-y: auto;
+    min-height: 200px;
+}
+
+.admin-log-empty {
+    color: var(--text-muted);
+    text-align: center;
+    padding: 40px;
+    font-family: inherit;
+}
+
+.admin-log-line {
+    color: #c0c4d0;
+    white-space: pre-wrap;
+    word-break: break-all;
+    padding: 1px 0;
+}
+
+.admin-log-error { color: var(--red); }
+.admin-log-success { color: var(--green); }
+.admin-log-info { color: var(--accent); }
+
+/* =====================================================================
+   사용자 관리 공용 컴포넌트 (User Admin)
+   ===================================================================== */
+
+/* ----- User Admin: 확장 패널 ----- */
+.user-expand-row { display: none; }
+.user-expand-row.open { display: table-row; }
+.user-expand-cell {
+    padding: 0 14px 16px;
+    background: var(--bg-card);
+    border-bottom: 1px solid var(--border);
+}
+.user-expand-inner {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 16px;
+    padding: 16px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+}
+.user-expand-section h4 {
+    font-size: 12px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 10px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+}
+.user-expand-section .field-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    font-size: 13px;
+}
+.user-expand-section .field-label {
+    color: var(--text-muted);
+    min-width: 52px;
+    font-size: 12px;
+}
+.user-expand-section select,
+.user-expand-section input[type="date"] {
+    padding: 6px 10px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 13px;
+}
+.user-expand-section select:focus,
+.user-expand-section input[type="date"]:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+.user-expand-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 8px;
+}
+
+/* ----- User Admin: 모바일 반응형 ----- */
+@media (max-width: 768px) {
+    .user-expand-inner {
+        grid-template-columns: 1fr;
+        gap: 12px;
+        padding: 12px;
+    }
+    /* table-stack-mobile 내부 확장 셀: flex 대신 block */
+    .table-stack-mobile .user-expand-cell {
+        display: block;
+        padding: 0 8px 12px;
+    }
+    .table-stack-mobile .user-expand-cell::before { display: none; }
+    .user-expand-section select,
+    .user-expand-section input[type="date"] {
+        min-height: 44px;
+        width: 100%;
+    }
+    .user-expand-actions .btn {
+        min-height: 44px;
+        flex: 1;
+    }
+    .pagination a, .pagination span {
+        padding: 10px 14px;
+        min-width: 44px;
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+}

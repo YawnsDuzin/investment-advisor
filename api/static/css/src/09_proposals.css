@@ -1,0 +1,327 @@
+/* ===== Detail Sections ===== */
+.detail-text {
+    font-size: 15px;
+    color: var(--text-muted);
+    line-height: 1.8;
+    margin-top: 10px;
+    white-space: pre-line;
+}
+
+/* ===== Proposal Card ===== */
+.proposal-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 22px;
+    margin-bottom: 14px;
+    transition: border-color 0.15s;
+}
+.proposal-card:hover { border-color: #3a3e4a; }
+
+.proposal-card-header {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 14px;
+}
+
+.proposal-card-header .asset-name {
+    font-size: 17px;
+    font-weight: 600;
+}
+
+.proposal-card-header .ticker {
+    font-size: 14px;
+    color: var(--text-muted);
+}
+
+.proposal-card-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 18px;
+    align-items: center;
+    margin-bottom: 16px;
+    font-size: 14px;
+}
+
+.proposal-card-meta .meta-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.proposal-card-meta .meta-label {
+    color: var(--text-muted);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.proposal-card-body {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px;
+}
+
+.proposal-card-body .field-group {
+    font-size: 14px;
+    line-height: 1.8;
+}
+
+.proposal-card-body .field-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+}
+
+.proposal-card-body .field-value {
+    color: var(--text);
+    white-space: pre-line;
+}
+
+@media (max-width: 768px) {
+    .proposal-card-body { grid-template-columns: 1fr; }
+}
+
+.section-title {
+    font-size: 18px;
+    font-weight: 600;
+    margin: 36px 0 18px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+}
+
+/* ===== Proposal Row ===== */
+.proposal-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(42,46,58,0.5);
+    font-size: 14px;
+}
+
+.proposal-row:last-child { border-bottom: none; }
+.proposal-name { font-weight: 600; min-width: 140px; }
+.proposal-ticker { color: var(--text-muted); min-width: 80px; }
+.proposal-alloc { min-width: 60px; text-align: right; }
+
+/* ===== Price Target / Score Display ===== */
+.price-target {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 14px;
+    margin-top: 8px;
+}
+
+.price-range { font-weight: 600; color: var(--accent); }
+
+.upside-badge {
+    font-size: 13px;
+    padding: 2px 10px;
+    border-radius: 9999px;
+    font-weight: 600;
+    border: 1px solid transparent;
+}
+
+.upside-positive { background: rgba(52,211,153,0.15); color: var(--green); border-color: rgba(52,211,153,0.25); }
+.upside-negative { background: rgba(248,113,113,0.15); color: var(--red); border-color: rgba(248,113,113,0.25); }
+
+.score-display {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 13px;
+    padding: 3px 10px;
+    border-radius: 9999px;
+    background: rgba(79,140,255,0.1);
+    border: 1px solid rgba(79,140,255,0.2);
+    color: var(--accent);
+    font-weight: 600;
+}
+
+.score-sentiment { background: rgba(147,130,255,0.1); color: var(--purple); }
+
+.stock-analysis-link {
+    display: inline-block;
+    margin-top: 10px;
+    font-size: 13px;
+    padding: 6px 14px;
+    border-radius: 8px;
+    background: rgba(79,140,255,0.1);
+    color: var(--accent);
+    font-weight: 500;
+    border: 1px solid rgba(79,140,255,0.2);
+    transition: all 0.15s;
+}
+.stock-analysis-link:hover { background: rgba(79,140,255,0.2); color: var(--accent-hover); }
+
+/* ===== Tracking Badges ===== */
+.tracking-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    padding: 2px 10px;
+    border-radius: 9999px;
+    font-weight: 600;
+    border: 1px solid transparent;
+}
+
+.tracking-badge-streak {
+    background: rgba(79,140,255,0.12);
+    color: var(--accent);
+    border-color: rgba(79,140,255,0.2);
+}
+
+.tracking-badge-new {
+    background: rgba(52,211,153,0.15);
+    color: var(--green);
+    border-color: rgba(52,211,153,0.25);
+}
+
+.tracking-badge-gone {
+    background: rgba(248,113,113,0.12);
+    color: var(--red);
+    border-color: rgba(248,113,113,0.2);
+}
+
+.confidence-change {
+    font-size: 13px;
+    font-weight: 600;
+    margin-left: 6px;
+}
+.confidence-up { color: var(--green); }
+.confidence-down { color: var(--red); }
+
+/* ===== 제안 상세 탭 분할 (UI-12) + Sticky CTA (UI-13) ===== */
+.detail-panel {
+    padding: 10px 14px;
+    background: rgba(79,140,255,0.04);
+    border-left: 3px solid var(--accent);
+    font-size: 13px;
+    line-height: 1.55;
+}
+
+/* 상단 CTA — 버튼 크기만큼만 차지 */
+.detail-sticky-cta {
+    display: flex;
+    gap: 6px;
+    padding: 4px 0 6px;
+    margin-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+}
+.detail-cta-btn {
+    flex: 0 0 auto;
+    min-height: 28px;
+    padding: 4px 12px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+}
+.detail-cta-btn:hover {
+    background: var(--bg-card-hover);
+    border-color: rgba(79,140,255,0.4);
+}
+
+/* 섹션 스택 (탭 제거 — 한번에 전체 표시) */
+.detail-section {
+    padding: 6px 0 8px;
+    border-bottom: 1px dashed rgba(255,255,255,0.06);
+    margin-bottom: 6px;
+}
+.detail-section:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+}
+.detail-section-title {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+}
+
+.detail-meta-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.meta-tag {
+    font-size: 12px;
+    padding: 3px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+}
+.meta-tag-sector { background: rgba(147,130,255,0.1); border-color: rgba(147,130,255,0.2); color: var(--purple); }
+.meta-tag-discovery { background: rgba(52,211,153,0.1); border-color: rgba(52,211,153,0.2); color: var(--green); }
+.meta-tag-momentum { background: rgba(251,191,36,0.1); border-color: rgba(251,191,36,0.2); color: var(--orange); }
+.meta-tag-supply { background: rgba(79,140,255,0.1); border-color: rgba(79,140,255,0.2); color: var(--accent); }
+.meta-tag-neutral { background: rgba(255,255,255,0.05); }
+
+.detail-return-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.detail-return-chip {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+    padding: 3px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    font-size: 12px;
+}
+.detail-return-chip.positive {
+    background: rgba(52,211,153,0.08);
+    border-color: rgba(52,211,153,0.25);
+    color: var(--green);
+}
+.detail-return-chip.negative {
+    background: rgba(248,113,113,0.08);
+    border-color: rgba(248,113,113,0.25);
+    color: var(--red);
+}
+.detail-return-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-weight: 600;
+}
+.detail-return-value {
+    font-size: 13px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.detail-block { margin-bottom: 6px; }
+.detail-label {
+    color: var(--text-muted);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    display: block;
+    margin-bottom: 4px;
+}
+.detail-cond-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-top: 4px;
+}

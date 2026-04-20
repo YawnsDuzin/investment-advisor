@@ -1,0 +1,260 @@
+/* ===== Cards ===== */
+.card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 24px;
+    margin-bottom: 18px;
+}
+
+.card:hover { border-color: #3a3e4a; }
+
+.card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.card-title { font-size: 18px; font-weight: 600; }
+
+/* ===== Stat Grid (Dashboard) ===== */
+.stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin-bottom: 28px;
+}
+
+.stat-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 24px;
+    text-align: center;
+}
+
+.stat-value {
+    font-size: 36px;
+    font-weight: 700;
+    color: var(--accent);
+    margin-bottom: 4px;
+}
+
+.stat-label {
+    font-size: 14px;
+    color: var(--text-muted);
+}
+
+/* ===== Market Summary ===== */
+.market-summary {
+    background: linear-gradient(135deg, #1a1d27 0%, #1e2a3a 100%);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 28px;
+    margin-bottom: 28px;
+    font-size: 16px;
+    line-height: 1.9;
+    white-space: pre-line;
+}
+
+.market-summary .label {
+    font-size: 13px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 10px;
+}
+
+/* ===== Summary Body (구조화된 시장 요약) ===== */
+.summary-body { white-space: normal; }
+
+.summary-section {
+    margin-bottom: 14px;
+}
+.summary-section:last-child { margin-bottom: 0; }
+
+.summary-section-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid rgba(79,140,255,0.15);
+}
+
+.summary-section-content {
+    font-size: 15px;
+    line-height: 1.8;
+    color: var(--text);
+    margin-bottom: 4px;
+}
+
+.summary-highlight {
+    padding: 6px 12px;
+    margin: 4px 0;
+    border-radius: 6px;
+    font-size: 14px;
+    line-height: 1.7;
+}
+
+.summary-highlight-star {
+    background: rgba(79,140,255,0.06);
+    border-left: 3px solid var(--accent);
+    color: var(--text);
+}
+
+.summary-highlight-theme {
+    background: rgba(52,211,153,0.06);
+    border-left: 3px solid var(--green);
+    color: var(--text);
+}
+
+.summary-highlight-warn {
+    background: rgba(248,113,113,0.06);
+    border-left: 3px solid var(--red);
+    color: var(--text);
+}
+
+.summary-highlight-dash {
+    background: rgba(52,211,153,0.05);
+    border-left: 3px solid var(--green);
+    color: var(--text);
+}
+
+.summary-bullet {
+    display: inline-block;
+    margin-right: 8px;
+    color: var(--accent);
+    font-weight: 700;
+}
+.summary-bullet-green { color: var(--green); }
+
+.summary-label {
+    color: var(--accent);
+    font-weight: 700;
+}
+.summary-label-green { color: var(--green); }
+.summary-sep { color: var(--text-muted); margin-right: 4px; }
+.summary-text { color: var(--text); }
+
+.summary-section-warn .summary-section-title {
+    color: var(--red);
+    border-bottom-color: rgba(248,113,113,0.25);
+}
+.summary-section-warn .summary-section-content {
+    background: rgba(248,113,113,0.06);
+    border-left: 3px solid var(--red);
+    padding: 10px 14px;
+    border-radius: 6px;
+    margin-top: 6px;
+}
+
+/* ===== Stat Grid 확장 (6열) ===== */
+.stat-grid-6 {
+    grid-template-columns: repeat(6, 1fr);
+}
+
+.stat-sub {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+
+.stat-card-accent .stat-value { color: var(--green); }
+.stat-card-signal .stat-value { color: var(--purple); }
+
+/* ===== Summary Insights (발굴유형 + 섹터) ===== */
+.summary-insights {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 28px;
+}
+
+.insight-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 20px;
+}
+
+.insight-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 12px;
+}
+
+.insight-bars { display: flex; flex-direction: column; gap: 8px; }
+
+.insight-bar-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.insight-bar-label {
+    font-size: 13px;
+    color: var(--text);
+    width: 90px;
+    flex-shrink: 0;
+}
+
+.insight-bar-track {
+    flex: 1;
+    height: 8px;
+    background: rgba(255,255,255,0.05);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.insight-bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.5s ease;
+}
+
+.insight-bar-early_signal { background: var(--purple); }
+.insight-bar-consensus { background: var(--accent); }
+.insight-bar-contrarian { background: var(--orange); }
+.insight-bar-deep_value { background: var(--green); }
+.insight-bar-unknown { background: var(--text-muted); }
+
+.insight-bar-count {
+    font-size: 13px;
+    color: var(--text-muted);
+    width: 24px;
+    text-align: right;
+    flex-shrink: 0;
+}
+
+.insight-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.insight-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    padding: 5px 12px;
+    border-radius: 16px;
+    background: rgba(79,140,255,0.08);
+    border: 1px solid rgba(79,140,255,0.15);
+    color: var(--text);
+}
+
+.insight-tag-count {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--accent);
+}

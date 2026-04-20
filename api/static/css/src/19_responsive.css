@@ -1,0 +1,229 @@
+/* ===== Responsive ===== */
+@media (max-width: 768px) {
+    /* 사이드바: 숨김 → 슬라이드 오버레이 */
+    .mobile-menu-btn { display: flex; }
+
+    .sidebar {
+        transform: translateX(-100%);
+        transition: transform 0.25s ease;
+        z-index: 1000;
+        width: var(--sidebar-w);
+    }
+    .sidebar-open .sidebar { transform: translateX(0); }
+    .sidebar-open .sidebar-overlay { display: block; }
+    .sidebar-open .mobile-menu-btn { display: none; }
+    .sidebar-close-btn { display: flex; }
+
+    /* 컨텐츠: 전체 너비 사용 */
+    .content { margin-left: 0; }
+    .content-header {
+        padding: 14px 16px;
+        padding-left: 62px; /* 햄버거 버튼 공간 확보 */
+    }
+    .content-header h2 { font-size: 16px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .header-right { flex-shrink: 0; flex-wrap: nowrap; }
+    .header-right .btn { white-space: nowrap; font-size: 12px; padding: 5px 10px; }
+    .content-body { padding: 14px 12px; }
+    .user-dropdown-name { display: none; }
+    .user-dropdown-menu { right: -8px; }
+
+    /* risk-temp 뱃지 축소 → 날짜 우측에 표시 */
+    .risk-temp { font-size: 11px; padding: 3px 10px; gap: 4px; }
+    .risk-temp-dot { width: 6px; height: 6px; }
+
+    /* 세션 카드: 모바일에서 날짜+HIGH / 뱃지+버튼 2줄 */
+    .session-card-top { flex-wrap: wrap; }
+    .session-card-row1 { flex-basis: 100%; }
+    .session-card-row2 { width: 100%; justify-content: flex-start; }
+    .session-card-row2 .btn { margin-left: auto; }
+
+    /* 그리드 축소 */
+    .stat-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+    .stat-grid-6 { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .stat-card { padding: 10px 8px; }
+    .stat-value { font-size: 22px; }
+    .stat-label { font-size: 11px; }
+    .stat-sub { font-size: 10px; }
+    .scenario-grid { grid-template-columns: 1fr; }
+    .impact-timeline { grid-template-columns: 1fr; }
+
+    /* 카드 패딩 축소 */
+    .card { padding: 14px; margin-bottom: 12px; }
+    .card-title { font-size: 16px; }
+    .card-header { gap: 6px; }
+
+    .market-summary { padding: 16px; margin-bottom: 18px; font-size: 14px; }
+    .summary-highlight { font-size: 13px; padding: 5px 10px; }
+    .summary-insights { grid-template-columns: 1fr; }
+    .insight-bar-label { width: 72px; font-size: 12px; }
+
+    /* 필터: 2열 그리드 */
+    .filters {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+    }
+    .filter-select, .filter-input { width: 100%; font-size: 13px; padding: 8px 10px; }
+    .filters .btn-primary { grid-column: 1 / -1; }
+
+    /* 제안 카드 (메타) */
+    .proposal-card { padding: 14px; margin-bottom: 10px; }
+    .proposal-card-header { gap: 6px; margin-bottom: 10px; }
+    .proposal-card-header .asset-name { font-size: 15px; }
+    .proposal-card-meta {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px 12px;
+        margin-bottom: 12px;
+        font-size: 13px;
+    }
+    .proposal-card-body { grid-template-columns: 1fr; gap: 12px; }
+
+    /* 가격 목표: 줄바꿈 허용 */
+    .price-target { flex-wrap: wrap; gap: 6px; font-size: 13px; }
+
+    /* 시나리오 카드 */
+    .scenario-card { padding: 12px; }
+
+    /* 신호 */
+    .signal-item { padding: 10px 12px; font-size: 13px; gap: 8px; }
+    .signal-icon { width: 24px; height: 24px; font-size: 12px; }
+
+    /* 섹션 타이틀 */
+    .section-title { font-size: 16px; margin: 24px 0 12px; }
+
+    /* 신뢰도/비중 바 축소 */
+    .confidence-bar { width: 60px; }
+    .alloc-bar { width: 50px; }
+
+    /* 테이블 스크롤 */
+    .table-wrap { margin: 0 -12px; padding: 0 12px; }
+
+    /* 히스토리 타임라인 */
+    .history-timeline { padding-left: 18px; }
+    .history-entry { padding: 14px; }
+    .history-entry::before { left: -16px; width: 8px; height: 8px; }
+
+    /* 채팅 레이아웃 */
+    .chat-container { height: calc(100vh - 160px); }
+    .chat-messages { padding: 12px; }
+    .chat-bubble { max-width: 95%; }
+    .chat-input-bar { padding: 10px 12px; }
+}
+
+/* ----- Tablet 브레이크포인트 (769~1024px) — UI-18 ----- */
+@media (min-width: 769px) and (max-width: 1024px) {
+    /* 사이드바는 이미 좁은 상태이므로 유지 */
+    .sidebar { width: 200px; }
+    .content { margin-left: 200px; }
+
+    /* 주요 그리드: 2열 중간 단계 */
+    .stat-grid-6 { grid-template-columns: repeat(3, 1fr); }
+    .scenario-grid { grid-template-columns: repeat(2, 1fr); }
+    .summary-insights { grid-template-columns: 1fr 1fr; }
+    .top-picks-grid { grid-template-columns: repeat(2, 1fr); }
+
+    /* 광고 슬롯 — 태블릿은 가로 배너 유지 */
+    .ad-slot-body { flex-basis: 180px; }
+
+    /* 필터는 한 줄 유지 (flex-wrap 자연스럽게 접힘) */
+    .filters { gap: 8px; }
+
+    /* 하단 탭바는 모바일 전용 — 태블릿에서는 숨김 */
+    .bottom-tabbar { display: none; }
+}
+
+/* ----- 모바일 전용 추가 규칙 (하단 탭바 노출 + 여백 확보) ----- */
+@media (max-width: 768px) {
+    .bottom-tabbar { display: flex; }
+
+    /* 하단 탭바 높이만큼 본문 여백 */
+    .content-body {
+        padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+    }
+    /* 면책 배너도 하단 탭바 위에 오도록 */
+    .global-disclaimer {
+        margin-bottom: 0;
+    }
+
+    /* 티어 배지: 모바일에서는 살짝 축소 */
+    .header-tier-badge { font-size: 10px; padding: 2px 7px; }
+
+    /* 모달: 모바일에서 좌우 여백 최소화 */
+    .modal-box { padding: 24px 20px 20px; }
+
+    /* 모바일에서만 본문 버튼·인풋 터치 타겟 보장 — 헤더 소형 버튼 제외 */
+    .content-body .btn,
+    .filter-select,
+    .filter-input,
+    .user-dropdown-item {
+        min-height: 44px;
+    }
+
+    /* Track Record 위젯 — 모바일에서 세로 스택 */
+    .dash-tr-widget { padding: 14px 16px; }
+    .dash-tr-right {
+        width: 100%;
+        justify-content: space-between;
+    }
+    .dash-tr-tabs { flex: 1 1 auto; }
+    .dash-tr-tab { flex: 1 1 auto; padding: 8px 6px; }
+
+    /* 광고 슬롯 — 모바일에서 세로 스택 */
+    .ad-slot {
+        flex-direction: column;
+        text-align: center;
+        gap: 8px;
+        padding: 14px;
+    }
+    .ad-slot-cta { width: 100%; max-width: 280px; }
+
+    /* 카드 잠금 오버레이 — 모바일에서 패딩 축소 */
+    .card-lock-overlay { padding: 14px; }
+    .card-lock-title { font-size: 13px; }
+
+    /* 제안 상세 섹션 — 모바일 최적화 */
+    .detail-panel { padding: 10px 12px; }
+    .detail-section { padding: 8px 0 10px; margin-bottom: 8px; }
+    .detail-section-title { font-size: 11px; }
+    .detail-return-grid { grid-template-columns: repeat(2, 1fr); }
+    .detail-return-value { font-size: 15px; }
+    .detail-cond-grid { grid-template-columns: 1fr; gap: 10px; }
+    .detail-meta-tags { gap: 6px; }
+    .meta-tag { font-size: 11px; padding: 2px 8px; }
+
+    /* Sticky CTA 바 — 모바일에서 detail-panel 하단 고정 (UI-13) */
+    .detail-panel { position: relative; padding-bottom: 68px; }
+    .detail-sticky-cta {
+        position: sticky;
+        bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+        left: 0; right: 0;
+        background: var(--bg-card);
+        border-top: 1px solid var(--border);
+        border-bottom: none;
+        padding: 10px 12px;
+        margin: 0 -12px -10px;
+        z-index: 5;
+        box-shadow: 0 -4px 12px rgba(0,0,0,0.25);
+    }
+    .detail-cta-btn { min-height: 44px; }
+}
+
+/* ════════════════════════════════════════════════════════════
+   Dashboard Hero (Option B) — KPI Strip + 3-row 2×2 Grid
+   ════════════════════════════════════════════════════════════ */
+
+/* ── 모바일 반응형 ── */
+@media (max-width: 768px) {
+    .sa-hero { padding: 20px; }
+    .sa-hero-asset { font-size: 22px; }
+    .sa-price-value { font-size: 18px; }
+    .sa-price-box { min-width: 110px; padding: 10px 12px; }
+    .sa-upside-value { font-size: 22px; }
+    .sa-upside-chip { min-width: 110px; padding: 8px 18px; }
+    .sa-arrow { display: none; }
+    .sa-condition-grid { grid-template-columns: 1fr; }
+    .sa-toc { position: static; }
+    .sa-body-text { font-size: 15px; line-height: 1.85; }
+    .sa-section .card-title { font-size: 17px; }
+}
