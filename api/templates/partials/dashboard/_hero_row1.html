@@ -1,0 +1,168 @@
+{#
+  Dashboard — Hero Row 1 (KPI Strip + Track Record 위젯)
+  출처: api/templates/dashboard.html (C2.2, 2026-04-21)
+  CONTEXT:
+    - issue_count, issue_delta (int)
+    - theme_count, theme_delta (int)
+    - buy_count, buy_delta (int)
+    - high_conviction_count (int)
+    - early_signal_count (int)
+    - total_alloc (float)
+    - avg_confidence (float, 0~1)
+  매크로 의존:
+    - change_indicator from _macros/proposal.html
+  주의:
+    - 하단 <script> 블록은 위젯 DOM(dash-tr-*)과 한 단위.
+      C3 트랙에서 외부 JS로 분리 예정.
+#}
+{% from "_macros/proposal.html" import change_indicator %}
+
+{# Row 1 — KPI Strip(좌) + Track Record(우) 통합 #}
+<div class="hero-row1">
+    <div class="stat-grid stat-grid-6 kpi-strip kpi-strip-tight">
+        <div class="stat-card">
+            <div class="stat-value">
+                {{ issue_count }}{{ change_indicator(issue_delta) }}
+            </div>
+            <div class="stat-label">글로벌 이슈</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">
+                {{ theme_count }}{{ change_indicator(theme_delta) }}
+            </div>
+            <div class="stat-label">투자 테마 · <span class="stat-inline-sub">신뢰도 {{ "%.0f"|format(avg_confidence * 100) }}%</span></div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">
+                {{ buy_count }}{{ change_indicator(buy_delta) }}
+            </div>
+            <div class="stat-label">매수 제안</div>
+        </div>
+        <div class="stat-card stat-card-accent">
+            <div class="stat-value">{{ high_conviction_count }}</div>
+            <div class="stat-label">높은 확신도</div>
+        </div>
+        <div class="stat-card stat-card-signal">
+            <div class="stat-value">{{ early_signal_count }}</div>
+            <div class="stat-label">얼리 시그널</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ "%.1f"|format(total_alloc) }}%</div>
+            <div class="stat-label">총 비중</div>
+        </div>
+    </div>
+
+    <div class="dash-tr-widget hero-tr">
+        <div class="tr-visual">
+            <div class="tr-donut-wrap">
+                <svg viewBox="0 0 80 80" width="80" height="80" class="tr-donut" aria-label="승률">
+                    <circle cx="40" cy="40" r="32" fill="none" stroke="var(--border)" stroke-width="8"/>
+                    <circle cx="40" cy="40" r="32" fill="none" stroke="var(--color-positive)" stroke-width="8"
+                            stroke-dasharray="0 201" stroke-linecap="round"
+                            transform="rotate(-90 40 40)" id="dash-tr-donut-arc"/>
+                    <text x="40" y="38" text-anchor="middle" fill="var(--text)" font-size="14" font-weight="700" id="dash-tr-donut-pct">—</text>
+                    <text x="40" y="52" text-anchor="middle" fill="var(--text-muted)" font-size="9">승률</text>
+                </svg>
+            </div>
+            <div class="tr-return-block">
+                <div class="dash-tr-title" style="margin-bottom:6px;">
+                    📈 Track Record
+                    <a href="/pages/track-record" class="widget-more" style="float:right;">자세히 →</a>
+                </div>
+                <div class="tr-bar-label">평균 수익률 · <span id="dash-tr-period-label">3M</span></div>
+                <div class="tr-bar-track">
+                    <div class="tr-bar-zero"></div>
+                    <div class="tr-bar-fill" id="dash-tr-bar-fill" style="width:0%;left:50%;"></div>
+                </div>
+                <div class="tr-bar-value" id="dash-tr-bar-value">—</div>
+                <div class="tr-sample" id="dash-tr-sample">샘플 로드 중...</div>
+            </div>
+        </div>
+        <div class="dash-tr-right">
+            <div class="dash-tr-tabs" role="tablist" aria-label="기간 선택">
+                <button type="button" class="dash-tr-tab" data-period="1m" role="tab">1M</button>
+                <button type="button" class="dash-tr-tab active" data-period="3m" role="tab" aria-selected="true">3M</button>
+                <button type="button" class="dash-tr-tab" data-period="6m" role="tab">6M</button>
+                <button type="button" class="dash-tr-tab" data-period="1y" role="tab">1Y</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    var cache = null;
+    var labelByKey = { '1m': '1M', '3m': '3M', '6m': '6M', '1y': '1Y' };
+    var DONUT_CIRC = 201;  // 2π * 32
+
+    function render(period) {
+        var p = {};
+        if (cache && cache.overview && cache.overview.periods) p = cache.overview.periods[period] || {};
+
+        var pctEl = document.getElementById('dash-tr-donut-pct');
+        var arcEl = document.getElementById('dash-tr-donut-arc');
+        var fillEl = document.getElementById('dash-tr-bar-fill');
+        var valEl = document.getElementById('dash-tr-bar-value');
+        var sampEl = document.getElementById('dash-tr-sample');
+        var plEl = document.getElementById('dash-tr-period-label');
+        if (plEl) plEl.textContent = labelByKey[period];
+
+        if (p.win_rate_pct == null && !p.n) {
+            if (pctEl) pctEl.textContent = '—';
+            if (arcEl) arcEl.setAttribute('stroke-dasharray', '0 ' + DONUT_CIRC);
+            if (fillEl) fillEl.style.width = '0%';
+            if (valEl) { valEl.textContent = '샘플 없음'; valEl.className = 'tr-bar-value'; }
+            if (sampEl) sampEl.textContent = '과거 모멘텀 기준 · 샘플 0건';
+            return;
+        }
+
+        var winRate = p.win_rate_pct != null ? p.win_rate_pct : 0;
+        var arc = (winRate / 100 * DONUT_CIRC).toFixed(1);
+        if (pctEl) pctEl.textContent = winRate.toFixed(0) + '%';
+        if (arcEl) arcEl.setAttribute('stroke-dasharray', arc + ' ' + DONUT_CIRC);
+
+        var avg = p.avg_return_pct;
+        if (avg != null) {
+            var absAvg = Math.min(Math.abs(avg), 50);  // 50%를 max로 clamp
+            var widthPct = (absAvg / 50 * 50).toFixed(1);  // 바 전체의 50%를 max
+            if (fillEl) {
+                fillEl.style.width = widthPct + '%';
+                if (avg >= 0) {
+                    fillEl.style.left = '50%';
+                    fillEl.classList.remove('tr-bar-neg');
+                    fillEl.classList.add('tr-bar-pos');
+                } else {
+                    fillEl.style.left = (50 - parseFloat(widthPct)) + '%';
+                    fillEl.classList.remove('tr-bar-pos');
+                    fillEl.classList.add('tr-bar-neg');
+                }
+            }
+            if (valEl) {
+                valEl.textContent = (avg >= 0 ? '+' : '') + avg.toFixed(2) + '%';
+                valEl.className = 'tr-bar-value ' + (avg >= 0 ? 'color-green' : 'color-red');
+            }
+        } else {
+            if (fillEl) fillEl.style.width = '0%';
+            if (valEl) { valEl.textContent = '—'; valEl.className = 'tr-bar-value'; }
+        }
+        if (sampEl) sampEl.textContent = '샘플 ' + (p.n || 0) + '건';
+    }
+
+    document.querySelectorAll('.dash-tr-tab').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            document.querySelectorAll('.dash-tr-tab').forEach(function(b) {
+                b.classList.remove('active');
+                b.setAttribute('aria-selected', 'false');
+            });
+            btn.classList.add('active');
+            btn.setAttribute('aria-selected', 'true');
+            render(btn.getAttribute('data-period'));
+        });
+    });
+
+    fetch('/api/track-record/summary')
+        .then(function(r) { return r.ok ? r.json() : null; })
+        .then(function(data) { cache = data; render('3m'); })
+        .catch(function() { render('3m'); });
+})();
+</script>

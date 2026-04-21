@@ -1,0 +1,63 @@
+{#
+  Dashboard — Market Summary (접이식 블록)
+  출처: api/templates/dashboard.html (C2.2, 2026-04-21)
+  CONTEXT:
+    - session (object): analysis_date, market_summary
+    - current_user (optional): 로그인 시 inline risk gauge 표시
+    - risk_pct (float)
+  매크로 의존:
+    - risk_gauge from _macros/proposal.html
+  주의:
+    - 토글 버튼의 onclick 인라인 JS는 DOM id 'market-summary-block' 참조.
+      모바일 기본 접힘 JS는 dashboard.html {% block scripts %}에 잔류.
+#}
+{% from "_macros/proposal.html" import risk_gauge %}
+
+{# Market Summary (접이식, 모바일 기본 접힘) #}
+<div class="market-summary" id="market-summary-block">
+    <div class="label" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+        <span>Market Summary &middot; {{ session.analysis_date }}</span>
+        {% if current_user %}
+            {# 로그인 사용자: hero에 없으므로 여기 게이지 표시 #}
+            {{ risk_gauge(risk_pct, session.risk_temperature) }}
+        {% endif %}
+    </div>
+    <div class="summary-body">
+    {% if session.market_summary %}
+        {% set summary_text = session.market_summary %}
+        {% set has_sections = '[시장 환경]' in summary_text or '[핵심 이슈]' in summary_text %}
+        {% if has_sections %}
+            {% for line in summary_text.split('\n') %}
+                {% set trimmed = line.strip() %}
+                {% if trimmed == '' %}
+                {% elif trimmed.startswith('[') and ']' in trimmed %}
+                    {% set section_title = trimmed.split(']')[0][1:] %}
+                    {% set section_content = trimmed.split(']', 1)[1].strip() %}
+                    <div class="summary-section">
+                        <div class="summary-section-title">{{ section_title }}</div>
+                        {% if section_content %}
+                        <div class="summary-section-content">{{ section_content }}</div>
+                        {% endif %}
+                    </div>
+                {% elif trimmed.startswith('★') %}
+                    <div class="summary-highlight summary-highlight-star">{{ trimmed }}</div>
+                {% elif trimmed.startswith('▸') %}
+                    <div class="summary-highlight summary-highlight-theme">{{ trimmed }}</div>
+                {% elif trimmed.startswith('⚠') %}
+                    <div class="summary-highlight summary-highlight-warn">{{ trimmed }}</div>
+                {% else %}
+                    <div class="summary-section-content">{{ trimmed }}</div>
+                {% endif %}
+            {% endfor %}
+        {% else %}
+            {{ summary_text }}
+        {% endif %}
+    {% else %}
+        (분석 요약 없음)
+    {% endif %}
+    </div>
+    <button type="button" class="market-summary-toggle"
+            onclick="document.getElementById('market-summary-block').classList.toggle('collapsed'); this.textContent = document.getElementById('market-summary-block').classList.contains('collapsed') ? '▼ 시장 요약 펼치기' : '▲ 접기';">
+        ▲ 접기
+    </button>
+</div>
