@@ -218,9 +218,9 @@ app_runs → app_logs (v18, 범용 실행 로그)
 - `users.tier`(v16) — 구독 티어 (`free`/`pro`/`premium`), `tier_expires_at`로 만료 관리.
 - `admin_audit_logs`(v17) — 관리자 감사 로그. `action`: tier_change/role_change/status_change/password_reset/user_delete. actor/target 이메일 denormalize로 계정 삭제 후에도 이력 유지.
 - `app_runs`/`app_logs`(v18) — 범용 실행 로그. `run_type`별 실행 이력 + 상세 로그. `shared/logger.py`가 사용.
-- `investment_proposals.entry_price`/`post_return_*_pct`(v19) — 추천 후 실제 수익률 추적. `entry_price` 확정 → 주기적 가격 스냅샷(`post_return_snapshot` JSONB) → 1m/3m/6m/1y 실제 수익률 갱신. `price_tracker.py`가 사용.
+- `investment_proposals.entry_price`/`post_return_*_pct`(v19) — 추천 후 실제 수익률 추적. `entry_price` 확정 → `proposal_price_snapshots` 테이블에 일별 가격 스냅샷(snapshot_date, price, price_source) 누적 → 1m/3m/6m/1y 실제 수익률 갱신. `price_tracker.py`가 사용.
 - `investment_proposals.foreign_net_buy_signal`/`squeeze_risk`/`index_membership`/`foreign_ownership_pct`(v20) — KRX 확장 데이터. 외국인 순매수 신호, 숏스퀴즈 위험도, 주요 지수 편입, 외국인 보유비율. `krx_data.py`가 수집.
-- `education_topics`(v21) — 투자 교육 커리큘럼. 5개 카테고리(basics/analysis/risk/macro/practical), slug/title/content/examples(JSONB)/difficulty(beginner/intermediate/advanced). 시드 데이터 12개 토픽 자동 삽입.
+- `education_topics`(v21) — 투자 교육 커리큘럼. 6개 카테고리(basics/analysis/risk/macro/practical/stories), slug/title/content/examples(JSONB)/difficulty(beginner/intermediate/advanced). 시드 데이터 26개 토픽 자동 삽입 (v21에서 11개, v24에서 신규 15개 추가).
 - `education_chat_sessions`/`education_chat_messages`(v21) — 교육 AI 튜터 채팅. user_id + topic_id FK. KST 기준 일일 턴 제한 적용.
 - `inquiries`/`inquiry_replies`(v22) — 고객 문의 게시판. category(general/bug/feature), status(open/answered/closed), `is_private` 비공개 플래그. `user_email` denormalize. Admin/Moderator만 답변·상태 변경.
 
