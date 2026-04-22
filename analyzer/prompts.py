@@ -51,7 +51,9 @@ RSS 뉴스를 분석하여 투자 유효한 테마를 구조화합니다.
 2. JSON 코드블록 바깥에는 어떤 텍스트도 출력 금지 (제목·주석·마크다운 헤더 `**[...]**` 일체 불가).
 3. 모든 문자열 값은 **한 줄**로 작성. 줄바꿈이 필요하면 반드시 `\\n`으로 이스케이프. 값 안에 raw 개행 문자 절대 금지.
 4. 값 안에 `(이하 계속)`, `(생략)`, `(issue N impact_short ...)` 같은 **메타 주석 일체 금지**.
-5. 출력 길이가 길어질 것 같으면, 각 `impact_*` 필드를 2문장 이내로 줄이고 이슈/테마 수를 하한선(각각 8건/4개)으로 낮출 것. 중간에 포맷을 바꾸지 말 것."""
+5. **JSON 문자열 값(`"..."`) 내부에 ``` 또는 ```json 같은 Markdown fence 마커·백틱(`)를 절대 삽입하지 말 것**. 인용이 필요하면 `'` (작은따옴표) 또는 「」 사용. 위반 시 파서가 펜스를 코드블록 종결로 오인하여 전체 응답이 버려짐.
+6. 출력 도중 "여기까지 응답하고 이어서 계속"식의 self-interruption 금지. 한 번의 응답으로 끝까지 완결 출력할 것.
+7. 출력 길이가 길어질 것 같으면, 각 `impact_*` 필드를 1~2문장 이내로 줄이고 테마 `description`은 2~3문장 이내로 작성. 이슈/테마 수는 하한선(각각 8건/4개)으로 낮춰도 좋다. 중간에 포맷을 바꾸지 말 것."""
 
 STAGE1_PROMPT = """## 분석 날짜: {date}
 
@@ -261,7 +263,7 @@ STAGE1A_PROMPT = """## 분석 날짜: {date}
 - **장기 영향** (6개월 이상): 구조적 변화 가능성 — **2문장 이내**
 - **과거 유사 사례** (선택): 명확한 사례가 있을 때만 1문장으로 간략히. 없으면 null
 
-### 2단계: 투자 테마 도출 (4~7개)
+### 2단계: 투자 테마 도출 (4~6개, 권장 5개)
 각 테마에 대해:
 - 복수의 이슈에서 교차 검증된 테마만 선정
 - **theme_key** (영문 snake_case 고유 키): 아래 규칙 참조
@@ -269,9 +271,10 @@ STAGE1A_PROMPT = """## 분석 날짜: {date}
 - **테마 유효성**: strong / medium / weak
 - 신뢰도 (0.00~1.00): 뉴스 일관성, 데이터 뒷받침, 시장 반영 정도 기준
 - 투자 시계 (short: ~1개월 / mid: 1~6개월 / long: 6개월+)
-- 핵심 모니터링 지표 — **4~6개만** 선별
-- **시나리오 분석**: Bull/Base/Bear 케이스 각각의 확률, 설명(1~2문장), 핵심 가정, 시장 영향
-- **매크로 변수 영향**: 해당 테마에 직접 관련된 변수 2~3개만 선별하여 시나리오별 전망 (6개 전부 작성 불필요)
+- **설명 (description)**: 2~3문장으로 간결히 (테마 논리 + 투자 함의)
+- 핵심 모니터링 지표 — **4개만** 선별 (간결한 명사구)
+- **시나리오 분석**: Bull/Base/Bear 각각 확률 + 설명 **1문장** + 핵심 가정 **1구절** + 시장 영향 **1구절**
+- **매크로 변수 영향**: 해당 테마에 직접 관련된 변수 **2개만** 선별 (3개 이상 작성 금지)
 
 #### theme_key 생성 규칙
 - 각 테마에 영문 snake_case 키를 부여하세요 (예: "secondary_battery_oversupply", "us_fed_rate_cut", "ai_semiconductor_demand")
@@ -307,42 +310,191 @@ STAGE1A_PROMPT = """## 분석 날짜: {date}
     {{
       "theme_key": "english_snake_case_key",
       "theme_name": "테마명",
-      "description": "테마 설명 및 투자 논리 (3~5문장)",
+      "description": "테마 설명 및 투자 논리 (2~3문장, 한 줄로)",
       "related_issue_indices": [0, 1],
       "confidence_score": 0.00-1.00,
       "time_horizon": "short|mid|long",
       "theme_type": "structural|cyclical",
       "theme_validity": "strong|medium|weak",
-      "key_indicators": ["모니터링할 핵심 지표 4~6개"],
+      "key_indicators": ["지표1", "지표2", "지표3", "지표4"],
       "scenarios": [
         {{
           "scenario_type": "bull",
           "probability": 25,
-          "description": "낙관 시나리오 설명 (1~2문장)",
-          "key_assumptions": "핵심 가정",
-          "market_impact": "S&P500 +X%, KOSPI +X% 등 시장 영향"
+          "description": "낙관 시나리오 설명 (1문장)",
+          "key_assumptions": "핵심 가정 1구절",
+          "market_impact": "S&P500 +X%, KOSPI +X%"
         }},
         {{
           "scenario_type": "base",
           "probability": 50,
-          "description": "기본 시나리오 설명 (1~2문장)",
-          "key_assumptions": "핵심 가정",
-          "market_impact": "시장 영향"
+          "description": "기본 시나리오 설명 (1문장)",
+          "key_assumptions": "핵심 가정 1구절",
+          "market_impact": "시장 영향 1구절"
         }},
         {{
           "scenario_type": "bear",
           "probability": 25,
-          "description": "비관 시나리오 설명 (1~2문장)",
-          "key_assumptions": "핵심 가정",
-          "market_impact": "시장 영향"
+          "description": "비관 시나리오 설명 (1문장)",
+          "key_assumptions": "핵심 가정 1구절",
+          "market_impact": "시장 영향 1구절"
         }}
       ],
       "macro_impacts": [
         {{
-          "variable_name": "해당 테마에 직접 관련된 변수만 (oil_wti|gold|usdkrw|us_10y_yield|sp500|kospi 중 선택)",
-          "base_case": "기본 시나리오 전망치",
-          "worse_case": "악화 시나리오 전망치",
-          "better_case": "호전 시나리오 전망치",
+          "variable_name": "oil_wti|gold|usdkrw|us_10y_yield|sp500|kospi 중 1개",
+          "base_case": "기본 전망치",
+          "worse_case": "악화 전망치",
+          "better_case": "호전 전망치",
+          "unit": "$|₩|%|pt"
+        }}
+      ]
+    }}
+  ]
+}}
+```"""
+
+
+# ── Stage 1-A 분할: 1-A1 이슈 전용 + 1-A2 테마 전용 ────
+# 2026-04-22 재발 대응: 단일 쿼리 출력이 ~23KB까지 늘며 self-interruption 발생.
+# 이슈와 테마를 분리 호출하면 각 쿼리 출력이 10~12KB로 안정화됨.
+
+STAGE1A1_SYSTEM = STAGE1_SYSTEM
+
+STAGE1A1_PROMPT = """## 분석 날짜: {date}
+
+## 오늘 수집된 글로벌 뉴스 (카테고리별 정리)
+
+{news_text}
+{bond_yield_section}
+---
+
+## 분석 요청 — Stage 1-A1: 이슈 심층 분석 (단일 단계)
+
+위 뉴스를 바탕으로 **이슈 분석만** 수행하세요. 투자 테마 발굴과 제안은 다음 단계에서 별도로 수행합니다.
+
+### 글로벌 이슈 심층 분석 (8~10건, 엄수)
+각 이슈에 대해:
+- 카테고리 분류 (geopolitical / macroeconomic / monetary_policy / sector / technology / commodity / regulatory)
+- 영향 지역 및 파급 범위 (글로벌/지역/국가별)
+- 중요도 (1~5) — 시장 영향력 기준
+- **단기 영향** (1개월 이내): 구체적 시장 반응 예상 — **2문장 이내**
+- **중기 영향** (1~6개월): 섹터·자산별 파급 경로 — **2문장 이내**
+- **장기 영향** (6개월 이상): 구조적 변화 가능성 — **2문장 이내**
+- **과거 유사 사례** (선택): 명확한 사례가 있을 때만 1문장으로 간략히. 없으면 null
+
+## 출력 형식
+
+반드시 아래 JSON 형식으로만 응답하세요 (themes 필드 없음):
+
+```json
+{{
+  "analysis_date": "{date}",
+  "market_summary": "간결하게 작성 (총 8~12줄):\\n\\n[시장 환경] 핵심 요약 1~2문장\\n\\n[핵심 이슈]\\n★ 이슈1: 1문장\\n★ 이슈2: 1문장\\n★ 이슈3: 1문장\\n\\n[주의] 리스크 1~2건",
+  "risk_temperature": "high|medium|low",
+  "data_sources": ["RSS뉴스"],
+  "issues": [
+    {{
+      "category": "geopolitical|macroeconomic|monetary_policy|sector|technology|commodity|regulatory",
+      "region": "영향 지역",
+      "title": "이슈 제목",
+      "summary": "이슈 핵심 요약 (2~3문장)",
+      "source": "뉴스 출처",
+      "importance": 1-5,
+      "impact_short": "단기(1개월) 시장 영향 분석 (2문장 이내)",
+      "impact_mid": "중기(1~6개월) 파급 경로 (2문장 이내)",
+      "impact_long": "장기(6개월+) 구조적 변화 (2문장 이내)",
+      "historical_analogue": "과거 유사 사례 1문장 (명확한 경우만, 없으면 null)"
+    }}
+  ]
+}}
+```"""
+
+
+STAGE1A2_SYSTEM = STAGE1_SYSTEM
+
+STAGE1A2_PROMPT = """## 분석 날짜: {date}
+
+## 이전 단계에서 분석된 이슈 목록 (Stage 1-A1 결과)
+
+{issues_context}
+
+## 참고용 원본 뉴스 (카테고리별 정리)
+
+{news_text}
+{bond_yield_section}
+---
+
+## 분석 요청 — Stage 1-A2: 투자 테마 발굴
+
+위 이슈 목록과 뉴스를 바탕으로 **투자 테마만** 도출하세요. 투자 제안은 다음 단계에서 별도 생성합니다.
+
+### 투자 테마 도출 (4~6개, 권장 5개)
+각 테마에 대해:
+- 복수의 이슈에서 교차 검증된 테마만 선정 (위 이슈 목록의 인덱스를 `related_issue_indices`로 참조)
+- **theme_key** (영문 snake_case 고유 키): 아래 규칙 참조
+- **테마 유형**: structural(구조적) / cyclical(순환적) 구분
+- **테마 유효성**: strong / medium / weak
+- 신뢰도 (0.00~1.00): 뉴스 일관성, 데이터 뒷받침, 시장 반영 정도 기준
+- 투자 시계 (short: ~1개월 / mid: 1~6개월 / long: 6개월+)
+- **설명 (description)**: 2~3문장으로 간결히 (테마 논리 + 투자 함의)
+- 핵심 모니터링 지표 — **4개만** 선별 (간결한 명사구)
+- **시나리오 분석**: Bull/Base/Bear 각각 확률 + 설명 **1문장** + 핵심 가정 **1구절** + 시장 영향 **1구절**
+- **매크로 변수 영향**: 해당 테마에 직접 관련된 변수 **2개만** 선별 (3개 이상 작성 금지)
+
+#### theme_key 생성 규칙
+- 각 테마에 영문 snake_case 키를 부여하세요 (예: "secondary_battery_oversupply", "us_fed_rate_cut", "ai_semiconductor_demand")
+- 3~5단어, 소문자, 밑줄(_) 구분. 테마의 핵심 개념을 영어로 표현
+- **의미적으로 동일한 테마에는 반드시 동일한 키를 재사용하세요** — 한국어 테마명 표현이 달라도 같은 주제면 같은 키
+- 예: "2차전지 공급과잉 우려" / "배터리 과잉 생산 심화" → 모두 `secondary_battery_oversupply`
+{existing_theme_keys_section}
+## 출력 형식
+
+반드시 아래 JSON 형식으로만 응답하세요 (issues 필드 없음, themes만):
+
+```json
+{{
+  "analysis_date": "{date}",
+  "themes": [
+    {{
+      "theme_key": "english_snake_case_key",
+      "theme_name": "테마명",
+      "description": "테마 설명 및 투자 논리 (2~3문장, 한 줄로)",
+      "related_issue_indices": [0, 1],
+      "confidence_score": 0.00-1.00,
+      "time_horizon": "short|mid|long",
+      "theme_type": "structural|cyclical",
+      "theme_validity": "strong|medium|weak",
+      "key_indicators": ["지표1", "지표2", "지표3", "지표4"],
+      "scenarios": [
+        {{
+          "scenario_type": "bull",
+          "probability": 25,
+          "description": "낙관 시나리오 설명 (1문장)",
+          "key_assumptions": "핵심 가정 1구절",
+          "market_impact": "S&P500 +X%, KOSPI +X%"
+        }},
+        {{
+          "scenario_type": "base",
+          "probability": 50,
+          "description": "기본 시나리오 설명 (1문장)",
+          "key_assumptions": "핵심 가정 1구절",
+          "market_impact": "시장 영향 1구절"
+        }},
+        {{
+          "scenario_type": "bear",
+          "probability": 25,
+          "description": "비관 시나리오 설명 (1문장)",
+          "key_assumptions": "핵심 가정 1구절",
+          "market_impact": "시장 영향 1구절"
+        }}
+      ],
+      "macro_impacts": [
+        {{
+          "variable_name": "oil_wti|gold|usdkrw|us_10y_yield|sp500|kospi 중 1개",
+          "base_case": "기본 전망치",
+          "worse_case": "악화 전망치",
+          "better_case": "호전 전망치",
           "unit": "$|₩|%|pt"
         }}
       ]

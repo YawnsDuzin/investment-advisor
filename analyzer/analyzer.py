@@ -18,6 +18,8 @@ from shared.logger import get_logger, archive_ai_query
 from analyzer.prompts import (
     STAGE1_SYSTEM, STAGE1_PROMPT,
     STAGE1A_SYSTEM, STAGE1A_PROMPT,
+    STAGE1A1_SYSTEM, STAGE1A1_PROMPT,
+    STAGE1A2_SYSTEM, STAGE1A2_PROMPT,
     STAGE1B_SYSTEM, STAGE1B_PROMPT,
     STAGE2_SYSTEM, STAGE2_PROMPT,
 )
@@ -62,15 +64,17 @@ def _detect_proposal_price_anomalies(proposal: dict) -> list[str]:
     return flags
 
 
-def _try_fix_truncated_json(json_str: str) -> str | None:
-    """잘린 JSON 복구 시도 — 미종료 문자열/배열/객체를 닫아줌"""
-    s = json_str.rstrip()
+def _has_unterminated_string(text: str) -> bool:
+    """텍스트가 JSON 문자열 값 내부에서 끝났는지 판정.
 
-    # 미종료 문자열 닫기: 마지막 열린 따옴표 찾기
+    2026-04-22 Stage 1-A 재발: 모델이 `"description": "일` 까지 쓴 뒤 문자열 값 안에
+    ```json 마크다운 펜스를 삽입하며 탈출 → regex가 그 안쪽 백틱을 펜스 종결로
+    오인하면 `blocks[0]`이 문자열 중간에서 끊긴 상태로 추출됨.
+    이 패턴을 sanitize 단에서 감지하여 multi-block 병합을 차단한다.
+    """
     in_string = False
     escape = False
-    last_quote_pos = -1
-    for i, ch in enumerate(s):
+    for ch in text:
         if escape:
             escape = False
             continue
@@ -78,15 +82,65 @@ def _try_fix_truncated_json(json_str: str) -> str | None:
             escape = True
             continue
         if ch == '"':
-            if not in_string:
-                in_string = True
-                last_quote_pos = i
-            else:
-                in_string = False
+            in_string = not in_string
+    return in_string
 
-    if in_string:
-        # 문자열 내부에서 잘림 → 따옴표로 닫기
-        s = s + '"'
+
+def _trim_to_last_complete_array_item(text: str) -> str:
+    """배열 내 마지막으로 완전히 닫힌 `}` (또는 `]`) 뒤까지만 보존.
+
+    깊이 기반 스캔으로 "배열 레벨(=top 배열 내부)에서 객체가 닫힌 직후" 위치를 추적.
+    미완 객체(부분 theme/issue)를 떨어뜨리기 위한 안전 절단점으로 사용.
+    반환값은 새 `,` 또는 `]`가 붙기 전의 위치 — 호출자가 닫기 보정을 이어서 수행.
+    """
+    in_string = False
+    escape = False
+    depth = 0
+    last_item_close = -1  # 배열 안의 `}`/`]`가 닫힌 직후 위치
+    for i, ch in enumerate(text):
+        if escape:
+            escape = False
+            continue
+        if ch == '\\' and in_string:
+            escape = True
+            continue
+        if ch == '"':
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if ch in ('{', '['):
+            depth += 1
+        elif ch in ('}', ']'):
+            depth -= 1
+            # 루트 `{`(depth=1) 내부의 배열(`issues`/`themes` depth=2) 안에서 닫힌 객체를 추적
+            # depth>=2는 top 객체 바깥, depth==1 복귀는 배열이 닫힌 것 — 그 전 `}`가 마지막 완전 item
+            if depth >= 2:
+                last_item_close = i + 1
+    if last_item_close > 0:
+        return text[:last_item_close]
+    return text
+
+
+def _try_fix_truncated_json(json_str: str) -> str | None:
+    """잘린 JSON 복구 시도 — 미종료 문자열/배열/객체를 닫아줌.
+
+    전략:
+    1. 문자열 중간에서 끊긴 경우 → 마지막 "완전히 닫힌 배열 item" 위치로 절단하여
+       부분 객체(theme/issue)를 드롭 → 이후 브래킷 닫기
+    2. 구조(중괄호/대괄호)만 열려 있는 경우 → 그대로 닫기
+    """
+    s = json_str.rstrip()
+
+    # 1단계: 문자열 내부에서 잘렸는지 확인
+    if _has_unterminated_string(s):
+        # 마지막 완전히 닫힌 배열 item 직후로 절단하여 부분 객체 제거
+        trimmed = _trim_to_last_complete_array_item(s)
+        if trimmed != s and trimmed.strip():
+            s = trimmed.rstrip().rstrip(',')
+        else:
+            # 절단점 못 찾으면 따옴표만 닫고 진행
+            s = s + '"'
 
     # 마지막 불완전 key-value 쌍 제거 (예: "key": "val 에서 잘린 경우)
     # 이미 따옴표를 닫았으므로, 남은 구조만 닫으면 됨
@@ -169,7 +223,10 @@ def _sanitize_json_response(text: str) -> str:
     """파싱 전 전처리 — 모델이 망가뜨린 JSON을 복원 가능한 형태로 정리.
 
     처리 순서:
-    1. 여러 개의 ```json 코드블록이 있으면 모두 연결(모델이 Part 1/2로 쪼갠 경우 대응)
+    1. 여러 개의 ```json 코드블록이 있을 때:
+       - 첫 블록이 **미종료 문자열** 상태로 끝나면 → 문자열 값 내부에 펜스가 잘못 삽입된 케이스
+         (2026-04-22 재발 패턴) → 첫 블록만 사용하여 절단 복구 위임 (병합하면 구조가 꼬임)
+       - 둘 다 정상 종결이면 Part 1/2 식 쪼개짐으로 간주하고 연결
     2. 단일 코드블록이면 블록 내용만 추출
     3. JSON 바깥의 마크다운 헤더(`**[...]**`) 제거
     4. 값 내부의 자기주석 패턴(`*(issue N ...)*`) 제거
@@ -181,7 +238,17 @@ def _sanitize_json_response(text: str) -> str:
     # 1~2. 코드블록 처리
     blocks = re.findall(r"```json\s*(.*?)```", text, re.DOTALL)
     if len(blocks) >= 2:
-        text = "".join(blocks)  # Part 1 + Part 2 연결
+        # 2026-04-22 재발 대응: 첫 블록이 미종료 문자열이면 multi-block이 아니라
+        # "값 내부에 펜스 삽입"으로 regex가 오인한 경우. 병합하면 오히려 구조 파괴됨.
+        if _has_unterminated_string(blocks[0]):
+            log = get_logger("분석")
+            log.warning(
+                f"멀티블록 감지됐으나 첫 블록이 미종료 문자열 → 첫 블록만 사용 "
+                f"(blocks={len(blocks)}, block0={len(blocks[0])}자)"
+            )
+            text = blocks[0]
+        else:
+            text = "".join(blocks)  # Part 1 + Part 2 정상 연결
     elif len(blocks) == 1:
         text = blocks[0]
     else:
@@ -203,6 +270,41 @@ def _sanitize_json_response(text: str) -> str:
     return text.strip()
 
 
+_THEME_REQUIRED_FIELDS = ("theme_key", "theme_name", "description", "time_horizon")
+_ISSUE_REQUIRED_FIELDS = ("category", "title", "summary", "impact_short")
+
+
+def _drop_partial_items(result: dict) -> int:
+    """복구된 JSON에서 필수 필드가 빠진 theme/issue 엔트리 제거.
+
+    잘린 JSON 복구 후 마지막 엔트리가 반쪽짜리로 남는 경우(예: description만 있고
+    scenarios/macro_impacts 누락)에 다운스트림 검증기가 실패하므로 여기서 정리.
+
+    Returns:
+        제거된 항목 수
+    """
+    dropped = 0
+    themes = result.get("themes")
+    if isinstance(themes, list):
+        kept = [
+            t for t in themes
+            if isinstance(t, dict)
+            and all(t.get(f) for f in _THEME_REQUIRED_FIELDS)
+        ]
+        dropped += len(themes) - len(kept)
+        result["themes"] = kept
+    issues = result.get("issues")
+    if isinstance(issues, list):
+        kept = [
+            i for i in issues
+            if isinstance(i, dict)
+            and all(i.get(f) for f in _ISSUE_REQUIRED_FIELDS)
+        ]
+        dropped += len(issues) - len(kept)
+        result["issues"] = kept
+    return dropped
+
+
 def _parse_json_response(full_response: str) -> dict:
     """Claude 응답에서 JSON 추출 및 파싱 (전처리 + 잘린 JSON 복구 지원).
 
@@ -210,6 +312,7 @@ def _parse_json_response(full_response: str) -> dict:
     - `_parse_status`: 'success' | 'sanitized_recovered' | 'truncated_recovered' | 'failed' | 'empty'
     - `_parse_error`: JSONDecodeError 메시지 (실패 시)
     - `_truncated`: 복구 여부 boolean
+    - `_dropped_partial`: 복구 후 필수 필드 누락으로 제거된 item 수
     """
     log = get_logger("분석")
 
@@ -244,6 +347,9 @@ def _parse_json_response(full_response: str) -> dict:
         if sanitized and sanitized != json_str:
             try:
                 result = json.loads(sanitized)
+                dropped = _drop_partial_items(result)
+                if dropped:
+                    log.warning(f"복구 후 부분 항목 {dropped}건 제거")
                 themes_count = len(result.get("themes", []))
                 issues_count = len(result.get("issues", []))
                 proposals_count = len(result.get("proposals", []))
@@ -253,6 +359,7 @@ def _parse_json_response(full_response: str) -> dict:
                 result["_truncated"] = False
                 result["_parse_status"] = "sanitized_recovered"
                 result["_parse_error"] = str(first_error)
+                result["_dropped_partial"] = dropped
                 return result
             except json.JSONDecodeError as se:
                 log.info(f"전처리 후에도 파싱 실패 — 잘린 JSON 복구로 진행: {se}")
@@ -264,6 +371,9 @@ def _parse_json_response(full_response: str) -> dict:
         if fixed:
             try:
                 result = json.loads(fixed)
+                dropped = _drop_partial_items(result)
+                if dropped:
+                    log.warning(f"복구 후 부분 항목 {dropped}건 제거")
                 themes_count = len(result.get("themes", []))
                 issues_count = len(result.get("issues", []))
                 proposals_count = len(result.get("proposals", []))
@@ -271,6 +381,7 @@ def _parse_json_response(full_response: str) -> dict:
                 result["_truncated"] = True
                 result["_parse_status"] = "truncated_recovered"
                 result["_parse_error"] = str(first_error)
+                result["_dropped_partial"] = dropped
                 return result
             except json.JSONDecodeError:
                 pass
@@ -535,6 +646,85 @@ async def stage1_discover_themes(
 
 # ── Stage 1 분할: 1-A(이슈+테마) + 1-B(테마별 제안) ──
 
+def _format_issues_context(issues: list[dict]) -> str:
+    """Stage 1-A2에 넘길 이슈 요약 컨텍스트 생성 — 인덱스·카테고리·중요도·핵심 요약만."""
+    if not issues:
+        return "(이슈 없음)"
+    lines = []
+    for idx, issue in enumerate(issues):
+        cat = issue.get("category", "")
+        imp = issue.get("importance", "")
+        title = issue.get("title", "").strip()
+        summary = (issue.get("summary") or "").strip()
+        impact_mid = (issue.get("impact_mid") or "").strip()
+        lines.append(f"- **[{idx}] ({cat}, 중요도 {imp})** {title}")
+        if summary:
+            lines.append(f"  요약: {summary}")
+        if impact_mid:
+            lines.append(f"  중기 파급: {impact_mid}")
+    return "\n".join(lines)
+
+
+async def stage1a1_analyze_issues(
+    news_text: str, date: str, max_turns: int = 6,
+    model: str | None = None,
+    timeout_sec: int = 600,
+    bond_yield_section: str = "",
+) -> dict:
+    """Stage 1-A1: 이슈만 분석 (테마 제외) — 출력 8~10KB로 안정화.
+
+    2026-04-22 Stage 1-A 재발 대응: 단일 쿼리가 23KB까지 늘며 self-interruption 발생.
+    이슈·테마를 분리하여 각 쿼리를 10~12KB로 축소.
+    """
+    prompt = STAGE1A1_PROMPT.format(
+        news_text=news_text, date=date,
+        bond_yield_section=bond_yield_section,
+    )
+    start = time.time()
+    response = await _query_claude(
+        prompt, STAGE1A1_SYSTEM, max_turns, model=model, timeout_sec=timeout_sec,
+        archive_stage="stage1a1", archive_target_key=date,
+    )
+    parsed = _parse_json_response(response)
+    _archive_result(
+        stage="stage1a1", target_key=date, model=model,
+        system_prompt=STAGE1A1_SYSTEM, user_prompt=prompt,
+        response=response, parsed=parsed, elapsed_sec=time.time() - start,
+    )
+    return parsed
+
+
+async def stage1a2_build_themes(
+    news_text: str, date: str, issues: list[dict],
+    max_turns: int = 6,
+    existing_keys: list[dict] | None = None,
+    model: str | None = None,
+    timeout_sec: int = 600,
+    bond_yield_section: str = "",
+) -> dict:
+    """Stage 1-A2: 이슈 목록을 받아 투자 테마 4~6개 발굴."""
+    keys_section = _format_existing_theme_keys(existing_keys or [])
+    issues_context = _format_issues_context(issues)
+    prompt = STAGE1A2_PROMPT.format(
+        news_text=news_text, date=date,
+        issues_context=issues_context,
+        existing_theme_keys_section=keys_section,
+        bond_yield_section=bond_yield_section,
+    )
+    start = time.time()
+    response = await _query_claude(
+        prompt, STAGE1A2_SYSTEM, max_turns, model=model, timeout_sec=timeout_sec,
+        archive_stage="stage1a2", archive_target_key=date,
+    )
+    parsed = _parse_json_response(response)
+    _archive_result(
+        stage="stage1a2", target_key=date, model=model,
+        system_prompt=STAGE1A2_SYSTEM, user_prompt=prompt,
+        response=response, parsed=parsed, elapsed_sec=time.time() - start,
+    )
+    return parsed
+
+
 async def stage1a_discover_themes(
     news_text: str, date: str, max_turns: int = 6,
     existing_keys: list[dict] | None = None,
@@ -542,7 +732,85 @@ async def stage1a_discover_themes(
     timeout_sec: int = 600,
     bond_yield_section: str = "",
 ) -> dict:
-    """Stage 1-A: 뉴스 기반 이슈 분석 + 테마 발굴 (투자 제안 제외)"""
+    """Stage 1-A: 이슈 분석 + 테마 발굴 오케스트레이터.
+
+    내부적으로 Stage 1-A1(이슈) → Stage 1-A2(테마)를 순차 호출하여 출력 크기를
+    제어한다. 반환 스키마는 기존 단일 호출 버전과 동일(`{issues, themes, ...}`).
+    """
+    log = get_logger("파이프라인")
+
+    # ── Stage 1-A1: 이슈 분석 ──
+    log.info(f"[Stage 1-A1] 이슈 분석 시작 (모델: {model or 'default'}, 타임아웃: {timeout_sec}초)")
+    issues_result = await stage1a1_analyze_issues(
+        news_text, date, max_turns,
+        model=model, timeout_sec=timeout_sec,
+        bond_yield_section=bond_yield_section,
+    )
+
+    if issues_result.get("error"):
+        log.error(f"[Stage 1-A1] 이슈 분석 실패 — {issues_result['error']}")
+        return issues_result
+
+    issues = issues_result.get("issues", [])
+    log.info(f"[Stage 1-A1] 이슈 {len(issues)}건 분석 완료")
+
+    if not issues:
+        log.error("[Stage 1-A1] 이슈 0건 — Stage 1-A2 스킵")
+        return {
+            "error": "이슈 분석 결과 없음",
+            "_parse_status": "empty",
+            "_parse_error": "stage1a1_no_issues",
+            "_truncated": False,
+            **issues_result,
+        }
+
+    # ── Stage 1-A2: 테마 발굴 ──
+    log.info(f"[Stage 1-A2] 테마 발굴 시작 (이슈 {len(issues)}건 컨텍스트 주입)")
+    themes_result = await stage1a2_build_themes(
+        news_text, date, issues, max_turns,
+        existing_keys=existing_keys,
+        model=model, timeout_sec=timeout_sec,
+        bond_yield_section=bond_yield_section,
+    )
+
+    if themes_result.get("error"):
+        log.warning(f"[Stage 1-A2] 테마 발굴 실패 — 이슈만으로 결과 반환: {themes_result['error']}")
+        # 이슈는 확보됐으므로 테마 없이라도 진행
+        themes_result = {"themes": []}
+
+    themes = themes_result.get("themes", [])
+    log.info(f"[Stage 1-A2] 테마 {len(themes)}건 발굴 완료")
+
+    # ── 결과 병합 (기존 호출자 호환) ──
+    merged = {
+        "analysis_date": issues_result.get("analysis_date", date),
+        "market_summary": issues_result.get("market_summary", ""),
+        "risk_temperature": issues_result.get("risk_temperature", "medium"),
+        "data_sources": issues_result.get("data_sources", ["RSS뉴스"]),
+        "issues": issues,
+        "themes": themes,
+        "_parse_status": "success",
+        "_truncated": bool(
+            issues_result.get("_truncated") or themes_result.get("_truncated")
+        ),
+        "_stage1a_split": True,  # 분할 실행 여부 플래그 (진단용)
+    }
+    # 복구 메타 유지
+    for key in ("_parse_error", "_dropped_partial"):
+        if issues_result.get(key) or themes_result.get(key):
+            merged[key] = issues_result.get(key) or themes_result.get(key)
+    return merged
+
+
+# ── 레거시 단일 호출 경로 (하위호환용, 신규 코드는 위 분할 버전 사용 권장) ──
+async def stage1a_discover_themes_legacy_single_call(
+    news_text: str, date: str, max_turns: int = 6,
+    existing_keys: list[dict] | None = None,
+    model: str | None = None,
+    timeout_sec: int = 600,
+    bond_yield_section: str = "",
+) -> dict:
+    """Stage 1-A 단일 호출 버전 — 2026-04-22 이전 경로 (디버깅·비교용으로만 보존)."""
     keys_section = _format_existing_theme_keys(existing_keys or [])
     prompt = STAGE1A_PROMPT.format(
         news_text=news_text, date=date,
