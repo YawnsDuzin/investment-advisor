@@ -126,7 +126,7 @@ TOPICS: list[dict] = [
 ## 투자자 유형별 매칭 + 이 앱에서 활용
 
 | 투자자 유형 | 우선 discovery_type | 활용 포인트 |
-|------------|--------------------|-----------
+|------------|--------------------|-----------|
 | 보수적 장기 | `consensus` | 안정적 메인 수혜, 변동성 낮음 |
 | 공격적 성장 | `early_signal` | 선점 알파, 비중 적절히 제한 |
 | 역발상 투자자 | `contrarian` | 소수 의견, 분할 매수 |
@@ -153,7 +153,7 @@ TOPICS: list[dict] = [
 
 ## `entry_price` 확정
 
-`entry_price`는 **추천일 종가**로 확정되며, 이후 절대로 변경되지 않습니다. 이 값이 수익률 계산의 기준점(baseline)입니다. 가격 데이터를 가져오지 못한 경우 NULL이 되며, NULL인 제안은 수익률 추적 대상에서 제외됩니다. 한국 주식은 pykrx, 해외 주식은 yfinance에서 종가를 수집합니다. 추적 대상 조건: `entry_price IS NOT NULL` AND `action='buy'` AND 추천일로부터 1년 이내.
+`entry_price`는 추천 시점의 가격(`price_source` 필드로 출처 확인 가능 — `yfinance_realtime`/`yfinance_close`/`pykrx`/`pykrx_crosscheck` 중 하나)으로 확정됩니다. 한 번 저장되면 추적 종료까지 절대 변경되지 않습니다. 이 값이 수익률 계산의 기준점(baseline)입니다. 가격 데이터를 가져오지 못한 경우 NULL이 되며, NULL인 제안은 수익률 추적 대상에서 제외됩니다. 추적 대상 조건: `entry_price IS NOT NULL` AND `action='buy'` AND 추천일로부터 1년 이내.
 
 ## `post_return_1m_pct` / `3m` / `6m` / `1y` 4개 시점 추적
 
@@ -166,7 +166,7 @@ TOPICS: list[dict] = [
 | `post_return_6m_pct` | +180일 | 진짜 알파 vs 노이즈 구분 |
 | `post_return_1y_pct` | +365일 | 장기 투자 가치 |
 
-각 시점은 **해당 일 수 + grace 기간**(1m: +5일, 3m: +7일 등) 이후 첫 추적 시 채워집니다. 따라서 추천 직후에는 NULL이 정상입니다. 선택적으로 `post_return_snapshot` JSONB 필드에는 주기적 가격 스냅샷 `[{date, price, days_since_entry}]`이 쌓이므로 중간 흐름도 확인할 수 있습니다.
+각 시점은 **해당 일 수 + grace 기간**(1m: +5일, 3m: +7일 등) 이후 첫 추적 시 채워집니다. 따라서 추천 직후에는 NULL이 정상입니다. 또한 `proposal_price_snapshots` 테이블에 일별 가격 스냅샷(snapshot_date, price, price_source)이 쌓이므로 추천 후 가격 흐름의 중간 변화도 추적 가능합니다.
 
 ## 매매 복기 워크플로우
 
@@ -175,7 +175,7 @@ TOPICS: list[dict] = [
 | 질문 | 점검 방법 |
 |------|----------|
 | 왜 샀나 (당시 rationale) | rationale 필드 재읽기, discovery_type 확인 |
-| 왜 팔았나 (또는 안 팔았나) | 매도 시 가격 vs `entry_price` 비교 |
+| 왜 팔았나 (또는 안 팔았나) | 매도 시 가격 vs `entry_price` 비교; 보유 중이면 최신 `post_return_*_pct` vs 당초 보유 기간 계획 비교 |
 | 시장 vs 종목 요인 분리 | 동일 기간 KOSPI/S&P500 수익률과 비교 |
 | 다음에 바꿀 점 | 포지션 크기, 분할 매수/매도 여부 메모 |
 
@@ -183,7 +183,7 @@ TOPICS: list[dict] = [
 
 ## 트랙레코드 페이지 활용
 
-이 앱의 **트랙레코드 페이지**(`/track-record`)에서는 전체 추천의 시점별 평균 수익률, conviction별 성과, sector별 성과를 한 눈에 볼 수 있습니다. 특정 시장 국면(상승장/하락장)에서 AI 분석의 강점이 어디에 있는지 파악하고, 본인의 매매 패턴과 비교해 보세요. **`post_return_6m_pct`가 높은 종목군과 낮은 종목군**의 공통점을 찾으면 더 나은 필터링 기준을 만들 수 있습니다.""",
+이 앱의 **트랙레코드 페이지**(`/pages/track-record`)에서는 전체 추천의 시점별 평균 수익률, conviction별 성과, sector별 성과를 한 눈에 볼 수 있습니다. 특정 시장 국면(상승장/하락장)에서 AI 분석의 강점이 어디에 있는지 파악하고, 본인의 매매 패턴과 비교해 보세요. **`post_return_6m_pct`가 높은 종목군과 낮은 종목군**의 공통점을 찾으면 더 나은 필터링 기준을 만들 수 있습니다.""",
         "examples": json.dumps([
             {
                 "title": "익절 타이밍 복기: +30%에 팔았지만 1년 후 +120%",
