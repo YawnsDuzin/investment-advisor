@@ -26,6 +26,7 @@ _EDU_CATEGORIES = {
     "risk": "리스크 관리",
     "macro": "매크로 경제",
     "practical": "실전 활용",
+    "stories": "투자 이야기",
 }
 
 
