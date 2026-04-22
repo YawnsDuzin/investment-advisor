@@ -4,6 +4,7 @@ Stage 1: 뉴스 → 이슈 분석 + 테마 발굴 (시나리오/매크로 포함
 Stage 2: 핵심 종목 심층분석 (펀더멘털·퀀트·센티먼트)
 """
 import json
+import re
 import asyncio
 import time
 import anyio
@@ -131,11 +132,82 @@ def _try_fix_truncated_json(json_str: str) -> str | None:
     return s
 
 
+def _escape_control_chars_in_strings(json_str: str) -> str:
+    """JSON 문자열 값 내부의 raw 제어문자(\\n, \\r, \\t)를 이스케이프.
+
+    상태머신으로 문자열 내부(`"..."`)만 처리하여 구조 문자는 건드리지 않는다.
+    2026-04-22 Stage 1-A 실패 대응: 모델이 값 안에 raw 개행을 삽입하는 경우 복구.
+    """
+    out = []
+    in_string = False
+    escape = False
+    for ch in json_str:
+        if escape:
+            out.append(ch)
+            escape = False
+            continue
+        if ch == '\\':
+            out.append(ch)
+            escape = True
+            continue
+        if ch == '"':
+            in_string = not in_string
+            out.append(ch)
+            continue
+        if in_string and ch == '\n':
+            out.append('\\n')
+        elif in_string and ch == '\r':
+            out.append('\\r')
+        elif in_string and ch == '\t':
+            out.append('\\t')
+        else:
+            out.append(ch)
+    return ''.join(out)
+
+
+def _sanitize_json_response(text: str) -> str:
+    """파싱 전 전처리 — 모델이 망가뜨린 JSON을 복원 가능한 형태로 정리.
+
+    처리 순서:
+    1. 여러 개의 ```json 코드블록이 있으면 모두 연결(모델이 Part 1/2로 쪼갠 경우 대응)
+    2. 단일 코드블록이면 블록 내용만 추출
+    3. JSON 바깥의 마크다운 헤더(`**[...]**`) 제거
+    4. 값 내부의 자기주석 패턴(`*(issue N ...)*`) 제거
+    5. 문자열 값 내부의 raw 제어문자를 \\n 등으로 이스케이프
+    """
+    if not text:
+        return text
+
+    # 1~2. 코드블록 처리
+    blocks = re.findall(r"```json\s*(.*?)```", text, re.DOTALL)
+    if len(blocks) >= 2:
+        text = "".join(blocks)  # Part 1 + Part 2 연결
+    elif len(blocks) == 1:
+        text = blocks[0]
+    else:
+        # ```json 없는 경우 일반 ``` 블록 시도
+        plain_blocks = re.findall(r"```\s*(.*?)```", text, re.DOTALL)
+        if plain_blocks:
+            text = "".join(plain_blocks) if len(plain_blocks) >= 2 else plain_blocks[0]
+
+    # 3. 마크다운 헤더 제거 (예: **[테마 Part 1 — 1~3번]**)
+    text = re.sub(r"\*\*\[[^\]]*\]\*\*", "", text)
+
+    # 4. 자기주석 패턴 제거
+    text = re.sub(r"\*\(issue\s+\d+[^)]*\)\*", "", text)
+    text = re.sub(r"\*?\((?:이하\s*계속|생략|continued|to\s*be\s*continued)\)\*?", "", text, flags=re.IGNORECASE)
+
+    # 5. 문자열 값 내부 제어문자 이스케이프
+    text = _escape_control_chars_in_strings(text)
+
+    return text.strip()
+
+
 def _parse_json_response(full_response: str) -> dict:
-    """Claude 응답에서 JSON 추출 및 파싱 (잘린 JSON 복구 지원).
+    """Claude 응답에서 JSON 추출 및 파싱 (전처리 + 잘린 JSON 복구 지원).
 
     반환 딕셔너리에는 진단용 메타 필드가 첨부된다:
-    - `_parse_status`: 'success' | 'truncated_recovered' | 'failed' | 'empty'
+    - `_parse_status`: 'success' | 'sanitized_recovered' | 'truncated_recovered' | 'failed' | 'empty'
     - `_parse_error`: JSONDecodeError 메시지 (실패 시)
     - `_truncated`: 복구 여부 boolean
     """
@@ -150,6 +222,7 @@ def _parse_json_response(full_response: str) -> dict:
             "_truncated": False,
         }
 
+    # 기존 경량 추출 경로 (정상 케이스 유지)
     json_str = full_response.strip()
     if "```json" in json_str:
         json_str = json_str.split("```json")[1].split("```")[0].strip()
@@ -162,9 +235,31 @@ def _parse_json_response(full_response: str) -> dict:
         result["_parse_status"] = "success"
         return result
     except json.JSONDecodeError as e:
+        first_error = e
         log.warning(f"JSON 파싱 실패: {e}")
-        log.info("잘린 JSON 복구 시도 중...")
 
+        # 전처리 경로: 쪼개진 코드블록·메타 주석·raw 제어문자 복구
+        log.info("JSON 전처리(sanitize) 시도 중...")
+        sanitized = _sanitize_json_response(full_response)
+        if sanitized and sanitized != json_str:
+            try:
+                result = json.loads(sanitized)
+                themes_count = len(result.get("themes", []))
+                issues_count = len(result.get("issues", []))
+                proposals_count = len(result.get("proposals", []))
+                log.info(
+                    f"JSON 전처리 복구 성공 (이슈 {issues_count}건, 테마 {themes_count}건, 제안 {proposals_count}건)"
+                )
+                result["_truncated"] = False
+                result["_parse_status"] = "sanitized_recovered"
+                result["_parse_error"] = str(first_error)
+                return result
+            except json.JSONDecodeError as se:
+                log.info(f"전처리 후에도 파싱 실패 — 잘린 JSON 복구로 진행: {se}")
+                json_str = sanitized  # 다음 단계에 전처리 결과 전달
+
+        # 기존 잘린 JSON 복구 경로
+        log.info("잘린 JSON 복구 시도 중...")
         fixed = _try_fix_truncated_json(json_str)
         if fixed:
             try:
@@ -175,16 +270,16 @@ def _parse_json_response(full_response: str) -> dict:
                 log.info(f"JSON 복구 성공 (이슈 {issues_count}건, 테마 {themes_count}건, 제안 {proposals_count}건)")
                 result["_truncated"] = True
                 result["_parse_status"] = "truncated_recovered"
-                result["_parse_error"] = str(e)
+                result["_parse_error"] = str(first_error)
                 return result
             except json.JSONDecodeError:
                 pass
 
         log.error(f"JSON 복구 실패 — 원본 응답 앞부분:\n{full_response[:500]}")
         return {
-            "error": str(e),
+            "error": str(first_error),
             "_parse_status": "failed",
-            "_parse_error": str(e),
+            "_parse_error": str(first_error),
             "_truncated": False,
         }
 
