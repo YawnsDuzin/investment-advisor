@@ -61,6 +61,7 @@
 | 2026-04-18 | 분석 파이프라인 타임아웃·KRX 로그인 실패 (원시 로그) | Stage 1-A / KRX | 기록 | [202604181600_분석오류.md](202604181600_%EB%B6%84%EC%84%9D%EC%98%A4%EB%A5%98.md) |
 | 2026-04-18 | Stage 2 파싱 실패·DB tuple index 오류 (원시 로그) | Stage 2 / DB | 기록 | [202604182005_분석오류.md](202604182005_%EB%B6%84%EC%84%9D%EC%98%A4%EB%A5%98.md) |
 | 2026-04-22 | Stage 1-A JSON 파싱 실패 (쪼개진 블록 + raw 개행) | Stage 1-A | ✅ 해결됨 | [20260422_stage1a_json_parse_failure.md](20260422_stage1a_json_parse_failure.md) |
+| 2026-04-22 | Stage 1-A 재발 — 문자열 값 내부 ```json 펜스 삽입 (4중 대응) | Stage 1-A | ✅ 해결됨 | [20260422_stage1a_fence_injection_in_string.md](20260422_stage1a_fence_injection_in_string.md) |
 
 ---
 
