@@ -137,7 +137,6 @@ class UniverseConfig:
     """Stock Universe 동기화 설정 (Phase 1a — recommendation-engine-redesign).
 
     스크리너가 LLM hallucination을 차단하기 위해 참조하는 검증된 종목 마스터.
-    Phase 1a는 KRX(KOSPI+KOSDAQ)만 활성화. Phase 1b에서 US 추가 예정.
     """
     krx_enabled: bool = field(default_factory=lambda: _env_bool("UNIVERSE_KRX_ENABLED", True))
     us_enabled: bool = field(default_factory=lambda: _env_bool("UNIVERSE_US_ENABLED", False))
@@ -146,6 +145,34 @@ class UniverseConfig:
     sync_meta_schedule: str = field(default_factory=lambda: os.getenv("UNIVERSE_SYNC_META_SCHEDULE", "weekly"))
     # auto 모드에서 meta가 stale로 판단되는 경과 일수
     meta_stale_days: int = field(default_factory=lambda: int(os.getenv("UNIVERSE_META_STALE_DAYS", "7")))
+
+
+@dataclass
+class ScreenerConfig:
+    """Universe-First Stage 1-B 분해 설정 (Phase 2 — recommendation-engine-redesign).
+
+    enable_universe_first_b=False(기본) 시 기존 Stage 1-B(LLM이 ticker 자유 생성) 동작.
+    True 시 Stage 1-B1(스펙 생성) → 1-B2(결정적 스크리너) → 1-B3(배치 분석) 분해 동작.
+    """
+    enable_universe_first_b: bool = field(
+        default_factory=lambda: _env_bool("ENABLE_UNIVERSE_FIRST_B", False)
+    )
+    # Spec 매칭 0건/과소 시 fallback 재시도 횟수
+    spec_screener_max_retries: int = field(
+        default_factory=lambda: int(os.getenv("SPEC_SCREENER_MAX_RETRIES", "3"))
+    )
+    # 0건 매칭 시 market_cap_range 확장 비율 (%)
+    spec_screener_fallback_expand_pct: int = field(
+        default_factory=lambda: int(os.getenv("SPEC_SCREENER_FALLBACK_EXPAND_PCT", "50"))
+    )
+    # Stage 1-B1 스펙당 후보 최대 수 (기본 20)
+    candidates_max: int = field(
+        default_factory=lambda: int(os.getenv("SPEC_SCREENER_CANDIDATES_MAX", "20"))
+    )
+    # Stage 1-B3 배치 분석에 넘길 후보 수 (스크리너 결과 상위 N)
+    stage1b3_top_n: int = field(
+        default_factory=lambda: int(os.getenv("STAGE1B3_TOP_N", "20"))
+    )
 
 
 @dataclass
@@ -169,4 +196,5 @@ class AppConfig:
     auth: AuthConfig = field(default_factory=AuthConfig)
     recommendation: RecommendationConfig = field(default_factory=RecommendationConfig)
     universe: UniverseConfig = field(default_factory=UniverseConfig)
+    screener: ScreenerConfig = field(default_factory=ScreenerConfig)
     max_turns: int = field(default_factory=lambda: int(os.getenv("MAX_TURNS", "1")))  # 하위호환

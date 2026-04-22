@@ -21,10 +21,13 @@ from analyzer.prompts import (
     STAGE1A1_SYSTEM, STAGE1A1_PROMPT,
     STAGE1A2_SYSTEM, STAGE1A2_PROMPT,
     STAGE1B_SYSTEM, STAGE1B_PROMPT,
+    STAGE1B1_SYSTEM, STAGE1B1_PROMPT,
+    STAGE1B3_SYSTEM, STAGE1B3_PROMPT,
     STAGE2_SYSTEM, STAGE2_PROMPT,
 )
 from analyzer.stock_data import fetch_multiple_stocks, fetch_stock_data, format_stock_data_text, fetch_momentum_batch, validate_krx_tickers
-from shared.config import AnalyzerConfig, DatabaseConfig
+from analyzer.screener import screen as screen_universe, candidates_to_prompt_table
+from shared.config import AnalyzerConfig, DatabaseConfig, ScreenerConfig
 from shared.db import get_recent_recommendations, get_existing_theme_keys
 
 
@@ -897,6 +900,186 @@ async def stage1b_generate_proposals(
     return result.get("proposals", [])
 
 
+# ── Stage 1-B (Universe-First): 1-B1 스펙 생성 + 1-B2 스크리너 + 1-B3 배치 분석 ──
+
+async def stage1b1_generate_spec(
+    theme: dict, date: str, regime: str = "neutral",
+    recent_recs: list[dict] | None = None,
+    max_turns: int = 1,
+    model: str | None = None,
+    timeout_sec: int = 300,
+) -> dict:
+    """Stage 1-B1: 테마 → 투자 스펙(JSON, ticker 없음). LLM hallucination 차단의 시작점."""
+    recent_section = _format_recent_recommendations(recent_recs or [])
+    theme_name = theme.get("theme_name", "")
+    theme_key = theme.get("theme_key") or theme_name
+    prompt = STAGE1B1_PROMPT.format(
+        date=date,
+        theme_name=theme_name,
+        theme_key=theme_key,
+        theme_description=theme.get("description", ""),
+        theme_type=theme.get("theme_type", ""),
+        time_horizon=theme.get("time_horizon", ""),
+        confidence_score=theme.get("confidence_score", ""),
+        regime=regime,
+        recent_recommendations_section=recent_section,
+    )
+    start = time.time()
+    response = await _query_claude(
+        prompt, STAGE1B1_SYSTEM, max_turns, model=model, timeout_sec=timeout_sec,
+        archive_stage="stage1b1", archive_target_key=theme_key,
+    )
+    spec = _parse_json_response(response)
+    _archive_result(
+        stage="stage1b1", target_key=theme_key, model=model,
+        system_prompt=STAGE1B1_SYSTEM, user_prompt=prompt,
+        response=response, parsed=spec, elapsed_sec=time.time() - start,
+    )
+    # theme_key 누락 시 보강 (스크리너 로깅용)
+    if not spec.get("theme_key"):
+        spec["theme_key"] = theme_key
+    return spec
+
+
+async def stage1b3_analyze_candidates(
+    theme: dict, spec: dict, candidates: list[dict], date: str,
+    max_turns: int = 1,
+    model: str | None = None,
+    timeout_sec: int = 600,
+) -> list[dict]:
+    """Stage 1-B3: 후보 N개에 대해 한 번의 호출로 rationale/risk/conviction 배치 생성.
+
+    화이트리스트 검증: 출력의 ticker가 입력 candidates에 없으면 자동 제외 (hallucination 차단).
+    """
+    if not candidates:
+        return []
+
+    theme_name = theme.get("theme_name", "")
+    theme_key = spec.get("theme_key") or theme_name
+    candidates_table = candidates_to_prompt_table(candidates, max_rows=30)
+    prompt = STAGE1B3_PROMPT.format(
+        date=date,
+        theme_name=theme_name,
+        theme_key=theme_key,
+        thesis=spec.get("thesis", ""),
+        value_chain_tier=", ".join(spec.get("value_chain_tier") or []),
+        sector_norm=", ".join(spec.get("sector_norm") or []),
+        catalyst_window=spec.get("expected_catalyst_window_months", "?"),
+        candidates_count=len(candidates),
+        candidates_table=candidates_table,
+    )
+    start = time.time()
+    response = await _query_claude(
+        prompt, STAGE1B3_SYSTEM, max_turns, model=model, timeout_sec=timeout_sec,
+        archive_stage="stage1b3", archive_target_key=theme_key,
+    )
+    parsed = _parse_json_response(response)
+    _archive_result(
+        stage="stage1b3", target_key=theme_key, model=model,
+        system_prompt=STAGE1B3_SYSTEM, user_prompt=prompt,
+        response=response, parsed=parsed, elapsed_sec=time.time() - start,
+    )
+
+    # 화이트리스트 검증 — 입력 candidates의 ticker만 허용
+    allowed_tickers = {c["ticker"] for c in candidates}
+    proposals = parsed.get("proposals", []) if isinstance(parsed, dict) else []
+    accepted: list[dict] = []
+    rejected: list[str] = []
+    candidate_index = {c["ticker"]: c for c in candidates}
+
+    for p in proposals:
+        tk = (p.get("ticker") or "").strip()
+        if tk not in allowed_tickers:
+            rejected.append(tk or "(empty)")
+            continue
+        # 후보 표의 실측 데이터로 보강 (AI가 잘못 적었을 수 있는 필드 교정)
+        cand = candidate_index[tk]
+        p["asset_name"] = cand.get("asset_name") or p.get("asset_name") or tk
+        p["market"] = cand.get("market") or p.get("market")
+        if not p.get("sector"):
+            p["sector"] = cand.get("sector_norm")
+        # 스펙/매칭 근거를 audit trail에 기록 (Phase 3에서 DB 저장)
+        p["spec_snapshot"] = spec
+        p["screener_match_reason"] = cand.get("screener_match_reason")
+        accepted.append(p)
+
+    log = get_logger("stage1b3")
+    if rejected:
+        log.warning(
+            f"[stage1b3:{theme_key}] 화이트리스트 위반 ticker {len(rejected)}건 자동 제외: {rejected[:5]}"
+        )
+    log.info(f"[stage1b3:{theme_key}] {len(accepted)}/{len(proposals)} proposals accepted")
+    return accepted
+
+
+def stage1b2_screen_candidates(
+    spec: dict, db_cfg: DatabaseConfig,
+    screener_cfg: ScreenerConfig | None = None,
+) -> list[dict]:
+    """Stage 1-B2: 결정적 스크리너 호출 — analyzer.screener.screen() wrapper.
+
+    AI 호출 없음. 스펙 → 후보 리스트 (universe에서 추출).
+    """
+    result = screen_universe(db_cfg, spec, cfg=screener_cfg)
+    return result.candidates
+
+
+async def stage1b_universe_first(
+    theme: dict, db_cfg: DatabaseConfig, date: str,
+    cfg: AnalyzerConfig, screener_cfg: ScreenerConfig,
+    regime: str = "neutral",
+    recent_recs: list[dict] | None = None,
+    timeout_sec: int = 600,
+) -> list[dict]:
+    """Universe-First Stage 1-B 통합: 1-B1 → 1-B2 → 1-B3 → 검증된 proposals.
+
+    실패 시 빈 리스트 반환 (caller가 기존 stage1b로 폴백할지는 별도 정책).
+    """
+    log = get_logger("stage1b-universe")
+    theme_name = theme.get("theme_name", "")
+    theme_key = theme.get("theme_key") or theme_name
+
+    # 1-B1: 스펙 생성
+    try:
+        spec = await stage1b1_generate_spec(
+            theme, date, regime=regime, recent_recs=recent_recs,
+            max_turns=cfg.max_turns, model=cfg.model_analysis, timeout_sec=timeout_sec,
+        )
+    except Exception as e:
+        log.error(f"[1-B1:{theme_key}] 스펙 생성 실패: {e}")
+        return []
+
+    if not isinstance(spec, dict) or not (spec.get("required_keywords") or spec.get("sector_norm")):
+        log.warning(f"[1-B1:{theme_key}] 스펙이 비어 있거나 필수 필드 누락 — 건너뜀")
+        return []
+
+    # 1-B2: 결정적 스크리너 (Python only, AI 호출 없음)
+    try:
+        candidates = stage1b2_screen_candidates(spec, db_cfg, screener_cfg=screener_cfg)
+    except Exception as e:
+        log.error(f"[1-B2:{theme_key}] 스크리너 실행 실패: {e}")
+        return []
+
+    if not candidates:
+        log.warning(f"[1-B2:{theme_key}] 스크리너 매칭 0건 — 테마 스킵")
+        return []
+
+    # 상위 N개로 제한 (AI 입력 비용 절감)
+    candidates = candidates[: screener_cfg.stage1b3_top_n]
+
+    # 1-B3: 배치 분석 (AI 1회 호출)
+    try:
+        proposals = await stage1b3_analyze_candidates(
+            theme, spec, candidates, date,
+            max_turns=cfg.max_turns, model=cfg.model_analysis, timeout_sec=timeout_sec,
+        )
+    except Exception as e:
+        log.error(f"[1-B3:{theme_key}] 배치 분석 실패: {e}")
+        return []
+
+    return proposals
+
+
 # ── Stage 2: 핵심 종목 심층분석 ──────────────────────
 
 async def stage2_analyze_stock(
@@ -1043,7 +1226,16 @@ async def run_pipeline(
         total_proposals = sum(len(t.get("proposals", [])) for t in themes)
         log.info(f"[Stage 1-B] 체크포인트에서 복원 — 총 {total_proposals}건 제안")
     else:
-        log.info(f"[Stage 1-B] 테마별 투자 제안 생성 시작 — {len(themes)}개 테마 (병렬 실행)")
+        # Phase 2: ENABLE_UNIVERSE_FIRST_B 토글에 따라 듀얼 모드 동작
+        from shared.config import ScreenerConfig
+        screener_cfg = ScreenerConfig()
+        universe_first = screener_cfg.enable_universe_first_b
+        mode_label = "Universe-First (1-B1+1-B2+1-B3)" if universe_first else "Legacy (LLM 자유 생성)"
+        log.info(
+            f"[Stage 1-B] 테마별 투자 제안 생성 시작 — {len(themes)}개 테마 (병렬 실행, 모드: {mode_label})"
+        )
+        # 시장 레짐: Phase 5에서 동적 산정. 현재는 'neutral' 고정.
+        regime = "neutral"
 
         async def _generate_proposals_for_theme(i: int, theme: dict) -> None:
             theme_name = theme.get("theme_name", f"테마{i+1}")
@@ -1052,11 +1244,20 @@ async def run_pipeline(
             async with _sdk_semaphore:
                 log.info(f"[Stage 1-B] ({i+1}/{len(themes)}) '{theme_name}' 제안 생성 시작")
                 try:
-                    proposals = await stage1b_generate_proposals(
-                        theme, date, cfg.max_turns, recent_recs,
-                        model=cfg.model_analysis,
-                        timeout_sec=timeout,
-                    )
+                    if universe_first:
+                        if db_cfg is None:
+                            raise RuntimeError("Universe-First 모드는 db_cfg가 필요합니다.")
+                        proposals = await stage1b_universe_first(
+                            theme, db_cfg, date, cfg, screener_cfg,
+                            regime=regime, recent_recs=recent_recs,
+                            timeout_sec=timeout,
+                        )
+                    else:
+                        proposals = await stage1b_generate_proposals(
+                            theme, date, cfg.max_turns, recent_recs,
+                            model=cfg.model_analysis,
+                            timeout_sec=timeout,
+                        )
                     theme["proposals"] = proposals
                     log.info(f"[Stage 1-B] ({i+1}/{len(themes)}) '{theme_name}' — {len(proposals)}건 제안 완료")
                 except Exception as e:
