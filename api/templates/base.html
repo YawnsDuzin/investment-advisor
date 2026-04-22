@@ -103,24 +103,42 @@
                                 </div>
                             </div>
                             <div class="user-dropdown-divider"></div>
-                            <a href="/pages/watchlist" class="user-dropdown-item">관심 종목{% if watchlist_limit %} <span class="user-dropdown-badge">{{ watchlist_usage }}/{{ watchlist_limit }}</span>{% endif %}</a>
-                            <a href="/pages/notifications" class="user-dropdown-item">
-                                알림{% if unread_notifications %} <span class="user-dropdown-badge">{{ unread_notifications }}</span>{% endif %}
+                            <a href="/pages/watchlist" class="user-dropdown-item">
+                                <span class="user-dropdown-item-label"><i data-lucide="star" class="icon icon-sm" aria-hidden="true"></i>관심 종목</span>
+                                {% if watchlist_limit %}<span class="user-dropdown-badge">{{ watchlist_usage }}/{{ watchlist_limit }}</span>{% endif %}
                             </a>
-                            <a href="/pages/profile" class="user-dropdown-item">프로필</a>
-                            <a href="/pages/pricing" class="user-dropdown-item">플랜 / 업그레이드</a>
+                            <a href="/pages/notifications" class="user-dropdown-item">
+                                <span class="user-dropdown-item-label"><i data-lucide="bell" class="icon icon-sm" aria-hidden="true"></i>알림</span>
+                                {% if unread_notifications %}<span class="user-dropdown-badge">{{ unread_notifications }}</span>{% endif %}
+                            </a>
+                            <a href="/pages/profile" class="user-dropdown-item">
+                                <span class="user-dropdown-item-label"><i data-lucide="user" class="icon icon-sm" aria-hidden="true"></i>프로필</span>
+                            </a>
+                            <a href="/pages/pricing" class="user-dropdown-item">
+                                <span class="user-dropdown-item-label"><i data-lucide="crown" class="icon icon-sm" aria-hidden="true"></i>플랜 / 업그레이드</span>
+                            </a>
                             {% if current_user.role in ('admin', 'moderator') %}
                             <div class="user-dropdown-divider"></div>
-                            <a href="/admin/users" class="user-dropdown-item">사용자 관리</a>
+                            <a href="/admin/users" class="user-dropdown-item">
+                                <span class="user-dropdown-item-label"><i data-lucide="users" class="icon icon-sm" aria-hidden="true"></i>사용자 관리</span>
+                            </a>
                             {% endif %}
                             {% if current_user.role == 'admin' %}
-                            <a href="/admin/users/audit-logs" class="user-dropdown-item">감사 로그</a>
-                            <a href="/admin" class="user-dropdown-item">관리자 메뉴</a>
-                            <a href="/docs" target="_blank" class="user-dropdown-item">API Docs</a>
+                            <a href="/admin/users/audit-logs" class="user-dropdown-item">
+                                <span class="user-dropdown-item-label"><i data-lucide="scroll-text" class="icon icon-sm" aria-hidden="true"></i>감사 로그</span>
+                            </a>
+                            <a href="/admin" class="user-dropdown-item">
+                                <span class="user-dropdown-item-label"><i data-lucide="settings" class="icon icon-sm" aria-hidden="true"></i>관리자 메뉴</span>
+                            </a>
+                            <a href="/docs" target="_blank" class="user-dropdown-item">
+                                <span class="user-dropdown-item-label"><i data-lucide="code-2" class="icon icon-sm" aria-hidden="true"></i>API Docs</span>
+                            </a>
                             {% endif %}
                             <div class="user-dropdown-divider"></div>
                             <form action="/auth/logout" method="post" style="margin:0;">
-                                <button type="submit" class="user-dropdown-item user-dropdown-logout">로그아웃</button>
+                                <button type="submit" class="user-dropdown-item user-dropdown-logout">
+                                    <span class="user-dropdown-item-label"><i data-lucide="log-out" class="icon icon-sm" aria-hidden="true"></i>로그아웃</span>
+                                </button>
                             </form>
                         </div>
                     </div>

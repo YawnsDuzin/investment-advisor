@@ -21,7 +21,7 @@
     {% if current_user %}
     <div class="watchlist-widget">
         <div class="widget-header">
-            <span>⭐ 내 관심 종목</span>
+            <span class="widget-title-with-icon"><i data-lucide="star" class="icon icon-sm" aria-hidden="true"></i>내 관심 종목</span>
             <a href="/pages/watchlist" class="widget-more">전체 →</a>
         </div>
         <div class="watchlist-quick">
@@ -48,7 +48,7 @@
     {% else %}
     <div class="watchlist-widget">
         <div class="widget-header">
-            <span>🌡️ 시장 상태</span>
+            <span class="widget-title-with-icon"><i data-lucide="thermometer" class="icon icon-sm" aria-hidden="true"></i>시장 상태</span>
             <span style="font-size:12px;color:var(--text-muted);">{{ session.analysis_date }}</span>
         </div>
         <div style="display:flex;justify-content:center;padding:12px 0;">

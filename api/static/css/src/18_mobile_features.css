@@ -76,6 +76,13 @@
     color: var(--orange);
     font-size: 14px;
     flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+}
+.global-disclaimer .disclaimer-icon svg.lucide {
+    width: 16px;
+    height: 16px;
+    stroke-width: 2.25;
 }
 .global-disclaimer .disclaimer-text { flex: 1 1 280px; }
 .global-disclaimer strong { color: var(--text); }

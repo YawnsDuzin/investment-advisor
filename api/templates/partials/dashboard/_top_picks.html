@@ -62,10 +62,10 @@
                 {% endif %}
                 {# 이상 신호만 강조 #}
                 {% if pk.foreign_net_buy_signal == 'strong_buy' %}
-                <span class="top-pick-badge" style="background:rgba(52,211,153,0.15);color:var(--green);border:1px solid rgba(52,211,153,0.35);" title="외국인 5일+ 연속 순매수">🏦</span>
+                <span class="top-pick-badge" style="background:rgba(52,211,153,0.15);color:var(--green);border:1px solid rgba(52,211,153,0.35);" title="외국인 5일+ 연속 순매수"><i data-lucide="landmark" class="icon icon-sm" aria-hidden="true"></i></span>
                 {% endif %}
                 {% if pk.squeeze_risk == 'high' %}
-                <span class="top-pick-badge" style="background:rgba(248,113,113,0.15);color:var(--red);border:1px solid rgba(248,113,113,0.35);" title="숏스퀴즈 위험">⚡</span>
+                <span class="top-pick-badge" style="background:rgba(248,113,113,0.15);color:var(--red);border:1px solid rgba(248,113,113,0.35);" title="숏스퀴즈 위험"><i data-lucide="zap" class="icon icon-sm" aria-hidden="true"></i></span>
                 {% endif %}
             </div>
         </div>
@@ -172,12 +172,12 @@
                 </button>
             {% endif %}
             <a href="/pages/stocks/{{ pk.ticker }}{% if pk.market %}?market={{ pk.market }}{% endif %}"
-               class="action-btn" title="기초정보">
-                📊 정보
+               class="action-btn action-btn-icon" title="기초정보">
+                <i data-lucide="info" class="icon icon-sm" aria-hidden="true"></i>정보
             </a>
             {% if pk.theme_key %}
-            <a href="/pages/themes/history/{{ pk.theme_key }}" class="action-btn action-btn-signal" title="테마 히스토리">
-                📈 테마
+            <a href="/pages/themes/history/{{ pk.theme_key }}" class="action-btn action-btn-signal action-btn-icon" title="테마 히스토리">
+                <i data-lucide="trending-up" class="icon icon-sm" aria-hidden="true"></i>테마
             </a>
             {% endif %}
         </div>

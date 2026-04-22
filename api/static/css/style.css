@@ -348,6 +348,20 @@ svg.lucide.icon-lg { width: 24px; height: 24px; }
 .user-dropdown-item:hover {
     background: var(--bg-card-hover);
 }
+.user-dropdown-item-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+}
+.user-dropdown-item-label svg.lucide {
+    width: 15px;
+    height: 15px;
+    color: var(--text-muted);
+    stroke-width: 2;
+}
+.user-dropdown-logout .user-dropdown-item-label svg.lucide {
+    color: var(--red);
+}
 .user-dropdown-logout {
     color: var(--red);
     font-size: 13px;
@@ -2408,12 +2422,24 @@ tbody tr:hover { background: var(--bg-card-hover); }
     backdrop-filter: blur(2px);
     z-index: 2;
 }
-.card-lock-icon { font-size: 26px; }
+.card-lock-icon { font-size: 26px; display: inline-flex; align-items: center; justify-content: center; color: var(--text-muted); }
+.card-lock-icon svg.lucide { width: 28px; height: 28px; stroke-width: 2; }
 .card-lock-title {
     font-size: 14px;
     font-weight: 700;
     color: var(--text);
     margin: 0;
+}
+
+/* 위젯 타이틀에 Lucide 아이콘 inline 배치 — Dashboard Hero Row용 공통 유틸 */
+.widget-title-with-icon {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+.widget-title-with-icon svg.lucide {
+    color: var(--accent);
+    flex-shrink: 0;
 }
 
 /* ── 워치리스트 요약 위젯 ── */
@@ -2634,6 +2660,18 @@ tbody tr:hover { background: var(--bg-card-hover); }
 .action-btn:disabled {
     cursor: default;
     opacity: 0.7;
+}
+.action-btn svg.lucide {
+    width: 14px;
+    height: 14px;
+    stroke-width: 2;
+    flex-shrink: 0;
+}
+.top-pick-badge svg.lucide {
+    width: 14px;
+    height: 14px;
+    stroke-width: 2;
+    vertical-align: middle;
 }
 .action-watched {
     color: var(--orange);
@@ -3767,6 +3805,13 @@ tbody tr:hover { background: var(--bg-card-hover); }
     color: var(--orange);
     font-size: 14px;
     flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+}
+.global-disclaimer .disclaimer-icon svg.lucide {
+    width: 16px;
+    height: 16px;
+    stroke-width: 2.25;
 }
 .global-disclaimer .disclaimer-text { flex: 1 1 280px; }
 .global-disclaimer strong { color: var(--text); }

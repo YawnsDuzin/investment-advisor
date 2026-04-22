@@ -283,6 +283,20 @@
 .user-dropdown-item:hover {
     background: var(--bg-card-hover);
 }
+.user-dropdown-item-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+}
+.user-dropdown-item-label svg.lucide {
+    width: 15px;
+    height: 15px;
+    color: var(--text-muted);
+    stroke-width: 2;
+}
+.user-dropdown-logout .user-dropdown-item-label svg.lucide {
+    color: var(--red);
+}
 .user-dropdown-logout {
     color: var(--red);
     font-size: 13px;
