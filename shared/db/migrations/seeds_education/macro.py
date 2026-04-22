@@ -81,7 +81,70 @@ Stage 1 분석의 `macro_impacts`에서 금리 시나리오를 확인:
             {"title": "원/달러 1,440원 시대 (2022.10)", "description": "환율 1,200 → 1,440원 급등. 같은 기간 S&P500 -20%였지만, 원화 기준으로는 -6% 수준. 환율이 해외 투자 손실을 상쇄. 반면 2023년 환율 하락 시에는 수익도 깎임.", "period": "2022~2023", "lesson": "해외 투자 시 주가와 환율, 두 가지 변수를 동시에 관리해야 한다"}
         ]),
     },
+    {
+        "category": "macro", "slug": "scenario-thinking",
+        "title": "base/worse/better — 시나리오 사고법",
+        "summary": "시나리오 3종(낙관·기본·비관)으로 매크로 충격에 대비하는 사고 프레임을 배웁니다.",
+        "difficulty": "intermediate", "sort_order": 32,
+        "content": """## 왜 시나리오 사고인가?
+
+**점추정**은 "Fed가 3.5번 인하할 것"처럼 단 하나의 예측에 베팅하는 방식. 틀렸을 때 포트폴리오 전체가 타격을 받는다. **확률적 시나리오 사고**는 bull·base·bear 3개 경로에 각각 확률(25/50/25)을 부여하고, 어느 경로가 실현되더라도 치명적 손실을 피하는 포트폴리오를 구성하는 프레임이다.
+
+## theme_scenarios — `bull`/`base`/`bear`
+
+`theme_scenarios` 테이블은 **테마 단위** 시나리오다. 하나의 테마에 3개가 붙는다.
+
+- `bull`: 낙관 (probability 25%), `base`: 기본 (probability 50%), `bear`: 비관 (probability 25%)
+- 각 시나리오는 `market_impact`(예: "S&P500 +8%, KOSPI +5%")를 포함 — **정량 수치**로 베팅 강도를 결정한다.
+
+## macro_impacts — `base_case`/`worse_case`/`better_case`
+
+`macro_impacts` 테이블은 **매크로 변수 단위** 시나리오다. 6개 변수별 전망치 3개가 붙는다.
+
+- `variable_name`: `oil_wti` | `gold` | `usdkrw` | `us_10y_yield` | `sp500` | `kospi`
+- `base_case`: 기본 전망치, `worse_case`: 악화 전망치, `better_case`: 호전 전망치
+
+`usdkrw`는 원화 약세가 `worse_case`이지만, `gold`는 가격 상승이 `better_case`(안전자산 수요)다. 변수마다 방향이 다르다.
+
+## 두 구조 비교
+
+| 측면 | `theme_scenarios` | `macro_impacts` |
+|------|------------------|-----------------|
+| 단위 | 테마 1개 = 시나리오 3개 | 테마 1개 = 변수별 시나리오 |
+| 시나리오 키 | `bull` / `base` / `bear` | `base_case` / `worse_case` / `better_case` |
+| 핵심 정보 | probability + market_impact | `oil_wti` `gold` `usdkrw` `us_10y_yield` `sp500` `kospi` |
+| 활용 | 테마 베팅 강도 결정 | 매크로 헤지 자산 배분 |
+
+**주의**: `base`(theme_scenarios)와 `base_case`(macro_impacts)는 다른 테이블의 다른 필드다.
+
+## 두 구조를 함께 보는 법
+
+`bear` 시나리오(침체)가 열리면 `usdkrw`의 `worse_case`(원화 약세)가 실현될 가능성이 높다. 반면 같은 `bear`에서도 `gold`의 `better_case`(금 상승)는 공존한다. probability 25/50/25 가중 자산 배분 예시:
+
+| 자산군 | bull (25%) | base (50%) | bear (25%) | 가중 평균 |
+|--------|-----------|-----------|-----------|---------|
+| 주식 (성장) | 70% | 50% | 20% | ~47% |
+| 채권 | 10% | 30% | 50% | ~30% |
+| 금 | 5% | 10% | 20% | ~11% |
+| 현금 | 15% | 10% | 10% | ~12% |
+
+## 이 앱에서 활용
+
+**테마 상세**: `theme_scenarios`의 `bull`/`bear` market_impact 비교 → 하방이 큰 테마는 `base` 기준 비중 축소.
+
+**매크로 탭**: `macro_impacts`의 `us_10y_yield`, `usdkrw`, `sp500` 전망 확인. `worse_case`와 `better_case` 폭이 클수록 불확실성이 높으므로 헤지 비중을 늘린다. `gold`, `usdkrw`의 `worse_case`를 보고 안전자산 편입 여부를 결정한다.""",
+        "examples": json.dumps([
+            {
+                "title": "2024년 Fed 피벗 시나리오 — base/worse/better 실제 적용",
+                "description": "2023년 말 시장은 2024년 Fed 인하 횟수를 두고 세 가지 시나리오를 상정했다. base_case: 3~3.5번 인하(연 4.5→3.75%), 주식·채권 모두 온건 상승. worse_case: 인플레 재상승으로 인하 1번 이하, us_10y_yield 5.5% 재돌파, 성장주 급락. better_case: 경기 연착륙 확인으로 5번 이상 인하, 나스닥 +30% 이상. 실제 2024년 결과는 base에 근접(3번 인하). 그러나 worse_case를 대비해 gold와 단기채를 10~15% 편입한 포트폴리오는 연초 채권 변동성 구간(1~3월)을 방어적으로 통과했다. 이 앱의 macro_impacts가 base_case에 50% 확률을 두는 이유는, 기본 시나리오가 실현될 가능성이 가장 높으면서도 worse/better에 대한 헤지를 명시적으로 설계하도록 강제하기 때문이다.",
+                "period": "2023.12 ~ 2024.12",
+                "lesson": "점추정 대신 base/worse/better 3종 시나리오를 미리 써두면, 예상 밖 경로에서도 '틀린 게 아니라 worse_case가 열렸다'고 인식하고 감정적 매도를 막을 수 있다."
+            }
+        ]),
+    },
 ]
 
 # v24 마이그레이션에서 신규 추가되는 토픽의 slug 집합
-V24_SLUGS: set[str] = set()
+V24_SLUGS: set[str] = {
+    "scenario-thinking",
+}
