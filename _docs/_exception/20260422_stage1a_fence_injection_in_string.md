@@ -92,6 +92,47 @@ r = _parse_json_response(fake)
 - `stage1a1`·`stage1a2` 로그가 각각 10~12KB 이하, 완결되는지 모니터링
 - 청크별 수신 타임라인에 27초+ 공백이 재발하는지 관찰
 
+## 후속 발생 이슈 (2026-04-22 10:21) — Stage 1-B 전체 실패
+
+분할 적용 후 재실행에서 Stage 1-A1(이슈 10건)·1-A2(테마 5건)는 모두 success로 복구됐으나, 이어지는 Stage 1-B 5건이 모두 동일 에러로 즉시 실패:
+
+```
+[Stage 1-B] 제안 생성 실패: sequence item 0: expected str instance, NoneType found
+```
+
+- **원인**: [analyzer/analyzer.py:606](../../analyzer/analyzer.py#L606) `"/".join(sorted(info['themes']))` — `get_recent_recommendations()` 결과 중 `theme_name=NULL`인 레코드가 있어 set에 `None`이 포함됨 → `"/".join([None])` 실패. `proposal_tracking` 테이블에 NULL theme_name 데이터가 쌓여있던 것으로 추정.
+- **수정**: [analyzer/analyzer.py:577-619](../../analyzer/analyzer.py#L577-L619) — `_format_recent_recommendations` 를 방어적으로 재작성:
+  - `ticker` NULL 레코드는 스킵
+  - `theme_name` NULL/빈문자열은 set에 추가하지 않음
+  - `asset_name`/`count` NULL도 기본값으로 대체
+  - 결과 map이 비면 빈 문자열 반환
+- **검증**: 로컬 smoke test 4케이스 통과 (None theme_name 스킵 / 완전 NULL 레코드 스킵 / 정상 케이스 유지 / existing_keys 무영향).
+
+## 추가 최적화 — recent_recs 컨텍스트 팽창 방지 (2026-04-22, 이어서)
+
+**동기**: 방어 처리 후 기능은 정상이나, `recent_recs`가 Stage 1-B의 테마 개수만큼 반복 전송되어 토큰 낭비 우려. 누적 이력이 계속 증가할 수 있음.
+
+**진단**:
+- Stage 1-B는 테마 N개마다 별도 호출 → 동일 `recent_recs` 블록이 N번 전송
+- 현재 130건 → 티커 dedup 후 ~80개 → 기존 포맷 ~3,100자/render
+- 5테마 × 3,100자 = 15,500자 (~5,000+ 토큰) 누적
+- 7일 슬라이딩 윈도우 상한은 있으나 일일 제안 볼륨이 늘면 250+ 티커까지 팽창 가능
+
+**개선**: [analyzer/analyzer.py:577-640](../../analyzer/analyzer.py#L577-L640) — `_format_recent_recommendations` 컴팩트 포맷 + Top-N 캡
+- **인라인 포맷**: `- 005930 (삼성전자) [AI/반도체] 3회\n` → `005930 삼성전자, ...` (한 줄에 이어 붙임)
+- **테마 별도 요약**: 중복되는 테마명 per-line 나열 대신 상위 12개만 "이미 다룬 테마 키워드: ..." 한 줄로
+- **Top-N 캡**: `_RECENT_RECS_MAX_TICKERS=80`, count DESC 정렬 후 상위만 표시. 초과 시 헤더에 "상위 80개 표시" 명시
+- **NULL 방어** 유지
+
+**효과 (130건 시뮬레이션)**:
+| 지표 | 기존 | 신규 | 변화 |
+|---|---|---|---|
+| 포맷 크기 | ~3,100자 | 1,062자 | **-66%** |
+| 5회 전송 누적 | ~15KB | ~5KB | **-66%** |
+| 상한 팽창 | 선형 증가 | ≤80티커 | 제어됨 |
+
+**검증**: 5케이스 smoke test 통과 (empty / single / NULL 섞임 / asset_name 없음 / Top-80 cap).
+
 ## 후속 모니터링
 - **관찰 지표**: `ai_query_archive` 테이블에서 stage별 `response_chars` 분포 + `parse_status` 분포. `stage1a1`/`stage1a2` 분리 후 `stage1a` 단일 쿼리는 사라져야 정상.
 - **알림 조건**: `parse_status IN ('failed','empty')` 가 주 1건 이상 발생하거나, `truncated_recovered` 가 월 5건 이상 누적되면 프롬프트/모델 재점검.

@@ -574,39 +574,73 @@ async def _query_claude(
 
 # ── Stage 1: 이슈 분석 + 테마 발굴 ──────────────────
 
+_RECENT_RECS_MAX_TICKERS = 80  # Top-N 캡 — 누적 증가로 인한 컨텍스트 팽창 방지
+_RECENT_RECS_THEME_SUMMARY_MAX = 12  # 이미 다룬 테마 키워드 요약 최대 개수
+
+
 def _format_recent_recommendations(recent_recs: list[dict]) -> str:
-    """최근 추천 이력을 프롬프트용 요약 텍스트로 포맷팅 (토큰 절약)"""
+    """최근 추천 이력을 **컴팩트 인라인 포맷**으로 변환 (토큰 절약).
+
+    설계 원칙:
+    - Stage 1-B가 테마 개수만큼 반복 호출되므로 블록이 매번 전송됨 → 짧을수록 유리
+    - 목적은 "이미 추천된 티커에서 벗어나라"는 신호 → 티커+이름만 있으면 충분
+    - 최근 다룬 테마 키워드는 별도 요약 한 줄로 제공 (밸류체인 확장 힌트)
+    - NULL 필드 방어 처리 (2026-04-22 Stage 1-B 전체 실패 재발 방지)
+    - Top-N 캡으로 누적 팽창 방지 — count DESC 기준 상위 유지
+    """
     if not recent_recs:
         return ""
 
-    # 티커별로 그룹핑하여 요약
+    # 티커별 그룹핑 — NULL 필드는 건너뛰거나 기본값으로 대체
     ticker_map: dict[str, dict] = {}
+    theme_counter: dict[str, int] = {}
     for rec in recent_recs:
-        tk = rec['ticker']
+        tk = rec.get('ticker')
+        if not tk:
+            continue
         if tk not in ticker_map:
             ticker_map[tk] = {
-                'name': rec['asset_name'],
-                'themes': set(),
+                'name': rec.get('asset_name') or '',
                 'count': 0,
             }
-        ticker_map[tk]['themes'].add(rec['theme_name'])
-        ticker_map[tk]['count'] += rec['count']
+        ticker_map[tk]['count'] += rec.get('count', 0) or 0
+        theme_name = rec.get('theme_name')
+        if theme_name:
+            theme_counter[theme_name] = theme_counter.get(theme_name, 0) + (rec.get('count', 0) or 0)
 
-    lines = [
-        "\n---\n",
-        "## 최근 추천 이력 (중복 방지 — 최근 7일)",
-        "",
-        f"아래 {len(ticker_map)}개 종목은 최근 이미 추천되었습니다.",
-        "**이 종목들은 신규 추천에서 제외**하고, 동일 밸류체인 내 아직 발굴되지 않은 2~3차 수혜주를 대신 찾으세요.",
-        "단, 기존 포지션의 목표가 조정이나 청산 판단이 필요하면 별도 언급할 수 있습니다.",
-        "",
-        "제외 종목 목록:",
+    if not ticker_map:
+        return ""
+
+    # Top-N 캡 — count DESC 정렬 후 상위만 (쿼리는 이미 count DESC이지만 방어적으로 재정렬)
+    ranked = sorted(ticker_map.items(), key=lambda kv: (-kv[1]['count'], kv[0]))
+    truncated = len(ranked) > _RECENT_RECS_MAX_TICKERS
+    ranked = ranked[:_RECENT_RECS_MAX_TICKERS]
+
+    # 컴팩트 인라인 포맷 — 한 줄 당 여러 티커
+    ticker_tokens = []
+    for tk, info in ranked:
+        name = info['name']
+        ticker_tokens.append(f"{tk} {name}".strip() if name else tk)
+    tickers_line = ", ".join(ticker_tokens)
+
+    # 최근 다룬 테마 키워드 요약 (상위 N개)
+    top_themes = sorted(theme_counter.items(), key=lambda kv: -kv[1])[:_RECENT_RECS_THEME_SUMMARY_MAX]
+    themes_line = ", ".join(t for t, _ in top_themes) if top_themes else ""
+
+    header = f"## 최근 7일 추천 이력 (총 {len(ticker_map)}개 티커"
+    if truncated:
+        header += f", 상위 {_RECENT_RECS_MAX_TICKERS}개 표시"
+    header += ")"
+
+    parts = [
+        "\n---",
+        header,
+        "**위 티커는 신규 추천에서 제외**하고 동일 밸류체인의 2~3차 수혜주 또는 다른 테마의 종목을 발굴하세요.",
     ]
-    for tk, info in ticker_map.items():
-        themes_str = "/".join(sorted(info['themes']))
-        lines.append(f"  - {tk} ({info['name']}) [{themes_str}] {info['count']}회")
-    lines.append("")
-    return "\n".join(lines)
+    if themes_line:
+        parts.append(f"- 이미 다룬 테마 키워드: {themes_line}")
+    parts.append(f"- 제외 티커: {tickers_line}")
+    return "\n".join(parts) + "\n"
 
 
 def _format_existing_theme_keys(existing_keys: list[dict]) -> str:
