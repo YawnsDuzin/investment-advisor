@@ -133,6 +133,22 @@ class RecommendationConfig:
 
 
 @dataclass
+class UniverseConfig:
+    """Stock Universe 동기화 설정 (Phase 1a — recommendation-engine-redesign).
+
+    스크리너가 LLM hallucination을 차단하기 위해 참조하는 검증된 종목 마스터.
+    Phase 1a는 KRX(KOSPI+KOSDAQ)만 활성화. Phase 1b에서 US 추가 예정.
+    """
+    krx_enabled: bool = field(default_factory=lambda: _env_bool("UNIVERSE_KRX_ENABLED", True))
+    us_enabled: bool = field(default_factory=lambda: _env_bool("UNIVERSE_US_ENABLED", False))
+    # 동기화 주기 (스케줄러/CLI에서 참조하는 힌트값. 실제 트리거는 systemd/cron이 담당)
+    sync_price_schedule: str = field(default_factory=lambda: os.getenv("UNIVERSE_SYNC_PRICE_SCHEDULE", "daily"))
+    sync_meta_schedule: str = field(default_factory=lambda: os.getenv("UNIVERSE_SYNC_META_SCHEDULE", "weekly"))
+    # auto 모드에서 meta가 stale로 판단되는 경과 일수
+    meta_stale_days: int = field(default_factory=lambda: int(os.getenv("UNIVERSE_META_STALE_DAYS", "7")))
+
+
+@dataclass
 class AuthConfig:
     """JWT 인증 설정"""
     enabled: bool = field(default_factory=lambda: _env_bool("AUTH_ENABLED", False))
@@ -152,4 +168,5 @@ class AppConfig:
     analyzer: AnalyzerConfig = field(default_factory=AnalyzerConfig)
     auth: AuthConfig = field(default_factory=AuthConfig)
     recommendation: RecommendationConfig = field(default_factory=RecommendationConfig)
+    universe: UniverseConfig = field(default_factory=UniverseConfig)
     max_turns: int = field(default_factory=lambda: int(os.getenv("MAX_TURNS", "1")))  # 하위호환
