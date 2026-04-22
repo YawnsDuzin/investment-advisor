@@ -1,0 +1,41 @@
+{#
+  Dashboard — Yield Curve (한국 금리 환경)
+  출처: api/templates/dashboard.html (C2.2, 2026-04-21)
+  CONTEXT:
+    - bond_yields (dict, optional):
+        yield_curve_status, spread_10y_2y, corp_aa
+  매크로 의존:
+    - yield_curve from _macros/common.html
+  주의:
+    - 호출부 dashboard.html이 {% if bond_yields %}로 가드.
+      partial 자체는 None일 때 호출되지 않는다고 가정.
+#}
+{% from "_macros/common.html" import yield_curve %}
+
+{# 금리 Yield Curve 차트 #}
+<div class="card" style="margin-bottom:20px;">
+    <div class="card-header">
+        <span class="card-title">🏛️ 한국 금리 환경</span>
+        <span style="font-size:13px;color:var(--text-muted);">
+            {% if bond_yields.yield_curve_status == 'normal' %}
+            <span style="color:var(--success);">● 정상 커브</span>
+            {% elif bond_yields.yield_curve_status == 'flat' %}
+            <span style="color:var(--warning);">● 평탄 커브</span>
+            {% elif bond_yields.yield_curve_status == 'inverted' %}
+            <span style="color:var(--danger);">● 역전 커브</span>
+            {% endif %}
+            {% if bond_yields.spread_10y_2y is not none %}
+            &middot; 스프레드(10Y-2Y)
+            <span {% if bond_yields.spread_10y_2y < 0 %}style="color:var(--danger);font-weight:600;"{% else %}style="color:var(--text);"{% endif %}>
+                {{ bond_yields.spread_10y_2y }}%p
+            </span>
+            {% endif %}
+            {% if bond_yields.corp_aa %}
+            &middot; 회사채AA- {{ bond_yields.corp_aa }}%
+            {% endif %}
+        </span>
+    </div>
+    <div class="card-body" style="padding:16px;">
+        {{ yield_curve(bond_yields) }}
+    </div>
+</div>

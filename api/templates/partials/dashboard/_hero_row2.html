@@ -1,0 +1,75 @@
+{#
+  Dashboard — Hero Row 2 (워치리스트 / 발굴 유형 / 주요 섹터 3-col)
+  출처: api/templates/dashboard.html (C2.2, 2026-04-21)
+  CONTEXT:
+    - current_user (optional): 로그인 사용자 (분기)
+    - watched_in_today (list): 오늘 분석에 포함된 관심 종목
+    - risk_pct (float): 비로그인 사용자에게 시장 상태 게이지로 표시
+    - session (object): analysis_date, risk_temperature
+    - discovery_counts (dict, optional)
+    - top_sectors (list, optional)
+  매크로 의존:
+    - risk_gauge from _macros/proposal.html
+    - discovery_stackbar, sector_chips from _macros/theme.html
+#}
+{% from "_macros/proposal.html" import risk_gauge %}
+{% from "_macros/theme.html" import discovery_stackbar, sector_chips %}
+
+{# Row 2 — 관심(1) + 발굴 유형(2) + 주요 섹터(3) — 3-col #}
+<div class="hero-grid-3col">
+    {# 1. 워치리스트 (로그인) 또는 시장 상태 게이지 (비로그인) #}
+    {% if current_user %}
+    <div class="watchlist-widget">
+        <div class="widget-header">
+            <span>⭐ 내 관심 종목</span>
+            <a href="/pages/watchlist" class="widget-more">전체 →</a>
+        </div>
+        <div class="watchlist-quick">
+            {% if watched_in_today %}
+                {% for w in watched_in_today[:6] %}
+                <a href="/pages/proposals/history/{{ w.ticker }}" class="wl-item {% if w.in_top_picks %}wl-item-hot{% endif %}">
+                    <span class="wl-ticker">{{ w.ticker }}</span>
+                    <span class="wl-name">{{ w.asset_name }}</span>
+                    {% if w.current_price %}
+                    <span class="wl-price">{{ w.current_price|fmt_price(w.currency) }}</span>
+                    {% endif %}
+                    {% if w.in_top_picks %}
+                    <span class="wl-badge-pick">Top #{{ w.pick_rank }}</span>
+                    {% endif %}
+                </a>
+                {% endfor %}
+            {% else %}
+                <div class="wl-empty">오늘 분석에 관심 종목이 없습니다.<br>
+                    <a href="/pages/watchlist" style="color:var(--accent);">관심 종목 관리 →</a>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+    {% else %}
+    <div class="watchlist-widget">
+        <div class="widget-header">
+            <span>🌡️ 시장 상태</span>
+            <span style="font-size:12px;color:var(--text-muted);">{{ session.analysis_date }}</span>
+        </div>
+        <div style="display:flex;justify-content:center;padding:12px 0;">
+            {{ risk_gauge(risk_pct, session.risk_temperature) }}
+        </div>
+    </div>
+    {% endif %}
+
+    {# 2. 발굴 유형 분포 (옵션) #}
+    {% if discovery_counts %}
+    <div class="insight-card insight-card-compact">
+        <div class="insight-title">발굴 유형 분포</div>
+        {{ discovery_stackbar(discovery_counts) }}
+    </div>
+    {% endif %}
+
+    {# 3. 주요 섹터 Top 5 (옵션) #}
+    {% if top_sectors %}
+    <div class="insight-card insight-card-compact">
+        <div class="insight-title">주요 섹터 Top 5</div>
+        {{ sector_chips(top_sectors) }}
+    </div>
+    {% endif %}
+</div>

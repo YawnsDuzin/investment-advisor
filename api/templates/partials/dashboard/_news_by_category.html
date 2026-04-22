@@ -1,0 +1,60 @@
+{#
+  Dashboard — 수집 뉴스 (카테고리별 아코디언)
+  출처: api/templates/dashboard.html (C2.2, 2026-04-21)
+  CONTEXT:
+    - news_by_category (dict, non-empty): 호출부 dashboard.html이 {% if %}로 가드
+        각 entry: label, articles[]
+        각 article: title, title_ko, link, source, published, summary, summary_ko
+    - session (object): analysis_date
+  매크로 의존: 없음
+#}
+
+{# 수집 뉴스 (카테고리별 아코디언) #}
+<div class="section-title">수집 뉴스 ({{ session.analysis_date }})</div>
+
+<div class="news-categories">
+    {% for cat, data in news_by_category.items() %}
+    <div class="news-category-card">
+        <div class="news-category-header" onclick="this.parentElement.classList.toggle('open')">
+            <span>
+                <span class="news-category-label">{{ data.label }}</span>
+                <span class="news-category-count">{{ data.articles|length }}건</span>
+            </span>
+            <span class="news-toggle">&#9660;</span>
+        </div>
+        <div class="news-category-body">
+            {% for article in data.articles %}
+            <div class="news-item">
+                <div class="news-item-title">
+                    {% if article.title_ko and article.title_ko != article.title %}
+                    <div style="margin-bottom:2px;">
+                        {% if article.link %}
+                        <a href="{{ article.link }}" target="_blank" rel="noopener">{{ article.title_ko }}</a>
+                        {% else %}
+                        {{ article.title_ko }}
+                        {% endif %}
+                    </div>
+                    <div style="font-size:12px;color:var(--text-muted);font-weight:normal;">{{ article.title }}</div>
+                    {% else %}
+                    {% if article.link %}
+                    <a href="{{ article.link }}" target="_blank" rel="noopener">{{ article.title }}</a>
+                    {% else %}
+                    {{ article.title }}
+                    {% endif %}
+                    {% endif %}
+                </div>
+                <div class="news-item-meta">
+                    <span class="news-source">{{ article.source }}</span>
+                    {% if article.published %}
+                    <span>{{ article.published }}</span>
+                    {% endif %}
+                </div>
+                {% if article.summary_ko or article.summary %}
+                <div class="news-item-summary">{{ article.summary_ko or article.summary }}</div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
+</div>

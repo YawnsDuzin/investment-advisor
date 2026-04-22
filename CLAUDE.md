@@ -36,7 +36,8 @@ investment-advisor/
 │   ├── templates/       ← Jinja2 HTML (다크 테마 + 우측 상단 드롭다운 메뉴) + _macros.html(공통 매크로)
 │   └── static/css/
 └── _docs/               ← 운영 문서 (분석 파이프라인, 라즈베리파이 매뉴얼)
-    └── _prompts/        ← 작업 요청 프롬프트 기록 (날짜별)
+    ├── _prompts/        ← 작업 요청 프롬프트 기록 (날짜별)
+    └── _exception/      ← 분석/운영 예외·장애 관리 대장 (README.md가 이슈 인덱스)
 ```
 
 ## Commands
@@ -246,3 +247,20 @@ app_runs → app_logs (v18, 범용 실행 로그)
 - 종목 외부 링크: `external_links(ticker, market, mode)` 매크로 사용. 한국(KRX) → 네이버증권/Yahoo/KRX, 해외 → Yahoo/Finviz/SeekingAlpha/SimplyWallSt. `mode='icon'`(인라인) 또는 `mode='full'`(블록)
 - 투자 교육은 Free 티어도 접근 가능(일 5턴). 테마 채팅은 Pro 이상만 가능. `tier_limits.py`의 `EDU_CHAT_DAILY_TURNS` vs `CHAT_DAILY_TURNS` 참고
 - 문의 게시판 프라이버시: Admin/Moderator는 전체 조회, 일반 유저는 공개 문의 + 본인의 비공개 문의만 조회
+
+## Issue & Exception Management
+
+분석 파이프라인·API 운영 중 발생하는 예외·장애·AI 응답 파싱 실패는 `_docs/_exception/` 폴더에서 구조화된 형태로 관리한다. 향후 유사 장애 대응 시 반드시 이 대장을 먼저 참조할 것.
+
+- **인덱스**: [`_docs/_exception/README.md`](_docs/_exception/README.md) — 이슈 대장 표 + 템플릿 + 자주 발생하는 패턴(Lessons Learned)
+- **개별 리포트**: `YYYYMMDD_<짧은_영문_slug>.md` 포맷. 증상 → 근본 원인(직접/구조/근본 3계층) → 수정 사항(Layer별) → 검증 → 후속 모니터링 순서로 작성
+- **원시 로그 덤프**: `YYYYMMDDHHMM_분석오류.md`는 구조화 전 로그 원본 (레거시)
+- **이슈 발생 시 워크플로우**:
+  1. 로그·`ai_query_archive` 테이블에서 실패 원인 파악
+  2. `_docs/_exception/YYYYMMDD_<slug>.md` 템플릿에 맞춰 리포트 작성
+  3. README의 "이슈 대장" 표에 한 줄 추가
+  4. 수정 완료 후 상태를 `✅ 해결됨 (커밋 <hash>)`로 업데이트
+- **AI 응답 파싱 실패 대응 레이어** (2026-04-22 Stage 1-A 이슈 이후 정립):
+  - 프롬프트 레이어: `STAGE1_SYSTEM`의 "출력 형식 엄수" 섹션 — 단일 JSON 블록·raw 개행 금지·메타 주석 금지 강제
+  - 파서 레이어: `_sanitize_json_response()` (쪼개진 코드블록 병합·마크다운 헤더 제거·자기주석 제거·제어문자 이스케이프) → `_try_fix_truncated_json()` (잘린 JSON 복구) 2단 복구
+  - 아카이빙 레이어: 실패·복구 모두 `ai_query_archive.parse_status`에 기록 (`success` / `sanitized_recovered` / `truncated_recovered` / `timeout_partial` / `failed` / `empty`)
