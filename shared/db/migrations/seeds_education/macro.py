@@ -132,7 +132,7 @@ Stage 1 분석의 `macro_impacts`에서 금리 시나리오를 확인:
 
 **테마 상세**: `theme_scenarios`의 `bull`/`bear` market_impact 비교 → 하방이 큰 테마는 `base` 기준 비중 축소.
 
-**매크로 탭**: `macro_impacts`의 `us_10y_yield`, `usdkrw`, `sp500` 전망 확인. `worse_case`와 `better_case` 폭이 클수록 불확실성이 높으므로 헤지 비중을 늘린다. `gold`, `usdkrw`의 `worse_case`를 보고 안전자산 편입 여부를 결정한다.""",
+**테마 상세의 매크로 섹션**: `macro_impacts`의 `us_10y_yield`, `usdkrw`, `sp500` 전망 확인. `worse_case`와 `better_case` 폭이 클수록 불확실성이 높으므로 헤지 비중을 늘린다. `gold`, `usdkrw`의 `worse_case`를 보고 안전자산 편입 여부를 결정한다.""",
         "examples": json.dumps([
             {
                 "title": "2024년 Fed 피벗 시나리오 — base/worse/better 실제 적용",
