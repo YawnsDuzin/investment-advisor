@@ -954,3 +954,24 @@ def _migrate_to_v23(cur) -> None:
     """)
 
     print("[DB] v23 마이그레이션 완료 — ai_query_archive + app_logs.context + incident_reports")
+
+
+def _migrate_to_v24(cur):
+    """Education 신규 토픽 15개 추가 (basics 5 + analysis 2 + macro 1 + practical 2 + stories 5).
+
+    stories 카테고리 신규 도입. 기존 11개 토픽은 ON CONFLICT (slug) DO NOTHING으로 보호.
+    신규 DB의 경우 v21에서 26개 전체가 이미 시드되었으므로 v24는 사실상 no-op이 됨 (멱등).
+    """
+    from shared.db.migrations.seeds_education import NEW_TOPICS_V24
+    for t in NEW_TOPICS_V24:
+        cur.execute(
+            """INSERT INTO education_topics (category, slug, title, summary, content,
+                       examples, difficulty, sort_order)
+               VALUES (%(category)s, %(slug)s, %(title)s, %(summary)s, %(content)s,
+                       %(examples)s::jsonb, %(difficulty)s, %(sort_order)s)
+               ON CONFLICT (slug) DO NOTHING""",
+            t,
+        )
+    print(f"[DB] v24: 교육 토픽 {len(NEW_TOPICS_V24)}개 추가 (stories 카테고리 도입)")
+
+    cur.execute("INSERT INTO schema_version (version) VALUES (24) ON CONFLICT DO NOTHING")
