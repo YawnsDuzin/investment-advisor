@@ -43,6 +43,25 @@ body {
 a { color: var(--accent); text-decoration: none; }
 a:hover { color: var(--accent-hover); }
 
+/* ===== Lucide Icon Utilities =====
+   Lucide.createIcons()가 <i data-lucide="..."> → <svg class="lucide lucide-*">로 치환.
+   기본 출력 SVG는 stroke="currentColor" fill="none"이므로 부모의 color만 바꾸면 색 변경 가능.
+   크기 변형은 .icon-sm/.icon-lg, 굵기는 data-lucide-stroke-width 속성으로 제어.
+*/
+.icon,
+[data-lucide],
+svg.lucide {
+    width: 20px;
+    height: 20px;
+    stroke-width: 2;
+    flex-shrink: 0;
+    vertical-align: middle;
+}
+.icon-sm,
+svg.lucide.icon-sm { width: 16px; height: 16px; }
+.icon-lg,
+svg.lucide.icon-lg { width: 24px; height: 24px; }
+
 /* ======== 03_layout.css ======== */
 /* ===== Sidebar ===== */
 .sidebar {
@@ -3766,14 +3785,17 @@ tbody tr:hover { background: var(--bg-card-hover); }
     background: rgba(79, 140, 255, 0.08);
 }
 
-/* ----- 하단 탭바 (모바일 전용) ----- */
+/* ----- 하단 탭바 (모바일 전용) -----
+   아이콘: Lucide SVG (<i data-lucide="..."> → <svg class="lucide ...">)
+   활성 표시: 아이콘 영역 pill 배경 (accent 반투명) + 아이콘·레이블 accent 색상
+*/
 .bottom-tabbar {
     display: none;
     position: fixed;
     left: 0;
     right: 0;
     bottom: 0;
-    height: 56px;
+    height: 60px;
     padding-bottom: env(safe-area-inset-bottom, 0px);
     background: var(--bg-card);
     border-top: 1px solid var(--border);
@@ -3787,7 +3809,7 @@ tbody tr:hover { background: var(--bg-card-hover); }
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 2px;
+    gap: 3px;
     padding: 6px 4px;
     min-height: 44px;
     color: var(--text-muted);
@@ -3799,23 +3821,34 @@ tbody tr:hover { background: var(--bg-card-hover); }
 }
 .bottom-tab:hover { color: var(--text); }
 .bottom-tab.active { color: var(--accent); }
-.bottom-tab.active::before {
-    content: "";
-    position: absolute;
-    top: 0;
-    left: 30%;
-    right: 30%;
-    height: 3px;
-    background: var(--accent);
-    border-radius: 0 0 3px 3px;
-}
+
+/* 아이콘 영역은 pill 컨테이너 — 활성 시 accent 반투명 배경이 SVG 주변을 감싼다 */
 .bottom-tab-icon {
-    font-size: 20px;
-    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 46px;
+    height: 26px;
+    border-radius: 9999px;
+    background: transparent;
+    transition: background-color 0.18s ease, transform 0.18s ease;
+}
+.bottom-tab-icon svg.lucide,
+.bottom-tab-icon [data-lucide] {
+    width: 22px;
+    height: 22px;
+    stroke-width: 2;
+}
+.bottom-tab.active .bottom-tab-icon {
+    background: rgba(79, 140, 255, 0.18);  /* accent 기반 pill */
+}
+.bottom-tab.active .bottom-tab-icon svg.lucide {
+    stroke-width: 2.25;
 }
 .bottom-tab-label {
     font-size: 10px;
     letter-spacing: 0.2px;
+    line-height: 1;
 }
 
 /* ----- 터치 타겟 44px (UI-07) — 컨텍스트 한정 ----- */

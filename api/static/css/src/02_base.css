@@ -10,3 +10,22 @@ body {
 
 a { color: var(--accent); text-decoration: none; }
 a:hover { color: var(--accent-hover); }
+
+/* ===== Lucide Icon Utilities =====
+   Lucide.createIcons()가 <i data-lucide="..."> → <svg class="lucide lucide-*">로 치환.
+   기본 출력 SVG는 stroke="currentColor" fill="none"이므로 부모의 color만 바꾸면 색 변경 가능.
+   크기 변형은 .icon-sm/.icon-lg, 굵기는 data-lucide-stroke-width 속성으로 제어.
+*/
+.icon,
+[data-lucide],
+svg.lucide {
+    width: 20px;
+    height: 20px;
+    stroke-width: 2;
+    flex-shrink: 0;
+    vertical-align: middle;
+}
+.icon-sm,
+svg.lucide.icon-sm { width: 16px; height: 16px; }
+.icon-lg,
+svg.lucide.icon-lg { width: 24px; height: 24px; }

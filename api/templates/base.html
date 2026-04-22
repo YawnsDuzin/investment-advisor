@@ -142,6 +142,15 @@
     {% include "partials/_upgrade_modal.html" %}
     {% include "partials/_common_modal.html" %}
 
+    <!-- Lucide Icons (self-hosted, v1.8.0) -->
+    <script src="/static/js/lucide.min.js"></script>
+    <script>
+    // <i data-lucide="..."> → <svg> 변환. DOMContentLoaded 이전에도 실행 가능.
+    if (window.lucide && typeof lucide.createIcons === 'function') {
+        lucide.createIcons();
+    }
+    </script>
+
     <script>
     // 유저 드롭다운 외부 클릭 시 닫기
     document.addEventListener('click', function(e) {
