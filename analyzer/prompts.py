@@ -634,9 +634,16 @@ STAGE1B1_PROMPT = """## 분석 날짜: {date}
    consumer_discretionary, consumer_staples, energy, materials, industrials, utilities, real_estate`.
 3. **market_cap_bucket**: small/mid/large/mega 중 적합한 것 1~3개. 얼리 시그널은 small/mid.
 4. **market_cap_range_krw**: [최소, 최대] (KRW 환산). 예) [3000억, 2조원] = [300_000_000_000, 2_000_000_000_000].
-5. **required_keywords**: stock_universe의 asset_name/industry/aliases에 ILIKE 매칭될 키워드 3~6개.
-   - 너무 광범위하지 않게: "반도체"(과다) 보다 "반도체 검사장비"가 좋음.
+5. **required_keywords**: stock_universe의 asset_name/sector_krx/industry/aliases에 ILIKE 매칭될 키워드 3~6개.
+   - **한국 기업명은 사업 내용을 포함하지 않는 경우가 많다** (예: "휴켐스"·"유니드"·"OCI"는 화학 기업이지만 이름에 "화학" 없음).
+     → industry 필드도 대부분 NULL이므로, **sector_krx(한글 업종명)와 매칭될 키워드를 필수 1개 이상 포함**하라.
+     사용 가능한 sector_krx 예: `전기·전자, 화학, 기계·장비, 제약, 의료·정밀기기, 금속, 비금속, 유통, IT 서비스,
+     일반서비스, 운송·창고, 오락·문화, 섬유·의류, 종이·목재, 음식료·담배, 기타금융, 기타제조, 건설, 통신,
+     전기·가스, 금융, 보험, 증권, 은행, 운송장비·부품, 부동산, 출판·매체복제`
+   - 너무 세분화되거나 생소한 전문용어는 피하라: "연료첨가제"·"자성소재"·"모듈하우징" 대신
+     "화학" + "기계·장비" + "소재" 같은 **KRX 업종명 또는 일반적 섹터 용어** 위주.
    - 한국 종목 매칭을 고려해 한글 키워드 위주 + 필요 시 영문.
+   - required_keywords는 OR 매칭(하나라도 맞으면 후보)이므로 **광범위한 것 1~2개 + 구체적인 것 1~2개** 조합이 이상적.
 6. **exclude_keywords**: 매칭에서 제외할 키워드 0~3개 (예: 우선주는 has_preferred로 자동 제외되므로 불필요).
 7. **markets**: ["KOSPI", "KOSDAQ", "NASDAQ", "NYSE"] 중 일부. 한국 중심 테마면 KOSPI+KOSDAQ만.
 8. **expected_catalyst_window_months**: 카탈리스트 발현 예상 개월 수 (1~36).

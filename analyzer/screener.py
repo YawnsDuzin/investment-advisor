@@ -55,7 +55,10 @@ _log = get_logger("screener")
 
 # ── 매칭 컬럼 ───────────────────────────────────────
 # ILIKE 매칭 시 검사할 컬럼들. aliases는 JSONB라 별도 처리.
-_TEXT_MATCH_COLUMNS = ("asset_name", "asset_name_en", "industry")
+# sector_krx는 한글 업종명(예: "전기·전자", "화학", "제약")이라 한글 키워드 매칭에 필수.
+# industry는 universe_sync가 채우지 못하는 경우가 많아(pykrx sector API 한계)
+# sector_krx가 실질적인 한글 매칭 앵커 역할을 한다.
+_TEXT_MATCH_COLUMNS = ("asset_name", "asset_name_en", "industry", "sector_krx")
 
 
 @dataclass
@@ -164,6 +167,7 @@ def _execute_screen(db_cfg: DatabaseConfig, spec: dict, *, limit: int) -> list[d
             str(r.get("asset_name") or ""),
             str(r.get("asset_name_en") or ""),
             str(r.get("industry") or ""),
+            str(r.get("sector_krx") or ""),
             str(r.get("aliases") or ""),
         ]).lower()
         for kw in required:
@@ -244,14 +248,26 @@ def screen(
 
         # Try 2: drop one required keyword
         dropped = _drop_one_required_keyword(current_spec)
-        if not dropped:
-            fallback_log.append("required_keywords 비어 있어 추가 fallback 불가")
+        if dropped:
+            dropped_kw = (current_spec.get("required_keywords") or [])[-1]
+            current_spec = dropped
+            fallback_log.append(f"required_keyword 제거: '{dropped_kw}'")
+            rows = _execute_screen(db_cfg, current_spec, limit=max_candidates)
+            retries += 1
+            if rows:
+                break
+        else:
+            # required_keywords가 이미 비어있음 → 마지막 수단: market_cap_range도 제거하고 sector/listed만으로 시도
+            if current_spec.get("market_cap_range_krw"):
+                current_spec = dict(current_spec)
+                current_spec.pop("market_cap_range_krw", None)
+                fallback_log.append("market_cap_range 제거 (sector만으로 최종 시도)")
+                rows = _execute_screen(db_cfg, current_spec, limit=max_candidates)
+                retries += 1
+                if rows:
+                    break
+            fallback_log.append("모든 fallback 소진")
             break
-        dropped_kw = (current_spec.get("required_keywords") or [])[-1]
-        current_spec = dropped
-        fallback_log.append(f"required_keyword 제거: '{dropped_kw}'")
-        rows = _execute_screen(db_cfg, current_spec, limit=max_candidates)
-        retries += 1
 
     duration = time.time() - started
 
