@@ -247,6 +247,7 @@ app_runs → app_logs (v18, 범용 실행 로그)
 - 종목 외부 링크: `external_links(ticker, market, mode)` 매크로 사용. 한국(KRX) → 네이버증권/Yahoo/KRX, 해외 → Yahoo/Finviz/SeekingAlpha/SimplyWallSt. `mode='icon'`(인라인) 또는 `mode='full'`(블록)
 - 투자 교육은 Free 티어도 접근 가능(일 5턴). 테마 채팅은 Pro 이상만 가능. `tier_limits.py`의 `EDU_CHAT_DAILY_TURNS` vs `CHAT_DAILY_TURNS` 참고
 - 문의 게시판 프라이버시: Admin/Moderator는 전체 조회, 일반 유저는 공개 문의 + 본인의 비공개 문의만 조회
+- **문서 파일 명명 규칙**: `_docs/` 하위(및 `_docs/_prompts/`, `_docs/_exception/` 포함)에 새 문서 파일을 생성할 때는 **반드시 `YYYYMMDDHHMMSS_` 타임스탬프 접두사**를 파일명 앞에 붙인다. 예: `20260422172248_recommendation-engine-redesign.md`. 기존 관례 파일(`raspberry-pi-setup.md`, `README.md` 등)은 예외로 유지하되, **신규 생성 문서**는 반드시 이 규칙을 따른다. 타임스탬프는 파일 생성 시각(KST) 기준.
 
 ## Issue & Exception Management
 
