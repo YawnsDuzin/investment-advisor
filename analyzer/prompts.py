@@ -588,6 +588,157 @@ STAGE1B_PROMPT = """## 분석 날짜: {date}
 ```"""
 
 
+# ── Stage 1-B1: 투자 스펙 생성 (Phase 2 — Universe-First) ──
+# AI가 ticker를 직접 생성하지 않고, 어떤 조건의 회사가 수혜인가를 JSON 스펙으로 출력.
+# 시스템(스크리너)이 이 스펙으로 stock_universe에서 후보를 추출한다.
+
+STAGE1B1_SYSTEM = SYSTEM_PROMPT_BASE + """
+
+추가 역할: 글로벌 매크로 전략팀의 종목 선정 책임자입니다.
+직접 종목 티커를 언급하지 않고, "어떤 조건의 기업군이 이 테마의 수혜를 받는가"를
+구조화된 스펙(JSON)으로만 설계합니다. 실제 종목 매칭은 시스템이 검증된 유니버스에서
+결정적으로 수행합니다.
+
+원칙:
+- **티커 직접 언급 금지** — 출력에 ticker 필드 자체가 없습니다.
+- **밸류체인 위치 명시 강제** — primary(완성품)/secondary(핵심 부품·소재)/tertiary(2~3차 공급망) 중 선택.
+- **얼리 시그널 우선** — small/mid 시총 + secondary/tertiary tier 우선 설계.
+- **연속성** — 같은 theme_key가 이전 분석에 있다면 스펙을 약간만 조정 (key_indicators는 새로워질 수 있음).
+"""
+
+STAGE1B1_PROMPT = """## 분석 날짜: {date}
+
+## 투자 테마 정보
+
+- **테마명**: {theme_name}
+- **theme_key**: {theme_key}
+- **테마 설명**: {theme_description}
+- **테마 유형**: {theme_type}
+- **투자 시계**: {time_horizon}
+- **신뢰도**: {confidence_score}
+- **현재 시장 레짐**: {regime}
+
+{recent_recommendations_section}
+
+---
+
+## 분석 요청 — Stage 1-B1: 투자 스펙 생성
+
+위 테마에 대해 "어떤 조건의 기업이 수혜를 받는가"를 JSON 스펙으로 설계하세요.
+**티커를 출력하지 마세요** — 시스템이 이 스펙으로 검증된 유니버스에서 자동 매칭합니다.
+
+스펙 작성 시 다음 원칙을 따르세요:
+1. **value_chain_tier**: primary/secondary/tertiary 중 1~2개. 얼리 시그널 발굴이 목표라면 secondary/tertiary 위주.
+2. **sector_norm**: 우리 시스템의 정규화된 섹터 키 중에서 1~3개 선택.
+   사용 가능한 키: `semiconductors, it_hardware, it_software, communication, finance, healthcare,
+   consumer_discretionary, consumer_staples, energy, materials, industrials, utilities, real_estate`.
+3. **market_cap_bucket**: small/mid/large/mega 중 적합한 것 1~3개. 얼리 시그널은 small/mid.
+4. **market_cap_range_krw**: [최소, 최대] (KRW 환산). 예) [3000억, 2조원] = [300_000_000_000, 2_000_000_000_000].
+5. **required_keywords**: stock_universe의 asset_name/industry/aliases에 ILIKE 매칭될 키워드 3~6개.
+   - 너무 광범위하지 않게: "반도체"(과다) 보다 "반도체 검사장비"가 좋음.
+   - 한국 종목 매칭을 고려해 한글 키워드 위주 + 필요 시 영문.
+6. **exclude_keywords**: 매칭에서 제외할 키워드 0~3개 (예: 우선주는 has_preferred로 자동 제외되므로 불필요).
+7. **markets**: ["KOSPI", "KOSDAQ", "NASDAQ", "NYSE"] 중 일부. 한국 중심 테마면 KOSPI+KOSDAQ만.
+8. **expected_catalyst_window_months**: 카탈리스트 발현 예상 개월 수 (1~36).
+
+## 출력 형식
+
+반드시 아래 JSON 형식으로만 응답:
+
+```json
+{{
+  "theme_key": "{theme_key}",
+  "thesis": "이 테마의 핵심 논거 (1~2문장)",
+  "value_chain_tier": ["secondary", "tertiary"],
+  "sector_norm": ["semiconductors"],
+  "market_cap_bucket": ["small", "mid"],
+  "market_cap_range_krw": [300000000000, 2000000000000],
+  "required_keywords": ["반도체", "테스트", "검사장비", "프로브"],
+  "exclude_keywords": [],
+  "markets": ["KOSPI", "KOSDAQ"],
+  "expected_catalyst_window_months": 6,
+  "max_candidates": 20
+}}
+```
+"""
+
+
+# ── Stage 1-B3: 후보 배치 분석 (Phase 2 — Universe-First) ──
+# 스크리너가 추출한 후보 N개에 대해 한 번의 호출로 rationale/risk/conviction을 생성.
+# 후보 리스트의 ticker만 출력 가능 (whitelist enforced by post-processing).
+
+STAGE1B3_SYSTEM = SYSTEM_PROMPT_BASE + """
+
+추가 역할: 시스템이 결정적 스크리너로 추출한 후보 종목들에 대해
+포트폴리오 매니저 관점으로 일괄 분석/판단합니다.
+
+엄수 사항:
+- **반드시 입력 후보 표의 ticker만 사용**. 그 외 ticker를 만들면 시스템이 자동 제외합니다.
+- 후보 표의 시총·섹터·가격은 실측 데이터입니다 — 추정 금지.
+- target_price_low/high는 알 수 없으면 null. Stage 2 심층분석에서 채워집니다.
+- 한 번의 응답에 모든 후보를 처리 (배치 호출 — Pi 자원 절약).
+"""
+
+STAGE1B3_PROMPT = """## 분석 날짜: {date}
+
+## 테마 맥락
+- **테마**: {theme_name}
+- **thesis**: {thesis}
+- **밸류체인**: {value_chain_tier}
+- **타겟 섹터**: {sector_norm}
+- **카탈리스트 윈도우**: {catalyst_window}개월
+
+## 스크리너로 추출된 후보 ({candidates_count}개)
+{candidates_table}
+
+---
+
+## 분석 요청 — Stage 1-B3: 후보 배치 분석
+
+위 후보 각각에 대해:
+- **conviction**: 테마 thesis와의 적합도 + 진입 매력도. 신중하게 분포 (high는 30% 이내).
+- **discovery_type**: consensus / early_signal / contrarian / deep_value 중 하나.
+  - 시총·섹터·인지도를 보고 판단. 후보 표의 small/mid 종목은 early_signal 후보가 많음.
+- **action**: buy / hold / watch (sell은 사용 금지 — 추천 시스템이라 보유 여부 정보 없음).
+- **investment_rationale**: 왜 이 종목이 테마 thesis의 수혜자인지 (3~5문장, 구체적으로).
+- **key_risk**: 가장 큰 리스크 1가지 (1~2문장).
+- **target_allocation_pct**: 0.5~7.0 사이 권장. conviction high는 5~7, medium은 2~4, low는 0.5~2.
+- **vendor_tier**: 1=대형 리더 / 2=중견 핵심 / 3=니치 전문기업 (시총·후보 표 참고).
+
+## 출력 형식
+
+반드시 아래 JSON 형식으로만 응답:
+
+```json
+{{
+  "theme_key": "{theme_key}",
+  "proposals": [
+    {{
+      "ticker": "후보 표의 ticker만 사용",
+      "market": "후보 표의 market 그대로",
+      "asset_name": "후보 표의 name 그대로",
+      "asset_type": "stock",
+      "action": "buy|hold|watch",
+      "conviction": "high|medium|low",
+      "discovery_type": "consensus|early_signal|contrarian|deep_value",
+      "vendor_tier": 1,
+      "supply_chain_position": "이 종목의 밸류체인 내 역할 (1~2문장)",
+      "investment_rationale": "수혜 논거 (3~5문장)",
+      "risk_factors": "핵심 리스크 (1~2문장)",
+      "target_allocation": 3.0,
+      "target_price_low": null,
+      "target_price_high": null,
+      "current_price": null,
+      "price_momentum_check": "unknown",
+      "sector": "후보의 sector_norm 또는 더 구체적인 섹터",
+      "currency": "KRW|USD"
+    }}
+  ]
+}}
+```
+"""
+
+
 # ── Stage 2: 핵심 종목 심층분석 ─────────────────────
 
 STAGE2_SYSTEM = SYSTEM_PROMPT_BASE + """

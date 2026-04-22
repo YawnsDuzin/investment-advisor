@@ -9,7 +9,7 @@ from shared.db.migrations import run_migrations
 
 
 # ── 스키마 버전 관리 ──────────────────────────────
-SCHEMA_VERSION = 24  # v24: education 신규 15토픽 + stories 카테고리
+SCHEMA_VERSION = 26  # v26: Evidence Validation Layer (Phase 3 — recommendation-engine-redesign)
 
 
 def _create_base_schema(cur) -> None:

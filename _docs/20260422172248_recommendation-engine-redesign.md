@@ -470,12 +470,16 @@ REGIME_VOL_WINDOW_DAYS=60
 
 ## 7. DB 스키마 변경 요약
 
-| 버전 | 변경 내용 |
-|---|---|
-| **v23** | `stock_universe` 테이블 신설 + `shared/sector_mapping.py` |
-| **v24** | `proposal_validation_log` + `investment_proposals.spec_snapshot`/`screener_match_reason` |
-| **v25** | `factor_performance` + `analysis_sessions.regime`/`regime_confidence` |
-| **v26** | `market_insights` + `daily_top_picks.counterfactuals` |
+> **버전 시프트 주의 (2026-04-22 적용)**: 본 문서 작성 후 검토 결과 v23/v24가 이미 다른 용도로
+> 선점되어 있어, 모든 신규 마이그레이션 번호를 +2 시프트했다 (v23→v25, v24→v26, v25→v27, v26→v28).
+> 아래 표는 시프트 후 실제 번호 기준이다.
+
+| 계획상 번호 | 실제 번호 | 변경 내용 | 상태 |
+|---|---|---|---|
+| ~~v23~~ | **v25** | `stock_universe` 테이블 신설 + `shared/sector_mapping.py` | ✅ 적용됨 (Phase 1a) |
+| ~~v24~~ | **v26** | `proposal_validation_log` + `investment_proposals.spec_snapshot`/`screener_match_reason` | 대기 |
+| ~~v25~~ | **v27** | `factor_performance` + `analysis_sessions.regime`/`regime_confidence` | 대기 |
+| ~~v26~~ | **v28** | `market_insights` + `daily_top_picks.counterfactuals` | 대기 |
 
 ## 8. 트레이드오프
 

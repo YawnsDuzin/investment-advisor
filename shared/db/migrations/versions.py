@@ -1,4 +1,4 @@
-"""스키마 마이그레이션 v2 ~ v23.
+"""스키마 마이그레이션 v2 ~ v25.
 
 새 마이그레이션 추가 시:
 1. 이 파일에 `_migrate_to_vN(cur)` 함수 추가
@@ -978,3 +978,114 @@ def _migrate_to_v24(cur) -> None:
         ON CONFLICT (version) DO NOTHING;
     """)
     print(f"[DB] v24: 교육 토픽 {len(NEW_TOPICS_V24)}개 추가 (stories 카테고리 도입)")
+
+
+def _migrate_to_v25(cur) -> None:
+    """v25: stock_universe — 검증된 종목 유니버스 (Phase 1a, recommendation-engine-redesign).
+
+    LLM이 자유롭게 티커를 생성하지 못하도록 유니버스에서만 후보를 선택할 수 있게
+    하기 위한 기반 테이블. 일별 가격 동기화 + 주간 메타데이터 동기화로 갱신된다.
+    초기 범위: KRX(KOSPI+KOSDAQ 보통주), Phase 1b에서 US(S&P500+Nasdaq100) 추가 예정.
+
+    참고: 재설계 계획서(_docs/20260422172248_recommendation-engine-redesign.md)에서는
+    스키마 v23으로 표기되었으나, v23/v24가 이미 다른 용도로 선점되어 v25로 재할당.
+    """
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS stock_universe (
+            id              SERIAL PRIMARY KEY,
+            ticker          TEXT NOT NULL,
+            market          TEXT NOT NULL,
+            asset_name      TEXT NOT NULL,
+            asset_name_en   TEXT,
+            sector_gics     TEXT,
+            sector_krx      TEXT,
+            sector_norm     TEXT,
+            industry        TEXT,
+            market_cap_krw  BIGINT,
+            market_cap_bucket TEXT,
+            last_price      NUMERIC(18,4),
+            last_price_ccy  TEXT,
+            last_price_at   TIMESTAMPTZ,
+            listed          BOOLEAN DEFAULT TRUE,
+            delisted_at     DATE,
+            has_preferred   BOOLEAN DEFAULT FALSE,
+            aliases         JSONB,
+            data_source     TEXT,
+            meta_synced_at  TIMESTAMPTZ,
+            price_synced_at TIMESTAMPTZ,
+            created_at      TIMESTAMPTZ DEFAULT NOW(),
+            UNIQUE(ticker, market)
+        );
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_universe_sector_norm
+            ON stock_universe(sector_norm);
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_universe_market_cap
+            ON stock_universe(market_cap_krw);
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_universe_listed
+            ON stock_universe(listed) WHERE listed = TRUE;
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_universe_market
+            ON stock_universe(market) WHERE listed = TRUE;
+    """)
+
+    cur.execute("""
+        INSERT INTO schema_version (version) VALUES (25)
+        ON CONFLICT (version) DO NOTHING;
+    """)
+    print("[DB] v25 마이그레이션 완료 — stock_universe 테이블 생성 (Phase 1a)")
+
+
+def _migrate_to_v26(cur) -> None:
+    """v26: Evidence Validation Layer (Phase 3, recommendation-engine-redesign).
+
+    - proposal_validation_log: AI 제시 vs 실측 데이터 크로스체크 결과 영구 보존
+    - investment_proposals.spec_snapshot: Stage 1-B1 스펙 JSON 보존 (audit trail)
+    - investment_proposals.screener_match_reason: 어떤 키워드/조건으로 매칭됐는지
+
+    참고: 재설계 계획서의 v24가 v26으로 시프트(v23/v24 선점).
+    """
+    # 1) proposal_validation_log
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS proposal_validation_log (
+            id              SERIAL PRIMARY KEY,
+            proposal_id     INT REFERENCES investment_proposals(id) ON DELETE CASCADE,
+            field_name      TEXT NOT NULL,
+            ai_value        TEXT,
+            actual_value    TEXT,
+            evidence_source TEXT,
+            mismatch        BOOLEAN DEFAULT FALSE,
+            mismatch_pct    NUMERIC(10,4),
+            checked_at      TIMESTAMPTZ DEFAULT NOW()
+        );
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_validation_proposal
+            ON proposal_validation_log(proposal_id);
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_validation_mismatch
+            ON proposal_validation_log(mismatch) WHERE mismatch = TRUE;
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_validation_field
+            ON proposal_validation_log(field_name, mismatch);
+    """)
+
+    # 2) investment_proposals 컬럼 추가 — audit trail
+    cur.execute("""
+        ALTER TABLE investment_proposals
+            ADD COLUMN IF NOT EXISTS spec_snapshot JSONB,
+            ADD COLUMN IF NOT EXISTS screener_match_reason TEXT;
+    """)
+
+    cur.execute("""
+        INSERT INTO schema_version (version) VALUES (26)
+        ON CONFLICT (version) DO NOTHING;
+    """)
+    print("[DB] v26 마이그레이션 완료 — proposal_validation_log + spec_snapshot/screener_match_reason (Phase 3)")

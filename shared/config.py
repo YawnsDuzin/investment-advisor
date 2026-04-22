@@ -133,6 +133,72 @@ class RecommendationConfig:
 
 
 @dataclass
+class UniverseConfig:
+    """Stock Universe 동기화 설정 (Phase 1a — recommendation-engine-redesign).
+
+    스크리너가 LLM hallucination을 차단하기 위해 참조하는 검증된 종목 마스터.
+    """
+    krx_enabled: bool = field(default_factory=lambda: _env_bool("UNIVERSE_KRX_ENABLED", True))
+    us_enabled: bool = field(default_factory=lambda: _env_bool("UNIVERSE_US_ENABLED", False))
+    # 동기화 주기 (스케줄러/CLI에서 참조하는 힌트값. 실제 트리거는 systemd/cron이 담당)
+    sync_price_schedule: str = field(default_factory=lambda: os.getenv("UNIVERSE_SYNC_PRICE_SCHEDULE", "daily"))
+    sync_meta_schedule: str = field(default_factory=lambda: os.getenv("UNIVERSE_SYNC_META_SCHEDULE", "weekly"))
+    # auto 모드에서 meta가 stale로 판단되는 경과 일수
+    meta_stale_days: int = field(default_factory=lambda: int(os.getenv("UNIVERSE_META_STALE_DAYS", "7")))
+
+
+@dataclass
+class ValidationConfig:
+    """Evidence Validation Layer 설정 (Phase 3 — recommendation-engine-redesign).
+
+    AI가 제시한 시총·섹터·현재가가 실측(stock_universe / 실시간)과 일치하는지 검증.
+    불일치는 proposal_validation_log에 기록하고, mismatch_count >= 2면 Top Picks 감점.
+    """
+    enabled: bool = field(default_factory=lambda: _env_bool("ENABLE_EVIDENCE_VALIDATION", True))
+    market_cap_tolerance_pct: float = field(
+        default_factory=lambda: float(os.getenv("VALIDATION_MARKET_CAP_TOLERANCE_PCT", "20"))
+    )
+    price_tolerance_pct: float = field(
+        default_factory=lambda: float(os.getenv("VALIDATION_PRICE_TOLERANCE_PCT", "5"))
+    )
+    mismatch_penalty: int = field(
+        default_factory=lambda: int(os.getenv("VALIDATION_MISMATCH_PENALTY", "10"))
+    )
+    # mismatch_count >= 이 값이면 감점 (기본 2 — sector + market_cap 동시 틀림 등)
+    penalty_threshold: int = field(
+        default_factory=lambda: int(os.getenv("VALIDATION_PENALTY_THRESHOLD", "2"))
+    )
+
+
+@dataclass
+class ScreenerConfig:
+    """Universe-First Stage 1-B 분해 설정 (Phase 2 — recommendation-engine-redesign).
+
+    enable_universe_first_b=False(기본) 시 기존 Stage 1-B(LLM이 ticker 자유 생성) 동작.
+    True 시 Stage 1-B1(스펙 생성) → 1-B2(결정적 스크리너) → 1-B3(배치 분석) 분해 동작.
+    """
+    enable_universe_first_b: bool = field(
+        default_factory=lambda: _env_bool("ENABLE_UNIVERSE_FIRST_B", False)
+    )
+    # Spec 매칭 0건/과소 시 fallback 재시도 횟수
+    spec_screener_max_retries: int = field(
+        default_factory=lambda: int(os.getenv("SPEC_SCREENER_MAX_RETRIES", "3"))
+    )
+    # 0건 매칭 시 market_cap_range 확장 비율 (%)
+    spec_screener_fallback_expand_pct: int = field(
+        default_factory=lambda: int(os.getenv("SPEC_SCREENER_FALLBACK_EXPAND_PCT", "50"))
+    )
+    # Stage 1-B1 스펙당 후보 최대 수 (기본 20)
+    candidates_max: int = field(
+        default_factory=lambda: int(os.getenv("SPEC_SCREENER_CANDIDATES_MAX", "20"))
+    )
+    # Stage 1-B3 배치 분석에 넘길 후보 수 (스크리너 결과 상위 N)
+    stage1b3_top_n: int = field(
+        default_factory=lambda: int(os.getenv("STAGE1B3_TOP_N", "20"))
+    )
+
+
+@dataclass
 class AuthConfig:
     """JWT 인증 설정"""
     enabled: bool = field(default_factory=lambda: _env_bool("AUTH_ENABLED", False))
@@ -152,4 +218,7 @@ class AppConfig:
     analyzer: AnalyzerConfig = field(default_factory=AnalyzerConfig)
     auth: AuthConfig = field(default_factory=AuthConfig)
     recommendation: RecommendationConfig = field(default_factory=RecommendationConfig)
+    universe: UniverseConfig = field(default_factory=UniverseConfig)
+    screener: ScreenerConfig = field(default_factory=ScreenerConfig)
+    validation: ValidationConfig = field(default_factory=ValidationConfig)
     max_turns: int = field(default_factory=lambda: int(os.getenv("MAX_TURNS", "1")))  # 하위호환
