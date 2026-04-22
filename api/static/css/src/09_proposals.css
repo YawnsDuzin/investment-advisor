@@ -238,6 +238,12 @@
     background: var(--bg-card-hover);
     border-color: rgba(79,140,255,0.4);
 }
+.detail-cta-btn svg.lucide {
+    width: 14px;
+    height: 14px;
+    stroke-width: 2;
+    flex-shrink: 0;
+}
 
 /* 섹션 스택 (탭 제거 — 한번에 전체 표시) */
 .detail-section {
@@ -268,6 +274,15 @@
     padding: 3px 10px;
     border-radius: 6px;
     border: 1px solid var(--border);
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+.meta-tag svg.lucide {
+    width: 13px;
+    height: 13px;
+    stroke-width: 2.25;
+    flex-shrink: 0;
 }
 .meta-tag-sector { background: rgba(147,130,255,0.1); border-color: rgba(147,130,255,0.2); color: var(--purple); }
 .meta-tag-discovery { background: rgba(52,211,153,0.1); border-color: rgba(52,211,153,0.2); color: var(--green); }

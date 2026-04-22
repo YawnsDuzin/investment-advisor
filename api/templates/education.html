@@ -30,7 +30,13 @@
 <div class="edu-category-section">
     <h3 class="edu-category-title">
         <span class="edu-category-icon">
-            {% if cat_key == 'basics' %}&#x1F4D6;{% elif cat_key == 'analysis' %}&#x1F4CA;{% elif cat_key == 'risk' %}&#x1F6E1;{% elif cat_key == 'macro' %}&#x1F30D;{% elif cat_key == 'practical' %}&#x1F3AF;{% elif cat_key == 'stories' %}&#x1F4DA;{% endif %}
+            {% if cat_key == 'basics' %}<i data-lucide="book-open" aria-hidden="true"></i>
+            {% elif cat_key == 'analysis' %}<i data-lucide="bar-chart-3" aria-hidden="true"></i>
+            {% elif cat_key == 'risk' %}<i data-lucide="shield" aria-hidden="true"></i>
+            {% elif cat_key == 'macro' %}<i data-lucide="globe-2" aria-hidden="true"></i>
+            {% elif cat_key == 'practical' %}<i data-lucide="target" aria-hidden="true"></i>
+            {% elif cat_key == 'stories' %}<i data-lucide="library" aria-hidden="true"></i>
+            {% endif %}
         </span>
         {{ group.label }}
     </h3>
@@ -71,6 +77,14 @@
 }
 .edu-category-icon {
     font-size: 22px;
+    display: inline-flex;
+    align-items: center;
+    color: var(--accent);
+}
+.edu-category-icon svg.lucide {
+    width: 22px;
+    height: 22px;
+    stroke-width: 2;
 }
 .edu-topic-grid {
     display: grid;

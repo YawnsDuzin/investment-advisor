@@ -299,8 +299,15 @@ function toggleExpand(userId) {
 /* ── 확인 모달 ── */
 let _modalResolve = null;
 
-function openModal(icon, title, desc, btnText, btnClass) {
-    document.getElementById('modalIcon').textContent = icon;
+function openModal(iconName, title, desc, btnText, btnClass) {
+    // Lucide 아이콘 이름(예: 'user-cog')을 받아 SVG로 렌더.
+    // icon 위생: data-lucide 속성으로만 들어가므로 XSS 위험 없음 — 영소문자·하이픈만 허용.
+    const safeIcon = /^[a-z0-9-]+$/.test(iconName || '') ? iconName : 'alert-triangle';
+    const iconEl = document.getElementById('modalIcon');
+    iconEl.innerHTML = `<i data-lucide="${safeIcon}" aria-hidden="true"></i>`;
+    if (window.lucide && typeof lucide.createIcons === 'function') {
+        lucide.createIcons({ nameAttr: 'data-lucide' });
+    }
     document.getElementById('modalTitle').textContent = title;
     document.getElementById('modalDesc').textContent = desc;
     document.getElementById('modalReason').value = '';
@@ -333,7 +340,7 @@ function qs(params) { return new URLSearchParams(params).toString(); }
 /* ── 역할 변경 ── */
 async function doChangeRole(userId) {
     const role = document.getElementById('role-' + userId).value;
-    const reason = await openModal('👤', '역할 변경', `역할을 "${role}"(으)로 변경합니다.`, '변경', 'btn-primary');
+    const reason = await openModal('user-cog', '역할 변경', `역할을 "${role}"(으)로 변경합니다.`, '변경', 'btn-primary');
     if (reason === null) return;
     try {
         const resp = await fetch(`/admin/users/${userId}/role?` + qs({ role, reason }), { method: 'PATCH' });
@@ -346,7 +353,7 @@ async function doChangeRole(userId) {
 /* ── 상태 변경 ── */
 async function doChangeStatus(userId, isActive) {
     const action = isActive ? '활성화' : '비활성화';
-    const icon = isActive ? '✅' : '⚠️';
+    const icon = isActive ? 'check-circle' : 'alert-triangle';
     const reason = await openModal(icon, `계정 ${action}`, `이 계정을 ${action}합니다.`, action, isActive ? 'btn-primary' : 'btn-danger');
     if (reason === null) return;
     try {
@@ -361,7 +368,7 @@ async function doChangeStatus(userId, isActive) {
 async function doChangeTier(userId) {
     const tier = document.getElementById('tier-' + userId).value;
     const expRaw = document.getElementById('tier-exp-' + userId).value;
-    const reason = await openModal('🏷️', '티어 변경', `티어를 "${tier}"(으)로 변경합니다.`, '변경', 'btn-primary');
+    const reason = await openModal('tag', '티어 변경', `티어를 "${tier}"(으)로 변경합니다.`, '변경', 'btn-primary');
     if (reason === null) return;
     const params = { tier, reason };
     if (expRaw) params.expires_at = expRaw;
@@ -375,7 +382,7 @@ async function doChangeTier(userId) {
 
 /* ── PW 초기화 ── */
 async function doResetPassword(userId) {
-    const reason = await openModal('🔑', '비밀번호 초기화', '임시 비밀번호를 발급합니다. 기존 비밀번호는 더 이상 사용할 수 없습니다.', '발급', 'btn-danger');
+    const reason = await openModal('key-round', '비밀번호 초기화', '임시 비밀번호를 발급합니다. 기존 비밀번호는 더 이상 사용할 수 없습니다.', '발급', 'btn-danger');
     if (reason === null) return;
     try {
         const resp = await fetch(`/admin/users/${userId}/reset-password?` + qs({ reason }), { method: 'POST' });
@@ -407,7 +414,7 @@ async function doResetPassword(userId) {
 
 /* ── 계정 삭제 ── */
 async function doDeleteUser(userId, email) {
-    const reason = await openModal('🗑️', '계정 삭제', `"${email}" 계정을 영구 삭제합니다.\n이 작업은 되돌릴 수 없습니다.`, '삭제', 'btn-danger-fill');
+    const reason = await openModal('trash-2', '계정 삭제', `"${email}" 계정을 영구 삭제합니다.\n이 작업은 되돌릴 수 없습니다.`, '삭제', 'btn-danger-fill');
     if (reason === null) return;
     try {
         const resp = await fetch(`/admin/users/${userId}?` + qs({ reason }), { method: 'DELETE' });

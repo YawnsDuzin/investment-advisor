@@ -43,29 +43,29 @@
         <div class="top-pick-header">
             <div class="top-pick-rank-wrap">
                 <span class="top-pick-rank">#{{ pk.rank }}</span>
-                {% if pk.rank == 1 %}<span class="top-pick-trophy" title="Top Pick">&#128293;</span>{% endif %}
+                {% if pk.rank == 1 %}<span class="top-pick-trophy" title="Top Pick"><i data-lucide="flame" aria-hidden="true"></i></span>{% endif %}
             </div>
             <div class="top-pick-badges">
                 {# 핵심 뱃지만 제한 표시 (최대 3개 + 이상 신호) #}
                 {% if pk.discovery_type == 'early_signal' %}
-                <span class="top-pick-badge top-pick-badge-early">&#127793; 얼리</span>
+                <span class="top-pick-badge top-pick-badge-early"><i data-lucide="sprout" aria-hidden="true"></i>얼리</span>
                 {% elif pk.discovery_type == 'deep_value' %}
-                <span class="top-pick-badge top-pick-badge-deepvalue">&#128176; 딥밸류</span>
+                <span class="top-pick-badge top-pick-badge-deepvalue"><i data-lucide="banknote" aria-hidden="true"></i>딥밸류</span>
                 {% elif pk.discovery_type == 'contrarian' %}
-                <span class="top-pick-badge top-pick-badge-contrarian">&#8635; 역발상</span>
+                <span class="top-pick-badge top-pick-badge-contrarian"><i data-lucide="refresh-ccw" aria-hidden="true"></i>역발상</span>
                 {% endif %}
                 {% if pk.conviction == 'high' %}
                 <span class="top-pick-badge top-pick-badge-conviction">HIGH</span>
                 {% endif %}
                 {% if pk.has_stock_analysis %}
-                <span class="top-pick-badge top-pick-badge-stage2" title="Stage 2 심층분석 완료">&#11088; 심층</span>
+                <span class="top-pick-badge top-pick-badge-stage2" title="Stage 2 심층분석 완료"><i data-lucide="layers" aria-hidden="true"></i>심층</span>
                 {% endif %}
                 {# 이상 신호만 강조 #}
                 {% if pk.foreign_net_buy_signal == 'strong_buy' %}
-                <span class="top-pick-badge" style="background:rgba(52,211,153,0.15);color:var(--green);border:1px solid rgba(52,211,153,0.35);" title="외국인 5일+ 연속 순매수">🏦</span>
+                <span class="top-pick-badge" style="background:rgba(52,211,153,0.15);color:var(--green);border:1px solid rgba(52,211,153,0.35);" title="외국인 5일+ 연속 순매수"><i data-lucide="landmark" class="icon icon-sm" aria-hidden="true"></i></span>
                 {% endif %}
                 {% if pk.squeeze_risk == 'high' %}
-                <span class="top-pick-badge" style="background:rgba(248,113,113,0.15);color:var(--red);border:1px solid rgba(248,113,113,0.35);" title="숏스퀴즈 위험">⚡</span>
+                <span class="top-pick-badge" style="background:rgba(248,113,113,0.15);color:var(--red);border:1px solid rgba(248,113,113,0.35);" title="숏스퀴즈 위험"><i data-lucide="zap" class="icon icon-sm" aria-hidden="true"></i></span>
                 {% endif %}
             </div>
         </div>
@@ -172,12 +172,12 @@
                 </button>
             {% endif %}
             <a href="/pages/stocks/{{ pk.ticker }}{% if pk.market %}?market={{ pk.market }}{% endif %}"
-               class="action-btn" title="기초정보">
-                📊 정보
+               class="action-btn action-btn-icon" title="기초정보">
+                <i data-lucide="info" class="icon icon-sm" aria-hidden="true"></i>정보
             </a>
             {% if pk.theme_key %}
-            <a href="/pages/themes/history/{{ pk.theme_key }}" class="action-btn action-btn-signal" title="테마 히스토리">
-                📈 테마
+            <a href="/pages/themes/history/{{ pk.theme_key }}" class="action-btn action-btn-signal action-btn-icon" title="테마 히스토리">
+                <i data-lucide="trending-up" class="icon icon-sm" aria-hidden="true"></i>테마
             </a>
             {% endif %}
         </div>

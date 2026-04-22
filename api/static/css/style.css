@@ -43,6 +43,25 @@ body {
 a { color: var(--accent); text-decoration: none; }
 a:hover { color: var(--accent-hover); }
 
+/* ===== Lucide Icon Utilities =====
+   Lucide.createIcons()가 <i data-lucide="..."> → <svg class="lucide lucide-*">로 치환.
+   기본 출력 SVG는 stroke="currentColor" fill="none"이므로 부모의 color만 바꾸면 색 변경 가능.
+   크기 변형은 .icon-sm/.icon-lg, 굵기는 data-lucide-stroke-width 속성으로 제어.
+*/
+.icon,
+[data-lucide],
+svg.lucide {
+    width: 20px;
+    height: 20px;
+    stroke-width: 2;
+    flex-shrink: 0;
+    vertical-align: middle;
+}
+.icon-sm,
+svg.lucide.icon-sm { width: 16px; height: 16px; }
+.icon-lg,
+svg.lucide.icon-lg { width: 24px; height: 24px; }
+
 /* ======== 03_layout.css ======== */
 /* ===== Sidebar ===== */
 .sidebar {
@@ -328,6 +347,20 @@ a:hover { color: var(--accent-hover); }
 }
 .user-dropdown-item:hover {
     background: var(--bg-card-hover);
+}
+.user-dropdown-item-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+}
+.user-dropdown-item-label svg.lucide {
+    width: 15px;
+    height: 15px;
+    color: var(--text-muted);
+    stroke-width: 2;
+}
+.user-dropdown-logout .user-dropdown-item-label svg.lucide {
+    color: var(--red);
 }
 .user-dropdown-logout {
     color: var(--red);
@@ -1007,6 +1040,12 @@ tbody tr:hover { background: var(--bg-card-hover); }
     font-size: 48px;
     margin-bottom: 12px;
     display: block;
+    color: var(--accent);
+}
+.confirm-modal-body .modal-icon svg.lucide {
+    width: 44px;
+    height: 44px;
+    stroke-width: 1.75;
 }
 .confirm-modal-body .modal-title {
     font-size: 18px;
@@ -1454,6 +1493,12 @@ tbody tr:hover { background: var(--bg-card-hover); }
     background: var(--bg-card-hover);
     border-color: rgba(79,140,255,0.4);
 }
+.detail-cta-btn svg.lucide {
+    width: 14px;
+    height: 14px;
+    stroke-width: 2;
+    flex-shrink: 0;
+}
 
 /* 섹션 스택 (탭 제거 — 한번에 전체 표시) */
 .detail-section {
@@ -1484,6 +1529,15 @@ tbody tr:hover { background: var(--bg-card-hover); }
     padding: 3px 10px;
     border-radius: 6px;
     border: 1px solid var(--border);
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+.meta-tag svg.lucide {
+    width: 13px;
+    height: 13px;
+    stroke-width: 2.25;
+    flex-shrink: 0;
 }
 .meta-tag-sector { background: rgba(147,130,255,0.1); border-color: rgba(147,130,255,0.2); color: var(--purple); }
 .meta-tag-discovery { background: rgba(52,211,153,0.1); border-color: rgba(52,211,153,0.2); color: var(--green); }
@@ -2053,6 +2107,21 @@ tbody tr:hover { background: var(--bg-card-hover); }
 
 .news-category-header:hover { background: var(--bg-card-hover); }
 
+.news-category-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+.news-category-icon {
+    display: inline-flex;
+    align-items: center;
+    color: var(--accent);
+}
+.news-category-icon svg.lucide {
+    width: 18px;
+    height: 18px;
+    stroke-width: 2;
+}
 .news-category-label {
     font-weight: 600;
     font-size: 15px;
@@ -2169,7 +2238,18 @@ tbody tr:hover { background: var(--bg-card-hover); }
     color: #7aa8ff;
     letter-spacing: 0.5px;
 }
-.top-pick-trophy { font-size: 16px; }
+.top-pick-trophy {
+    font-size: 16px;
+    display: inline-flex;
+    align-items: center;
+    color: var(--orange);
+}
+.top-pick-trophy svg.lucide {
+    width: 16px;
+    height: 16px;
+    stroke-width: 2;
+    fill: rgba(251,191,36,0.25);
+}
 
 .top-pick-badges { display: flex; flex-wrap: wrap; gap: 4px; }
 .top-pick-badge {
@@ -2180,6 +2260,9 @@ tbody tr:hover { background: var(--bg-card-hover); }
     color: var(--text-muted, #9ba0b4);
     border: 1px solid rgba(148,163,184,0.18);
     white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
 }
 .top-pick-badge-stage2 { background: rgba(168,85,247,0.12); color: #c084fc; border-color: rgba(168,85,247,0.32); }
 .top-pick-badge-early { background: rgba(34,197,94,0.12); color: #4ade80; border-color: rgba(34,197,94,0.32); }
@@ -2389,12 +2472,24 @@ tbody tr:hover { background: var(--bg-card-hover); }
     backdrop-filter: blur(2px);
     z-index: 2;
 }
-.card-lock-icon { font-size: 26px; }
+.card-lock-icon { font-size: 26px; display: inline-flex; align-items: center; justify-content: center; color: var(--text-muted); }
+.card-lock-icon svg.lucide { width: 28px; height: 28px; stroke-width: 2; }
 .card-lock-title {
     font-size: 14px;
     font-weight: 700;
     color: var(--text);
     margin: 0;
+}
+
+/* 위젯 타이틀에 Lucide 아이콘 inline 배치 — Dashboard Hero Row용 공통 유틸 */
+.widget-title-with-icon {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+.widget-title-with-icon svg.lucide {
+    color: var(--accent);
+    flex-shrink: 0;
 }
 
 /* ── 워치리스트 요약 위젯 ── */
@@ -2615,6 +2710,18 @@ tbody tr:hover { background: var(--bg-card-hover); }
 .action-btn:disabled {
     cursor: default;
     opacity: 0.7;
+}
+.action-btn svg.lucide {
+    width: 14px;
+    height: 14px;
+    stroke-width: 2;
+    flex-shrink: 0;
+}
+.top-pick-badge svg.lucide {
+    width: 14px;
+    height: 14px;
+    stroke-width: 2;
+    vertical-align: middle;
 }
 .action-watched {
     color: var(--orange);
@@ -3748,6 +3855,13 @@ tbody tr:hover { background: var(--bg-card-hover); }
     color: var(--orange);
     font-size: 14px;
     flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+}
+.global-disclaimer .disclaimer-icon svg.lucide {
+    width: 16px;
+    height: 16px;
+    stroke-width: 2.25;
 }
 .global-disclaimer .disclaimer-text { flex: 1 1 280px; }
 .global-disclaimer strong { color: var(--text); }
@@ -3766,14 +3880,17 @@ tbody tr:hover { background: var(--bg-card-hover); }
     background: rgba(79, 140, 255, 0.08);
 }
 
-/* ----- 하단 탭바 (모바일 전용) ----- */
+/* ----- 하단 탭바 (모바일 전용) -----
+   아이콘: Lucide SVG (<i data-lucide="..."> → <svg class="lucide ...">)
+   활성 표시: 아이콘 영역 pill 배경 (accent 반투명) + 아이콘·레이블 accent 색상
+*/
 .bottom-tabbar {
     display: none;
     position: fixed;
     left: 0;
     right: 0;
     bottom: 0;
-    height: 56px;
+    height: 60px;
     padding-bottom: env(safe-area-inset-bottom, 0px);
     background: var(--bg-card);
     border-top: 1px solid var(--border);
@@ -3787,7 +3904,7 @@ tbody tr:hover { background: var(--bg-card-hover); }
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 2px;
+    gap: 3px;
     padding: 6px 4px;
     min-height: 44px;
     color: var(--text-muted);
@@ -3799,23 +3916,34 @@ tbody tr:hover { background: var(--bg-card-hover); }
 }
 .bottom-tab:hover { color: var(--text); }
 .bottom-tab.active { color: var(--accent); }
-.bottom-tab.active::before {
-    content: "";
-    position: absolute;
-    top: 0;
-    left: 30%;
-    right: 30%;
-    height: 3px;
-    background: var(--accent);
-    border-radius: 0 0 3px 3px;
-}
+
+/* 아이콘 영역은 pill 컨테이너 — 활성 시 accent 반투명 배경이 SVG 주변을 감싼다 */
 .bottom-tab-icon {
-    font-size: 20px;
-    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 46px;
+    height: 26px;
+    border-radius: 9999px;
+    background: transparent;
+    transition: background-color 0.18s ease, transform 0.18s ease;
+}
+.bottom-tab-icon svg.lucide,
+.bottom-tab-icon [data-lucide] {
+    width: 22px;
+    height: 22px;
+    stroke-width: 2;
+}
+.bottom-tab.active .bottom-tab-icon {
+    background: rgba(79, 140, 255, 0.18);  /* accent 기반 pill */
+}
+.bottom-tab.active .bottom-tab-icon svg.lucide {
+    stroke-width: 2.25;
 }
 .bottom-tab-label {
     font-size: 10px;
     letter-spacing: 0.2px;
+    line-height: 1;
 }
 
 /* ----- 터치 타겟 44px (UI-07) — 컨텍스트 한정 ----- */

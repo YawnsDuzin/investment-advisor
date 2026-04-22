@@ -138,13 +138,13 @@
                     {% if current_user %}
                     <div class="detail-sticky-cta">
                         <button type="button" class="detail-cta-btn" onclick="event.stopPropagation(); addWatch{{ p.id }}();" title="관심 종목 추가">
-                            <span aria-hidden="true">⭐</span> 관심
+                            <i data-lucide="star" aria-hidden="true"></i> 관심
                         </button>
                         <button type="button" class="detail-cta-btn" onclick="event.stopPropagation(); subscribeTicker('{{ p.ticker }}', this);" title="알림 구독">
-                            <span aria-hidden="true">🔔</span> 알림
+                            <i data-lucide="bell" aria-hidden="true"></i> 알림
                         </button>
                         <button type="button" class="detail-cta-btn" onclick="event.stopPropagation(); focusMemo({{ p.id }});" title="메모 작성">
-                            <span aria-hidden="true">📝</span> 메모
+                            <i data-lucide="edit-3" aria-hidden="true"></i> 메모
                         </button>
                     </div>
                     {% endif %}
@@ -174,20 +174,20 @@
                             {% endif %}
                             {# KRX 확장 데이터 뱃지 #}
                             {% if p.foreign_net_buy_signal == 'strong_buy' %}
-                            <span class="meta-tag" style="background:var(--success);color:#fff;">🏦 외인 강력매수</span>
+                            <span class="meta-tag" style="background:var(--success);color:#fff;"><i data-lucide="landmark" aria-hidden="true"></i>외인 강력매수</span>
                             {% elif p.foreign_net_buy_signal == 'buy' %}
-                            <span class="meta-tag" style="background:#2d6a4f;color:#fff;">🏦 외인 순매수</span>
+                            <span class="meta-tag" style="background:#2d6a4f;color:#fff;"><i data-lucide="landmark" aria-hidden="true"></i>외인 순매수</span>
                             {% elif p.foreign_net_buy_signal == 'sell' %}
-                            <span class="meta-tag" style="background:var(--danger);color:#fff;">🏦 외인 순매도</span>
+                            <span class="meta-tag" style="background:var(--danger);color:#fff;"><i data-lucide="landmark" aria-hidden="true"></i>외인 순매도</span>
                             {% endif %}
                             {% if p.squeeze_risk == 'high' %}
-                            <span class="meta-tag" style="background:#d00;color:#fff;">⚡ 숏스퀴즈 위험</span>
+                            <span class="meta-tag" style="background:#d00;color:#fff;"><i data-lucide="zap" aria-hidden="true"></i>숏스퀴즈 위험</span>
                             {% elif p.squeeze_risk == 'medium' %}
-                            <span class="meta-tag" style="background:#e85d04;color:#fff;">📊 공매도 과열</span>
+                            <span class="meta-tag" style="background:#e85d04;color:#fff;"><i data-lucide="alert-octagon" aria-hidden="true"></i>공매도 과열</span>
                             {% endif %}
                             {% if p.index_membership %}
                             {% for idx in p.index_membership %}
-                            <span class="meta-tag meta-tag-neutral">📌 {{ idx }}</span>
+                            <span class="meta-tag meta-tag-neutral"><i data-lucide="pin" aria-hidden="true"></i>{{ idx }}</span>
                             {% endfor %}
                             {% endif %}
                         </div>

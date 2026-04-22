@@ -210,7 +210,7 @@
 
     {% if analysis.risk_summary %}
     <div class="card sa-risk-card" style="margin:0;">
-        <div class="card-header"><span class="card-title">⚠ 리스크 요약</span></div>
+        <div class="card-header"><span class="card-title widget-title-with-icon"><i data-lucide="alert-triangle" class="icon icon-sm" aria-hidden="true"></i>리스크 요약</span></div>
         <div class="sa-body-text">{{ analysis.risk_summary }}</div>
     </div>
     {% endif %}
@@ -222,14 +222,14 @@
 <div id="sec-cases" class="proposal-card-body sa-section">
     {% if analysis.bull_case %}
     <div class="card sa-bull-card" style="margin:0;">
-        <div class="card-header"><span class="card-title" style="color:var(--green);">🐂 Bull Case</span></div>
+        <div class="card-header"><span class="card-title widget-title-with-icon" style="color:var(--green);"><i data-lucide="trending-up" class="icon icon-sm" aria-hidden="true"></i>Bull Case</span></div>
         <div class="sa-body-text">{{ analysis.bull_case }}</div>
     </div>
     {% endif %}
 
     {% if analysis.bear_case %}
     <div class="card sa-bear-card" style="margin:0;">
-        <div class="card-header"><span class="card-title" style="color:var(--red);">🐻 Bear Case</span></div>
+        <div class="card-header"><span class="card-title widget-title-with-icon" style="color:var(--red);"><i data-lucide="trending-down" class="icon icon-sm" aria-hidden="true"></i>Bear Case</span></div>
         <div class="sa-body-text">{{ analysis.bear_case }}</div>
     </div>
     {% endif %}

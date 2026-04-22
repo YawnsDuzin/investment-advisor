@@ -16,7 +16,18 @@
     {% for cat, data in news_by_category.items() %}
     <div class="news-category-card">
         <div class="news-category-header" onclick="this.parentElement.classList.toggle('open')">
-            <span>
+            <span class="news-category-title">
+                <span class="news-category-icon">
+                    {% if cat == 'global' %}<i data-lucide="globe-2" aria-hidden="true"></i>
+                    {% elif cat == 'finance' %}<i data-lucide="banknote" aria-hidden="true"></i>
+                    {% elif cat == 'technology' %}<i data-lucide="cpu" aria-hidden="true"></i>
+                    {% elif cat == 'commodities' %}<i data-lucide="factory" aria-hidden="true"></i>
+                    {% elif cat == 'korea' %}<i data-lucide="map-pin" aria-hidden="true"></i>
+                    {% elif cat == 'early_signals' %}<i data-lucide="radar" aria-hidden="true"></i>
+                    {% elif cat == 'korea_early' %}<i data-lucide="briefcase" aria-hidden="true"></i>
+                    {% else %}<i data-lucide="newspaper" aria-hidden="true"></i>
+                    {% endif %}
+                </span>
                 <span class="news-category-label">{{ data.label }}</span>
                 <span class="news-category-count">{{ data.articles|length }}건</span>
             </span>
