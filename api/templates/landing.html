@@ -58,7 +58,9 @@
         border-radius: 12px;
         padding: 18px;
     }
-    .lp-feature-icon { font-size: 26px; margin-bottom: 8px; }
+    .lp-feature-icon { font-size: 26px; margin-bottom: 8px; display: inline-flex; align-items: center; color: var(--accent); }
+    .lp-feature-icon svg.lucide { width: 28px; height: 28px; stroke-width: 1.75; }
+    .lp-section-title.widget-title-with-icon svg.lucide { width: 22px; height: 22px; color: var(--accent); stroke-width: 2; }
     .lp-feature-title {
         font-weight: 700;
         font-size: 14px;
@@ -138,10 +140,10 @@
 
 <!-- 핵심 기능 3가지 -->
 <section class="lp-section">
-    <div class="lp-section-title">🎯 AlphaSignal이 제공하는 것</div>
+    <div class="lp-section-title widget-title-with-icon"><i data-lucide="target" aria-hidden="true"></i>AlphaSignal이 제공하는 것</div>
     <div class="lp-features">
         <div class="lp-feature">
-            <div class="lp-feature-icon">🧠</div>
+            <div class="lp-feature-icon"><i data-lucide="brain" aria-hidden="true"></i></div>
             <div class="lp-feature-title">AI 멀티스테이지 분석</div>
             <div class="lp-feature-desc">
                 뉴스 → 이슈 → 테마 → 시나리오 → 종목 심층분석까지 매일 자동 실행.
@@ -149,7 +151,7 @@
             </div>
         </div>
         <div class="lp-feature">
-            <div class="lp-feature-icon">🌏</div>
+            <div class="lp-feature-icon"><i data-lucide="globe-2" aria-hidden="true"></i></div>
             <div class="lp-feature-title">한국 + 해외 동시 커버</div>
             <div class="lp-feature-desc">
                 pykrx(한국) + yfinance(해외) 결합, 매크로 시나리오까지 한 화면.
@@ -157,7 +159,7 @@
             </div>
         </div>
         <div class="lp-feature">
-            <div class="lp-feature-icon">📊</div>
+            <div class="lp-feature-icon"><i data-lucide="bar-chart-3" aria-hidden="true"></i></div>
             <div class="lp-feature-title">공개 트랙레코드</div>
             <div class="lp-feature-desc">
                 AI 추천의 기간별 승률·평균 수익률을 공개합니다.
@@ -169,7 +171,7 @@
 
 <!-- 트랙레코드 미리보기 -->
 <section class="lp-section">
-    <div class="lp-section-title">📈 최근 트랙레코드</div>
+    <div class="lp-section-title widget-title-with-icon"><i data-lucide="trending-up" aria-hidden="true"></i>최근 트랙레코드</div>
     <div class="lp-tr-preview" id="lp-tr-preview">
         <div class="lp-tr-card">
             <div class="lp-tr-card-label">1M</div>
@@ -200,7 +202,7 @@
 
 <!-- 요금제 티저 -->
 <section class="lp-section">
-    <div class="lp-section-title">💎 나에게 맞는 플랜</div>
+    <div class="lp-section-title widget-title-with-icon"><i data-lucide="gem" aria-hidden="true"></i>나에게 맞는 플랜</div>
     <div class="lp-pricing-teaser">
         <div class="lp-plan">
             <div class="lp-plan-name">Free</div>
