@@ -1039,3 +1039,53 @@ def _migrate_to_v25(cur) -> None:
         ON CONFLICT (version) DO NOTHING;
     """)
     print("[DB] v25 마이그레이션 완료 — stock_universe 테이블 생성 (Phase 1a)")
+
+
+def _migrate_to_v26(cur) -> None:
+    """v26: Evidence Validation Layer (Phase 3, recommendation-engine-redesign).
+
+    - proposal_validation_log: AI 제시 vs 실측 데이터 크로스체크 결과 영구 보존
+    - investment_proposals.spec_snapshot: Stage 1-B1 스펙 JSON 보존 (audit trail)
+    - investment_proposals.screener_match_reason: 어떤 키워드/조건으로 매칭됐는지
+
+    참고: 재설계 계획서의 v24가 v26으로 시프트(v23/v24 선점).
+    """
+    # 1) proposal_validation_log
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS proposal_validation_log (
+            id              SERIAL PRIMARY KEY,
+            proposal_id     INT REFERENCES investment_proposals(id) ON DELETE CASCADE,
+            field_name      TEXT NOT NULL,
+            ai_value        TEXT,
+            actual_value    TEXT,
+            evidence_source TEXT,
+            mismatch        BOOLEAN DEFAULT FALSE,
+            mismatch_pct    NUMERIC(10,4),
+            checked_at      TIMESTAMPTZ DEFAULT NOW()
+        );
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_validation_proposal
+            ON proposal_validation_log(proposal_id);
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_validation_mismatch
+            ON proposal_validation_log(mismatch) WHERE mismatch = TRUE;
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_validation_field
+            ON proposal_validation_log(field_name, mismatch);
+    """)
+
+    # 2) investment_proposals 컬럼 추가 — audit trail
+    cur.execute("""
+        ALTER TABLE investment_proposals
+            ADD COLUMN IF NOT EXISTS spec_snapshot JSONB,
+            ADD COLUMN IF NOT EXISTS screener_match_reason TEXT;
+    """)
+
+    cur.execute("""
+        INSERT INTO schema_version (version) VALUES (26)
+        ON CONFLICT (version) DO NOTHING;
+    """)
+    print("[DB] v26 마이그레이션 완료 — proposal_validation_log + spec_snapshot/screener_match_reason (Phase 3)")

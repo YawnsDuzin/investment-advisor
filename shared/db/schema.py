@@ -9,7 +9,7 @@ from shared.db.migrations import run_migrations
 
 
 # ── 스키마 버전 관리 ──────────────────────────────
-SCHEMA_VERSION = 25  # v25: stock_universe (Phase 1a — recommendation-engine-redesign)
+SCHEMA_VERSION = 26  # v26: Evidence Validation Layer (Phase 3 — recommendation-engine-redesign)
 
 
 def _create_base_schema(cur) -> None:

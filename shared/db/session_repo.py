@@ -2,7 +2,7 @@
 import json
 import re
 
-from shared.config import DatabaseConfig
+from shared.config import DatabaseConfig, ValidationConfig
 from shared.db.connection import get_connection
 
 
@@ -65,6 +65,7 @@ def save_analysis(cfg: DatabaseConfig, analysis_date: str, result: dict) -> int:
     v2 확장 필드는 있으면 저장, 없으면 NULL (하위호환)
     """
     conn = get_connection(cfg)
+    saved_proposals: list[tuple[int, dict]] = []  # (proposal_id, proposal) for Phase 3 validation
     try:
         with conn.cursor() as cur:
             # 1) 세션 생성 (같은 날짜면 기존 데이터 삭제 후 재생성)
@@ -164,6 +165,7 @@ def save_analysis(cfg: DatabaseConfig, analysis_date: str, result: dict) -> int:
                                 upside = round((tl - cp) / cp * 100, 2)
                         except (ValueError, TypeError):
                             pass
+                    spec_snapshot = proposal.get("spec_snapshot")
                     cur.execute(
                         """INSERT INTO investment_proposals
                            (theme_id, asset_type, asset_name, ticker, market,
@@ -176,8 +178,9 @@ def save_analysis(cfg: DatabaseConfig, analysis_date: str, result: dict) -> int:
                             return_1m_pct, return_3m_pct, return_6m_pct, return_1y_pct,
                             entry_price,
                             foreign_ownership_pct, index_membership,
-                            squeeze_risk, foreign_net_buy_signal)
-                           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                            squeeze_risk, foreign_net_buy_signal,
+                            spec_snapshot, screener_match_reason)
+                           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                            RETURNING id""",
                         (theme_id, proposal.get("asset_type"),
                          proposal.get("asset_name"), proposal.get("ticker"),
@@ -199,9 +202,12 @@ def save_analysis(cfg: DatabaseConfig, analysis_date: str, result: dict) -> int:
                          proposal.get("foreign_ownership_pct"),
                          proposal.get("index_membership"),
                          proposal.get("squeeze_risk"),
-                         proposal.get("foreign_net_buy_signal"))
+                         proposal.get("foreign_net_buy_signal"),
+                         json.dumps(spec_snapshot, ensure_ascii=False) if spec_snapshot else None,
+                         proposal.get("screener_match_reason"))
                     )
                     proposal_id = cur.fetchone()[0]
+                    saved_proposals.append((proposal_id, proposal))
 
                     # 4-a) 종목 심층분석 저장 (있는 경우)
                     stock_detail = proposal.get("stock_analysis")
@@ -237,9 +243,20 @@ def save_analysis(cfg: DatabaseConfig, analysis_date: str, result: dict) -> int:
 
         conn.commit()
         print(f"[DB] 세션 #{session_id} 저장 완료 — 이슈 {len(issues)}건, 테마 {len(themes)}건")
-        return session_id
     finally:
         conn.close()
+
+    # 7) Phase 3: Evidence Validation — 별도 트랜잭션 (실패해도 저장 결과는 유지)
+    try:
+        validation_cfg = ValidationConfig()
+        if validation_cfg.enabled and saved_proposals:
+            from analyzer.validator import validate_and_persist
+            validate_and_persist(cfg, saved_proposals, validation_cfg)
+    except Exception as e:
+        # 검증 실패는 저장 자체를 무효화하지 않음 — 경고만 출력
+        print(f"[DB] 세션 #{session_id} validation 실패 (무시): {e}")
+
+    return session_id
 
 
 def _generate_notifications(cur, session_id: int, themes: list) -> None:

@@ -293,9 +293,29 @@ def _run_top_picks_stage(
                 p["_proposal_id"] = ticker_map[tk]
         tmeta["confidence"] = theme.get("confidence_score")
 
+    # Phase 3: Evidence Validation 결과 조회 (mismatch 횟수 → 스코어 감점에 사용)
+    validation_mismatches = {}
+    validation_cfg = AppConfig().validation
+    if validation_cfg.enabled:
+        try:
+            from analyzer.validator import fetch_mismatch_counts
+            all_pids = [
+                p["_proposal_id"] for theme in themes
+                for p in theme.get("proposals", [])
+                if p.get("_proposal_id")
+            ]
+            validation_mismatches = fetch_mismatch_counts(db_cfg, all_pids)
+            if validation_mismatches:
+                log.info(f"Validation: {len(validation_mismatches)}건 proposal에 mismatch 발견")
+        except Exception as e:
+            log.warning(f"Validation 결과 조회 실패 (무시): {e}")
+
     # 룰 기반 스코어링
     picks = compute_rule_based_picks(
         session_id, themes, rec_cfg, theme_id_map, stage2_ids,
+        validation_mismatches=validation_mismatches,
+        validation_penalty=validation_cfg.mismatch_penalty,
+        validation_threshold=validation_cfg.penalty_threshold,
     )
     if not picks:
         log.info("룰 기반 후보 0건 — Top Picks 건너뜀")

@@ -146,6 +146,14 @@ def score_proposal(proposal: dict, cfg: RecommendationConfig) -> tuple[float, di
         breakdown["no_price_penalty"] = -cfg.w_no_price_penalty
         total -= cfg.w_no_price_penalty
 
+    # Phase 3: Evidence Validation 감점 — _validation_mismatch_count는 caller가 주입
+    mismatch_count = int(proposal.get("_validation_mismatch_count") or 0)
+    threshold = int(proposal.get("_validation_threshold") or 2)
+    penalty = int(proposal.get("_validation_penalty") or 0)
+    if mismatch_count >= threshold and penalty > 0:
+        breakdown["validation_penalty"] = -penalty
+        total -= penalty
+
     return round(total, 2), breakdown
 
 
@@ -207,6 +215,9 @@ def compute_rule_based_picks(
     cfg: RecommendationConfig,
     theme_id_map: dict | None = None,
     stage2_proposal_ids: set | None = None,
+    validation_mismatches: dict[int, int] | None = None,
+    validation_penalty: int = 0,
+    validation_threshold: int = 2,
 ) -> list[dict]:
     """룰 기반 Top Picks 계산 — 순수 로직 (DB I/O 없음)
 
@@ -214,11 +225,15 @@ def compute_rule_based_picks(
         themes: Stage 1-B 결과 (각 proposal에 _proposal_id 병합되어 있어야 함)
         theme_id_map: {theme_name: {id, confidence, streak_days}}
         stage2_proposal_ids: Stage 2 완료된 proposal_id 집합
+        validation_mismatches: {proposal_id: mismatch_count} — Phase 3 evidence validation
+        validation_penalty: mismatch >= threshold일 때 차감할 점수
+        validation_threshold: 감점 발동 mismatch 개수 (기본 2)
     Returns:
         상위 max_candidates 개 픽 리스트 — save_top_picks()에 전달 가능한 형태
     """
     theme_id_map = theme_id_map or {}
     stage2_proposal_ids = stage2_proposal_ids or set()
+    validation_mismatches = validation_mismatches or {}
 
     candidates = build_candidate_pool(
         session_id, themes, theme_id_map, stage2_proposal_ids,
@@ -228,6 +243,12 @@ def compute_rule_based_picks(
 
     # 각 후보에 점수 부여
     for p in candidates:
+        # Phase 3: validation mismatch 정보 주입
+        pid = p.get("_proposal_id")
+        if pid and pid in validation_mismatches:
+            p["_validation_mismatch_count"] = validation_mismatches[pid]
+            p["_validation_threshold"] = validation_threshold
+            p["_validation_penalty"] = validation_penalty
         score, breakdown = score_proposal(p, cfg)
         p["_score"] = score
         p["_breakdown"] = breakdown
