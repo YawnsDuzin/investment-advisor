@@ -62,7 +62,7 @@
     "category": "<basics|analysis|risk|macro|practical|stories>",
     "slug": "<kebab-case>",
     "title": "<한글 제목>",
-    "summary": "<한 문장 요약, 50~100자>",
+    "summary": "<한 문장 요약, 30~100자>",
     "difficulty": "<beginner|intermediate|advanced>",
     "sort_order": <int>,
     "content": """## 섹션1
