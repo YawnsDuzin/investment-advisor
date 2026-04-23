@@ -26,6 +26,7 @@
             <li><a href="/pages/themes" class="{% if active_page == 'themes' %}active{% endif %}" onclick="document.body.classList.remove('sidebar-open')">Themes</a></li>
             <li><a href="/pages/proposals" class="{% if active_page == 'proposals' %}active{% endif %}" onclick="document.body.classList.remove('sidebar-open')">Stock Picks</a></li>
             <li><a href="/pages/track-record" class="{% if active_page == 'track_record' %}active{% endif %}" onclick="document.body.classList.remove('sidebar-open')">Track Record</a></li>
+            <li><a href="/pages/screener" class="{% if active_page == 'screener' %}active{% endif %}" onclick="document.body.classList.remove('sidebar-open')">Screener</a></li>
             {% if not auth_enabled or (current_user and (current_user.role in ('admin', 'moderator') or current_user.effective_tier() in ('pro', 'premium'))) %}
             <li><a href="/pages/chat" class="{% if active_page == 'chat' %}active{% endif %}" onclick="document.body.classList.remove('sidebar-open')">Theme Chat</a></li>
             {% endif %}

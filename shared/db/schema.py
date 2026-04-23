@@ -9,7 +9,7 @@ from shared.db.migrations import run_migrations
 
 
 # ── 스키마 버전 관리 ──────────────────────────────
-SCHEMA_VERSION = 32  # v32: market_signals 테이블 — 일별 이상 시그널 탐지 (로드맵 Step 3-2)
+SCHEMA_VERSION = 33  # v33: screener_presets — 커스텀 스크리너 프리셋 (로드맵 UI-6)
 
 
 def _create_base_schema(cur) -> None:

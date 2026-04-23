@@ -1304,3 +1304,38 @@ def _migrate_to_v32(cur) -> None:
         ON CONFLICT (version) DO NOTHING;
     """)
     print("[DB] v32 마이그레이션 완료 — market_signals 테이블 (로드맵 Step 3-2)")
+
+
+def _migrate_to_v33(cur) -> None:
+    """v33: screener_presets — 사용자 커스텀 스크리너 프리셋 저장 (로드맵 UI-6).
+
+    프리미엄 스크리너 페이지에서 유저가 필터 조합을 저장·재사용·공유할 수 있게 한다.
+    Pro/Premium 티어 기능 (Free는 read-only로 공개 프리셋만 이용).
+    """
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS screener_presets (
+            id          SERIAL PRIMARY KEY,
+            user_id     INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            name        VARCHAR(200) NOT NULL,
+            description TEXT,
+            spec        JSONB NOT NULL,
+            is_public   BOOLEAN DEFAULT FALSE,
+            created_at  TIMESTAMP DEFAULT NOW(),
+            updated_at  TIMESTAMP DEFAULT NOW(),
+            UNIQUE (user_id, name)
+        );
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_screener_presets_public
+            ON screener_presets(is_public, created_at DESC) WHERE is_public = TRUE;
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_screener_presets_user
+            ON screener_presets(user_id, updated_at DESC);
+    """)
+
+    cur.execute("""
+        INSERT INTO schema_version (version) VALUES (33)
+        ON CONFLICT (version) DO NOTHING;
+    """)
+    print("[DB] v33 마이그레이션 완료 — screener_presets (로드맵 UI-6)")

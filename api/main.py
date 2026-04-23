@@ -100,6 +100,9 @@ from api.routes import signals as _signals_routes
 app.include_router(_signals_routes.router)
 from api.routes import sectors as _sectors_routes
 app.include_router(_sectors_routes.router)
+from api.routes import screener as _screener_routes
+app.include_router(_screener_routes.router)
+app.include_router(_screener_routes.pages_router)
 app.include_router(education.router)
 app.include_router(education.pages_router)
 app.include_router(inquiry.router)
