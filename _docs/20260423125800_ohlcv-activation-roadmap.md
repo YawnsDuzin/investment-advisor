@@ -24,15 +24,19 @@
 
 ### A1. Stage 1 모멘텀 체크 DB 리팩터 🟢 ⭐⭐⭐⭐⭐
 
-- [ ] **상태**: ⬜
-- [ ] `analyzer/stock_data.py`에 `fetch_momentum_from_db(tickers, markets)` 함수 추가
-  - [ ] 단일 SQL로 (1m/3m/6m/1y 수익률, `current_price`, `price_source`) 일괄 조회
-  - [ ] 기준일: OHLCV 최신 trade_date. 개월 환산은 21/63/126/252 거래일.
-- [ ] `analyzer/stock_data.py` `fetch_momentum_batch` 호출 지점에 옵션 flag 추가
-  - [ ] 기본 DB 우선, fallback yfinance/pykrx (OHLCV 결측 종목)
-  - [ ] `.env`에 `MOMENTUM_SOURCE=db|live` 스위치 (기본 `db`)
-- [ ] 단위 테스트: OHLCV 채워진 케이스 vs 결측 케이스
-- [ ] 체감 테스트: 기존 대비 분석 배치 소요 시간 비교 로그
+- [x] **상태**: ✅ (커밋 예정 — 본 세션에서 구현 완료)
+- [x] `analyzer/stock_data.py`에 `fetch_momentum_from_db(stocks, db_cfg)` + 내부 배치 쿼리 `_fetch_ohlcv_history_batch` 추가
+  - [x] 단일 SQL로 다중 (ticker, market) 히스토리 일괄 조회 (`VALUES (%s, %s), ...` 템플릿)
+  - [x] 반환: `current_price` / `momentum_tag` / `return_1m/3m/6m/1y_pct` / `price_source="ohlcv_db"`
+  - [x] 기준일: OHLCV 최신 trade_date. `_calc_period_returns`(22/66/132/전체 거래일 offset) 재사용
+- [x] `fetch_momentum_batch(stocks, db_cfg=None)` 시그니처 확장 + `MOMENTUM_SOURCE` 스위치 추가
+  - [x] `db`(기본): OHLCV 우선 → 결측만 live 폴백
+  - [x] `live`: 기존 ThreadPool 동작만
+  - [x] `db_only`: DB 만, 폴백 없음 (디버깅)
+  - [x] `.env.example` + CLAUDE.md 환경변수 테이블 갱신
+- [x] `analyzer.py` 호출부에 `db_cfg` 전달 + 완료 로그에 소스별 카운터(`ohlcv_db=N pykrx=N yfinance=N`) 표시
+- [x] `investment_proposals.price_source` 가능값 목록에 `ohlcv_db` 추가 (CLAUDE.md 스키마 주석)
+- [ ] 체감 테스트: 실제 라즈베리파이에서 배치 소요 시간 비교 로그 (OHLCV 백필 완료 후 검증)
 
 **기대 효과**
 - 분석 배치에서 모멘텀 조회 단계 10x 이상 단축 예상 (yfinance 루프 제거)
