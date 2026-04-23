@@ -1,0 +1,69 @@
+{#
+  Dashboard — 오늘의 이상 시그널 카드 (로드맵 UI-3)
+  CONTEXT: 없음 (클라이언트에서 /api/signals/today fetch)
+  데이터 소스: market_signals (v32), analyzer/signals.py가 배치로 채움
+#}
+<div class="card" id="signals-today-card" style="margin-bottom:16px;">
+    <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;">
+        <span style="display:inline-flex;align-items:center;gap:6px;">
+            <i data-lucide="zap" style="width:16px;height:16px;color:var(--accent);" aria-hidden="true"></i>
+            <strong>오늘의 이상 시그널</strong>
+        </span>
+        <span id="signals-today-date" style="font-size:12px;color:var(--text-muted);"></span>
+    </div>
+    <div id="signals-today-body" style="padding:12px 14px;">
+        <div class="tr-loading" style="color:var(--text-muted);font-size:13px;">불러오는 중…</div>
+    </div>
+</div>
+
+<script>
+(function() {
+    const toneColor = {
+        positive: 'var(--green)',
+        negative: 'var(--red)',
+        neutral:  'var(--accent)',
+    };
+
+    function fmtSample(s) {
+        const m = s.metric || {};
+        let extra = '';
+        if (m.gap_pct != null) extra = ' ' + (m.gap_pct > 0 ? '+' : '') + m.gap_pct + '%';
+        else if (m.ratio != null) extra = ' ×' + m.ratio;
+        return '<a href="/pages/proposals/history/' + encodeURIComponent(s.ticker) +
+               '" style="color:inherit;text-decoration:none;">' +
+               '<span style="font-family:ui-monospace,monospace;">' + s.ticker + '</span>' +
+               '<span style="color:var(--text-muted);font-size:11px;">' + (s.market ? ' @' + s.market : '') + extra + '</span>' +
+               '</a>';
+    }
+
+    function render(data) {
+        const body = document.getElementById('signals-today-body');
+        const dateEl = document.getElementById('signals-today-date');
+        dateEl.textContent = data.signal_date || '';
+        if (!data.groups || data.groups.length === 0) {
+            body.innerHTML = '<div style="color:var(--text-muted);font-size:13px;">오늘 탐지된 시그널이 없습니다.</div>';
+            return;
+        }
+
+        const rows = data.groups.map(function(g) {
+            const color = toneColor[g.tone] || 'var(--text-muted)';
+            const samples = g.samples.slice(0, 8).map(fmtSample).join(' · ');
+            const more = g.count > g.samples.length ? ' <span style="color:var(--text-muted);font-size:11px;">외 ' + (g.count - g.samples.length) + '건</span>' : '';
+            return '<div class="signal-row" style="display:grid;grid-template-columns:120px 40px 1fr;gap:10px;padding:6px 0;border-bottom:1px solid var(--border-light, var(--border));align-items:baseline;font-size:13px;">' +
+                   '<span style="color:' + color + ';font-weight:600;">' + g.label + '</span>' +
+                   '<span style="color:var(--text-muted);font-size:11px;text-align:right;">' + g.count + '건</span>' +
+                   '<span>' + samples + more + '</span>' +
+                   '</div>';
+        }).join('');
+        body.innerHTML = rows;
+    }
+
+    fetch('/api/signals/today?limit=12')
+        .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+        .then(render)
+        .catch(function(err) {
+            document.getElementById('signals-today-body').innerHTML =
+                '<div style="color:var(--text-muted);font-size:12px;">시그널 조회 실패: ' + err.message + '</div>';
+        });
+})();
+</script>

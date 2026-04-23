@@ -1,0 +1,110 @@
+{#
+  Dashboard — 섹터 모멘텀 히트맵 (로드맵 UI-3)
+  CONTEXT: 없음 (클라이언트에서 /api/sectors/momentum fetch)
+  데이터 소스: stock_universe × stock_universe_ohlcv JOIN
+#}
+<div class="card" id="sector-heatmap-card" style="margin-bottom:16px;">
+    <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+        <span style="display:inline-flex;align-items:center;gap:6px;">
+            <i data-lucide="layout-grid" style="width:16px;height:16px;color:var(--accent);" aria-hidden="true"></i>
+            <strong>섹터 모멘텀 히트맵</strong>
+        </span>
+        <div style="display:inline-flex;gap:4px;">
+            <button class="sector-mg-btn" data-mg="ALL" style="font-size:11px;padding:3px 8px;background:var(--accent);border:none;border-radius:4px;color:#fff;cursor:pointer;">ALL</button>
+            <button class="sector-mg-btn" data-mg="KRX" style="font-size:11px;padding:3px 8px;background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:4px;color:var(--text);cursor:pointer;">KRX</button>
+            <button class="sector-mg-btn" data-mg="US"  style="font-size:11px;padding:3px 8px;background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:4px;color:var(--text);cursor:pointer;">US</button>
+        </div>
+    </div>
+    <div id="sector-heatmap-body" style="padding:10px 14px;overflow-x:auto;">
+        <div class="tr-loading" style="color:var(--text-muted);font-size:13px;">불러오는 중…</div>
+    </div>
+</div>
+
+<script>
+(function() {
+    const periodLabels = { r1m: '1M', r3m: '3M', r6m: '6M', r12m: '1Y' };
+
+    // 값(%) → 배경색 (-30% 이하 진한 빨강 ~ +30% 이상 진한 초록)
+    function cellColor(v) {
+        if (v == null) return 'rgba(255,255,255,0.03)';
+        const clamp = Math.max(-30, Math.min(30, v));
+        const t = (clamp + 30) / 60; // 0..1
+        // 보간: red(239,68,68) → neutral(70,70,70) → green(52,211,153)
+        let r, g, b;
+        if (t < 0.5) {
+            const k = t / 0.5;
+            r = Math.round(239 + (70 - 239) * k);
+            g = Math.round(68  + (70 - 68)  * k);
+            b = Math.round(68  + (70 - 68)  * k);
+        } else {
+            const k = (t - 0.5) / 0.5;
+            r = Math.round(70 + (52  - 70) * k);
+            g = Math.round(70 + (211 - 70) * k);
+            b = Math.round(70 + (153 - 70) * k);
+        }
+        const alpha = 0.18 + Math.abs(clamp) / 30 * 0.45;
+        return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
+    }
+
+    function fmt(v) {
+        if (v == null) return '-';
+        return (v > 0 ? '+' : '') + v.toFixed(1) + '%';
+    }
+
+    function render(data) {
+        const body = document.getElementById('sector-heatmap-body');
+        const sectors = data.sectors || [];
+        if (sectors.length === 0) {
+            body.innerHTML = '<div style="color:var(--text-muted);font-size:13px;">집계 가능한 섹터가 없습니다 (stock_universe.sector_norm / OHLCV 데이터 필요).</div>';
+            return;
+        }
+        const periods = data.periods || ['r1m', 'r3m', 'r6m', 'r12m'];
+        let html = '<table class="sector-heatmap" style="width:100%;border-collapse:separate;border-spacing:3px;font-size:12px;">';
+        html += '<thead><tr><th style="text-align:left;padding:4px 8px;color:var(--text-muted);">섹터 <span style="font-size:10px;">(n)</span></th>';
+        periods.forEach(function(p) {
+            html += '<th style="padding:4px 8px;color:var(--text-muted);">' + (periodLabels[p] || p) + '</th>';
+        });
+        html += '</tr></thead><tbody>';
+        sectors.forEach(function(s) {
+            html += '<tr>';
+            html += '<td style="padding:4px 8px;font-weight:500;">' + s.sector + ' <span style="color:var(--text-muted);font-size:11px;">(' + s.n + ')</span></td>';
+            periods.forEach(function(p) {
+                const v = s[p];
+                const bg = cellColor(v);
+                html += '<td style="padding:6px 10px;text-align:right;background:' + bg + ';border-radius:4px;font-variant-numeric:tabular-nums;font-weight:600;">' + fmt(v) + '</td>';
+            });
+            html += '</tr>';
+        });
+        html += '</tbody></table>';
+        body.innerHTML = html;
+    }
+
+    function load(mg) {
+        const url = '/api/sectors/momentum' + (mg && mg !== 'ALL' ? '?market_group=' + mg : '');
+        fetch(url)
+            .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+            .then(render)
+            .catch(function(err) {
+                document.getElementById('sector-heatmap-body').innerHTML =
+                    '<div style="color:var(--text-muted);font-size:12px;">섹터 집계 실패: ' + err.message + '</div>';
+            });
+    }
+
+    // 버튼 바인딩
+    document.querySelectorAll('.sector-mg-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            document.querySelectorAll('.sector-mg-btn').forEach(function(b) {
+                b.style.background = 'rgba(255,255,255,0.05)';
+                b.style.border = '1px solid var(--border)';
+                b.style.color = 'var(--text)';
+            });
+            btn.style.background = 'var(--accent)';
+            btn.style.border = 'none';
+            btn.style.color = '#fff';
+            load(btn.dataset.mg);
+        });
+    });
+
+    load('ALL');
+})();
+</script>

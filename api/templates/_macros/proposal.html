@@ -147,7 +147,72 @@
         {% endif %}
     </div>
     {% endif %}
+
+    {{ factor_snapshot_panel(p.factor_snapshot) }}
 </div>
+{% endmacro %}
+
+
+{# ── AI가 본 실측 데이터 (로드맵 UI-7) ──
+    factor_snapshot JSONB를 표 형태로 표시하여 LLM 분석의 근거 수치를 투명화.
+    B1(factor_engine)이 계산한 cross-section percentile 그대로 인용.
+#}
+{% macro factor_snapshot_panel(snap) %}
+{% if snap %}
+<div class="factor-snapshot-panel" style="margin-top:12px;padding:12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+        <i data-lucide="sigma" style="width:14px;height:14px;color:var(--text-muted);"></i>
+        <span style="font-size:12px;color:var(--text-muted);font-weight:600;">AI가 본 실측 데이터</span>
+        <span style="font-size:11px;color:var(--text-muted);">
+            — {{ snap.market_group or '?' }} universe {{ snap.universe_size or '?' }}종목 cross-section
+        </span>
+    </div>
+    <table class="factor-table" style="width:100%;font-size:12px;border-collapse:collapse;">
+        <thead>
+            <tr style="color:var(--text-muted);border-bottom:1px solid var(--border);">
+                <th style="text-align:left;padding:4px 6px;">팩터</th>
+                <th style="text-align:right;padding:4px 6px;">값</th>
+                <th style="text-align:right;padding:4px 6px;">백분위</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for label, val_key, pct_key, val_suffix, pct_direction in [
+                ('단기 수익률 (1m)',    'r1m_pct',      'r1m_pctile',    '%', 'top'),
+                ('중기 수익률 (3m)',    'r3m_pct',      'r3m_pctile',    '%', 'top'),
+                ('반기 수익률 (6m)',    'r6m_pct',      'r6m_pctile',    '%', 'top'),
+                ('장기 수익률 (12m)',   'r12m_pct',     'r12m_pctile',   '%', 'top'),
+                ('60일 변동성',         'vol60_pct',    'low_vol_pctile','%', 'low_vol'),
+                ('거래량 추세 (20/60)', 'volume_ratio', 'volume_pctile', 'x', 'high'),
+            ] %}
+            {% set val = snap[val_key] %}
+            {% set pct = snap[pct_key] %}
+            {% if val is not none %}
+            <tr style="border-bottom:1px solid var(--border-light, var(--border));">
+                <td style="padding:4px 6px;">{{ label }}</td>
+                <td style="padding:4px 6px;text-align:right;font-variant-numeric:tabular-nums;">
+                    {% if val_suffix == '%' %}{{ '%+.2f' % val }}%{% else %}{{ '%.2f' % val }}{{ val_suffix }}{% endif %}
+                </td>
+                <td style="padding:4px 6px;text-align:right;font-variant-numeric:tabular-nums;color:var(--text-muted);">
+                    {% if pct is not none %}
+                        {% if pct_direction == 'low_vol' %}
+                            저변동 상위 {{ ((1 - pct) * 100)|round(0, 'common')|int }}%
+                        {% else %}
+                            상위 {{ ((1 - pct) * 100)|round(0, 'common')|int }}%
+                        {% endif %}
+                    {% else %} - {% endif %}
+                </td>
+            </tr>
+            {% endif %}
+            {% endfor %}
+        </tbody>
+    </table>
+    {% if snap.computed_at %}
+    <div style="margin-top:6px;font-size:10px;color:var(--text-muted);">
+        산출 시각: {{ snap.computed_at }}
+    </div>
+    {% endif %}
+</div>
+{% endif %}
 {% endmacro %}
 
 

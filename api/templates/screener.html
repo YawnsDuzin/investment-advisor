@@ -1,0 +1,310 @@
+{% extends "base.html" %}
+{% block title %}스크리너 — AlphaSignal{% endblock %}
+{% block page_title %}프리미엄 스크리너{% endblock %}
+{% block header_actions %}
+<button class="btn" id="saveBtn" style="font-size:12px;padding:4px 12px;" onclick="savePreset()">프리셋 저장</button>
+<button class="btn" id="loadBtn" style="font-size:12px;padding:4px 12px;margin-left:4px;" onclick="toggleLoadPanel()">내 프리셋</button>
+{% endblock %}
+
+{% block content %}
+<div class="card" style="margin-bottom:16px;">
+    <div class="card-header"><strong>필터</strong></div>
+    <div style="padding:14px 16px;display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:14px 18px;font-size:13px;">
+
+        <label>
+            <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">시장 (복수 선택)</div>
+            <select multiple id="f-markets" style="width:100%;min-height:80px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:6px;">
+                <option value="KOSPI">KOSPI</option>
+                <option value="KOSDAQ">KOSDAQ</option>
+                <option value="NASDAQ">NASDAQ</option>
+                <option value="NYSE">NYSE</option>
+            </select>
+        </label>
+
+        <label>
+            <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">섹터 (쉼표 구분, 영문 소문자 sector_norm)</div>
+            <input id="f-sectors" type="text" placeholder="semiconductors, energy, ..." style="width:100%;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);">
+        </label>
+
+        <label>
+            <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">시총 범위 (억원)</div>
+            <div style="display:flex;gap:6px;">
+                <input id="f-mcap-min" type="number" placeholder="최소" style="flex:1;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);">
+                <input id="f-mcap-max" type="number" placeholder="최대" style="flex:1;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);">
+            </div>
+        </label>
+
+        <label>
+            <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">일평균 거래대금 하한 (KRX, 억원)</div>
+            <input id="f-liq-krw" type="number" placeholder="예: 10" style="width:100%;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);">
+        </label>
+
+        <label>
+            <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">일평균 거래대금 하한 (US, 천달러)</div>
+            <input id="f-liq-usd" type="number" placeholder="예: 500" style="width:100%;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);">
+        </label>
+
+        <label>
+            <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">1y 수익률 범위 (%)</div>
+            <div style="display:flex;gap:6px;">
+                <input id="f-r1y-min" type="number" placeholder="min" style="flex:1;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);">
+                <input id="f-r1y-max" type="number" placeholder="max" style="flex:1;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);">
+            </div>
+        </label>
+
+        <label>
+            <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">거래량 비율(20d/60d) 하한</div>
+            <input id="f-volr" type="number" step="0.1" placeholder="예: 1.2" style="width:100%;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);">
+        </label>
+
+        <label>
+            <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">60일 변동성 상한 (%)</div>
+            <input id="f-vol60" type="number" step="0.1" placeholder="예: 3.0" style="width:100%;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);">
+        </label>
+
+        <label>
+            <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">52주 고점 근접도 하한 (0~1)</div>
+            <input id="f-prox" type="number" step="0.01" min="0" max="1" placeholder="예: 0.85" style="width:100%;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);">
+        </label>
+
+        <label>
+            <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">정렬</div>
+            <select id="f-sort" style="width:100%;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);">
+                <option value="market_cap_desc">시총 ↓</option>
+                <option value="r1y_desc">1y 수익률 ↓</option>
+                <option value="volume_surge_desc">거래량 비율 ↓</option>
+                <option value="name_asc">이름 A→Z</option>
+            </select>
+        </label>
+    </div>
+    <div style="padding:10px 16px;border-top:1px solid var(--border);display:flex;gap:10px;align-items:center;">
+        <button class="btn btn-primary" onclick="runScreener()" style="padding:6px 18px;">실행</button>
+        <span id="status" style="color:var(--text-muted);font-size:12px;"></span>
+    </div>
+</div>
+
+<!-- 프리셋 로드 패널 -->
+<div class="card" id="loadPanel" style="margin-bottom:16px;display:none;">
+    <div class="card-header"><strong>내 프리셋 · 공개 프리셋</strong></div>
+    <div id="presetsBody" style="padding:10px 16px;">
+        <div class="tr-loading" style="color:var(--text-muted);font-size:13px;">불러오는 중…</div>
+    </div>
+</div>
+
+<!-- 결과 -->
+<div class="card">
+    <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;">
+        <strong>결과</strong>
+        <span id="resultSummary" style="color:var(--text-muted);font-size:12px;"></span>
+    </div>
+    <div id="resultsBody" style="padding:10px 0;overflow-x:auto;">
+        <div style="padding:20px;color:var(--text-muted);font-size:13px;">위에서 조건을 설정하고 "실행"을 누르세요.</div>
+    </div>
+</div>
+
+<script>
+function parseMultiselect(el) {
+    return Array.from(el.selectedOptions).map(function(o) { return o.value; });
+}
+function parseCommaList(s) {
+    return (s || '').split(',').map(function(x) { return x.trim().toLowerCase(); }).filter(Boolean);
+}
+function num(id) {
+    const el = document.getElementById(id);
+    if (!el || el.value === '') return null;
+    const v = parseFloat(el.value);
+    return isNaN(v) ? null : v;
+}
+
+function currentSpec() {
+    const spec = {};
+    const markets = parseMultiselect(document.getElementById('f-markets'));
+    if (markets.length) spec.markets = markets;
+    const sectors = parseCommaList(document.getElementById('f-sectors').value);
+    if (sectors.length) spec.sectors = sectors;
+    const mcMin = num('f-mcap-min');
+    const mcMax = num('f-mcap-max');
+    if (mcMin !== null || mcMax !== null) {
+        spec.market_cap_krw = {};
+        if (mcMin !== null) spec.market_cap_krw.min = mcMin * 1e8;   // 억 → 원
+        if (mcMax !== null) spec.market_cap_krw.max = mcMax * 1e8;
+    }
+    const liqKrw = num('f-liq-krw');
+    if (liqKrw !== null) spec.min_daily_value_krw = liqKrw * 1e8;   // 억 → 원
+    const liqUsd = num('f-liq-usd');
+    if (liqUsd !== null) spec.min_daily_value_usd = liqUsd * 1000;  // 천달러 → 달러
+    const r1yMin = num('f-r1y-min');
+    const r1yMax = num('f-r1y-max');
+    if (r1yMin !== null || r1yMax !== null) {
+        spec.return_1y_range = {};
+        if (r1yMin !== null) spec.return_1y_range.min = r1yMin;
+        if (r1yMax !== null) spec.return_1y_range.max = r1yMax;
+    }
+    const volr = num('f-volr');
+    if (volr !== null) spec.volume_ratio_min = volr;
+    const vol60 = num('f-vol60');
+    if (vol60 !== null) spec.max_vol60_pct = vol60;
+    const prox = num('f-prox');
+    if (prox !== null) spec.high_52w_proximity_min = prox;
+    spec.sort = document.getElementById('f-sort').value;
+    return spec;
+}
+
+function applySpec(spec) {
+    // 역방향: spec → DOM
+    const markets = spec.markets || [];
+    Array.from(document.getElementById('f-markets').options).forEach(function(o) {
+        o.selected = markets.indexOf(o.value) >= 0;
+    });
+    document.getElementById('f-sectors').value = (spec.sectors || []).join(', ');
+    const mc = spec.market_cap_krw || {};
+    document.getElementById('f-mcap-min').value = mc.min != null ? mc.min / 1e8 : '';
+    document.getElementById('f-mcap-max').value = mc.max != null ? mc.max / 1e8 : '';
+    document.getElementById('f-liq-krw').value = spec.min_daily_value_krw != null ? spec.min_daily_value_krw / 1e8 : '';
+    document.getElementById('f-liq-usd').value = spec.min_daily_value_usd != null ? spec.min_daily_value_usd / 1000 : '';
+    const r1y = spec.return_1y_range || {};
+    document.getElementById('f-r1y-min').value = r1y.min != null ? r1y.min : '';
+    document.getElementById('f-r1y-max').value = r1y.max != null ? r1y.max : '';
+    document.getElementById('f-volr').value = spec.volume_ratio_min != null ? spec.volume_ratio_min : '';
+    document.getElementById('f-vol60').value = spec.max_vol60_pct != null ? spec.max_vol60_pct : '';
+    document.getElementById('f-prox').value = spec.high_52w_proximity_min != null ? spec.high_52w_proximity_min : '';
+    if (spec.sort) document.getElementById('f-sort').value = spec.sort;
+}
+
+function runScreener() {
+    const spec = currentSpec();
+    document.getElementById('status').textContent = '실행 중...';
+    fetch('/api/screener/run', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
+        body: JSON.stringify(spec),
+    })
+        .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+        .then(function(data) {
+            renderResults(data);
+            document.getElementById('status').textContent = '완료 (' + data.count + '건, tier=' + data.tier + ')';
+        })
+        .catch(function(err) {
+            document.getElementById('status').textContent = '실패: ' + err.message;
+        });
+}
+
+function fmtPct(v) {
+    if (v == null) return '-';
+    return (v > 0 ? '+' : '') + v.toFixed(2) + '%';
+}
+function fmtMcap(v) {
+    if (v == null) return '-';
+    if (v >= 1e12) return (v / 1e12).toFixed(2) + '조';
+    if (v >= 1e8) return (v / 1e8).toFixed(0) + '억';
+    return v.toLocaleString();
+}
+
+function renderResults(data) {
+    const body = document.getElementById('resultsBody');
+    document.getElementById('resultSummary').textContent =
+        '총 ' + data.count + '건 (한도 ' + data.limit_applied + ')';
+    if (!data.rows || data.rows.length === 0) {
+        body.innerHTML = '<div style="padding:20px;color:var(--text-muted);font-size:13px;">조건을 만족하는 종목이 없습니다.</div>';
+        return;
+    }
+    let html = '<table style="width:100%;font-size:13px;border-collapse:collapse;">';
+    html += '<thead><tr style="color:var(--text-muted);border-bottom:1px solid var(--border);">';
+    html += '<th style="text-align:left;padding:6px 8px;">티커</th>';
+    html += '<th style="text-align:left;padding:6px 8px;">종목명</th>';
+    html += '<th style="text-align:left;padding:6px 8px;">섹터</th>';
+    html += '<th style="text-align:right;padding:6px 8px;">시총</th>';
+    html += '<th style="text-align:right;padding:6px 8px;">1y</th>';
+    html += '<th style="text-align:right;padding:6px 8px;">Vol60</th>';
+    html += '<th style="text-align:right;padding:6px 8px;">VolRatio</th>';
+    html += '</tr></thead><tbody>';
+    data.rows.forEach(function(r) {
+        html += '<tr style="border-bottom:1px solid var(--border-light, var(--border));">';
+        html += '<td style="padding:6px 8px;font-family:ui-monospace,monospace;"><a href="/pages/proposals/history/' + encodeURIComponent(r.ticker) + '" style="color:var(--accent);">' + r.ticker + '</a> <span style="color:var(--text-muted);font-size:11px;">' + (r.market || '') + '</span></td>';
+        html += '<td style="padding:6px 8px;">' + (r.asset_name || '-') + '</td>';
+        html += '<td style="padding:6px 8px;color:var(--text-muted);">' + (r.sector_norm || '-') + '</td>';
+        html += '<td style="padding:6px 8px;text-align:right;font-variant-numeric:tabular-nums;">' + fmtMcap(r.market_cap_krw) + '</td>';
+        html += '<td style="padding:6px 8px;text-align:right;font-variant-numeric:tabular-nums;" class="' + (r.r1y >= 0 ? 'positive' : 'negative') + '">' + fmtPct(r.r1y) + '</td>';
+        html += '<td style="padding:6px 8px;text-align:right;font-variant-numeric:tabular-nums;">' + (r.vol60_pct != null ? r.vol60_pct.toFixed(2) + '%' : '-') + '</td>';
+        html += '<td style="padding:6px 8px;text-align:right;font-variant-numeric:tabular-nums;">' + (r.volume_ratio != null ? '×' + r.volume_ratio.toFixed(2) : '-') + '</td>';
+        html += '</tr>';
+    });
+    html += '</tbody></table>';
+    body.innerHTML = html;
+}
+
+function savePreset() {
+    const name = prompt('프리셋 이름');
+    if (!name) return;
+    const isPublic = confirm('이 프리셋을 공개할까요? (확인=공개, 취소=비공개)');
+    const spec = currentSpec();
+    fetch('/api/screener/presets', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
+        body: JSON.stringify({name: name, spec: spec, is_public: isPublic}),
+    })
+        .then(function(r) {
+            if (r.status === 403) { r.json().then(function(d) { alert('저장 불가: ' + d.detail); }); return null; }
+            if (r.status === 409) { r.json().then(function(d) { alert(d.detail); }); return null; }
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.json();
+        })
+        .then(function(data) {
+            if (data) alert('프리셋 "' + name + '" 저장 완료');
+        })
+        .catch(function(err) { alert('실패: ' + err.message); });
+}
+
+function toggleLoadPanel() {
+    const panel = document.getElementById('loadPanel');
+    panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+    if (panel.style.display === 'block') loadPresets();
+}
+
+function loadPresets() {
+    const body = document.getElementById('presetsBody');
+    body.innerHTML = '<div class="tr-loading">불러오는 중…</div>';
+    fetch('/api/screener/presets')
+        .then(function(r) {
+            if (r.status === 401) { body.innerHTML = '<div style="color:var(--text-muted);">로그인이 필요합니다.</div>'; return null; }
+            if (!r.ok) throw new Error('HTTP ' + r.status); return r.json();
+        })
+        .then(function(data) {
+            if (!data) return;
+            if (!data.presets || data.presets.length === 0) {
+                body.innerHTML = '<div style="color:var(--text-muted);font-size:13px;">저장된 프리셋이 없습니다.</div>';
+                return;
+            }
+            let html = '<div style="display:flex;flex-direction:column;gap:6px;">';
+            data.presets.forEach(function(p) {
+                const pub = p.is_public ? ' <span style="color:var(--accent);font-size:10px;">PUBLIC</span>' : '';
+                const mine = p.owned ? '' : ' <span style="color:var(--text-muted);font-size:10px;">by ' + (p.owner_email || '?') + '</span>';
+                html += '<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:6px;">';
+                html += '<strong style="flex:1;">' + p.name + '</strong>' + pub + mine;
+                html += '<button class="btn" style="font-size:11px;padding:3px 10px;" onclick="loadPreset(' + p.id + ', ' + JSON.stringify(p.spec).replace(/"/g, '&quot;') + ')">불러오기</button>';
+                if (p.owned) {
+                    html += '<button class="btn" style="font-size:11px;padding:3px 10px;background:transparent;color:var(--danger);border-color:var(--danger);" onclick="deletePreset(' + p.id + ')">삭제</button>';
+                }
+                html += '</div>';
+            });
+            html += '</div>';
+            body.innerHTML = html;
+        })
+        .catch(function(err) { body.innerHTML = '<div>로드 실패: ' + err.message + '</div>'; });
+}
+
+function loadPreset(id, spec) {
+    applySpec(spec);
+    document.getElementById('status').textContent = '프리셋 로드 완료';
+    toggleLoadPanel();
+}
+
+function deletePreset(id) {
+    if (!confirm('이 프리셋을 삭제할까요?')) return;
+    fetch('/api/screener/presets/' + id, {method: 'DELETE', headers: {'X-Requested-With': 'XMLHttpRequest'}})
+        .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+        .then(function() { loadPresets(); })
+        .catch(function(err) { alert('삭제 실패: ' + err.message); });
+}
+</script>
+{% endblock %}

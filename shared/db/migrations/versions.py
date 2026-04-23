@@ -1264,3 +1264,78 @@ def _migrate_to_v31(cur) -> None:
         ON CONFLICT (version) DO NOTHING;
     """)
     print("[DB] v31 마이그레이션 완료 — analysis_sessions.market_regime + market_indices_ohlcv (B2)")
+
+
+def _migrate_to_v32(cur) -> None:
+    """v32: market_signals 테이블 — 일별 이상 시그널 탐지 결과 저장 (로드맵 Step 3-2).
+
+    `analyzer/signals.py`가 stock_universe_ohlcv 기반 단일 SQL 배치로 탐지:
+      - new_52w_high / new_52w_low: 당일 close가 최근 252일 최고/최저
+      - volume_surge: 당일 volume >= 20일 평균 × 3
+      - above_200ma_cross / below_200ma_cross: 200MA 상/하향 돌파
+      - gap_up / gap_down: 오늘 open vs 어제 close ±3% 갭
+
+    UI-3 "오늘의 이상 시그널" 카드와 UI-5 워치리스트 알림의 소스.
+    PK (signal_date, signal_type, ticker, market) — 멱등 UPSERT.
+    """
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS market_signals (
+            id            SERIAL PRIMARY KEY,
+            signal_date   DATE NOT NULL,
+            signal_type   TEXT NOT NULL,
+            ticker        TEXT NOT NULL,
+            market        TEXT NOT NULL,
+            metric        JSONB,
+            created_at    TIMESTAMPTZ DEFAULT NOW(),
+            UNIQUE (signal_date, signal_type, ticker, market)
+        );
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_market_signals_date
+            ON market_signals(signal_date DESC);
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_market_signals_ticker
+            ON market_signals(ticker, market);
+    """)
+
+    cur.execute("""
+        INSERT INTO schema_version (version) VALUES (32)
+        ON CONFLICT (version) DO NOTHING;
+    """)
+    print("[DB] v32 마이그레이션 완료 — market_signals 테이블 (로드맵 Step 3-2)")
+
+
+def _migrate_to_v33(cur) -> None:
+    """v33: screener_presets — 사용자 커스텀 스크리너 프리셋 저장 (로드맵 UI-6).
+
+    프리미엄 스크리너 페이지에서 유저가 필터 조합을 저장·재사용·공유할 수 있게 한다.
+    Pro/Premium 티어 기능 (Free는 read-only로 공개 프리셋만 이용).
+    """
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS screener_presets (
+            id          SERIAL PRIMARY KEY,
+            user_id     INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            name        VARCHAR(200) NOT NULL,
+            description TEXT,
+            spec        JSONB NOT NULL,
+            is_public   BOOLEAN DEFAULT FALSE,
+            created_at  TIMESTAMP DEFAULT NOW(),
+            updated_at  TIMESTAMP DEFAULT NOW(),
+            UNIQUE (user_id, name)
+        );
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_screener_presets_public
+            ON screener_presets(is_public, created_at DESC) WHERE is_public = TRUE;
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_screener_presets_user
+            ON screener_presets(user_id, updated_at DESC);
+    """)
+
+    cur.execute("""
+        INSERT INTO schema_version (version) VALUES (33)
+        ON CONFLICT (version) DO NOTHING;
+    """)
+    print("[DB] v33 마이그레이션 완료 — screener_presets (로드맵 UI-6)")

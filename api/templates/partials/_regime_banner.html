@@ -1,0 +1,61 @@
+{#
+  Regime Banner — 분석 세션의 market_regime JSONB 시각화 (로드맵 UI-3)
+  CONTEXT:
+    - regime (dict | None): analysis_sessions.market_regime
+        {"indices": {...}, "breadth_kr_pct": float, "computed_at": str}
+  사용처: dashboard.html 상단, session_detail.html 등 원하는 곳에서 include
+  주의: regime이 None/빈 dict면 아무것도 렌더하지 않음 (백필 이전 호환)
+#}
+{% if regime and regime.indices %}
+{% set kospi = regime.indices.get('KOSPI') %}
+{% set kosdaq = regime.indices.get('KOSDAQ') %}
+{% set sp500 = regime.indices.get('SP500') %}
+{% set ndx = regime.indices.get('NDX100') %}
+{% set breadth = regime.breadth_kr_pct %}
+<div class="regime-banner" style="display:flex;flex-wrap:wrap;gap:10px;padding:10px 14px;margin-bottom:12px;background:rgba(79,140,255,0.06);border:1px solid rgba(79,140,255,0.2);border-radius:8px;font-size:12px;align-items:center;">
+    <span style="display:inline-flex;align-items:center;gap:6px;color:var(--accent);font-weight:600;">
+        <i data-lucide="activity" style="width:14px;height:14px;" aria-hidden="true"></i>
+        시장 레짐
+    </span>
+
+    {% for label, data in [('KOSPI', kospi), ('KOSDAQ', kosdaq), ('S&P500', sp500), ('NDX100', ndx)] %}
+    {% if data %}
+    {% set above = data.above_200ma %}
+    {% set vol_rg = data.vol_regime %}
+    {% set dd = data.drawdown_from_52w_high_pct %}
+    {% set r1 = data.return_1m_pct %}
+    {% set trend_color = 'var(--green)' if above else 'var(--red)' %}
+    {% set vol_color = {'low': 'var(--green)', 'mid': '#eab308', 'high': 'var(--red)'}.get(vol_rg, 'var(--text-muted)') %}
+    <span class="regime-index"
+          style="display:inline-flex;align-items:center;gap:4px;padding:4px 8px;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:6px;"
+          title="200MA {{ '위' if above else '아래' }} · 변동성 {{ vol_rg }} · 52w고점 대비 {{ '%+.2f'|format(dd) if dd is not none else '-' }}% · 1M {{ '%+.2f'|format(r1) if r1 is not none else '-' }}%">
+        <strong>{{ label }}</strong>
+        <span style="color:{{ trend_color }};font-weight:600;">
+            {% if above %}▲{% else %}▼{% endif %}
+            {% if data.pct_from_ma200 is not none %}{{ '%+.1f'|format(data.pct_from_ma200) }}%{% endif %}
+        </span>
+        <span style="color:{{ vol_color }};font-size:11px;">
+            {{ {'low': '저변동', 'mid': '중변동', 'high': '고변동'}.get(vol_rg, '') }}
+        </span>
+    </span>
+    {% endif %}
+    {% endfor %}
+
+    {% if breadth is not none %}
+    {% set b_color = 'var(--green)' if breadth >= 60 else ('var(--red)' if breadth <= 40 else 'var(--text-muted)') %}
+    <span class="regime-breadth"
+          style="display:inline-flex;align-items:center;gap:4px;padding:4px 8px;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:6px;"
+          title="KRX universe 중 최근 20일 수익률 > 0 종목 비율">
+        <i data-lucide="bar-chart-3" style="width:12px;height:12px;" aria-hidden="true"></i>
+        KRX 시장폭
+        <strong style="color:{{ b_color }};">{{ '%.1f'|format(breadth) }}%</strong>
+    </span>
+    {% endif %}
+
+    {% if regime.computed_at %}
+    <span style="margin-left:auto;font-size:10px;color:var(--text-muted);">
+        {{ regime.computed_at[:16] }}
+    </span>
+    {% endif %}
+</div>
+{% endif %}

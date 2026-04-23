@@ -188,66 +188,67 @@
 
 대상: [`api/templates/ticker_history.html`](../api/templates/ticker_history.html) + [`_macros.html`](../api/templates/_macros.html)
 
-- [ ] 미니 200일 주가 스파크라인 (SVG 또는 Chart.js)
-- [ ] 추천 시점 마커 (confidence별 색상)
-- [ ] 52주 고/저 위치 게이지 (현재가가 range 어디에)
-- [ ] 팩터 배지 (`모멘텀 A | 변동성 C | 유동성 A+`) — B1 완료 후
-- [ ] 거래량 이상도 표시 (평균 대비 배수)
-- [ ] API 엔드포인트: `GET /api/stocks/{ticker}/ohlcv?days=200`
+- [x] API 엔드포인트: `GET /api/stocks/{ticker}/ohlcv?days=200` (52w 고저 동봉)
+- [x] Chart.js v4 전역 도입 (base.html)
+- [ ] 미니 200일 주가 스파크라인 — ticker_history 페이지 실제 렌더 (후속 세부 UI)
+- [ ] 추천 시점 마커 / 52주 게이지 시각화
+- [ ] 팩터 배지 (`모멘텀 A | 변동성 C | 유동성 A+`)
+- [ ] 거래량 이상도 표시
 
 ### UI-2. 테마 히스토리 강화 🟡 ⭐⭐⭐
 
 대상: [`api/templates/theme_history.html`](../api/templates/theme_history.html)
 
-- [ ] 테마 구성 종목 평균 수익률 추이 라인 차트 (3개월)
-- [ ] 테마 vs KOSPI 상대 성과 오버레이
-- [ ] 테마 활성도(구성 종목 중 20d 수익률 > 0 비율) 배지
+- [x] API: `GET /themes/by-key/{theme_key}/performance` — 구성 종목 평균 r1m/r3m/r6m + 벤치마크 상대성과
+- [x] 테마 성과 카드 추가 (기간별 테마 평균 · 벤치마크 · 스프레드 α)
+- [ ] 라인 차트 시각화 (Chart.js) — 후속
+- [ ] 테마 활성도 배지
 
 ### UI-3. 대시보드 위젯 신설 🟢 ⭐⭐⭐⭐
 
 대상: [`api/templates/dashboard.html`](../api/templates/dashboard.html), `base.html`
 
-- [ ] **레짐 배지** (상단) — B2 연동. `"시장: 중립·저변동"` 1줄 요약
-- [ ] **오늘의 이상 시그널** 카드 — 52주 신고가 돌파 / 거래량 폭증 / Gap up 리스트
-- [ ] **섹터 모멘텀 히트맵** — 섹터 × 기간(20d/60d/1y) 색상 매트릭스
+- [x] **레짐 배너** — `analysis_sessions.market_regime` JSONB를 배지로 렌더 (`partials/_regime_banner.html`)
+- [x] **오늘의 이상 시그널** 카드 — `/api/signals/today` 기반 타입별 그룹핑
+- [x] **섹터 모멘텀 히트맵** — `/api/sectors/momentum` 기반 CSS grid 매트릭스 (ALL/KRX/US 토글)
 
 ### UI-4. 트랙 레코드 확장 🟡 ⭐⭐⭐⭐
 
 대상: [`api/routes/track_record.py`](../api/routes/track_record.py), `api/templates/track_record.html`
 
-- [ ] 벤치마크 대비 alpha (KOSPI 기준)
-- [ ] 승률 + 평균 보유기간 수익률 + Max DD
-- [ ] Sharpe 근사치
-- [ ] 시간대별 누적 성과 curve
+- [x] 벤치마크 대비 alpha (KOSPI/SP500) — B2b 자동 채움, overview + top_picks 노출
+- [x] Max Drawdown 집계 섹션 + top_picks 행 배지
+- [ ] Sharpe 근사치 (후속)
+- [ ] 시간대별 누적 성과 curve (후속)
 
 ### UI-5. 워치리스트 알림 강화 🟡 ⭐⭐⭐
 
 대상: [`api/routes/watchlist.py`](../api/routes/watchlist.py), `shared/db/` 알림 생성 로직
 
-- [ ] 200일 이평 돌파·이탈 알림
-- [ ] 변동성 급등 경보 (vol20 > vol60 × 2)
-- [ ] 섹터 상대강도 급변 알림
-- [ ] `user_subscriptions`에 `sub_type='signal'` 신설
+- [x] `analyzer/signals.py`의 `generate_watchlist_notifications()` — 워치리스트 ticker × market_signals JOIN → user_notifications INSERT
+- [x] analyzer/main.py 파이프라인에서 자동 호출, 당일 동일 title 중복 방지
+- [x] signal 종류: 52w 신고가/신저가 · 거래량 폭증 · 200MA 교차 · 갭 상승/하락
+- [ ] 섹터 상대강도 급변 알림 (후속)
 
 ### UI-6. 프리미엄 스크리너 (신규 페이지) 🔴 ⭐⭐⭐⭐⭐
 
-대상: 신규 `api/routes/screener.py`, `api/templates/screener.html`
+대상: 신규 [`api/routes/screener.py`](../api/routes/screener.py), [`api/templates/screener.html`](../api/templates/screener.html)
 
-- [ ] 티어 차등 필터 세트
-  - [ ] Free: 섹터/시총/가격
-  - [ ] Pro: 이력 필터 (1y 수익률, 거래대금, 변동성)
-  - [ ] Premium: 팩터 조합 (B1 연동), 저장·알림
-- [ ] `shared/tier_limits.py` 확장
-- [ ] 프리셋 저장/공유 기능
+- [x] v33 `screener_presets` 테이블
+- [x] `shared/tier_limits.py` 확장 (`SCREENER_PRESETS_MAX`, `SCREENER_RESULT_ROW_LIMIT`)
+- [x] 동적 SQL 빌더 `POST /api/screener/run`
+  * 시장 · 섹터 · 시총 · 유동성(KRX/US) · 1y 수익률 · 거래량 비율 · 변동성 · 52w 근접도 · 정렬
+- [x] 프리셋 CRUD `GET/POST/PUT/DELETE /api/screener/presets`
+- [x] `/pages/screener` HTML — 필터 폼 · 결과 테이블 · 프리셋 저장/불러오기/삭제
+- [ ] 티어별 필터 세트 차등 노출 (현재는 단일 세트, 클라이언트에서 가려야 함 — 후속)
 
 ### UI-7. AI 투명성 섹션 🟢 ⭐⭐⭐⭐⭐
 
-대상: Stage 2 분석 상세 페이지 (`api/templates/session_detail.html` 또는 proposals 카드)
+대상: Stage 2 분석 상세 페이지 (`api/templates/session_detail.html`)
 
-- [ ] **"AI가 본 실측 데이터" 섹션** 추가
-  - B1 완료 후 `factor_snapshot` JSONB를 표로 표시
-  - 예: "6개월 모멘텀 z = +1.42 / 거래량 z = +0.8 / 200일 이평 위"
-- [ ] 데이터 출처 명시 (`data_source`, `trade_date` 표기)
+- [x] **"AI가 본 실측 데이터" 섹션** — `_macros/proposal.html`의 `factor_snapshot_panel` 매크로
+- [x] r1m/r3m/r6m/r12m_pct · vol60 · volume_ratio + cross-section 백분위 표
+- [x] `session_detail.html` 상세 row 내부에서 호출
 
 **마케팅 효과**: 경쟁사 "AI가 알아서 판단" vs "우리는 AI가 **검증된 실측 데이터**로 판단". 차별화 포인트.
 
@@ -289,12 +290,15 @@ Month 6+:
 | A2 | 없음 |
 | A3 | ✅ v29 적용 — `investment_proposals.max_drawdown_pct / max_drawdown_date / alpha_vs_benchmark_pct` |
 | B1 | ✅ v30 적용 — `investment_proposals.factor_snapshot JSONB` |
-| B2 | ✅ v31 적용 — `analysis_sessions.market_regime JSONB` + `market_indices_ohlcv` 테이블 (alpha 채움은 B2b 후속) |
+| B2 | ✅ v31 적용 — `analysis_sessions.market_regime JSONB` + `market_indices_ohlcv` 테이블 |
+| B2b | ✅ alpha 채움 구현 완료 — `price_tracker._compute_alpha_vs_benchmark` |
+| Step 3-2 | ✅ v32 `market_signals` 테이블 — `analyzer/signals.py` 탐지 배치 |
+| UI-6 | ✅ v33 `screener_presets` 테이블 — `api/routes/screener.py` |
 | B3 | 없음 — 프롬프트·UI만 변경 |
 | C1 | v30~: factor_weights_history 테이블 |
 | C2 | v30~: backtest_runs 테이블 |
 
-**v29(A3)·v30(B1)·v31(B2) 모두 적용 완료.**
+**v29(A3)·v30(B1)·v31(B2)·v32(시그널)·v33(스크리너 프리셋) 모두 적용 완료.**
 
 ---
 

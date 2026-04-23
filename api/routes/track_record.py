@@ -53,6 +53,16 @@ def get_track_record_summary(conn = Depends(get_db_conn)):
                 COUNT(*) FILTER (WHERE post_return_1y_pct > 0)         AS win_1y,
                 ROUND(AVG(post_return_1y_pct) FILTER (WHERE post_return_1y_pct IS NOT NULL)::numeric, 2) AS avg_1y,
 
+                -- v29: Max Drawdown 집계
+                COUNT(*) FILTER (WHERE max_drawdown_pct IS NOT NULL)   AS n_mdd,
+                ROUND(AVG(max_drawdown_pct) FILTER (WHERE max_drawdown_pct IS NOT NULL)::numeric, 2) AS avg_mdd,
+                ROUND(MIN(max_drawdown_pct) FILTER (WHERE max_drawdown_pct IS NOT NULL)::numeric, 2) AS worst_mdd,
+
+                -- B2b: alpha_vs_benchmark_pct 집계 (벤치마크 대비 초과수익)
+                COUNT(*) FILTER (WHERE alpha_vs_benchmark_pct IS NOT NULL)  AS n_alpha,
+                COUNT(*) FILTER (WHERE alpha_vs_benchmark_pct > 0)          AS win_alpha,
+                ROUND(AVG(alpha_vs_benchmark_pct) FILTER (WHERE alpha_vs_benchmark_pct IS NOT NULL)::numeric, 2) AS avg_alpha,
+
                 COUNT(*) AS total_proposals,
                 COUNT(*) FILTER (WHERE entry_price IS NOT NULL) AS total_tracked
             FROM investment_proposals
@@ -74,6 +84,23 @@ def get_track_record_summary(conn = Depends(get_db_conn)):
 
         # 측정 대기 중 건수 (entry_price 있지만 아직 post_return_1m 없는 건)
         pending_count = int(overview.get("total_tracked") or 0) - int(overview.get("n_1m") or 0)
+
+        # v29 Max Drawdown 요약
+        drawdown = {
+            "n": int(overview.get("n_mdd") or 0),
+            "avg_pct": _float(overview.get("avg_mdd")),
+            "worst_pct": _float(overview.get("worst_mdd")),
+        }
+
+        # B2b alpha (벤치마크 대비 초과수익) 요약
+        n_alpha = int(overview.get("n_alpha") or 0)
+        win_alpha = int(overview.get("win_alpha") or 0)
+        alpha = {
+            "n": n_alpha,
+            "wins": win_alpha,
+            "win_rate_pct": _win_rate(win_alpha, n_alpha),
+            "avg_pct": _float(overview.get("avg_alpha")),
+        }
 
         # ── 2) 과거 모멘텀 (참고 지표) ──
         cur.execute("""
@@ -146,6 +173,9 @@ def get_track_record_summary(conn = Depends(get_db_conn)):
                 p.upside_pct,
                 p.post_return_1m_pct,
                 p.post_return_3m_pct,
+                p.max_drawdown_pct,
+                p.max_drawdown_date,
+                p.alpha_vs_benchmark_pct,
                 p.return_1m_pct AS momentum_1m_pct,
                 t.theme_name,
                 -- 최신 스냅샷 가격 (추적 중인 경우)
@@ -168,6 +198,7 @@ def get_track_record_summary(conn = Depends(get_db_conn)):
             if entry and latest and entry > 0:
                 live_return = round((latest - entry) / entry * 100, 2)
 
+            mdd_date = r.get("max_drawdown_date")
             top_picks.append({
                 "analysis_date": r["analysis_date"].isoformat() if r.get("analysis_date") else None,
                 "rank": r.get("rank"),
@@ -183,6 +214,9 @@ def get_track_record_summary(conn = Depends(get_db_conn)):
                 "upside_pct": _float(r.get("upside_pct")),
                 "post_return_1m_pct": _float(r.get("post_return_1m_pct")),
                 "post_return_3m_pct": _float(r.get("post_return_3m_pct")),
+                "max_drawdown_pct": _float(r.get("max_drawdown_pct")),
+                "max_drawdown_date": mdd_date.isoformat() if mdd_date else None,
+                "alpha_vs_benchmark_pct": _float(r.get("alpha_vs_benchmark_pct")),
                 "live_return_pct": live_return,
                 "momentum_1m_pct": _float(r.get("momentum_1m_pct")),
                 "rationale_text": r.get("rationale_text"),
@@ -210,6 +244,8 @@ def get_track_record_summary(conn = Depends(get_db_conn)):
             "total_tracked": int(overview.get("total_tracked") or 0),
             "pending_count": max(0, pending_count),
             "periods": periods,
+            "drawdown": drawdown,
+            "alpha": alpha,
         },
         "momentum_reference": momentum,
         "by_discovery_type": by_type,

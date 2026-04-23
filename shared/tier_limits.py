@@ -57,6 +57,21 @@ THEME_VIEW_LIMITS: Dict[str, Optional[int]] = {
     TIER_PREMIUM: None,
 }
 
+# ── 프리미엄 스크리너 (로드맵 UI-6) ────────────────────
+# 스크리너 실행은 모든 티어 허용. 프리셋 저장·공유는 Pro 이상.
+SCREENER_PRESETS_MAX: Dict[str, Optional[int]] = {
+    TIER_FREE: 0,     # Free: 저장 불가 (공개 프리셋 read-only 이용만)
+    TIER_PRO: 10,
+    TIER_PREMIUM: None,
+}
+
+SCREENER_RESULT_ROW_LIMIT: Dict[str, Optional[int]] = {
+    # 일회 실행 시 최대 반환 행 수
+    TIER_FREE: 50,
+    TIER_PRO: 200,
+    TIER_PREMIUM: 500,
+}
+
 
 @dataclass(frozen=True)
 class TierInfo:
