@@ -91,17 +91,20 @@
 
 ### B1. 정량 팩터 사전 계산 → 프롬프트 주입 🟡 ⭐⭐⭐⭐⭐
 
-- [ ] **상태**: ⬜
-- [ ] 팩터 산출 모듈 `analyzer/factor_engine.py` 신설
-  - [ ] 모멘텀 z-score (3m/6m/12m 결합)
-  - [ ] 저변동 z-score (vol60 역순위)
-  - [ ] 단기 반전 시그널 (1m 수익률)
-  - [ ] 거래량 이상 z-score (최근 20d 거래량 / 60d 평균)
-  - [ ] 산출은 **cross-sectional z-score** (동일 섹터 내 순위 기반)
-- [ ] `analyzer/prompts.py` STAGE2 템플릿에 `{quant_factors}` 블록 추가
-  - [ ] LLM은 수치 추정 금지 → 실측 팩터를 해석·스토리화
-- [ ] `investment_proposals`에 `factor_snapshot JSONB` 컬럼 추가 (v29 마이그레이션 한 번에 처리)
-- [ ] `proposal_validation_log`의 mismatch 필드 확장 — 팩터 cross-check
+- [x] **상태**: ✅ (본 세션에서 구현 완료)
+- [x] 팩터 산출 모듈 `analyzer/factor_engine.py` 신설
+  - [x] 기간별 수익률 r1m / r3m / r6m / r12m
+  - [x] 60일 변동성 `vol60_pct` (extreme change_pct ±50% clamp 후 STDDEV)
+  - [x] 거래량 추세 `volume_ratio` = 20일 평균 / 60일 평균
+  - [x] 산출은 **cross-section PERCENT_RANK** — 시장 그룹(KRX/US) 분리 집계
+  - [ ] 섹터별 정규화는 표본 확보 후 후속 (B1 v2)
+- [x] `analyzer/prompts.py` STAGE2 템플릿에 `{quant_factors_section}` 블록 추가
+  - [x] "수치는 DB 산출 실측값, 그대로 인용하라" 명시
+- [x] `investment_proposals.factor_snapshot JSONB` 컬럼 v30 마이그레이션
+- [x] `session_repo.py` INSERT에 factor_snapshot 컬럼 추가 (37번째)
+- [x] `analyzer.py` Stage 2 진입부에서 `compute_factor_snapshots()` 호출 + `_analyze_one` 내 텍스트 포맷·주입·proposal 저장
+- [ ] `proposal_validation_log`의 mismatch 필드 확장 — 팩터 cross-check (후속)
+- [ ] UI-7 "AI가 본 실측 데이터" 섹션에 factor_snapshot 시각화 (UI 작업 시)
 
 **기대 효과**
 - AI 수치 환각 제거. 숫자는 DB 산출, 해석만 AI.
@@ -279,13 +282,13 @@ Month 6+:
 | A1 | 없음 — 기존 테이블만 사용 |
 | A2 | 없음 |
 | A3 | ✅ v29 적용 — `investment_proposals.max_drawdown_pct / max_drawdown_date / alpha_vs_benchmark_pct` |
-| B1 | v30 예정: `investment_proposals.factor_snapshot JSONB` |
-| B2 | v30 예정: `analysis_sessions.market_regime JSONB` (A3에서 이미 추가된 `alpha_vs_benchmark_pct` 채움) |
+| B1 | ✅ v30 적용 — `investment_proposals.factor_snapshot JSONB` |
+| B2 | v31 예정: `analysis_sessions.market_regime JSONB` (A3에서 이미 추가된 `alpha_vs_benchmark_pct` 채움) |
 | B3 | 없음 — 프롬프트·UI만 변경 |
 | C1 | v30~: factor_weights_history 테이블 |
 | C2 | v30~: backtest_runs 테이블 |
 
-**v29는 A3에서 적용 완료.** B1·B2 컬럼은 v30에서 묶어서 추가 예정.
+**v29(A3)·v30(B1) 적용 완료.** B2는 v31에서 `analysis_sessions.market_regime JSONB` 추가 예정.
 
 ---
 
