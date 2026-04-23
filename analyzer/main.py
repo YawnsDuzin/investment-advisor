@@ -181,6 +181,15 @@ def _run_analysis(cfg: AppConfig, today: str, run_id: int | None, log,
     except Exception as e:
         log.warning(f"[Stage 4] 가격추적 중 오류 (분석 결과에는 영향 없음): {e}")
 
+    # 8) 이상 시그널 탐지 (로드맵 Step 3-2 — market_signals UPSERT)
+    try:
+        from analyzer.signals import detect_signals
+        sig_counts = detect_signals(cfg.db)
+        if sig_counts:
+            log.info(f"[시그널] 이상 시그널 {sum(sig_counts.values())}건 탐지 — {sig_counts}")
+    except Exception as e:
+        log.warning(f"[시그널] 탐지 중 오류 (분석 결과에는 영향 없음): {e}")
+
     # 8) 결과 요약 출력
     _print_summary(result, session_id)
 

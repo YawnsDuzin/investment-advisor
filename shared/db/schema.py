@@ -9,7 +9,7 @@ from shared.db.migrations import run_migrations
 
 
 # ── 스키마 버전 관리 ──────────────────────────────
-SCHEMA_VERSION = 31  # v31: analysis_sessions.market_regime JSONB + market_indices_ohlcv 테이블 (로드맵 B2)
+SCHEMA_VERSION = 32  # v32: market_signals 테이블 — 일별 이상 시그널 탐지 (로드맵 Step 3-2)
 
 
 def _create_base_schema(cur) -> None:

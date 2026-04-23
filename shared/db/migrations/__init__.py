@@ -42,6 +42,7 @@ _MIGRATIONS = {
     29: _v._migrate_to_v29,
     30: _v._migrate_to_v30,
     31: _v._migrate_to_v31,
+    32: _v._migrate_to_v32,
 }
 
 
