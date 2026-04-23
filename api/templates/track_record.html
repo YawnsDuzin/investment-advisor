@@ -124,6 +124,12 @@
     <div class="tr-loading">불러오는 중…</div>
 </div>
 
+<!-- 벤치마크 대비 초과수익 (로드맵 B2b/UI-4) -->
+<div class="section-title">벤치마크 대비 초과수익 (Alpha)</div>
+<div class="card" id="tr-alpha-card">
+    <div class="tr-loading">불러오는 중…</div>
+</div>
+
 <!-- 분류별 성과 -->
 <div class="section-title">분류별 성과 (Discovery Type)</div>
 <div class="card">
@@ -206,6 +212,34 @@
             '</div>';
     }
 
+    function renderAlpha(alpha) {
+        const card = document.getElementById("tr-alpha-card");
+        if (!alpha || !alpha.n) {
+            card.innerHTML = '<div class="empty-state"><p>아직 벤치마크 대비 초과수익 데이터가 없습니다 (기간 미도달 or 인덱스 OHLCV 결측).</p></div>';
+            return;
+        }
+        const avgCls = alpha.avg_pct == null ? "" : (alpha.avg_pct >= 0 ? "positive" : "negative");
+        const winCls = alpha.win_rate_pct == null ? "" : (alpha.win_rate_pct >= 50 ? "positive" : "negative");
+        card.innerHTML =
+            '<div class="tr-period-grid" style="grid-template-columns:repeat(3, 1fr);">' +
+                '<div class="tr-period-card">' +
+                    '<div class="tr-period-label">표본 수</div>' +
+                    '<div class="tr-period-winrate">' + alpha.n.toLocaleString() + '</div>' +
+                    '<div class="tr-period-n">alpha 측정 제안</div>' +
+                '</div>' +
+                '<div class="tr-period-card">' +
+                    '<div class="tr-period-label">아웃퍼폼 비율</div>' +
+                    '<div class="tr-period-winrate ' + winCls + '">' + (alpha.win_rate_pct != null ? alpha.win_rate_pct.toFixed(1) + '%' : '-') + '</div>' +
+                    '<div class="tr-period-winrate-sub">' + (alpha.wins || 0) + ' / ' + (alpha.n || 0) + '</div>' +
+                '</div>' +
+                '<div class="tr-period-card">' +
+                    '<div class="tr-period-label">평균 alpha</div>' +
+                    '<div class="tr-period-avg ' + avgCls + '">' + fmtPct(alpha.avg_pct) + '</div>' +
+                    '<div class="tr-period-n">벤치마크(KOSPI/S&P500) 대비 초과</div>' +
+                '</div>' +
+            '</div>';
+    }
+
     function renderByType(rows) {
         const wrap = document.getElementById("tr-by-type-wrap");
         if (!rows || rows.length === 0) {
@@ -260,12 +294,20 @@
                     '" style="font-size:11px;color:var(--text-muted);margin-top:2px;">' +
                     'Max DD ' + fmtPct(p.max_drawdown_pct) + '</div>';
             }
+            // B2b: alpha 배지
+            let alphaBadge = "";
+            if (p.alpha_vs_benchmark_pct != null) {
+                const aCls = p.alpha_vs_benchmark_pct >= 0 ? "positive" : "negative";
+                alphaBadge = '<div class="tr-pick-alpha ' + aCls +
+                    '" title="벤치마크(KOSPI/S&P500) 대비 초과수익" style="font-size:11px;margin-top:2px;">' +
+                    'α ' + fmtPct(p.alpha_vs_benchmark_pct) + '</div>';
+            }
             row.innerHTML =
                 '<div class="tr-pick-rank">#' + (p.rank || '-') + '<br><span class="tr-pick-name-sub">' + (p.analysis_date || '') + '</span></div>' +
                 '<div><div class="tr-pick-name">' + (p.asset_name || p.ticker) + ' <span class="tr-pick-name-sub">(' + p.ticker + ')</span></div>' +
                 '<div class="tr-pick-name-sub">' + (p.theme_name || '-') + '</div></div>' +
                 '<div class="tr-pick-type tr-pick-type-' + typeKey + '">' + (typeLabels[typeKey] || typeKey) + '</div>' +
-                '<div class="tr-pick-return ' + retCls + '">' + fmtPct(p.return_1m_pct) + mddBadge + '</div>';
+                '<div class="tr-pick-return ' + retCls + '">' + fmtPct(p.return_1m_pct) + mddBadge + alphaBadge + '</div>';
             list.appendChild(row);
         });
         wrap.innerHTML = "";
@@ -290,6 +332,7 @@
         .then(function(data) {
             renderPeriods((data.overview && data.overview.periods) || {});
             renderDrawdown((data.overview && data.overview.drawdown) || {});
+            renderAlpha((data.overview && data.overview.alpha) || {});
             renderByType(data.by_discovery_type || []);
             renderPicks(data.recent_top_picks || []);
             renderMeta(data);

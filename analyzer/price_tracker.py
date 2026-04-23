@@ -26,6 +26,20 @@ _RETURN_PERIODS = [
     ("post_return_1y_pct", 365, 14),
 ]
 
+# 시장 → 벤치마크 인덱스 코드 매핑 (로드맵 B2b)
+_BENCHMARK_MAP = {
+    "KOSPI": "KOSPI",
+    "KOSDAQ": "KOSPI",    # KOSDAQ 종목도 KOSPI 지수 대비 alpha로 통일 (main 벤치마크)
+    "KONEX": "KOSPI",
+    "NASDAQ": "SP500",
+    "NYSE": "SP500",
+    "AMEX": "SP500",
+}
+
+
+def _benchmark_code(market: str) -> str | None:
+    return _BENCHMARK_MAP.get((market or "").strip().upper())
+
 
 def _fetch_ohlcv_range(
     db_cfg: DatabaseConfig,
@@ -100,6 +114,95 @@ def _fetch_ohlcv_range(
             history_map[k] = unique
 
     return history_map
+
+
+def _fetch_benchmark_ranges(
+    db_cfg: DatabaseConfig,
+    codes: "list[str]",
+    from_date: date,
+    to_date: date,
+) -> "dict[str, list[tuple[date, float]]]":
+    """market_indices_ohlcv에서 여러 인덱스의 [from_date, to_date] 범위 (date, close) 이력 일괄 조회.
+
+    로드맵 B2b — alpha_vs_benchmark_pct 계산의 기준 벤치마크 시계열.
+
+    Returns:
+        {index_code: [(trade_date, close_float), ...] 오래된 순}
+        결측 인덱스는 빈 리스트.
+    """
+    if not codes:
+        return {}
+    uniq = list({c.strip().upper() for c in codes if c})
+    if not uniq:
+        return {}
+
+    sql = """
+        SELECT index_code, trade_date, close::float
+        FROM market_indices_ohlcv
+        WHERE index_code = ANY(%s)
+          AND trade_date BETWEEN %s AND %s
+        ORDER BY index_code, trade_date
+    """
+    conn = get_connection(db_cfg)
+    try:
+        with conn.cursor() as cur:
+            cur.execute(sql, (uniq, from_date, to_date))
+            rows = cur.fetchall()
+    except Exception as e:
+        get_logger("가격추적").warning(f"벤치마크 인덱스 조회 실패: {e}")
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        return {c: [] for c in uniq}
+    finally:
+        conn.close()
+
+    out: dict[str, list[tuple[date, float]]] = {c: [] for c in uniq}
+    for code, trade_date, close in rows:
+        out.setdefault(code.upper(), []).append((trade_date, float(close)))
+    return out
+
+
+def _compute_alpha_vs_benchmark(
+    stock_returns: dict,
+    bench_history: "list[tuple[date, float]]",
+    analysis_date: date,
+    tolerance_entry: int = 5,
+) -> float | None:
+    """추천 종목의 post_return과 같은 기간 벤치마크 수익률 차이(알파) 반환.
+
+    우선순위: 가장 긴 측정 기간(1y → 6m → 3m → 1m) 중 **벤치마크도 측정 가능한** 기간.
+    추천일 기준 벤치마크 entry close와 target_date 벤치마크 close로 벤치마크 기간 수익률 계산.
+
+    Returns:
+        stock_return_pct - benchmark_return_pct (둘 다 %). None이면 계산 불가.
+    """
+    if not bench_history:
+        return None
+
+    # 추천일 ± tolerance 범위의 벤치마크 entry close
+    bench_entry = _price_on_or_near(bench_history, analysis_date, tolerance_entry)
+    if not bench_entry:
+        return None
+    _, bench_entry_close = bench_entry
+    if bench_entry_close <= 0:
+        return None
+
+    # 긴 기간부터 우선 시도
+    for col, target_days, tolerance in reversed(_RETURN_PERIODS):
+        stock_ret = stock_returns.get(col)
+        if stock_ret is None:
+            continue
+        target_date = analysis_date + timedelta(days=target_days)
+        pick = _price_on_or_near(bench_history, target_date, tolerance)
+        if not pick:
+            continue
+        _, bench_close = pick
+        bench_ret = (bench_close - bench_entry_close) / bench_entry_close * 100
+        return round(float(stock_ret) - float(bench_ret), 2)
+
+    return None
 
 
 def _price_on_or_near(
@@ -315,6 +418,20 @@ def run_price_tracking(db_cfg: DatabaseConfig) -> dict:
         f"/{len(unique_tickers)}건"
     )
 
+    # 3-b) 벤치마크 인덱스 이력 (로드맵 B2b — alpha_vs_benchmark_pct 채움용)
+    bench_codes_needed = set()
+    for (_tk, mk) in unique_tickers:
+        code = _benchmark_code(mk)
+        if code:
+            bench_codes_needed.add(code)
+    benchmark_map: dict[str, list[tuple[date, float]]] = {}
+    if bench_codes_needed:
+        benchmark_map = _fetch_benchmark_ranges(
+            db_cfg, list(bench_codes_needed), from_date, today
+        )
+        covered_counts = {k: len(v) for k, v in benchmark_map.items()}
+        log.info(f"[가격추적] 벤치마크 이력 {covered_counts}")
+
     # 4) OHLCV 결측 종목 live 폴백 (오늘 가격만, snapshots UPSERT 용도)
     missing_tickers = [
         (tk, mk) for (tk, mk) in unique_tickers
@@ -342,6 +459,7 @@ def run_price_tracking(db_cfg: DatabaseConfig) -> dict:
     returns_updated = 0
     ohlcv_source_count = 0
     live_fallback_count = 0
+    alpha_computed = 0
 
     conn = get_connection(db_cfg)
     try:
@@ -356,11 +474,18 @@ def run_price_tracking(db_cfg: DatabaseConfig) -> dict:
 
                 history = history_map.get((tk, mk)) or history_map.get((tk, ""))
                 metrics: dict
+                alpha: float | None = None
                 if history:
                     metrics = _compute_returns_from_ohlcv(
                         history, entry_price, analysis_date, today
                     )
                     ohlcv_source_count += 1
+                    # B2b: 벤치마크 대비 alpha (post_return_* 구해진 최장 기간 기준)
+                    bench_code = _benchmark_code(mk)
+                    if bench_code and benchmark_map.get(bench_code):
+                        alpha = _compute_alpha_vs_benchmark(
+                            metrics, benchmark_map[bench_code], analysis_date,
+                        )
                 else:
                     # legacy: snapshots 기반
                     live = live_prices.get((tk, mk))
@@ -392,6 +517,10 @@ def run_price_tracking(db_cfg: DatabaseConfig) -> dict:
                 if metrics.get("max_drawdown_date") is not None:
                     set_parts.append("max_drawdown_date = %s")
                     params.append(metrics["max_drawdown_date"])
+                if alpha is not None:
+                    set_parts.append("alpha_vs_benchmark_pct = %s")
+                    params.append(alpha)
+                    alpha_computed += 1
                 if set_parts:
                     params.append(t["id"])
                     cur.execute(
@@ -410,7 +539,7 @@ def run_price_tracking(db_cfg: DatabaseConfig) -> dict:
     log.info(
         f"[가격추적] 수익률 {returns_updated}건 갱신 "
         f"(출처: ohlcv={ohlcv_source_count} live_fallback={live_fallback_count}) "
-        f"+ 결측 스냅샷 {snapshots_saved}건"
+        f"+ 결측 스냅샷 {snapshots_saved}건 + alpha {alpha_computed}건"
     )
     return {
         "tracked": len(targets),
@@ -418,4 +547,5 @@ def run_price_tracking(db_cfg: DatabaseConfig) -> dict:
         "returns_updated": returns_updated,
         "ohlcv_source_count": ohlcv_source_count,
         "live_fallback_count": live_fallback_count,
+        "alpha_computed": alpha_computed,
     }
