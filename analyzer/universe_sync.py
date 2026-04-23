@@ -25,6 +25,7 @@ import argparse
 import json
 import re
 import sys
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -624,7 +625,7 @@ def sync_prices_us(db_cfg: DatabaseConfig, *, index_filter: str | None = None,
     if with_ohlcv:
         # 동일 df에서 OHLCV 추출 — 5일치 반환되지만 trade_date PK로 중복 UPSERT 안전
         ticker_to_market = {tk: existing[tk][0] for tk in all_tickers}
-        ohlcv_rows = _us_ohlcv_rows_from_df(df, ticker_to_market)
+        ohlcv_rows, _ = _us_ohlcv_rows_from_df(df, ticker_to_market)
         ohlcv_upserted = _upsert_ohlcv_rows(db_cfg, ohlcv_rows)
 
     duration = (datetime.now(KST) - started).total_seconds()
@@ -827,15 +828,19 @@ def _fetch_us_ohlcv_df(tickers: list[str], period: str):
     return df
 
 
-def _us_ohlcv_rows_from_df(df, ticker_to_market: dict[str, str]) -> list[tuple]:
-    """yfinance batch DataFrame → OHLCV 행 리스트.
+def _us_ohlcv_rows_from_df(df, ticker_to_market: dict[str, str]) -> tuple[list[tuple], set[str]]:
+    """yfinance batch DataFrame → (OHLCV 행 리스트, 행 1개 이상 생성된 티커 집합).
 
     - `group_by='ticker'`인 경우 2-level column: df[ticker][OHLCV...]
     - 단일 ticker만 넘긴 경우 DataFrame의 columns가 1-level일 수 있음 → 우회 처리.
+
+    성공 티커 집합은 호출자가 batch 실패 티커(= 요청했으나 행 0건)를 집합연산으로
+    식별하여 개별 재시도에 사용한다.
     """
-    if df is None:
-        return []
     rows: list[tuple] = []
+    success: set[str] = set()
+    if df is None:
+        return rows, success
 
     def _as_float(x) -> float | None:
         try:
@@ -863,6 +868,7 @@ def _us_ohlcv_rows_from_df(df, ticker_to_market: dict[str, str]) -> list[tuple]:
             close_series = sub_df["Close"]
         except (KeyError, IndexError):
             return
+        emitted = 0
         for dt, close_v in close_series.items():
             close = _as_float(close_v)
             if close is None or close <= 0:
@@ -880,6 +886,9 @@ def _us_ohlcv_rows_from_df(df, ticker_to_market: dict[str, str]) -> list[tuple]:
                 o, h, lo, close, v,
                 "yfinance", False,
             ))
+            emitted += 1
+        if emitted > 0:
+            success.add(ticker)
 
     # 2-level columns (batch)
     if hasattr(df.columns, "levels") and len(df.columns.levels) >= 2:
@@ -895,17 +904,24 @@ def _us_ohlcv_rows_from_df(df, ticker_to_market: dict[str, str]) -> list[tuple]:
         if len(ticker_to_market) == 1:
             only_ticker = next(iter(ticker_to_market.keys()))
             _emit(only_ticker, df)
-    return rows
+    return rows, success
 
 
 def sync_ohlcv_us(db_cfg: DatabaseConfig, *, days: int, index_filter: str | None = None,
-                  chunk_size: int = 100) -> dict:
+                  chunk_size: int = 100, retry_failed: bool = True,
+                  max_retry_budget: int = 30, retry_sleep_sec: float = 2.0) -> dict:
     """US 일별 OHLCV 백필/증분 — yfinance batch download.
 
     Args:
         days: 과거 N일 (yfinance period=f"{days}d")
         index_filter: 'SP500'/'NDX100'/None(전체)
         chunk_size: yf.download 1회 호출당 ticker 수 (rate limit 완화)
+        retry_failed: batch 내 행 0건 티커를 단건 재시도할지 여부
+        max_retry_budget: 실패 티커가 이 수 초과 시 재시도 skip (systemic 장애 의심)
+        retry_sleep_sec: 단건 재시도 사이 sleep (rate limit 회피)
+
+    Returns dict:
+        upserted / chunks / duration_sec / failed_tickers / retried_ok / still_failed
     """
     _ensure_yfinance()
     started = datetime.now(KST)
@@ -930,7 +946,9 @@ def sync_ohlcv_us(db_cfg: DatabaseConfig, *, days: int, index_filter: str | None
 
     if not registered:
         _log.warning("[OHLCV/US] 대상 종목 없음 — meta sync 먼저 실행하세요.")
-        return {"upserted": 0, "chunks": 0, "duration_sec": (datetime.now(KST) - started).total_seconds()}
+        return {"upserted": 0, "chunks": 0,
+                "failed_tickers": [], "retried_ok": [], "still_failed": [],
+                "duration_sec": (datetime.now(KST) - started).total_seconds()}
 
     tickers = sorted(registered.keys())
     period = f"{days}d"
@@ -938,22 +956,76 @@ def sync_ohlcv_us(db_cfg: DatabaseConfig, *, days: int, index_filter: str | None
 
     total_upserted = 0
     chunks = 0
+    success_tickers: set[str] = set()
     for i in range(0, len(tickers), chunk_size):
         chunk = tickers[i:i + chunk_size]
         chunks += 1
         try:
             df = _fetch_us_ohlcv_df(chunk, period=period)
         except Exception as e:
+            # chunk 전체 실패 → 해당 티커들은 success_tickers에 추가되지 않아 아래에서 실패 감지됨
             _log.warning(f"[OHLCV/US] chunk {chunks} 조회 실패: {e}")
             continue
         ticker_to_market = {tk: registered[tk] for tk in chunk}
-        rows = _us_ohlcv_rows_from_df(df, ticker_to_market)
+        rows, chunk_success = _us_ohlcv_rows_from_df(df, ticker_to_market)
+        success_tickers |= chunk_success
         total_upserted += _upsert_ohlcv_rows(db_cfg, rows)
-        _log.info(f"[OHLCV/US] chunk {chunks}: {len(chunk)}종목 → {len(rows)}행 upsert")
+        _log.info(
+            f"[OHLCV/US] chunk {chunks}: {len(chunk)}종목 요청 → {len(chunk_success)}종목 성공 / {len(rows)}행 upsert"
+        )
+
+    # 실패 티커 식별 (요청했으나 행 0건)
+    failed_tickers: list[str] = sorted(set(registered.keys()) - success_tickers)
+    retried_ok: list[str] = []
+    still_failed: list[str] = []
+
+    if failed_tickers:
+        sample = failed_tickers[:10]
+        _log.warning(
+            f"[OHLCV/US] 실패 티커 {len(failed_tickers)}건 (sample={sample})"
+        )
+        if retry_failed:
+            if len(failed_tickers) > max_retry_budget:
+                _log.warning(
+                    f"[OHLCV/US] 실패 {len(failed_tickers)}건이 재시도 한도({max_retry_budget}) 초과 — "
+                    "systemic 장애 의심, 단건 재시도 skip. `--ticker` 로 수동 재실행하세요."
+                )
+                still_failed = list(failed_tickers)
+            else:
+                _log.info(f"[OHLCV/US] 실패 {len(failed_tickers)}건 단건 재시도 시작")
+                for tk in failed_tickers:
+                    try:
+                        r = sync_ohlcv_ticker(db_cfg, ticker=tk, days=days)
+                        if r.get("upserted", 0) > 0:
+                            retried_ok.append(tk)
+                        else:
+                            still_failed.append(tk)
+                    except Exception as e:
+                        _log.warning(f"[OHLCV/US/retry] {tk} 재시도 예외: {type(e).__name__}: {e}")
+                        still_failed.append(tk)
+                    if retry_sleep_sec > 0:
+                        time.sleep(retry_sleep_sec)
+                _log.warning(
+                    f"[OHLCV/US] 재시도 결과: 복구={len(retried_ok)}건, 여전히실패={len(still_failed)}건"
+                )
+                if still_failed:
+                    _log.warning(f"[OHLCV/US] 여전히실패: {still_failed[:20]}")
+        else:
+            still_failed = list(failed_tickers)
 
     duration = (datetime.now(KST) - started).total_seconds()
-    _log.info(f"[OHLCV/US] 완료: {total_upserted}건 / {chunks}청크 / {duration:.1f}s")
-    return {"upserted": total_upserted, "chunks": chunks, "duration_sec": duration}
+    _log.info(
+        f"[OHLCV/US] 완료: upsert={total_upserted}건 / {chunks}청크 / "
+        f"실패={len(failed_tickers)}, 재시도복구={len(retried_ok)}, 잔여실패={len(still_failed)} / {duration:.1f}s"
+    )
+    return {
+        "upserted": total_upserted,
+        "chunks": chunks,
+        "failed_tickers": failed_tickers,
+        "retried_ok": retried_ok,
+        "still_failed": still_failed,
+        "duration_sec": duration,
+    }
 
 
 def sync_ohlcv_ticker(db_cfg: DatabaseConfig, *, ticker: str, days: int) -> dict:
@@ -1022,7 +1094,7 @@ def sync_ohlcv_ticker(db_cfg: DatabaseConfig, *, ticker: str, days: int) -> dict
             ))
     elif market in ("NASDAQ", "NYSE"):
         df = _fetch_us_ohlcv_df([ticker], period=f"{days}d")
-        rows = _us_ohlcv_rows_from_df(df, {ticker: market})
+        rows, _ = _us_ohlcv_rows_from_df(df, {ticker: market})
     else:
         _log.error(f"[OHLCV/ticker] 알 수 없는 market={market}")
         return {"ticker": ticker, "upserted": 0, "reason": "unknown_market"}
