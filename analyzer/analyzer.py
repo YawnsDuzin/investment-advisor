@@ -1086,6 +1086,7 @@ async def stage2_analyze_stock(
     ticker: str, asset_name: str, market: str,
     theme_context: str, date: str, max_turns: int = 6,
     stock_data_text: str = "",
+    quant_factors_text: str = "",
     investor_data_text: str = "",
     short_selling_text: str = "",
     model: str | None = None,
@@ -1096,6 +1097,13 @@ async def stage2_analyze_stock(
     if stock_data_text:
         stock_data_section = f"\n\n## 실시간 시장 데이터 (조회 시점: {date})\n\n{stock_data_text}\n"
 
+    quant_factors_section = ""
+    if quant_factors_text:
+        quant_factors_section = (
+            "\n\n## 정량 팩터 스냅샷 (DB 산출 실측값 — 그대로 인용하세요)\n\n"
+            f"{quant_factors_text}\n"
+        )
+
     investor_section = f"\n\n{investor_data_text}\n" if investor_data_text else ""
     short_section = f"\n\n{short_selling_text}\n" if short_selling_text else ""
 
@@ -1103,6 +1111,7 @@ async def stage2_analyze_stock(
         ticker=ticker, asset_name=asset_name,
         market=market, theme_context=theme_context, date=date,
         stock_data_section=stock_data_section,
+        quant_factors_section=quant_factors_section,
         investor_data_section=investor_section,
         short_selling_section=short_section,
     )
@@ -1499,6 +1508,18 @@ async def run_pipeline(
     except Exception as e:
         log.warning(f"KRX 수급/공매도 조회 실패 (무시): {e}")
 
+    # ── 정량 팩터 스냅샷 (로드맵 B1) ──
+    factor_map: dict[tuple[str, str], dict] = {}
+    if db_cfg is not None:
+        try:
+            from analyzer.factor_engine import compute_factor_snapshots
+            factor_map = compute_factor_snapshots(
+                db_cfg,
+                [(p["ticker"], p.get("market", "")) for p, _ in stock_targets],
+            )
+        except Exception as e:
+            log.warning(f"[factor] 스냅샷 계산 실패 (무시): {e}")
+
     log.info(f"[Stage 2] 종목 심층분석 시작 — {len(stock_targets)}종목 (병렬 실행)")
 
     _STAGE2_REQUIRED_FIELDS = ("factor_scores", "sentiment_score", "recommendation")
@@ -1532,10 +1553,23 @@ async def run_pipeline(
                 sd = stock_data_map.get(ticker.upper())
                 sd_text = format_stock_data_text(sd) if sd else ""
 
+                # 정량 팩터 스냅샷 (B1)
+                tk_upper = ticker.upper()
+                mk_upper = (market or "").strip().upper()
+                factor_snap = factor_map.get((tk_upper, mk_upper))
+                factors_text = ""
+                if factor_snap:
+                    try:
+                        from analyzer.factor_engine import format_factor_snapshot_text
+                        factors_text = format_factor_snapshot_text(factor_snap)
+                    except Exception:
+                        factors_text = ""
+                    # proposal에 저장 (session_repo가 JSONB로 삽입)
+                    proposal["factor_snapshot"] = factor_snap
+
                 # KRX 확장 데이터 포맷팅
                 inv_text = ""
                 sht_text = ""
-                tk_upper = ticker.upper()
                 if tk_upper in investor_map:
                     inv_text = format_investor_data_text(investor_map[tk_upper])
                 if tk_upper in short_map:
@@ -1564,6 +1598,7 @@ async def run_pipeline(
                         market=market, theme_context=theme_name,
                         date=date, max_turns=turns_for_attempt,
                         stock_data_text=sd_text,
+                        quant_factors_text=factors_text,
                         investor_data_text=inv_text,
                         short_selling_text=sht_text,
                         model=cfg.model_analysis,

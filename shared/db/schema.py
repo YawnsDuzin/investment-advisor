@@ -9,7 +9,7 @@ from shared.db.migrations import run_migrations
 
 
 # ── 스키마 버전 관리 ──────────────────────────────
-SCHEMA_VERSION = 29  # v29: investment_proposals max_drawdown_pct/_date + alpha_vs_benchmark_pct (로드맵 A3)
+SCHEMA_VERSION = 30  # v30: investment_proposals.factor_snapshot JSONB (로드맵 B1)
 
 
 def _create_base_schema(cur) -> None:

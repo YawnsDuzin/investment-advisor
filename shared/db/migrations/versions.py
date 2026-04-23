@@ -1184,3 +1184,33 @@ def _migrate_to_v29(cur) -> None:
         ON CONFLICT (version) DO NOTHING;
     """)
     print("[DB] v29 마이그레이션 완료 — investment_proposals max_drawdown_pct / max_drawdown_date / alpha_vs_benchmark_pct")
+
+
+def _migrate_to_v30(cur) -> None:
+    """v30: investment_proposals.factor_snapshot JSONB — 정량 팩터 스냅샷 (로드맵 B1).
+
+    Stage 2 분석 시점에 `analyzer/factor_engine.py`가 OHLCV 이력에서
+    산출한 cross-section percentile·raw 값을 JSONB로 보관. 예:
+
+        {
+          "r1m_pct": 5.2, "r3m_pct": 18.4, "r6m_pct": 35.1, "r12m_pct": 42.0,
+          "r1m_pctile": 0.72, "r3m_pctile": 0.85, "r6m_pctile": 0.88,
+          "vol60_pct": 2.15, "low_vol_pctile": 0.55,
+          "volume_ratio": 1.35, "volume_pctile": 0.78,
+          "universe_size": 2987,
+          "computed_at": "2026-04-23T13:00:00+09:00"
+        }
+
+    STAGE2 프롬프트에 실측값으로 주입되어 LLM의 수치 환각을 제거한다.
+    UI에서는 "AI가 본 실측 데이터" 섹션으로 투명화 가능(UI-7).
+    """
+    cur.execute("""
+        ALTER TABLE investment_proposals
+            ADD COLUMN IF NOT EXISTS factor_snapshot JSONB;
+    """)
+
+    cur.execute("""
+        INSERT INTO schema_version (version) VALUES (30)
+        ON CONFLICT (version) DO NOTHING;
+    """)
+    print("[DB] v30 마이그레이션 완료 — investment_proposals.factor_snapshot JSONB (B1)")
