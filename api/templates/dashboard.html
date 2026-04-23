@@ -36,6 +36,9 @@
 {% include "partials/dashboard/_top_picks.html" %}
 {% endif %}
 
+{# 오늘의 이상 시그널 (로드맵 UI-3) — market_signals 기반 클라이언트 fetch #}
+{% include "partials/dashboard/_signals_today.html" %}
+
 {% if news_by_category %}
 {% include "partials/dashboard/_news_by_category.html" %}
 {% endif %}

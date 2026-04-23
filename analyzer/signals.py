@@ -20,14 +20,12 @@ from __future__ import annotations
 
 import json
 import time
-from datetime import date, datetime
-from zoneinfo import ZoneInfo
+from datetime import date
 
 from shared.config import DatabaseConfig
 from shared.db import get_connection
 from shared.logger import get_logger
 
-_KST = ZoneInfo("Asia/Seoul")
 _log = get_logger("signals")
 
 
@@ -192,6 +190,97 @@ def detect_signals(db_cfg: DatabaseConfig, *, as_of: date | None = None,
         f"({ {k: v for k, v in sorted(counts.items(), key=lambda x: -x[1])} }) / {duration*1000:.0f}ms"
     )
     return counts
+
+
+# 워치리스트 알림 생성용 레이블 (routes/signals.py의 SIGNAL_LABELS와 동기)
+_SIGNAL_LABELS_KR = {
+    "new_52w_high": "52주 신고가",
+    "new_52w_low": "52주 신저가",
+    "volume_surge": "거래량 폭증",
+    "above_200ma_cross": "200일 이평 상향 돌파",
+    "below_200ma_cross": "200일 이평 하향 돌파",
+    "gap_up": "갭 상승",
+    "gap_down": "갭 하락",
+}
+
+
+def generate_watchlist_notifications(
+    db_cfg: DatabaseConfig, *, as_of: date | None = None,
+) -> int:
+    """워치리스트에 등록된 ticker에 대해 오늘 탐지된 market_signals을
+    `user_notifications`로 자동 발행 (UI-5 — 로드맵 Step 3-3).
+
+    중복 방지: 같은 유저·같은 title·당일 created_at인 row가 이미 있으면 스킵.
+    session_id / sub_id는 NULL (시스템 자동 알림).
+
+    Returns: 생성된 알림 수
+    """
+    sql_signals = """
+        SELECT signal_type, ticker, market, metric
+        FROM market_signals
+        WHERE signal_date = COALESCE(%s::date, (SELECT MAX(signal_date) FROM market_signals))
+    """
+    sql_watchers = """
+        SELECT uw.user_id, uw.ticker, uw.asset_name
+        FROM user_watchlist uw
+        WHERE UPPER(uw.ticker) = %s
+    """
+    sql_insert = """
+        INSERT INTO user_notifications (user_id, title, detail, link)
+        SELECT %s, %s, %s, %s
+        WHERE NOT EXISTS (
+            SELECT 1 FROM user_notifications
+            WHERE user_id = %s
+              AND title = %s
+              AND created_at::date = CURRENT_DATE
+        )
+    """
+
+    conn = get_connection(db_cfg)
+    created = 0
+    try:
+        with conn.cursor() as cur:
+            cur.execute(sql_signals, (as_of,))
+            signals = cur.fetchall()
+            if not signals:
+                return 0
+
+            for signal_type, ticker, _market, metric in signals:
+                label = _SIGNAL_LABELS_KR.get(signal_type, signal_type)
+                ticker_upper = str(ticker).strip().upper()
+
+                cur.execute(sql_watchers, (ticker_upper,))
+                watchers = cur.fetchall()
+                if not watchers:
+                    continue
+
+                for user_id, wl_ticker, asset_name in watchers:
+                    display_name = asset_name or wl_ticker
+                    title = f"{display_name} ({ticker_upper}) — {label}"
+                    # metric을 한 줄 상세로
+                    detail_parts: list[str] = []
+                    if isinstance(metric, dict):
+                        for k in ("close", "ratio", "gap_pct", "ma200", "high_252d", "low_252d"):
+                            if k in metric and metric[k] is not None:
+                                detail_parts.append(f"{k}={metric[k]}")
+                    detail = ", ".join(detail_parts) if detail_parts else None
+                    link = f"/pages/proposals/history/{ticker_upper}"
+
+                    cur.execute(sql_insert, (
+                        user_id, title, detail, link,
+                        user_id, title,
+                    ))
+                    created += cur.rowcount
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        _log.warning(f"[signals] 워치리스트 알림 생성 실패: {e}")
+        return created
+    finally:
+        conn.close()
+
+    _log.info(f"[signals] 워치리스트 매칭 알림 {created}건 생성")
+    return created
 
 
 def cleanup_old_signals(db_cfg: DatabaseConfig, retention_days: int = 90) -> int:

@@ -96,6 +96,8 @@ app.include_router(track_record.pages_router)
 app.include_router(stocks.router)
 app.include_router(stocks.pages_router)
 app.include_router(stocks.indices_router)
+from api.routes import signals as _signals_routes
+app.include_router(_signals_routes.router)
 app.include_router(education.router)
 app.include_router(education.pages_router)
 app.include_router(inquiry.router)
