@@ -91,6 +91,7 @@ sudo systemctl enable --now investment-advisor-analyzer.timer    # 매일 03:00 
 | `TOP_STOCKS_PER_THEME` | `2` | 각 테마당 심층분석할 종목 수 |
 | `ENABLE_STOCK_ANALYSIS` | `true` | Stage 2(종목 심층분석) 활성화 스위치 (true/false) |
 | `ENABLE_STOCK_DATA` | `true` | yfinance 실시간 주가 데이터 조회 스위치 (true/false) |
+| `MOMENTUM_SOURCE` | `db` | Stage 1 후 모멘텀 조회 소스: `db`(OHLCV 이력 우선·결측만 live 폴백) / `live`(기존 외부 API) / `db_only`(디버깅) |
 | `MODEL_ANALYSIS` | `claude-sonnet-4-6` | 분석(Stage 1·2)에 사용할 모델 |
 | `MODEL_TRANSLATE` | `claude-haiku-4-5-20251001` | 번역에 사용할 모델 (Haiku로 비용 최소화) |
 | `QUERY_TIMEOUT` | `900` | Claude SDK 단일 쿼리 타임아웃 (초). 서버 부하 시 증가 필요 |
@@ -126,7 +127,7 @@ sudo systemctl enable --now investment-advisor-analyzer.timer    # 매일 03:00 
   - 최근 7일 추천 이력 피드백으로 중복 추천 방지
   - 컨센서스/얼리시그널/컨트래리안/딥밸류 분류 (`discovery_type`)
   - 주가 반영도 태깅 (`price_momentum_check`)
-- **모멘텀 체크**: Stage 1 추천 종목의 기간별 수익률(1m/3m/6m/1y) 조회. 한국 주식은 pykrx 우선, 해외는 yfinance 사용. 급등(1m +20% 또는 3m +40%) 종목 필터링. 동시에 **모든 종목의 `current_price`를 실시간 가격으로 설정** (한국: pykrx 크로스체크, 해외: yfinance. 실패 시 개별 재조회, 그래도 실패 시 NULL). `price_source` 태깅으로 데이터 출처 추적
+- **모멘텀 체크**: Stage 1 추천 종목의 기간별 수익률(1m/3m/6m/1y) 조회. `MOMENTUM_SOURCE=db`(기본)에서 **`stock_universe_ohlcv` 이력 우선 조회** → 결측 종목만 live(pykrx/yfinance) 폴백. `MOMENTUM_SOURCE=live`로 전환하면 기존 외부 API 직조회 동작. 급등(1m +20% 또는 3m +40%) 종목 필터링. 동시에 **모든 종목의 `current_price`를 실제 가격으로 설정** (실패 시 개별 재조회, 그래도 실패 시 NULL). `price_source` 태깅으로 데이터 출처 추적 (`ohlcv_db` / `pykrx` / `pykrx_crosscheck` / `yfinance_close` / `yfinance_realtime`)
 - **주가 데이터**: Stage 2 대상 종목의 현재가/PER/PBR/시총 등을 yfinance로 실시간 조회 (ENABLE_STOCK_DATA로 on/off)
 - **Stage 2**: 실제 주가 데이터 + 5관점 심층분석 (펀더멘털·산업·모멘텀·퀀트·리스크)
   - 급등 종목보다 미반영 종목(early_signal/undervalued) 우선 선정
@@ -211,7 +212,7 @@ stock_universe_ohlcv (v27, 종목별 일별 OHLCV 이력, PK `(ticker, market, t
 - `stock_analyses.financial_summary`와 `factor_scores`는 JSONB 타입.
 - `theme_tracking.theme_key`는 테마명 정규화 키 (소문자, 공백·하이픈·가운뎃점 제거). `_normalize_theme_key()` 함수 사용.
 - `proposal_tracking`은 `(ticker, theme_key)` UNIQUE — 테마별 종목 추적.
-- `investment_proposals.price_source`는 가격 데이터 출처 (`yfinance_realtime` / `yfinance_close` / `pykrx` / `pykrx_crosscheck` / NULL). v10 추가.
+- `investment_proposals.price_source`는 가격 데이터 출처 (`ohlcv_db` / `yfinance_realtime` / `yfinance_close` / `pykrx` / `pykrx_crosscheck` / NULL). v10 추가. `ohlcv_db`는 `MOMENTUM_SOURCE=db` 모드에서 `stock_universe_ohlcv` 이력 기반 조회(v28 이후).
 - `investment_proposals.return_1m/3m/6m/1y_pct`는 기간별 수익률(%). v14 추가. 한국 주식은 pykrx, 해외는 yfinance history 기반.
 - `user_watchlist`는 `(user_id, ticker)` UNIQUE — 사용자별 관심 종목.
 - `user_subscriptions`는 `(user_id, sub_type, sub_key)` UNIQUE — `sub_type`은 `'ticker'` 또는 `'theme'`.

@@ -1317,14 +1317,18 @@ async def run_pipeline(
 
         if all_proposals:
             log.info(f"[모멘텀 체크] {len(all_proposals)}종목 기간별 수익률 조회 (1m/3m/6m/1y)...")
-            momentum_map = fetch_momentum_batch([
-                {"ticker": p["ticker"], "market": p.get("market", "")}
-                for p in all_proposals
-            ])
+            momentum_map = fetch_momentum_batch(
+                [
+                    {"ticker": p["ticker"], "market": p.get("market", "")}
+                    for p in all_proposals
+                ],
+                db_cfg=db_cfg,
+            )
 
             run_count = 0
             fallback_count = 0
             anomaly_count = 0
+            source_stats = {"ohlcv_db": 0, "pykrx": 0, "yfinance_close": 0, "other": 0}
             for p in all_proposals:
                 ticker = p["ticker"].strip().upper()
                 mdata = momentum_map.get(ticker)
@@ -1338,6 +1342,8 @@ async def run_pipeline(
                             p[key] = mdata[key]
                     if mdata["momentum_tag"] == "already_run":
                         run_count += 1
+                    src = mdata.get("price_source") or "other"
+                    source_stats[src if src in source_stats else "other"] += 1
                 else:
                     # 모멘텀 체크 실패 → fetch_stock_data로 현재가만 재시도
                     try:
@@ -1383,7 +1389,13 @@ async def run_pipeline(
                 log.info(f"[모멘텀 체크] {fallback_count}종목 개별 재조회로 가격 확보")
             if anomaly_count:
                 log.warning(f"[모멘텀 체크] {anomaly_count}종목 가격 이상 감지 (penny stock 등) — 위 경고 참고")
-            log.info(f"[모멘텀 체크] 완료 — {len(momentum_map)}/{len(all_proposals)}종목 조회 성공")
+            log.info(
+                f"[모멘텀 체크] 완료 — {len(momentum_map)}/{len(all_proposals)}종목 조회 성공 "
+                f"(출처: ohlcv_db={source_stats['ohlcv_db']} "
+                f"pykrx={source_stats['pykrx']} "
+                f"yfinance={source_stats['yfinance_close']} "
+                f"기타={source_stats['other']})"
+            )
 
     # ── AI 추정 가격 제거: yfinance 미조회 종목의 current_price를 null로 ──
     if not cfg.enable_stock_data:

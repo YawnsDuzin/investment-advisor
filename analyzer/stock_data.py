@@ -1,4 +1,5 @@
 """실시간 주가/재무 데이터 조회 모듈 — yfinance + pykrx(한국 주식 크로스체크)"""
+import os
 import threading
 from datetime import datetime, timedelta
 from shared.logger import get_logger
@@ -566,11 +567,136 @@ def fetch_momentum_check(ticker: str, market: str) -> dict | None:
         return None
 
 
-def fetch_momentum_batch(stocks: list[dict]) -> dict[str, dict]:
-    """복수 종목 기간별 수익률 병렬 조회
+def _fetch_ohlcv_history_batch(
+    stocks: list[tuple[str, str]],
+    db_cfg,
+    days: int = 400,
+) -> "dict[str, list[tuple[str, float]]]":
+    """stock_universe_ohlcv에서 (ticker, market) 배치에 대해 최근 N일 종가 이력을 단일 SQL로 조회.
+
+    Args:
+        stocks: [(ticker_upper, market), ...] 유니크 목록
+        db_cfg: DatabaseConfig
+        days: 오늘로부터 조회할 일수 (거래일 아닌 달력일 기준)
+
+    Returns:
+        {ticker_upper: [(trade_date_str, close_float), ...] 오래된 순}
+        OHLCV 결측 종목은 딕셔너리에서 제외.
+    """
+    if not stocks:
+        return {}
+
+    # 지연 import — stock_data는 DB 없이도 돌아가야 하므로
+    try:
+        from shared.db.connection import get_connection
+    except Exception as e:
+        get_logger("모멘텀DB").warning(f"DB 모듈 로드 실패 → OHLCV 조회 불가: {e}")
+        return {}
+
+    # (ticker, market) 정리. market=''이면 market 무시 매칭
+    pairs = [(tk.strip().upper(), (mk or "").strip()) for tk, mk in stocks]
+    placeholders = ",".join(["(%s, %s)"] * len(pairs))
+    flat_args: list = []
+    for tk, mk in pairs:
+        flat_args.extend([tk, mk])
+    flat_args.append(days)
+
+    sql = f"""
+    WITH targets (ticker, market) AS (
+        VALUES {placeholders}
+    )
+    SELECT UPPER(o.ticker) AS ticker, o.trade_date::text, o.close::float
+    FROM stock_universe_ohlcv o
+    JOIN targets t
+      ON UPPER(o.ticker) = t.ticker
+     AND (t.market = '' OR UPPER(o.market) = UPPER(t.market))
+    WHERE o.trade_date >= CURRENT_DATE - (%s::int)
+    ORDER BY ticker, o.trade_date
+    """
+
+    history_map: dict[str, list[tuple[str, float]]] = {}
+    conn = get_connection(db_cfg)
+    try:
+        with conn.cursor() as cur:
+            cur.execute(sql, flat_args)
+            rows = cur.fetchall()
+    except Exception as e:
+        get_logger("모멘텀DB").warning(f"OHLCV 배치 조회 실패: {e}")
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        return {}
+    finally:
+        conn.close()
+
+    for ticker, date_str, close in rows:
+        history_map.setdefault(ticker, []).append((date_str, float(close)))
+    return history_map
+
+
+def fetch_momentum_from_db(
+    stocks: list[dict],
+    db_cfg,
+    *,
+    days: int = 400,
+) -> dict[str, dict]:
+    """OHLCV 이력 테이블 기반 배치 모멘텀 조회 (외부 API 호출 없음).
 
     Args:
         stocks: [{"ticker": "NVDA", "market": "NASDAQ"}, ...]
+        db_cfg: DatabaseConfig
+        days: 조회 범위 (기본 400일 — 1y 수익률 여유 확보)
+
+    Returns:
+        {ticker: {"current_price", "momentum_tag", "return_1m_pct", ...,
+                  "price_source": "ohlcv_db"}}
+        OHLCV에 충분한 이력이 없는 종목은 결과에서 제외 (호출자가 live 폴백).
+    """
+    unique: list[tuple[str, str]] = []
+    seen = set()
+    for stock in stocks:
+        ticker = stock.get("ticker", "").strip().upper()
+        if not ticker or ticker in seen:
+            continue
+        seen.add(ticker)
+        unique.append((ticker, stock.get("market", "")))
+
+    if not unique:
+        return {}
+
+    history_map = _fetch_ohlcv_history_batch(unique, db_cfg, days=days)
+    if not history_map:
+        return {}
+
+    results: dict[str, dict] = {}
+    for ticker, _market in unique:
+        history = history_map.get(ticker)
+        if not history or len(history) < 2:
+            continue
+        returns = _calc_period_returns(history)
+        results[ticker] = {
+            "ticker": ticker,
+            "current_price": round(history[-1][1], 2),
+            "momentum_tag": _momentum_tag_from_returns(returns),
+            "price_source": "ohlcv_db",
+            **returns,
+        }
+    return results
+
+
+def fetch_momentum_batch(stocks: list[dict], db_cfg=None) -> dict[str, dict]:
+    """복수 종목 기간별 수익률 배치 조회.
+
+    소스 우선순위 (`MOMENTUM_SOURCE` 환경변수):
+      - "db" (기본): stock_universe_ohlcv 이력 → 결측 종목만 live(yfinance/pykrx) 폴백
+      - "live": 기존 동작 (live만)
+      - "db_only": DB만, live 폴백 없음 (디버깅용)
+    db_cfg가 None이면 자동으로 live 모드.
+
+    Args:
+        stocks: [{"ticker": "NVDA", "market": "NASDAQ"}, ...]
+        db_cfg: DatabaseConfig (선택). None이면 live 강제.
 
     Returns:
         {ticker: {"current_price", "momentum_tag", "return_1m_pct", ...}}
@@ -589,20 +715,47 @@ def fetch_momentum_batch(stocks: list[dict]) -> dict[str, dict]:
     if not unique_stocks:
         return {}
 
-    results = {}
-    with ThreadPoolExecutor(max_workers=min(len(unique_stocks), 8)) as pool:
-        futures = {
-            pool.submit(fetch_momentum_check, ticker, market): ticker
-            for ticker, market in unique_stocks
-        }
-        for future in as_completed(futures):
-            ticker = futures[future]
-            try:
-                data = future.result()
-                if data:
-                    results[ticker] = data
-            except Exception:
-                pass
+    source = (os.getenv("MOMENTUM_SOURCE") or "db").strip().lower()
+    log = get_logger("모멘텀")
+
+    results: dict[str, dict] = {}
+    missing: list[tuple[str, str]] = list(unique_stocks)
+
+    # 1차: DB 우선
+    if db_cfg is not None and source in ("db", "db_only"):
+        try:
+            db_results = fetch_momentum_from_db(
+                [{"ticker": tk, "market": mk} for tk, mk in unique_stocks],
+                db_cfg,
+            )
+            if db_results:
+                results.update(db_results)
+                missing = [(tk, mk) for tk, mk in unique_stocks if tk not in db_results]
+                log.info(
+                    f"[모멘텀] DB 조회 {len(db_results)}/{len(unique_stocks)}종목 성공, "
+                    f"결측 {len(missing)}종목은 live 폴백 시도"
+                )
+        except Exception as e:
+            log.warning(f"[모멘텀] DB 조회 전체 실패 → live 폴백: {e}")
+            missing = list(unique_stocks)
+
+    # 2차: 결측 종목 live 폴백 (db_only 모드가 아닐 때만)
+    if missing and source != "db_only":
+        if db_cfg is None and source == "db":
+            log.info(f"[모멘텀] db_cfg 미지정 → live 모드로 {len(missing)}종목 조회")
+        with ThreadPoolExecutor(max_workers=min(len(missing), 8)) as pool:
+            futures = {
+                pool.submit(fetch_momentum_check, ticker, market): ticker
+                for ticker, market in missing
+            }
+            for future in as_completed(futures):
+                ticker = futures[future]
+                try:
+                    data = future.result()
+                    if data:
+                        results[ticker] = data
+                except Exception:
+                    pass
 
     return results
 
