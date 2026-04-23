@@ -15,7 +15,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **AI**: Claude Code SDK (`claude-agent-sdk`) — 멀티스테이지 분석 파이프라인
 - **Backend**: FastAPI + Uvicorn (REST API + HTML 서빙)
 - **Template**: Jinja2 (다크 테마 UI)
-- **Database**: PostgreSQL + psycopg2 (스키마 자동 마이그레이션 v1~v30)
+- **Database**: PostgreSQL + psycopg2 (스키마 자동 마이그레이션 v1~v31)
 - **News**: feedparser + httpx (RSS 수집)
 - **Stock Data**: yfinance (해외 주가/재무 데이터) + pykrx (한국 주식 크로스체크/폴백)
 - **Async**: anyio (async/sync 브릿지)
@@ -166,14 +166,14 @@ sudo systemctl enable --now investment-advisor-analyzer.timer    # 매일 03:00 
 
 ### shared/ — 공용 모듈
 - `config.py` — `.env` 파일 자동 로드, `DatabaseConfig`, `NewsConfig`, `AnalyzerConfig`, `RecommendationConfig`(Top Picks 가중치·다양성), `UniverseConfig`/`ScreenerConfig`/`ValidationConfig`(Phase 1~3), `OhlcvConfig`(Phase 7 — retention/auto_adjust/on_price_sync), `AuthConfig`, `AppConfig`
-- `db.py` — `schema_version` 기반 자동 마이그레이션(v1~v30), `save_analysis()` + `_validate_proposal()` 검증 + tracking 갱신 + 구독 알림 생성(`_generate_notifications()`), `get_recent_recommendations()`, `get_connection()`
+- `db.py` — `schema_version` 기반 자동 마이그레이션(v1~v31), `save_analysis()` + `_validate_proposal()` 검증 + tracking 갱신 + 구독 알림 생성(`_generate_notifications()`), `get_recent_recommendations()`, `get_connection()`
 - `logger.py` — 범용 DB 로그 시스템. `init_logger(db_cfg)` → `start_run()` / `finish_run()`으로 실행 단위 추적. `get_logger(source)`로 콘솔+DB 동시 로깅. `app_runs`/`app_logs` 테이블 사용 (v18)
 - `pg_setup.py` — PostgreSQL 설치 감지 및 자동 설치 (Linux apt, Windows winget/choco)
 - `tier_limits.py` — 구독 티어별 기능 제한(워치리스트 수, 구독 수, 일일 분석 수, 교육 채팅 턴 수, 테마 열람 수). 프론트엔드·백엔드 공통 소스
 
 ## DB Schema
 
-`schema_version` 테이블로 버전 관리. `init_db()` 호출 시 자동 마이그레이션 (현재 v30).
+`schema_version` 테이블로 버전 관리. `init_db()` 호출 시 자동 마이그레이션 (현재 v31).
 
 **테이블 관계 (CASCADE):**
 ```
@@ -237,6 +237,8 @@ stock_universe_ohlcv (v27, 종목별 일별 OHLCV 이력, PK `(ticker, market, t
 - **Post-Return 추적 OHLCV 통합(로드맵 A3)** — `price_tracker.run_price_tracking()`은 `stock_universe_ohlcv`에서 종목별 (추천일~오늘) 이력을 배치 조회하여 `post_return_1m/3m/6m/1y_pct` + `max_drawdown_pct/_date`를 일괄 계산. OHLCV 결측 종목만 기존 live 조회 + `proposal_price_snapshots` 경로로 폴백. 완료 로그에 `출처: ohlcv=N live_fallback=N` 카운터 표시. 외부 API 호출량 대폭 감소.
 - **정량 팩터 엔진(로드맵 B1)** — `analyzer/factor_engine.py`가 `stock_universe_ohlcv`에서 `r1m/r3m/r6m/r12m_pct`, `vol60_pct`, `volume_ratio`를 추출하고, KRX/US 시장 그룹별 cross-section `PERCENT_RANK`로 `*_pctile`(0~1) 산출. Stage 2 진입 시 `compute_factor_snapshots()`로 대상 종목 일괄 계산 → `format_factor_snapshot_text()`로 프롬프트에 실측값 주입 (STAGE2_PROMPT의 `{quant_factors_section}`). AI는 수치 추정이 아닌 해석만 담당.
 - `investment_proposals.factor_snapshot JSONB`(v30) — Stage 2 저장 시 팩터 스냅샷을 그대로 기록. UI "AI가 본 실측 데이터" 섹션(UI-7 예정)의 데이터 소스.
+- **시장 레짐 레이어(로드맵 B2)** — `analyzer/regime.py`가 `market_indices_ohlcv`(v31)에서 KOSPI/KOSDAQ/S&P500/NDX100 인덱스의 `above_200ma`, `pct_from_ma200`, `vol60_pct`(±10% clamp), `vol_regime`(low/mid/high), `drawdown_from_52w_high_pct`, `return_1m/3m_pct`를 산출. 추가로 `stock_universe_ohlcv`에서 KRX 시장폭(20일 상승 종목 비율) 집계. `run_pipeline` 초기에 `compute_regime(db_cfg)` 호출 → `format_regime_text()` + `infer_positioning_hint()`로 STAGE1A/1A1/1A2 프롬프트에 `{market_regime_section}` 주입. AI는 국면에 맞춰 테마 신뢰도·리스크 톤 조정.
+- `analysis_sessions.market_regime JSONB`(v31) — Stage 1 진입 시점의 레짐 스냅샷 영속화. `market_indices_ohlcv`(v31) 테이블은 `analyzer/universe_sync.py --mode indices`로 수집 (pykrx KRX·yfinance US).
 
 ## Key Conventions
 

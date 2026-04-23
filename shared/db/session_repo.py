@@ -73,12 +73,14 @@ def save_analysis(cfg: DatabaseConfig, analysis_date: str, result: dict) -> int:
                 "DELETE FROM analysis_sessions WHERE analysis_date = %s",
                 (analysis_date,)
             )
+            market_regime = result.get("market_regime")
             cur.execute(
                 """INSERT INTO analysis_sessions
-                   (analysis_date, market_summary, risk_temperature, data_sources)
-                   VALUES (%s, %s, %s, %s) RETURNING id""",
+                   (analysis_date, market_summary, risk_temperature, data_sources, market_regime)
+                   VALUES (%s, %s, %s, %s, %s) RETURNING id""",
                 (analysis_date, result.get("market_summary"),
-                 result.get("risk_temperature"), result.get("data_sources"))
+                 result.get("risk_temperature"), result.get("data_sources"),
+                 json.dumps(market_regime, ensure_ascii=False) if market_regime else None)
             )
             session_id = cur.fetchone()[0]
 

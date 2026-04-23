@@ -1218,6 +1218,179 @@ def recompute_change_pct(db_cfg: DatabaseConfig) -> int:
     return updated
 
 
+# ── 시장 지수 OHLCV 수집 (로드맵 B2) ──
+# 벤치마크 지수(KOSPI/KOSDAQ/S&P500/NDX100) 이력을 market_indices_ohlcv에 보관.
+# stock_universe_ohlcv와 분리된 별도 테이블. analyzer/regime.py가 소비.
+
+# index_code → (source, fetch_args)
+_INDEX_SPECS: dict[str, dict] = {
+    "KOSPI":   {"source": "pykrx",   "code": "1001"},
+    "KOSDAQ":  {"source": "pykrx",   "code": "2001"},
+    "SP500":   {"source": "yfinance", "symbol": "^GSPC"},
+    "NDX100":  {"source": "yfinance", "symbol": "^NDX"},
+}
+
+
+_UPSERT_INDEX_OHLCV_SQL = """
+INSERT INTO market_indices_ohlcv (
+    index_code, trade_date, open, high, low, close, volume, change_pct, data_source
+) VALUES %s
+ON CONFLICT (index_code, trade_date) DO UPDATE SET
+    open=EXCLUDED.open, high=EXCLUDED.high, low=EXCLUDED.low,
+    close=EXCLUDED.close, volume=EXCLUDED.volume,
+    change_pct=EXCLUDED.change_pct, data_source=EXCLUDED.data_source
+"""
+
+
+def _fetch_index_rows_pykrx(index_code: str, code: str, days: int) -> list[tuple]:
+    """pykrx로 KRX 지수 OHLCV 조회. 반환: UPSERT SQL용 튜플 리스트."""
+    _ensure_pykrx()
+    today = datetime.now(KST)
+    start = today - timedelta(days=days)
+    try:
+        df = pykrx_stock.get_index_ohlcv_by_date(
+            fromdate=start.strftime("%Y%m%d"),
+            todate=today.strftime("%Y%m%d"),
+            ticker=code,
+        )
+    except Exception as e:
+        _log.error(f"[INDEX/{index_code}] pykrx 조회 실패: {e}")
+        return []
+    if df is None or df.empty:
+        return []
+
+    rows: list[tuple] = []
+    for dt, r in df.iterrows():
+        try:
+            trade_date = dt.date() if hasattr(dt, "date") else datetime.strptime(str(dt)[:10], "%Y-%m-%d").date()
+            close = float(r.get("종가") or 0)
+        except (TypeError, ValueError, KeyError, AttributeError):
+            continue
+        if close <= 0:
+            continue
+
+        def _f(col: str) -> float | None:
+            try:
+                v = r.get(col)
+                return float(v) if v is not None else None
+            except (TypeError, ValueError):
+                return None
+
+        def _i(col: str) -> int | None:
+            try:
+                v = r.get(col)
+                return int(v) if v is not None else None
+            except (TypeError, ValueError):
+                return None
+
+        change_pct = _f("등락률")
+        rows.append((
+            index_code, trade_date,
+            _f("시가"), _f("고가"), _f("저가"), close,
+            _i("거래량"),
+            change_pct, "pykrx",
+        ))
+    return rows
+
+
+def _fetch_index_rows_yfinance(index_code: str, symbol: str, days: int) -> list[tuple]:
+    """yfinance로 US 지수 OHLCV 조회."""
+    if yf is None:
+        _log.error(f"[INDEX/{index_code}] yfinance 미설치 — 수집 불가")
+        return []
+    try:
+        period = f"{max(days, 30)}d"
+        t = yf.Ticker(symbol)
+        hist = t.history(period=period, auto_adjust=False)
+    except Exception as e:
+        _log.error(f"[INDEX/{index_code}] yfinance 조회 실패: {e}")
+        return []
+    if hist is None or hist.empty:
+        return []
+
+    rows: list[tuple] = []
+    prev_close: float | None = None
+    for idx, r in hist.iterrows():
+        try:
+            trade_date = idx.date() if hasattr(idx, "date") else datetime.strptime(str(idx)[:10], "%Y-%m-%d").date()
+            close = float(r.get("Close") or 0)
+        except (TypeError, ValueError, KeyError, AttributeError):
+            continue
+        if close <= 0:
+            continue
+
+        def _f(col: str) -> float | None:
+            try:
+                v = r.get(col)
+                return float(v) if v is not None else None
+            except (TypeError, ValueError):
+                return None
+
+        def _i(col: str) -> int | None:
+            try:
+                v = r.get(col)
+                return int(v) if v is not None else None
+            except (TypeError, ValueError):
+                return None
+
+        change_pct = None
+        if prev_close is not None and prev_close > 0:
+            change_pct = round((close - prev_close) / prev_close * 100, 4)
+        prev_close = close
+
+        rows.append((
+            index_code, trade_date,
+            _f("Open"), _f("High"), _f("Low"), close,
+            _i("Volume"),
+            change_pct, "yfinance",
+        ))
+    return rows
+
+
+def sync_indices_ohlcv(db_cfg: DatabaseConfig, *, days: int,
+                       codes: tuple[str, ...] | None = None) -> dict:
+    """지정된 index_code 리스트에 대해 과거 N일 OHLCV 수집·UPSERT.
+
+    Args:
+        codes: None이면 _INDEX_SPECS 전체
+        days: 과거 몇 일치 수집할지
+
+    Returns: {index_code: upserted_count}
+    """
+    targets = codes if codes else tuple(_INDEX_SPECS.keys())
+    result: dict[str, int] = {}
+    all_rows: list[tuple] = []
+
+    for code in targets:
+        spec = _INDEX_SPECS.get(code)
+        if not spec:
+            _log.warning(f"[INDEX] 알 수 없는 index_code '{code}' — skip")
+            continue
+        if spec["source"] == "pykrx":
+            rows = _fetch_index_rows_pykrx(code, spec["code"], days)
+        elif spec["source"] == "yfinance":
+            rows = _fetch_index_rows_yfinance(code, spec["symbol"], days)
+        else:
+            rows = []
+        _log.info(f"[INDEX/{code}] {len(rows)}건 수집")
+        result[code] = len(rows)
+        all_rows.extend(rows)
+
+    if all_rows:
+        conn = get_connection(db_cfg)
+        try:
+            with conn.cursor() as cur:
+                execute_values(cur, _UPSERT_INDEX_OHLCV_SQL, all_rows, page_size=1000)
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+        _log.info(f"[INDEX] 총 {len(all_rows)}건 UPSERT 완료")
+    return result
+
+
 def cleanup_ohlcv(db_cfg: DatabaseConfig, *, retention_days: int,
                   delisted_retention_days: int = 0) -> dict:
     """retention 초과 OHLCV row 삭제. 대용량 환경을 위해 배치 LIMIT 반복 사용.
@@ -1347,14 +1520,15 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         description="Stock Universe 동기화 (Phase 1a KRX + Phase 1b US + Phase 7 OHLCV 이력)"
     )
     p.add_argument("--mode",
-                   choices=("meta", "price", "auto", "ohlcv", "backfill", "cleanup"),
+                   choices=("meta", "price", "auto", "ohlcv", "backfill", "cleanup", "indices"),
                    default="auto",
                    help=("meta: 주간 메타/시총/업종 | "
                          "price: 일별 가격 (+ OHLCV if OHLCV_ON_PRICE_SYNC=true) | "
                          "auto: stale 판별 후 자동 | "
                          "ohlcv: 특정 1일 OHLCV 재수집 (--date 필수) | "
                          "backfill: 과거 N일 OHLCV 일괄 수집 (--days 또는 --ticker) | "
-                         "cleanup: retention 초과 OHLCV row 삭제"))
+                         "cleanup: retention 초과 OHLCV row 삭제 | "
+                         "indices: 벤치마크 지수(KOSPI/S&P500 등) OHLCV 수집 — 로드맵 B2"))
     p.add_argument("--market",
                    choices=("KOSPI", "KOSDAQ", "KRX", "US", "SP500", "NDX", "ALL"),
                    default="ALL",
@@ -1502,6 +1676,21 @@ def main(argv: list[str] | None = None) -> int:
     # ── OHLCV 전용 모드 (대상 판별 불필요한 cleanup 먼저) ─────
     if args.mode == "cleanup":
         _log.info(f"결과: {_run_mode_cleanup(cfg, args)}")
+        return 0
+
+    if args.mode == "indices":
+        days = args.days if args.days is not None else 400
+        # --market 힌트로 부분 선택 지원 (SP500 / NDX / KOSPI / KOSDAQ / KRX / US / ALL)
+        codes: tuple[str, ...] | None = None
+        if args.market == "KRX":
+            codes = ("KOSPI", "KOSDAQ")
+        elif args.market == "US":
+            codes = ("SP500", "NDX100")
+        elif args.market in ("KOSPI", "KOSDAQ", "SP500"):
+            codes = (args.market,)
+        elif args.market == "NDX":
+            codes = ("NDX100",)
+        _log.info(f"결과: {sync_indices_ohlcv(cfg.db, days=days, codes=codes)}")
         return 0
 
     if not krx_markets and not us_filter:

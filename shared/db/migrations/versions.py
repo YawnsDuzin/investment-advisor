@@ -1214,3 +1214,53 @@ def _migrate_to_v30(cur) -> None:
         ON CONFLICT (version) DO NOTHING;
     """)
     print("[DB] v30 마이그레이션 완료 — investment_proposals.factor_snapshot JSONB (B1)")
+
+
+def _migrate_to_v31(cur) -> None:
+    """v31: 시장 레짐 레이어 (로드맵 B2).
+
+    1) `analysis_sessions.market_regime JSONB` — Stage 1 진입 시점의 시장 국면 스냅샷
+       예: {
+         "kospi": {"close": 2650.3, "above_200ma": true, "pct_from_ma200": 3.4,
+                    "vol60_pct": 1.12, "vol_regime": "mid",
+                    "drawdown_from_52w_high_pct": -5.2},
+         "sp500": {...},
+         "breadth_kr_pct": 58.2,   -- universe 중 20일 수익률 > 0 비율
+         "computed_at": "2026-04-23T13:00:00+09:00"
+       }
+
+    2) `market_indices_ohlcv` — 벤치마크 지수(KOSPI/S&P500 등) 일별 OHLCV 이력.
+       stock_universe_ohlcv와 분리하여 의미 구분. PK (index_code, trade_date).
+       `analyzer/regime.py`가 200일 이평·변동성 국면·낙폭 계산에 사용.
+       alpha_vs_benchmark_pct(v29) 채우기에도 활용 예정(B2b).
+    """
+    cur.execute("""
+        ALTER TABLE analysis_sessions
+            ADD COLUMN IF NOT EXISTS market_regime JSONB;
+    """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS market_indices_ohlcv (
+            index_code    TEXT NOT NULL,
+            trade_date    DATE NOT NULL,
+            open          NUMERIC(18,4),
+            high          NUMERIC(18,4),
+            low           NUMERIC(18,4),
+            close         NUMERIC(18,4) NOT NULL,
+            volume        BIGINT,
+            change_pct    NUMERIC(10,4),
+            data_source   TEXT NOT NULL,
+            created_at    TIMESTAMPTZ DEFAULT NOW(),
+            PRIMARY KEY (index_code, trade_date)
+        );
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_market_indices_date
+            ON market_indices_ohlcv(trade_date);
+    """)
+
+    cur.execute("""
+        INSERT INTO schema_version (version) VALUES (31)
+        ON CONFLICT (version) DO NOTHING;
+    """)
+    print("[DB] v31 마이그레이션 완료 — analysis_sessions.market_regime + market_indices_ohlcv (B2)")

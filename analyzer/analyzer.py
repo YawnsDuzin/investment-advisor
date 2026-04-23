@@ -707,6 +707,7 @@ async def stage1a1_analyze_issues(
     model: str | None = None,
     timeout_sec: int = 600,
     bond_yield_section: str = "",
+    market_regime_section: str = "",
 ) -> dict:
     """Stage 1-A1: 이슈만 분석 (테마 제외) — 출력 8~10KB로 안정화.
 
@@ -716,6 +717,7 @@ async def stage1a1_analyze_issues(
     prompt = STAGE1A1_PROMPT.format(
         news_text=news_text, date=date,
         bond_yield_section=bond_yield_section,
+        market_regime_section=market_regime_section,
     )
     start = time.time()
     response = await _query_claude(
@@ -738,6 +740,7 @@ async def stage1a2_build_themes(
     model: str | None = None,
     timeout_sec: int = 600,
     bond_yield_section: str = "",
+    market_regime_section: str = "",
 ) -> dict:
     """Stage 1-A2: 이슈 목록을 받아 투자 테마 4~6개 발굴."""
     keys_section = _format_existing_theme_keys(existing_keys or [])
@@ -747,6 +750,7 @@ async def stage1a2_build_themes(
         issues_context=issues_context,
         existing_theme_keys_section=keys_section,
         bond_yield_section=bond_yield_section,
+        market_regime_section=market_regime_section,
     )
     start = time.time()
     response = await _query_claude(
@@ -768,6 +772,7 @@ async def stage1a_discover_themes(
     model: str | None = None,
     timeout_sec: int = 600,
     bond_yield_section: str = "",
+    market_regime_section: str = "",
 ) -> dict:
     """Stage 1-A: 이슈 분석 + 테마 발굴 오케스트레이터.
 
@@ -782,6 +787,7 @@ async def stage1a_discover_themes(
         news_text, date, max_turns,
         model=model, timeout_sec=timeout_sec,
         bond_yield_section=bond_yield_section,
+        market_regime_section=market_regime_section,
     )
 
     if issues_result.get("error"):
@@ -808,6 +814,7 @@ async def stage1a_discover_themes(
         existing_keys=existing_keys,
         model=model, timeout_sec=timeout_sec,
         bond_yield_section=bond_yield_section,
+        market_regime_section=market_regime_section,
     )
 
     if themes_result.get("error"):
@@ -846,6 +853,7 @@ async def stage1a_discover_themes_legacy_single_call(
     model: str | None = None,
     timeout_sec: int = 600,
     bond_yield_section: str = "",
+    market_regime_section: str = "",
 ) -> dict:
     """Stage 1-A 단일 호출 버전 — 2026-04-22 이전 경로 (디버깅·비교용으로만 보존)."""
     keys_section = _format_existing_theme_keys(existing_keys or [])
@@ -853,6 +861,7 @@ async def stage1a_discover_themes_legacy_single_call(
         news_text=news_text, date=date,
         existing_theme_keys_section=keys_section,
         bond_yield_section=bond_yield_section,
+        market_regime_section=market_regime_section,
     )
     start = time.time()
     response = await _query_claude(
@@ -1163,6 +1172,23 @@ async def run_pipeline(
     except Exception as e:
         log.warning(f"국채 금리 조회 실패 (무시): {e}")
 
+    # ── 시장 레짐 스냅샷 (로드맵 B2) ──
+    market_regime_snap: dict = {}
+    market_regime_text = ""
+    if db_cfg is not None:
+        try:
+            from analyzer.regime import compute_regime, format_regime_text, infer_positioning_hint
+            market_regime_snap = compute_regime(db_cfg)
+            if market_regime_snap:
+                body = format_regime_text(market_regime_snap)
+                hint = infer_positioning_hint(market_regime_snap)
+                header = "\n\n## 시장 레짐 스냅샷 (DB 산출 — 국면 지표)"
+                if hint:
+                    header += f"\n**종합 국면:** {hint}\n"
+                market_regime_text = f"{header}\n{body}\n"
+        except Exception as e:
+            log.warning(f"[regime] 스냅샷 계산 실패 (무시): {e}")
+
     # ── 최근 추천 이력 조회 (중복 방지용) ──
     recent_recs = []
     existing_keys = []
@@ -1193,6 +1219,7 @@ async def run_pipeline(
             model=cfg.model_analysis,
             timeout_sec=timeout,
             bond_yield_section=bond_yield_text,
+            market_regime_section=market_regime_text,
         )
 
         if result.get("error"):
@@ -1209,6 +1236,7 @@ async def run_pipeline(
                 model=cfg.model_analysis,
                 timeout_sec=timeout,
                 bond_yield_section=bond_yield_text,
+                market_regime_section=market_regime_text,
             )
             if not retry_result.get("error") and len(retry_result.get("themes", [])) > len(result.get("themes", [])):
                 result = retry_result
@@ -1222,6 +1250,10 @@ async def run_pipeline(
     themes = result.get("themes", [])
     issues = result.get("issues", [])
     log.info(f"[Stage 1-A] 완료 — 이슈 {len(issues)}건, 테마 {len(themes)}건")
+
+    # B2: 레짐 스냅샷을 결과 dict에 첨부 → save_analysis가 analysis_sessions.market_regime에 저장
+    if market_regime_snap:
+        result["market_regime"] = market_regime_snap
 
     # ── Stage 1-B: 테마별 투자 제안 생성 (체크포인트 지원) ──
     if checkpoint and checkpoint.has("stage1b"):
