@@ -1033,6 +1033,11 @@ def sync_ohlcv_ticker(db_cfg: DatabaseConfig, *, ticker: str, days: int) -> dict
     return {"ticker": ticker, "market": market, "upserted": upserted, "duration_sec": duration}
 
 
+# change_pct 컬럼의 수용 한계 (v28: NUMERIC(10,4) → ±999999.9999%)
+# 역분할·상폐·수정주가 미반영으로 한계 초과 row가 들어올 수 있어 UPDATE 시 가드로 사용.
+_CHANGE_PCT_ABS_LIMIT = 999999.9999
+
+
 def recompute_change_pct(db_cfg: DatabaseConfig) -> int:
     """change_pct가 NULL인 row들을 window 함수로 일괄 재계산.
 
@@ -1040,9 +1045,41 @@ def recompute_change_pct(db_cfg: DatabaseConfig) -> int:
     대상으로 LAG로 이전 종가 참조하여 (close-prev)/prev*100 계산 후 UPDATE.
     첫 거래일은 prev_close가 없어 change_pct는 NULL 유지 (정상).
 
-    Returns: 업데이트된 row 수
+    방어 로직:
+      1. 오버플로우 가능 row(|계산값| >= _CHANGE_PCT_ABS_LIMIT)를 UPDATE 전에 식별하여
+         WARNING 로그로 티커·날짜·close·prev_close 샘플 출력 (최대 20건).
+         → 조작된 수정주가/상폐 직전 이상 체결 / 역분할 미반영 의심 케이스 조기 발견.
+      2. UPDATE SQL에 동일 범위 가드(WHERE ABS(...) < _CHANGE_PCT_ABS_LIMIT) 추가 —
+         한계 초과 row는 NULL 유지(이력 손실 아님, 재계산 시도는 다음 배치에서 반복).
+      3. 최종 UPDATE는 try/except로 감싸 psycopg2 오버플로우 등 예외 발생 시
+         rollback + ERROR 로그만 남기고 0 반환. **호출자로 예외 전파하지 않음** —
+         백필/가격 동기화 파이프라인이 이 단계 실패로 종료되지 않도록.
+
+    Returns: 업데이트된 row 수 (실패 시 0)
     """
-    sql = """
+    # 1) 오버플로우 가능 후보 사전 식별 (관측/모니터링 목적)
+    probe_sql = """
+    WITH affected AS (
+        SELECT DISTINCT ticker, market
+        FROM stock_universe_ohlcv
+        WHERE change_pct IS NULL
+    ),
+    ranked AS (
+        SELECT o.ticker, o.market, o.trade_date, o.close,
+               LAG(o.close) OVER (PARTITION BY o.ticker, o.market ORDER BY o.trade_date) AS prev_close
+        FROM stock_universe_ohlcv o
+        JOIN affected a USING (ticker, market)
+    )
+    SELECT ticker, market, trade_date, close, prev_close,
+           ((close - prev_close) / prev_close * 100)::numeric AS raw_pct
+    FROM ranked
+    WHERE prev_close IS NOT NULL
+      AND prev_close > 0
+      AND ABS((close - prev_close) / prev_close * 100) >= %s
+    ORDER BY ABS((close - prev_close) / prev_close * 100) DESC
+    LIMIT 20;
+    """
+    update_sql = """
     WITH affected AS (
         SELECT DISTINCT ticker, market
         FROM stock_universe_ohlcv
@@ -1062,20 +1099,50 @@ def recompute_change_pct(db_cfg: DatabaseConfig) -> int:
       AND o.trade_date = r.trade_date
       AND o.change_pct IS NULL
       AND r.prev_close IS NOT NULL
-      AND r.prev_close > 0;
+      AND r.prev_close > 0
+      AND ABS((r.close - r.prev_close) / r.prev_close * 100) < %s;
     """
+
+    updated = 0
     conn = get_connection(db_cfg)
     try:
-        with conn.cursor() as cur:
-            cur.execute(sql)
-            updated = cur.rowcount
-        conn.commit()
-    except Exception:
-        conn.rollback()
-        raise
+        # 1a) 오버플로우 후보 스캔
+        try:
+            with conn.cursor() as cur:
+                cur.execute(probe_sql, (_CHANGE_PCT_ABS_LIMIT,))
+                overflow_rows = cur.fetchall()
+            conn.commit()
+            if overflow_rows:
+                _log.warning(
+                    f"[OHLCV] change_pct 계산값이 한계(|{_CHANGE_PCT_ABS_LIMIT}%|) 초과 — "
+                    f"{len(overflow_rows)}건 (상위 20개 샘플 출력). "
+                    f"역분할/수정주가 미반영/상폐 직전 이상 체결 의심 — 해당 row는 NULL 유지."
+                )
+                for tk, mk, dt, close, prev, raw in overflow_rows:
+                    _log.warning(
+                        f"  └ {tk}({mk}) {dt} close={close} prev_close={prev} raw_pct={raw:+.2f}%"
+                    )
+        except Exception as e:
+            # probe 실패해도 본 UPDATE는 시도 (진단용이므로)
+            conn.rollback()
+            _log.warning(f"[OHLCV] change_pct 오버플로우 사전 스캔 실패 (UPDATE는 계속 시도): {e}")
+
+        # 2) 가드 포함 UPDATE — 실패해도 예외 전파 안 함
+        try:
+            with conn.cursor() as cur:
+                cur.execute(update_sql, (_CHANGE_PCT_ABS_LIMIT,))
+                updated = cur.rowcount
+            conn.commit()
+            _log.info(f"[OHLCV] change_pct 재계산: {updated}건 업데이트")
+        except Exception as e:
+            conn.rollback()
+            _log.error(
+                f"[OHLCV] change_pct 재계산 실패 — 이 단계를 건너뛰고 계속 진행합니다. "
+                f"원인: {type(e).__name__}: {e}"
+            )
+            updated = 0
     finally:
         conn.close()
-    _log.info(f"[OHLCV] change_pct 재계산: {updated}건 업데이트")
     return updated
 
 
@@ -1294,7 +1361,7 @@ def _run_mode_ohlcv_single(cfg: AppConfig, args: argparse.Namespace,
         result["us"] = sync_ohlcv_us(cfg.db, days=5, index_filter=index_filter)
 
     if not args.no_change_pct:
-        recompute_change_pct(cfg.db)
+        _safe_recompute_change_pct(cfg.db, stage="ohlcv-single")
     return result
 
 
@@ -1308,7 +1375,7 @@ def _run_mode_backfill(cfg: AppConfig, args: argparse.Namespace,
     if args.ticker:
         result["ticker"] = sync_ohlcv_ticker(cfg.db, ticker=args.ticker, days=days)
         if not args.no_change_pct:
-            recompute_change_pct(cfg.db)
+            _safe_recompute_change_pct(cfg.db, stage="backfill-ticker")
         return result
 
     today = datetime.now(KST)
@@ -1323,8 +1390,28 @@ def _run_mode_backfill(cfg: AppConfig, args: argparse.Namespace,
         result["us"] = sync_ohlcv_us(cfg.db, days=days, index_filter=index_filter)
 
     if not args.no_change_pct:
-        recompute_change_pct(cfg.db)
+        _safe_recompute_change_pct(cfg.db, stage="backfill")
     return result
+
+
+def _safe_recompute_change_pct(db_cfg: DatabaseConfig, *, stage: str) -> int:
+    """recompute_change_pct 래퍼 — 내부에서 이미 대부분의 예외를 흡수하지만,
+    추가 안전망으로 호출부에서도 BaseException 외의 모든 예외를 WARNING으로 전환하여
+    상위 배치(backfill/ohlcv/price 모드)의 비정상 종료를 방지한다.
+
+    Args:
+        stage: 로그 식별자 (backfill / backfill-ticker / ohlcv-single / price-sync 등)
+    Returns:
+        업데이트된 row 수 (실패 시 0)
+    """
+    try:
+        return recompute_change_pct(db_cfg)
+    except Exception as e:
+        _log.warning(
+            f"[{stage}] change_pct 재계산 호출 중 예외 — 이 단계를 건너뜁니다. "
+            f"원인: {type(e).__name__}: {e}"
+        )
+        return 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -1404,10 +1491,7 @@ def main(argv: list[str] | None = None) -> int:
 
     # price/auto 모드에서 OHLCV가 함께 수집되었으면 change_pct 재계산
     if with_ohlcv and args.mode in ("price", "auto") and not args.no_change_pct:
-        try:
-            recompute_change_pct(cfg.db)
-        except Exception as e:
-            _log.warning(f"change_pct 재계산 실패 (OHLCV UPSERT는 성공): {e}")
+        _safe_recompute_change_pct(cfg.db, stage=f"price-sync/{args.mode}")
 
     _log.info(f"결과: {result}")
     return 0

@@ -15,7 +15,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **AI**: Claude Code SDK (`claude-agent-sdk`) — 멀티스테이지 분석 파이프라인
 - **Backend**: FastAPI + Uvicorn (REST API + HTML 서빙)
 - **Template**: Jinja2 (다크 테마 UI)
-- **Database**: PostgreSQL + psycopg2 (스키마 자동 마이그레이션 v1~v27)
+- **Database**: PostgreSQL + psycopg2 (스키마 자동 마이그레이션 v1~v28)
 - **News**: feedparser + httpx (RSS 수집)
 - **Stock Data**: yfinance (해외 주가/재무 데이터) + pykrx (한국 주식 크로스체크/폴백)
 - **Async**: anyio (async/sync 브릿지)
@@ -165,14 +165,14 @@ sudo systemctl enable --now investment-advisor-analyzer.timer    # 매일 03:00 
 
 ### shared/ — 공용 모듈
 - `config.py` — `.env` 파일 자동 로드, `DatabaseConfig`, `NewsConfig`, `AnalyzerConfig`, `RecommendationConfig`(Top Picks 가중치·다양성), `UniverseConfig`/`ScreenerConfig`/`ValidationConfig`(Phase 1~3), `OhlcvConfig`(Phase 7 — retention/auto_adjust/on_price_sync), `AuthConfig`, `AppConfig`
-- `db.py` — `schema_version` 기반 자동 마이그레이션(v1~v27), `save_analysis()` + `_validate_proposal()` 검증 + tracking 갱신 + 구독 알림 생성(`_generate_notifications()`), `get_recent_recommendations()`, `get_connection()`
+- `db.py` — `schema_version` 기반 자동 마이그레이션(v1~v28), `save_analysis()` + `_validate_proposal()` 검증 + tracking 갱신 + 구독 알림 생성(`_generate_notifications()`), `get_recent_recommendations()`, `get_connection()`
 - `logger.py` — 범용 DB 로그 시스템. `init_logger(db_cfg)` → `start_run()` / `finish_run()`으로 실행 단위 추적. `get_logger(source)`로 콘솔+DB 동시 로깅. `app_runs`/`app_logs` 테이블 사용 (v18)
 - `pg_setup.py` — PostgreSQL 설치 감지 및 자동 설치 (Linux apt, Windows winget/choco)
 - `tier_limits.py` — 구독 티어별 기능 제한(워치리스트 수, 구독 수, 일일 분석 수, 교육 채팅 턴 수, 테마 열람 수). 프론트엔드·백엔드 공통 소스
 
 ## DB Schema
 
-`schema_version` 테이블로 버전 관리. `init_db()` 호출 시 자동 마이그레이션 (현재 v27).
+`schema_version` 테이블로 버전 관리. `init_db()` 호출 시 자동 마이그레이션 (현재 v28).
 
 **테이블 관계 (CASCADE):**
 ```
@@ -230,6 +230,7 @@ stock_universe_ohlcv (v27, 종목별 일별 OHLCV 이력, PK `(ticker, market, t
 - `stock_universe`(v25) — 검증된 종목 유니버스(KOSPI+KOSDAQ+NASDAQ+NYSE). LLM hallucination 차단용 화이트리스트. `ticker/market` UNIQUE, 메타(섹터·시총·상장상태) + 최신가 1개 보관. `analyzer/universe_sync.py`가 관리.
 - `proposal_validation_log`(v26) — AI 제시값 vs 실측 cross-check 결과. `field_name`·`mismatch`·`mismatch_pct`. Top Picks 감점 근거.
 - `stock_universe_ohlcv`(v27) — 종목별 일별 OHLCV 이력. PK `(ticker, market, trade_date)`, `open/high/low/close/volume/change_pct/data_source/adjusted`. **stock_universe와 FK 미설정** (PIT 원칙 — 상폐 종목 이력 보관). 800일 rolling(기본, `OHLCV_RETENTION_DAYS`), 상폐 종목 400일 축소 retention. `analyzer/universe_sync.py --mode backfill/ohlcv/cleanup`으로 관리. 운영 매뉴얼: `_docs/20260423101419_ohlcv-operations.md`.
+- `stock_universe_ohlcv.change_pct`(v28) — 정밀도 `NUMERIC(7,4)` → `NUMERIC(10,4)` 확장. 역분할(10:1↑)·상폐 직전 이상 체결·수정주가 미반영 혼입 등으로 |변동률| ≥ 1000% row가 백필 시 발생하여 오버플로우 유발. `recompute_change_pct()`는 `_CHANGE_PCT_ABS_LIMIT` 가드 + 사전 스캔 WARNING 로그 + 예외 흡수(호출자로 전파 안 함)로 보강. 한계 초과 row는 NULL 유지(PIT 이력 손실 없음).
 
 ## Key Conventions
 
