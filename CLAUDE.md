@@ -232,6 +232,7 @@ stock_universe_ohlcv (v27, 종목별 일별 OHLCV 이력, PK `(ticker, market, t
 - `proposal_validation_log`(v26) — AI 제시값 vs 실측 cross-check 결과. `field_name`·`mismatch`·`mismatch_pct`. Top Picks 감점 근거.
 - `stock_universe_ohlcv`(v27) — 종목별 일별 OHLCV 이력. PK `(ticker, market, trade_date)`, `open/high/low/close/volume/change_pct/data_source/adjusted`. **stock_universe와 FK 미설정** (PIT 원칙 — 상폐 종목 이력 보관). 800일 rolling(기본, `OHLCV_RETENTION_DAYS`), 상폐 종목 400일 축소 retention. `analyzer/universe_sync.py --mode backfill/ohlcv/cleanup`으로 관리. 운영 매뉴얼: `_docs/20260423101419_ohlcv-operations.md`.
 - `stock_universe_ohlcv.change_pct`(v28) — 정밀도 `NUMERIC(7,4)` → `NUMERIC(10,4)` 확장. 역분할(10:1↑)·상폐 직전 이상 체결·수정주가 미반영 혼입 등으로 |변동률| ≥ 1000% row가 백필 시 발생하여 오버플로우 유발. `recompute_change_pct()`는 `_CHANGE_PCT_ABS_LIMIT` 가드 + 사전 스캔 WARNING 로그 + 예외 흡수(호출자로 전파 안 함)로 보강. 한계 초과 row는 NULL 유지(PIT 이력 손실 없음).
+- **Stage 1-B 스크리너 OHLCV 필터(로드맵 A2)** — `analyzer/screener.py`가 `SCREENER_OHLCV_FILTERS=true`(기본)일 때 `stock_universe_ohlcv` 60일 집계(일평균 거래대금·60일 고점) CTE를 LEFT JOIN해 저유동·급락 종목 사전 제외. KRX/US 시장별 통화 분기(`SCREENER_MIN_DAILY_VALUE_KRW`/`_USD`), `SCREENER_MAX_DRAWDOWN_60D_PCT` 임계값. OHLCV 결측 종목은 조건 면제(백필 이전 호환). `screen()`의 fallback 최후 단계에서 자동 해제.
 
 ## Key Conventions
 
