@@ -1137,3 +1137,24 @@ def _migrate_to_v27(cur) -> None:
         ON CONFLICT (version) DO NOTHING;
     """)
     print("[DB] v27 마이그레이션 완료 — stock_universe_ohlcv 테이블 생성 (Phase 7)")
+
+
+def _migrate_to_v28(cur) -> None:
+    """v28: stock_universe_ohlcv.change_pct 정밀도 확장 — NUMERIC(7,4) → NUMERIC(10,4).
+
+    배경: 800일 백필 시 역분할(10:1 이상)·상폐 직전 급변·수정주가 미반영 혼입
+    등으로 |change_pct| ≥ 1000% row가 발생하여 NUMERIC(7,4) 오버플로우 발생.
+    정수부 여유 3자리(±999.9999%)는 현실 데이터에 과소. ±999999.9999%로 확장.
+
+    다른 percent 필드들(return_*_pct 등 NUMERIC(7,2))은 정수부 5자리라 안전.
+    """
+    cur.execute("""
+        ALTER TABLE stock_universe_ohlcv
+            ALTER COLUMN change_pct TYPE NUMERIC(10,4);
+    """)
+
+    cur.execute("""
+        INSERT INTO schema_version (version) VALUES (28)
+        ON CONFLICT (version) DO NOTHING;
+    """)
+    print("[DB] v28 마이그레이션 완료 — stock_universe_ohlcv.change_pct NUMERIC(10,4)로 확장")

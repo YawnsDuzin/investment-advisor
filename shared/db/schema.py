@@ -9,7 +9,7 @@ from shared.db.migrations import run_migrations
 
 
 # ── 스키마 버전 관리 ──────────────────────────────
-SCHEMA_VERSION = 27  # v27: stock_universe_ohlcv — 일별 OHLCV 이력 테이블 (Phase 7, ohlcv-history)
+SCHEMA_VERSION = 28  # v28: stock_universe_ohlcv.change_pct 정밀도 NUMERIC(7,4)→(10,4) (overflow 방어)
 
 
 def _create_base_schema(cur) -> None:
