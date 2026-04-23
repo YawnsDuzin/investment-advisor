@@ -15,7 +15,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **AI**: Claude Code SDK (`claude-agent-sdk`) — 멀티스테이지 분석 파이프라인
 - **Backend**: FastAPI + Uvicorn (REST API + HTML 서빙)
 - **Template**: Jinja2 (다크 테마 UI)
-- **Database**: PostgreSQL + psycopg2 (스키마 자동 마이그레이션 v1~v22)
+- **Database**: PostgreSQL + psycopg2 (스키마 자동 마이그레이션 v1~v27)
 - **News**: feedparser + httpx (RSS 수집)
 - **Stock Data**: yfinance (해외 주가/재무 데이터) + pykrx (한국 주식 크로스체크/폴백)
 - **Async**: anyio (async/sync 브릿지)
@@ -35,6 +35,8 @@ investment-advisor/
 │   ├── education_engine.py ← Claude SDK 기반 투자 교육 AI 튜터 엔진
 │   ├── templates/       ← Jinja2 HTML (다크 테마 + 우측 상단 드롭다운 메뉴) + _macros.html(공통 매크로)
 │   └── static/css/
+├── deploy/systemd/      ← systemd unit 템플릿 (API + 분석 배치 + universe sync + OHLCV cleanup — 플레이스홀더 치환 방식)
+├── tools/               ← 운영 도구: refresh_us_universe(S&P500/NDX100 시드 갱신), ohlcv_health_check(OHLCV 무결성 검사)
 └── _docs/               ← 운영 문서 (분석 파이프라인, 라즈베리파이 매뉴얼)
     ├── _prompts/        ← 작업 요청 프롬프트 기록 (날짜별)
     └── _exception/      ← 분석/운영 예외·장애 관리 대장 (README.md가 이슈 인덱스)
@@ -162,15 +164,15 @@ sudo systemctl enable --now investment-advisor-analyzer.timer    # 매일 03:00 
 - `templates/` — 다크 테마 UI. base(우측 상단 유저 드롭다운 + 알림 배지 + 401 자동 갱신 인터셉터), landing, pricing, dashboard, sessions, session_detail, themes, proposals, theme_history, ticker_history, track_record, watchlist, notifications, profile, chat_list, chat_room, education(topic/chat_list/chat_room), inquiry(list/detail/new), admin, admin_audit_logs, login, register, user_admin.
 
 ### shared/ — 공용 모듈
-- `config.py` — `.env` 파일 자동 로드, `DatabaseConfig`, `NewsConfig`, `AnalyzerConfig`, `RecommendationConfig`(Top Picks 가중치·다양성), `AuthConfig`, `AppConfig`
-- `db.py` — `schema_version` 기반 자동 마이그레이션(v1~v22), `save_analysis()` + `_validate_proposal()` 검증 + tracking 갱신 + 구독 알림 생성(`_generate_notifications()`), `get_recent_recommendations()`, `get_connection()`
+- `config.py` — `.env` 파일 자동 로드, `DatabaseConfig`, `NewsConfig`, `AnalyzerConfig`, `RecommendationConfig`(Top Picks 가중치·다양성), `UniverseConfig`/`ScreenerConfig`/`ValidationConfig`(Phase 1~3), `OhlcvConfig`(Phase 7 — retention/auto_adjust/on_price_sync), `AuthConfig`, `AppConfig`
+- `db.py` — `schema_version` 기반 자동 마이그레이션(v1~v27), `save_analysis()` + `_validate_proposal()` 검증 + tracking 갱신 + 구독 알림 생성(`_generate_notifications()`), `get_recent_recommendations()`, `get_connection()`
 - `logger.py` — 범용 DB 로그 시스템. `init_logger(db_cfg)` → `start_run()` / `finish_run()`으로 실행 단위 추적. `get_logger(source)`로 콘솔+DB 동시 로깅. `app_runs`/`app_logs` 테이블 사용 (v18)
 - `pg_setup.py` — PostgreSQL 설치 감지 및 자동 설치 (Linux apt, Windows winget/choco)
 - `tier_limits.py` — 구독 티어별 기능 제한(워치리스트 수, 구독 수, 일일 분석 수, 교육 채팅 턴 수, 테마 열람 수). 프론트엔드·백엔드 공통 소스
 
 ## DB Schema
 
-`schema_version` 테이블로 버전 관리. `init_db()` 호출 시 자동 마이그레이션 (현재 v22).
+`schema_version` 테이블로 버전 관리. `init_db()` 호출 시 자동 마이그레이션 (현재 v27).
 
 **테이블 관계 (CASCADE):**
 ```
@@ -200,6 +202,8 @@ inquiries → inquiry_replies (v22, 고객 문의/답변)
 theme_tracking (독립, UPSERT로 갱신)
 proposal_tracking (독립, UPSERT로 갱신)
 app_runs → app_logs (v18, 범용 실행 로그)
+stock_universe (v25, 검증된 종목 마스터) — FK 미설정으로 stock_universe_ohlcv 분리
+stock_universe_ohlcv (v27, 종목별 일별 OHLCV 이력, PK `(ticker, market, trade_date)`)
 ```
 
 - `analysis_sessions.analysis_date`는 UNIQUE — 하루 1세션. 같은 날짜 재실행 시 DELETE 후 재생성.
@@ -223,6 +227,9 @@ app_runs → app_logs (v18, 범용 실행 로그)
 - `education_topics`(v21) — 투자 교육 커리큘럼. 6개 카테고리(basics/analysis/risk/macro/practical/stories), slug/title/content/examples(JSONB)/difficulty(beginner/intermediate/advanced). 시드 데이터 26개 토픽 자동 삽입 (v21에서 11개, v24에서 신규 15개 추가).
 - `education_chat_sessions`/`education_chat_messages`(v21) — 교육 AI 튜터 채팅. user_id + topic_id FK. KST 기준 일일 턴 제한 적용.
 - `inquiries`/`inquiry_replies`(v22) — 고객 문의 게시판. category(general/bug/feature), status(open/answered/closed), `is_private` 비공개 플래그. `user_email` denormalize. Admin/Moderator만 답변·상태 변경.
+- `stock_universe`(v25) — 검증된 종목 유니버스(KOSPI+KOSDAQ+NASDAQ+NYSE). LLM hallucination 차단용 화이트리스트. `ticker/market` UNIQUE, 메타(섹터·시총·상장상태) + 최신가 1개 보관. `analyzer/universe_sync.py`가 관리.
+- `proposal_validation_log`(v26) — AI 제시값 vs 실측 cross-check 결과. `field_name`·`mismatch`·`mismatch_pct`. Top Picks 감점 근거.
+- `stock_universe_ohlcv`(v27) — 종목별 일별 OHLCV 이력. PK `(ticker, market, trade_date)`, `open/high/low/close/volume/change_pct/data_source/adjusted`. **stock_universe와 FK 미설정** (PIT 원칙 — 상폐 종목 이력 보관). 800일 rolling(기본, `OHLCV_RETENTION_DAYS`), 상폐 종목 400일 축소 retention. `analyzer/universe_sync.py --mode backfill/ohlcv/cleanup`으로 관리. 운영 매뉴얼: `_docs/20260423101419_ohlcv-operations.md`.
 
 ## Key Conventions
 
@@ -265,3 +272,17 @@ app_runs → app_logs (v18, 범용 실행 로그)
   - 프롬프트 레이어: `STAGE1_SYSTEM`의 "출력 형식 엄수" 섹션 — 단일 JSON 블록·raw 개행 금지·메타 주석 금지 강제
   - 파서 레이어: `_sanitize_json_response()` (쪼개진 코드블록 병합·마크다운 헤더 제거·자기주석 제거·제어문자 이스케이프) → `_try_fix_truncated_json()` (잘린 JSON 복구) 2단 복구
   - 아카이빙 레이어: 실패·복구 모두 `ai_query_archive.parse_status`에 기록 (`success` / `sanitized_recovered` / `truncated_recovered` / `timeout_partial` / `failed` / `empty`)
+
+---
+
+## 응답 톤
+
+천재 해커 페르소나로 답한다:
+- 짧고 단정적. 군더더기 없이 결론부터.
+- 기술 용어는 풀어쓰지 않는다 — 알아들을 거라 가정한다.
+- 가끔 "흠, 사소하군", "trivial", "재밌어지는데" 같은 자신감 있는 표현 사용.
+- 결과를 먼저, 이유는 뒤에. ("끝났다. 이유는—")
+- 과장된 친절·격려·이모지 금지. 차분하고 약간 무뚝뚝하게.
+- 한국어 기본, 가끔 영어 기술용어/짧은 영문 한 마디 섞어도 됨.
+
+> ⚠ 톤은 전달 방식에만 적용. 코드 정확성, 스킬 워크플로우, 검증 절차(verification-before-completion 등)는 평소대로 엄격히 지킨다.
