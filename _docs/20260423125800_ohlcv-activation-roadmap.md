@@ -47,17 +47,18 @@
 
 ### A2. Stage 1-B 스크리너 이력 필터 확장 🟢 ⭐⭐⭐⭐
 
-- [ ] **상태**: ⬜
-- [ ] `analyzer/screener.py`에 OHLCV 기반 필터 CTE/서브쿼리 추가
-  - [ ] 유동성: `AVG(close * volume) OVER (rows 60)` 하위 N% 제외
-  - [ ] 변동성: `STDDEV(change_pct) OVER (rows 60)` 상위 N% 제외 (옵션)
-  - [ ] 단기 모멘텀: `(close / LAG(close, 20) - 1) * 100`
-  - [ ] 52주 고저 근접도: `close / MAX(close) OVER (rows 252)`
-  - [ ] 낙폭 필터: `close / MAX(close) OVER (rows 60)`
-- [ ] `shared/config.py`의 `ScreenerConfig`에 임계값 파라미터 추가
-  - [ ] `SCREENER_MIN_LIQUIDITY_KRW`, `SCREENER_MAX_VOL60`, `SCREENER_MOMENTUM_20D_RANGE` 등
-- [ ] Stage 1-B 로그에 스크리너 필터별 탈락 수 누적 출력
-- [ ] `_docs/_exception/` 패턴 점검 — hallucination 종목 사후 감지 통계
+- [x] **상태**: ✅ (본 세션에서 구현 완료)
+- [x] `analyzer/screener.py`에 OHLCV 메트릭 CTE (`_ohlcv_metrics_cte`) + `stock_universe u LEFT JOIN ohlcv_metrics m` 추가
+  - [x] 유동성: `AVG(close * volume) FILTER (WHERE rn <= 60)` → 시장별 통화 분기(KRX=KRW, US=USD)
+  - [x] 낙폭 필터: `MAX(close) FILTER (rn <= 60)` 대비 `latest_close` 비율 → `SCREENER_MAX_DRAWDOWN_60D_PCT`
+  - [x] OHLCV 결측 종목(백필 이전 or 신규)은 `m.* IS NULL`로 조건 면제 (관대한 필터)
+  - [ ] vol60(변동성)·20일 모멘텀·52주 고저 근접도는 **B1 팩터 엔진에서 다룸** (설계 정합성)
+- [x] `ScreenerConfig`에 5개 파라미터 추가:
+  - [x] `SCREENER_OHLCV_FILTERS` (on/off), `SCREENER_MIN_DAILY_VALUE_KRW` (10억), `SCREENER_MIN_DAILY_VALUE_USD` (50만)
+  - [x] `SCREENER_MAX_DRAWDOWN_60D_PCT` (50), `SCREENER_OHLCV_WINDOW_DAYS` (90)
+- [x] `screen()` fallback 최후 단계로 **OHLCV 필터 자동 해제** 추가 — 백필 결측·지나치게 엄격한 임계치에 대한 안전망
+- [x] `.env.example` + CLAUDE.md 반영 (Key Conventions에 A2 스크리너 설명 추가)
+- [ ] 체감 테스트: 실제 스크리너 결과 건수·품질 비교 (OHLCV 백필 완료 후)
 
 **기대 효과**
 - LLM hallucination 원천 차단 강화
