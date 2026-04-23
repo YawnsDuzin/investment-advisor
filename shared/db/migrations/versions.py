@@ -1089,3 +1089,51 @@ def _migrate_to_v26(cur) -> None:
         ON CONFLICT (version) DO NOTHING;
     """)
     print("[DB] v26 마이그레이션 완료 — proposal_validation_log + spec_snapshot/screener_match_reason (Phase 3)")
+
+
+def _migrate_to_v27(cur) -> None:
+    """v27: stock_universe_ohlcv — 종목별 일별 OHLCV 이력 테이블 (Phase 7, ohlcv-history).
+
+    `stock_universe`는 종목별 현재 상태 1 row만 관리한다. 시계열 분석(팩터 백테스트,
+    레짐 판별, 모멘텀 계산)을 위해 일별 OHLCV를 rolling 보관하는 이력 테이블을 추가한다.
+
+    설계 결정 (계획서 _docs/20260422235016_ohlcv-history-table-plan.md §3):
+    - 원시 OHLCV + change_pct만 저장 (지표는 on-demand 계산)
+    - KRX + US 모두 포함
+    - 우선주/상폐 종목도 수집 (스크리너 레이어에서 필터) → PIT 원칙
+    - stock_universe 와의 FK 미설정 — 상폐 종목 OHLCV 이력 유지
+    - PK (ticker, market, trade_date) → 멱등 UPSERT
+
+    Retention은 환경변수 OHLCV_RETENTION_DAYS(기본 400일)로 별도 정리.
+    """
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS stock_universe_ohlcv (
+            ticker        TEXT NOT NULL,
+            market        TEXT NOT NULL,
+            trade_date    DATE NOT NULL,
+            open          NUMERIC(18,4),
+            high          NUMERIC(18,4),
+            low           NUMERIC(18,4),
+            close         NUMERIC(18,4) NOT NULL,
+            volume        BIGINT,
+            change_pct    NUMERIC(7,4),
+            data_source   TEXT NOT NULL,
+            adjusted      BOOLEAN DEFAULT FALSE,
+            created_at    TIMESTAMPTZ DEFAULT NOW(),
+            PRIMARY KEY (ticker, market, trade_date)
+        );
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_ohlcv_date
+            ON stock_universe_ohlcv(trade_date);
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_ohlcv_ticker_desc
+            ON stock_universe_ohlcv(ticker, market, trade_date DESC);
+    """)
+
+    cur.execute("""
+        INSERT INTO schema_version (version) VALUES (27)
+        ON CONFLICT (version) DO NOTHING;
+    """)
+    print("[DB] v27 마이그레이션 완료 — stock_universe_ohlcv 테이블 생성 (Phase 7)")
