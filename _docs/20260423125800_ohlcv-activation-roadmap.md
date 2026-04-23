@@ -69,15 +69,17 @@
 
 ### A3. Post-Return 추적을 OHLCV로 통합 🟢 ⭐⭐⭐
 
-- [ ] **상태**: ⬜
-- [ ] `analyzer/price_tracker.py`에 `compute_post_returns_from_ohlcv()` 추가
-  - [ ] `entry_price`를 기준으로 post-return 1m/3m/6m/1y 계산
-  - [ ] 추가 메트릭: **Max Drawdown / 평균 보유기간 수익률 / 벤치마크 대비 alpha**
-  - [ ] 벤치마크: 한국(KOSPI) / 해외(S&P 500). KOSPI OHLCV는 `pykrx` index ticker 별도 수집 필요
-- [ ] `proposal_price_snapshots` 중복 적재 여부 검토
-  - [ ] OHLCV에 해당 날짜 데이터 있으면 snapshots 적재 생략 (옵션)
-- [ ] DB v29 마이그레이션 (선택): `investment_proposals`에 `max_drawdown_pct`, `alpha_vs_benchmark_pct` 컬럼 추가
-- [ ] 트랙 레코드 페이지 표시 로직에 신규 메트릭 반영
+- [x] **상태**: ✅ (본 세션에서 구현 완료 — alpha는 B2 의존)
+- [x] `analyzer/price_tracker.py` 전면 리팩터 — OHLCV 우선 + live 폴백 구조
+  - [x] `_fetch_ohlcv_range(db_cfg, tickers, from, to)`: 다중 종목 단일 SQL 범위 조회
+  - [x] `_compute_returns_from_ohlcv(history, entry, analysis_date, today)`: post_return + max_drawdown 일괄 계산
+  - [x] `_compute_returns_from_snapshots(cur, ...)`: OHLCV 결측 종목용 legacy 폴백
+- [x] `proposal_price_snapshots` 처리: **OHLCV 결측 종목에만** 오늘 스냅샷 저장 (중복 적재 제거)
+- [x] DB v29 마이그레이션 — `investment_proposals.max_drawdown_pct` / `max_drawdown_date` / `alpha_vs_benchmark_pct` 컬럼 추가
+  - [x] `alpha_vs_benchmark_pct`는 B2(벤치마크 인덱스 OHLCV 수집) 구현 후 채움
+- [x] 완료 로그에 `출처: ohlcv=N live_fallback=N` 카운터 + `결측 스냅샷 N건`
+- [ ] 트랙 레코드 페이지(UI-4) 표시 로직에 신규 메트릭 반영 (UI 우선순위로 이월)
+- [ ] 체감 테스트: 라즈베리파이 배치 실측 비교 (OHLCV 백필 완료 후)
 
 **기대 효과**
 - 추천 성과 지표 품질 대폭 확장 (승률만 있던 현재 → Sharpe 근사·Max DD·alpha)
@@ -276,14 +278,14 @@ Month 6+:
 |------|-------------------|
 | A1 | 없음 — 기존 테이블만 사용 |
 | A2 | 없음 |
-| A3 | v29 (선택): `investment_proposals.max_drawdown_pct / alpha_vs_benchmark_pct` |
-| B1 | v29: `investment_proposals.factor_snapshot JSONB` |
-| B2 | v29: `analysis_sessions.market_regime JSONB` |
+| A3 | ✅ v29 적용 — `investment_proposals.max_drawdown_pct / max_drawdown_date / alpha_vs_benchmark_pct` |
+| B1 | v30 예정: `investment_proposals.factor_snapshot JSONB` |
+| B2 | v30 예정: `analysis_sessions.market_regime JSONB` (A3에서 이미 추가된 `alpha_vs_benchmark_pct` 채움) |
 | B3 | 없음 — 프롬프트·UI만 변경 |
 | C1 | v30~: factor_weights_history 테이블 |
 | C2 | v30~: backtest_runs 테이블 |
 
-**v29는 B1·B2·A3 컬럼을 묶어서 한 번에 추가하는 걸 권장** — 개별 마이그레이션 파편화 방지.
+**v29는 A3에서 적용 완료.** B1·B2 컬럼은 v30에서 묶어서 추가 예정.
 
 ---
 
