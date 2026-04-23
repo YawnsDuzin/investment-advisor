@@ -9,7 +9,7 @@ from shared.db.migrations import run_migrations
 
 
 # ── 스키마 버전 관리 ──────────────────────────────
-SCHEMA_VERSION = 28  # v28: stock_universe_ohlcv.change_pct 정밀도 NUMERIC(7,4)→(10,4) (overflow 방어)
+SCHEMA_VERSION = 29  # v29: investment_proposals max_drawdown_pct/_date + alpha_vs_benchmark_pct (로드맵 A3)
 
 
 def _create_base_schema(cur) -> None:

@@ -1158,3 +1158,29 @@ def _migrate_to_v28(cur) -> None:
         ON CONFLICT (version) DO NOTHING;
     """)
     print("[DB] v28 마이그레이션 완료 — stock_universe_ohlcv.change_pct NUMERIC(10,4)로 확장")
+
+
+def _migrate_to_v29(cur) -> None:
+    """v29: investment_proposals 성과 메트릭 확장 — max_drawdown + alpha (로드맵 A3).
+
+    추천 후 실제 수익률 추적(`price_tracker.py`)이 OHLCV 이력 테이블로 통합되면서
+    post_return_*_pct 외에 다음 메트릭을 함께 기록할 수 있다.
+
+    - `max_drawdown_pct`: entry_price 대비 추천 이후 최저점 낙폭(%). 항상 음수 또는 0.
+      예) entry 100 → 추천 후 최저가 70이면 max_drawdown_pct = -30.0
+    - `max_drawdown_date`: 해당 최저점이 기록된 거래일 (관측일 기준)
+    - `alpha_vs_benchmark_pct`: post_return 1y 기준 벤치마크 대비 초과수익(%).
+      벤치마크(KOSPI/S&P500) OHLCV 인프라 구축 전까지는 NULL 유지. B2 레짐 레이어에서 채움.
+    """
+    cur.execute("""
+        ALTER TABLE investment_proposals
+            ADD COLUMN IF NOT EXISTS max_drawdown_pct NUMERIC(7,2),
+            ADD COLUMN IF NOT EXISTS max_drawdown_date DATE,
+            ADD COLUMN IF NOT EXISTS alpha_vs_benchmark_pct NUMERIC(7,2);
+    """)
+
+    cur.execute("""
+        INSERT INTO schema_version (version) VALUES (29)
+        ON CONFLICT (version) DO NOTHING;
+    """)
+    print("[DB] v29 마이그레이션 완료 — investment_proposals max_drawdown_pct / max_drawdown_date / alpha_vs_benchmark_pct")
