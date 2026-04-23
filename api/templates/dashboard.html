@@ -8,6 +8,10 @@
 {{ ad_slot('banner') }}
 
 {% if session %}
+{# 시장 레짐 배너 (로드맵 UI-3) — session.market_regime JSONB 시각화 #}
+{% set regime = session.market_regime %}
+{% include "partials/_regime_banner.html" %}
+
 {# ════════════════════════════════════════════════════
    TIER 1 — First Glance (스크롤 없이 핵심 파악)
    ════════════════════════════════════════════════════ #}

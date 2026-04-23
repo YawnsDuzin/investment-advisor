@@ -1,11 +1,16 @@
 {% extends "base.html" %}
 {% from "_macros/theme.html" import theme_header, scenario_grid, indicator_tags, macro_impact_table %}
 {% from "_macros/common.html" import external_links, market_summary_body %}
+{% from "_macros/proposal.html" import factor_snapshot_panel %}
 {% block title %}세션 #{{ session.id }} — AlphaSignal{% endblock %}
 {% block page_title %}세션 #{{ session.id }} &middot; {{ session.analysis_date }}{% endblock %}
 {% block header_actions %}<a href="/pages/sessions" class="btn">목록으로</a>{% endblock %}
 
 {% block content %}
+{# 시장 레짐 배너 (로드맵 UI-3) — session.market_regime JSONB 시각화 #}
+{% set regime = session.market_regime %}
+{% include "partials/_regime_banner.html" %}
+
 <div class="market-summary">
     <div class="label" style="display:flex;align-items:center;justify-content:space-between;">
         <span>Market Summary</span>
@@ -178,6 +183,8 @@
                                 <a href="/proposals/{{ p.id }}/stock-analysis" target="_blank" class="stock-analysis-link">종목 심층분석 보기</a>
                             </div>
                             {% endif %}
+
+                            {{ factor_snapshot_panel(p.factor_snapshot) }}
                         </div>
                     </td>
                 </tr>
