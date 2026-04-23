@@ -9,7 +9,7 @@ from shared.db.migrations import run_migrations
 
 
 # ── 스키마 버전 관리 ──────────────────────────────
-SCHEMA_VERSION = 26  # v26: Evidence Validation Layer (Phase 3 — recommendation-engine-redesign)
+SCHEMA_VERSION = 28  # v28: stock_universe_ohlcv.change_pct 정밀도 NUMERIC(7,4)→(10,4) (overflow 방어)
 
 
 def _create_base_schema(cur) -> None:

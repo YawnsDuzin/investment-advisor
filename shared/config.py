@@ -171,6 +171,27 @@ class ValidationConfig:
 
 
 @dataclass
+class OhlcvConfig:
+    """종목별 일별 OHLCV 이력 테이블 설정 (Phase 7 — ohlcv-history).
+
+    `stock_universe_ohlcv` 테이블의 수집·보존·cleanup 정책.
+    계획서: _docs/20260422235016_ohlcv-history-table-plan.md
+    """
+    # 보존 일수 — 기본 800일(2년). 200일 이평/YoY 비교 안전. 확장 시 값만 늘리고 backfill 재실행.
+    retention_days: int = field(default_factory=lambda: int(os.getenv("OHLCV_RETENTION_DAYS", "800")))
+    # 상폐 종목 축소 retention (0이면 retention_days와 동일)
+    delisted_retention_days: int = field(
+        default_factory=lambda: int(os.getenv("OHLCV_DELISTED_RETENTION_DAYS", "400"))
+    )
+    # yfinance auto_adjust — False면 raw 가격 저장 (변동성·수급 계산 정확도 ↑)
+    auto_adjust: bool = field(default_factory=lambda: _env_bool("OHLCV_AUTO_ADJUST", False))
+    # price sync 실행 시 OHLCV도 함께 수집할지 (True 권장 — 같은 API 응답 재활용)
+    on_price_sync: bool = field(default_factory=lambda: _env_bool("OHLCV_ON_PRICE_SYNC", True))
+    # 백필 기본 일수 (CLI --days 생략 시)
+    backfill_days: int = field(default_factory=lambda: int(os.getenv("OHLCV_BACKFILL_DAYS", "800")))
+
+
+@dataclass
 class ScreenerConfig:
     """Universe-First Stage 1-B 분해 설정 (Phase 2 — recommendation-engine-redesign).
 
@@ -221,4 +242,5 @@ class AppConfig:
     universe: UniverseConfig = field(default_factory=UniverseConfig)
     screener: ScreenerConfig = field(default_factory=ScreenerConfig)
     validation: ValidationConfig = field(default_factory=ValidationConfig)
+    ohlcv: OhlcvConfig = field(default_factory=OhlcvConfig)
     max_turns: int = field(default_factory=lambda: int(os.getenv("MAX_TURNS", "1")))  # 하위호환

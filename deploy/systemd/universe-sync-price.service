@@ -1,0 +1,25 @@
+[Unit]
+Description=Investment Advisor - Universe 가격 + OHLCV 일별 동기화
+Documentation=https://github.com/yawnsduzin/investment-advisor
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=__SYSTEM_USER__
+Group=__SYSTEM_USER__
+WorkingDirectory=__INSTALL_DIR__
+Environment=PYTHONUNBUFFERED=1
+ExecStart=__VENV_PYTHON__ -m analyzer.universe_sync --mode price --market ALL
+TimeoutStartSec=1800
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=5
+
+# 실패 시 즉시 재시도하지 않음 — 타이머의 다음 주기에 시도
+Restart=no
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

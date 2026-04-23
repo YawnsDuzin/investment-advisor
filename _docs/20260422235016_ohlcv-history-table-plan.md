@@ -1,10 +1,12 @@
 # 종목별 일별 OHLCV 이력 테이블 추가 — 설계·작업·활용 방안
 
-> **상태**: 결정 확정 대기 (v1 draft)
+> **상태**: ✅ 확정 + 구현 완료 (2026-04-23) — 브랜치 `feature/ohlcv-history`
 > **작성일**: 2026-04-22 23:50 KST
+> **확정일**: 2026-04-23
 > **범위**: 신규 스키마 v27 + `analyzer/universe_sync.py` 확장 + 운영 자동화
 > **선행 조건**: Phase 1a/1b 완료 (stock_universe 구축됨)
 > **후속 의존**: Phase 4(Factor Feedback)·Phase 5(Regime) 구현 전제 인프라
+> **운영 매뉴얼**: [`20260423101419_ohlcv-operations.md`](20260423101419_ohlcv-operations.md)
 
 ---
 
@@ -67,15 +69,25 @@
 
 ---
 
-## 3. 결정사항 (5개 — 확정 제안)
+## 3. 결정사항 (5개 — ✅ 확정 2026-04-23)
 
-| # | 항목 | 제안 결정 | 근거 |
+| # | 항목 | 확정 내용 | 근거 |
 |---|---|---|---|
-| **1** | v19 `proposal_price_snapshots`와의 관계 | **Option A — 분리 유지** | Market data vs Portfolio data 분리는 업계 표준. 용도(성과 추적 vs 범용 분석)가 명확히 다름 |
-| **2** | 백필 범위 / 보존 주기 | **환경변수 `OHLCV_RETENTION_DAYS=400` (기본 400일 ≈ 1.1년)** | 1년 + 52주 고저 계산용 버퍼 50일. 2년 이상은 초기에는 불필요, 필요 시 환경변수로 확장 |
-| **3** | OHLCV vs 기술지표 사전 계산 | **원시 OHLCV만 저장 + `change_pct` 1개** | 정규화 원칙. 지표 로직 변경 시 재계산 불필요. pandas-ta로 on-demand 메모리 계산이 빠름 |
-| **4** | US 시장 포함 여부 | **KRX + US 둘 다 포함, CLI에서 선택 가능** | universe_sync 구조상 추가 비용 적음. 동시 진행이 일관성 유지에 유리 |
-| **5** | 우선주 / 상폐 종목 | **모두 수집. 스크리너만 필터링** | PIT(Point-in-time) 원칙. 생존편향 방지 (Phase 4.2 계획서 §4.2 명시). FK CASCADE 해제하여 universe에서 삭제돼도 OHLCV 유지 옵션 재검토 필요 (§6.1 참조) |
+| **1** | v19 `proposal_price_snapshots`와의 관계 | ✅ **Option A — 분리 유지** | Market data vs Portfolio data 분리는 업계 표준. 용도(성과 추적 vs 범용 분석)가 명확히 다름 |
+| **2** | 백필 범위 / 보존 주기 | ✅ **`OHLCV_RETENTION_DAYS=800` (2년, 원안 400 → 800 상향)** | 1년은 200일 이평이 초기 불안정 + YoY 비교 불가. 2년이면 200일 이평 + YoY + Phase 4 IC 계산 모두 안전. 디스크 +100MB(무시 가능). Phase 4/5에서 샘플 더 필요하면 1100(3년) 으로 확장만 하면 됨 |
+| **3** | OHLCV vs 기술지표 사전 계산 | ✅ **원시 OHLCV만 저장 + `change_pct` 1개** | 정규화 원칙. 지표 로직 변경 시 재계산 불필요. pandas-ta로 on-demand 메모리 계산이 빠름 |
+| **4** | US 시장 포함 여부 | ✅ **KRX + US 둘 다 포함, CLI `--market` 로 선택 가능** | universe_sync 구조상 추가 비용 적음. 동시 진행이 일관성 유지에 유리 |
+| **5** | 우선주 / 상폐 종목 | ✅ **모두 수집. 스크리너만 필터링** | PIT(Point-in-time) 원칙. 생존편향 방지. FK 미설정(§6.1-1) — universe에서 삭제돼도 OHLCV 보관. 상폐 종목은 `OHLCV_DELISTED_RETENTION_DAYS=400` 으로 축소 retention 적용 |
+
+### 3.1 §6.1 추가 결정사항 (5건 — ✅ 확정)
+
+| # | 항목 | 확정 | 비고 |
+|---|---|---|---|
+| 1 | FK 정책 | ✅ FK 미설정 | PIT 원칙 유지 |
+| 2 | 재분석 시 덮어쓰기 | ✅ PK 중복 시 UPSERT | 멱등성 |
+| 3 | yfinance `auto_adjust` | ✅ False (raw 저장) | 변동성·수급 계산 정확도 ↑ |
+| 4 | Retention 실행 주체 | ✅ systemd(자동) + CLI(수동) 양쪽 지원 | `ohlcv-cleanup.timer` 주 1회 |
+| 5 | 증분 실행 타이밍 | ✅ `--mode price`에 OHLCV 묻어가기 (`OHLCV_ON_PRICE_SYNC=true`) | 별도 타이머 불필요 |
 
 ---
 
@@ -112,17 +124,17 @@ CREATE INDEX idx_ohlcv_ticker_desc    ON stock_universe_ohlcv(ticker, market, tr
 - **`adjusted` 플래그**: 향후 adjusted price 별도 저장 여지 (현재 기본 False)
 - **FK 미설정(잠정)**: universe 마스터에서 delisted 처리된 종목의 OHLCV도 보관 필요 (§6.1)
 
-### 4.3 예상 데이터량
+### 4.3 예상 데이터량 (✅ 2년 확정 기준)
 
 | 항목 | 값 |
 |---|---|
 | 종목 수 (KRX+US) | ~3,300 |
-| 거래일 / 년 | ~250 |
-| 연간 row 수 | ~825,000 |
+| 거래일 / 년 | ~250 → 2년 ~560 |
+| 2년 row 수 | ~1,848,000 (상폐 축소 retention 감안 실측 ~1,600k) |
 | row 크기 | ~60 bytes |
-| 테이블 크기 | ~50 MB |
-| 인덱스 2종 포함 | ~100 MB |
-| Pi SSD 64GB 대비 | **0.16%** (무시 가능) |
+| 테이블 크기 | ~120 MB |
+| 인덱스 2종 포함 | ~200 MB |
+| Pi SSD 64GB 대비 | **0.31%** (무시 가능) |
 
 ---
 

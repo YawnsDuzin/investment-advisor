@@ -1,0 +1,11 @@
+[Unit]
+Description=Investment Advisor - Universe 가격/OHLCV 매일 02:30 KST 실행
+
+[Timer]
+# 매일 02:30 KST — 분석 배치(03:00) 전에 최신 가격/OHLCV 확보
+OnCalendar=*-*-* 02:30:00 Asia/Seoul
+Persistent=true
+Unit=universe-sync-price.service
+
+[Install]
+WantedBy=timers.target
