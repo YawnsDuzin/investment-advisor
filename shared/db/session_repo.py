@@ -73,12 +73,14 @@ def save_analysis(cfg: DatabaseConfig, analysis_date: str, result: dict) -> int:
                 "DELETE FROM analysis_sessions WHERE analysis_date = %s",
                 (analysis_date,)
             )
+            market_regime = result.get("market_regime")
             cur.execute(
                 """INSERT INTO analysis_sessions
-                   (analysis_date, market_summary, risk_temperature, data_sources)
-                   VALUES (%s, %s, %s, %s) RETURNING id""",
+                   (analysis_date, market_summary, risk_temperature, data_sources, market_regime)
+                   VALUES (%s, %s, %s, %s, %s) RETURNING id""",
                 (analysis_date, result.get("market_summary"),
-                 result.get("risk_temperature"), result.get("data_sources"))
+                 result.get("risk_temperature"), result.get("data_sources"),
+                 json.dumps(market_regime, ensure_ascii=False) if market_regime else None)
             )
             session_id = cur.fetchone()[0]
 
@@ -166,6 +168,7 @@ def save_analysis(cfg: DatabaseConfig, analysis_date: str, result: dict) -> int:
                         except (ValueError, TypeError):
                             pass
                     spec_snapshot = proposal.get("spec_snapshot")
+                    factor_snapshot = proposal.get("factor_snapshot")
                     cur.execute(
                         """INSERT INTO investment_proposals
                            (theme_id, asset_type, asset_name, ticker, market,
@@ -179,8 +182,8 @@ def save_analysis(cfg: DatabaseConfig, analysis_date: str, result: dict) -> int:
                             entry_price,
                             foreign_ownership_pct, index_membership,
                             squeeze_risk, foreign_net_buy_signal,
-                            spec_snapshot, screener_match_reason)
-                           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                            spec_snapshot, screener_match_reason, factor_snapshot)
+                           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                            RETURNING id""",
                         (theme_id, proposal.get("asset_type"),
                          proposal.get("asset_name"), proposal.get("ticker"),
@@ -204,7 +207,8 @@ def save_analysis(cfg: DatabaseConfig, analysis_date: str, result: dict) -> int:
                          proposal.get("squeeze_risk"),
                          proposal.get("foreign_net_buy_signal"),
                          json.dumps(spec_snapshot, ensure_ascii=False) if spec_snapshot else None,
-                         proposal.get("screener_match_reason"))
+                         proposal.get("screener_match_reason"),
+                         json.dumps(factor_snapshot, ensure_ascii=False) if factor_snapshot else None)
                     )
                     proposal_id = cur.fetchone()[0]
                     saved_proposals.append((proposal_id, proposal))

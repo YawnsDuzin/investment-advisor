@@ -1158,3 +1158,109 @@ def _migrate_to_v28(cur) -> None:
         ON CONFLICT (version) DO NOTHING;
     """)
     print("[DB] v28 마이그레이션 완료 — stock_universe_ohlcv.change_pct NUMERIC(10,4)로 확장")
+
+
+def _migrate_to_v29(cur) -> None:
+    """v29: investment_proposals 성과 메트릭 확장 — max_drawdown + alpha (로드맵 A3).
+
+    추천 후 실제 수익률 추적(`price_tracker.py`)이 OHLCV 이력 테이블로 통합되면서
+    post_return_*_pct 외에 다음 메트릭을 함께 기록할 수 있다.
+
+    - `max_drawdown_pct`: entry_price 대비 추천 이후 최저점 낙폭(%). 항상 음수 또는 0.
+      예) entry 100 → 추천 후 최저가 70이면 max_drawdown_pct = -30.0
+    - `max_drawdown_date`: 해당 최저점이 기록된 거래일 (관측일 기준)
+    - `alpha_vs_benchmark_pct`: post_return 1y 기준 벤치마크 대비 초과수익(%).
+      벤치마크(KOSPI/S&P500) OHLCV 인프라 구축 전까지는 NULL 유지. B2 레짐 레이어에서 채움.
+    """
+    cur.execute("""
+        ALTER TABLE investment_proposals
+            ADD COLUMN IF NOT EXISTS max_drawdown_pct NUMERIC(7,2),
+            ADD COLUMN IF NOT EXISTS max_drawdown_date DATE,
+            ADD COLUMN IF NOT EXISTS alpha_vs_benchmark_pct NUMERIC(7,2);
+    """)
+
+    cur.execute("""
+        INSERT INTO schema_version (version) VALUES (29)
+        ON CONFLICT (version) DO NOTHING;
+    """)
+    print("[DB] v29 마이그레이션 완료 — investment_proposals max_drawdown_pct / max_drawdown_date / alpha_vs_benchmark_pct")
+
+
+def _migrate_to_v30(cur) -> None:
+    """v30: investment_proposals.factor_snapshot JSONB — 정량 팩터 스냅샷 (로드맵 B1).
+
+    Stage 2 분석 시점에 `analyzer/factor_engine.py`가 OHLCV 이력에서
+    산출한 cross-section percentile·raw 값을 JSONB로 보관. 예:
+
+        {
+          "r1m_pct": 5.2, "r3m_pct": 18.4, "r6m_pct": 35.1, "r12m_pct": 42.0,
+          "r1m_pctile": 0.72, "r3m_pctile": 0.85, "r6m_pctile": 0.88,
+          "vol60_pct": 2.15, "low_vol_pctile": 0.55,
+          "volume_ratio": 1.35, "volume_pctile": 0.78,
+          "universe_size": 2987,
+          "computed_at": "2026-04-23T13:00:00+09:00"
+        }
+
+    STAGE2 프롬프트에 실측값으로 주입되어 LLM의 수치 환각을 제거한다.
+    UI에서는 "AI가 본 실측 데이터" 섹션으로 투명화 가능(UI-7).
+    """
+    cur.execute("""
+        ALTER TABLE investment_proposals
+            ADD COLUMN IF NOT EXISTS factor_snapshot JSONB;
+    """)
+
+    cur.execute("""
+        INSERT INTO schema_version (version) VALUES (30)
+        ON CONFLICT (version) DO NOTHING;
+    """)
+    print("[DB] v30 마이그레이션 완료 — investment_proposals.factor_snapshot JSONB (B1)")
+
+
+def _migrate_to_v31(cur) -> None:
+    """v31: 시장 레짐 레이어 (로드맵 B2).
+
+    1) `analysis_sessions.market_regime JSONB` — Stage 1 진입 시점의 시장 국면 스냅샷
+       예: {
+         "kospi": {"close": 2650.3, "above_200ma": true, "pct_from_ma200": 3.4,
+                    "vol60_pct": 1.12, "vol_regime": "mid",
+                    "drawdown_from_52w_high_pct": -5.2},
+         "sp500": {...},
+         "breadth_kr_pct": 58.2,   -- universe 중 20일 수익률 > 0 비율
+         "computed_at": "2026-04-23T13:00:00+09:00"
+       }
+
+    2) `market_indices_ohlcv` — 벤치마크 지수(KOSPI/S&P500 등) 일별 OHLCV 이력.
+       stock_universe_ohlcv와 분리하여 의미 구분. PK (index_code, trade_date).
+       `analyzer/regime.py`가 200일 이평·변동성 국면·낙폭 계산에 사용.
+       alpha_vs_benchmark_pct(v29) 채우기에도 활용 예정(B2b).
+    """
+    cur.execute("""
+        ALTER TABLE analysis_sessions
+            ADD COLUMN IF NOT EXISTS market_regime JSONB;
+    """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS market_indices_ohlcv (
+            index_code    TEXT NOT NULL,
+            trade_date    DATE NOT NULL,
+            open          NUMERIC(18,4),
+            high          NUMERIC(18,4),
+            low           NUMERIC(18,4),
+            close         NUMERIC(18,4) NOT NULL,
+            volume        BIGINT,
+            change_pct    NUMERIC(10,4),
+            data_source   TEXT NOT NULL,
+            created_at    TIMESTAMPTZ DEFAULT NOW(),
+            PRIMARY KEY (index_code, trade_date)
+        );
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_market_indices_date
+            ON market_indices_ohlcv(trade_date);
+    """)
+
+    cur.execute("""
+        INSERT INTO schema_version (version) VALUES (31)
+        ON CONFLICT (version) DO NOTHING;
+    """)
+    print("[DB] v31 마이그레이션 완료 — analysis_sessions.market_regime + market_indices_ohlcv (B2)")

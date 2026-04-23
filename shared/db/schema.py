@@ -9,7 +9,7 @@ from shared.db.migrations import run_migrations
 
 
 # ── 스키마 버전 관리 ──────────────────────────────
-SCHEMA_VERSION = 28  # v28: stock_universe_ohlcv.change_pct 정밀도 NUMERIC(7,4)→(10,4) (overflow 방어)
+SCHEMA_VERSION = 31  # v31: analysis_sessions.market_regime JSONB + market_indices_ohlcv 테이블 (로드맵 B2)
 
 
 def _create_base_schema(cur) -> None:

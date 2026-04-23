@@ -218,6 +218,28 @@ class ScreenerConfig:
         default_factory=lambda: int(os.getenv("STAGE1B3_TOP_N", "20"))
     )
 
+    # ── OHLCV 이력 기반 필터 (Phase 7 연동, 로드맵 A2) ──
+    # OHLCV 백필 이전이거나 문제 발생 시 false로 끄면 기존 동작 유지
+    ohlcv_filters_enabled: bool = field(
+        default_factory=lambda: _env_bool("SCREENER_OHLCV_FILTERS", True)
+    )
+    # 60 거래일 평균 거래대금 하한 (KRX, 원). 기본 10억원 — 페니스톡/극저유동 제외
+    min_daily_value_krw: int = field(
+        default_factory=lambda: int(os.getenv("SCREENER_MIN_DAILY_VALUE_KRW", "1000000000"))
+    )
+    # 60 거래일 평균 거래대금 하한 (US, USD). 기본 50만달러
+    min_daily_value_usd: int = field(
+        default_factory=lambda: int(os.getenv("SCREENER_MIN_DAILY_VALUE_USD", "500000"))
+    )
+    # 60일 고점 대비 최대 낙폭(%) — 예: 50이면 -50% 이상 빠진 하락 추세 종목 제외
+    max_drawdown_60d_pct: float = field(
+        default_factory=lambda: float(os.getenv("SCREENER_MAX_DRAWDOWN_60D_PCT", "50"))
+    )
+    # CTE 조회 윈도우 (최근 N 거래일) — 60일 집계 위해 여유 포함
+    ohlcv_window_days: int = field(
+        default_factory=lambda: int(os.getenv("SCREENER_OHLCV_WINDOW_DAYS", "90"))
+    )
+
 
 @dataclass
 class AuthConfig:

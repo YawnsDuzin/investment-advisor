@@ -76,38 +76,48 @@ def _quote_like(s: str) -> str:
     return s.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
 
 
-def _build_where_clauses(spec: dict) -> tuple[str, list]:
+def _build_where_clauses(
+    spec: dict,
+    *,
+    cfg: ScreenerConfig | None = None,
+    include_ohlcv_filters: bool = False,
+) -> tuple[str, list]:
     """스펙 → SQL WHERE 절 + 파라미터 리스트.
+
+    Args:
+        include_ohlcv_filters: True면 ohlcv_metrics 서브쿼리(`m.*`)를 참조하는 조건 추가.
+            호출부는 FROM 절에 `LEFT JOIN ohlcv_metrics m` 가 있어야 한다.
+        cfg: ScreenerConfig — OHLCV 임계값 주입. None이면 기본값.
 
     Returns:
         (where_sql, params)
     """
-    where: list[str] = ["listed = TRUE", "has_preferred = FALSE"]
+    where: list[str] = ["u.listed = TRUE", "u.has_preferred = FALSE"]
     params: list = []
 
     markets = spec.get("markets")
     if markets:
-        where.append("market = ANY(%s)")
+        where.append("u.market = ANY(%s)")
         params.append(list(markets))
 
     sectors = spec.get("sector_norm")
     if sectors:
-        where.append("sector_norm = ANY(%s)")
+        where.append("u.sector_norm = ANY(%s)")
         params.append(list(sectors))
 
     mcap_range = spec.get("market_cap_range_krw")
     if mcap_range and len(mcap_range) == 2:
         low, high = mcap_range
         if low is not None and low > 0:
-            where.append("market_cap_krw >= %s")
+            where.append("u.market_cap_krw >= %s")
             params.append(int(low))
         if high is not None and high > 0:
-            where.append("market_cap_krw <= %s")
+            where.append("u.market_cap_krw <= %s")
             params.append(int(high))
 
     buckets = spec.get("market_cap_bucket")
     if buckets:
-        where.append("market_cap_bucket = ANY(%s)")
+        where.append("u.market_cap_bucket = ANY(%s)")
         params.append(list(buckets))
 
     # required_keywords: 적어도 하나는 매칭되어야 함 (asset_name / asset_name_en / industry / aliases)
@@ -116,9 +126,9 @@ def _build_where_clauses(spec: dict) -> tuple[str, list]:
         kw_clauses: list[str] = []
         for kw in required:
             pat = f"%{_quote_like(kw)}%"
-            sub_clauses = [f"COALESCE({col}, '') ILIKE %s" for col in _TEXT_MATCH_COLUMNS]
+            sub_clauses = [f"COALESCE(u.{col}, '') ILIKE %s" for col in _TEXT_MATCH_COLUMNS]
             # JSONB aliases 검사 — JSONB::text ILIKE
-            sub_clauses.append("COALESCE(aliases::text, '') ILIKE %s")
+            sub_clauses.append("COALESCE(u.aliases::text, '') ILIKE %s")
             kw_clauses.append("(" + " OR ".join(sub_clauses) + ")")
             params.extend([pat] * (len(_TEXT_MATCH_COLUMNS) + 1))
         where.append("(" + " OR ".join(kw_clauses) + ")")
@@ -128,28 +138,112 @@ def _build_where_clauses(spec: dict) -> tuple[str, list]:
     if excluded:
         for kw in excluded:
             pat = f"%{_quote_like(kw)}%"
-            sub_clauses = [f"COALESCE({col}, '') NOT ILIKE %s" for col in _TEXT_MATCH_COLUMNS]
-            sub_clauses.append("COALESCE(aliases::text, '') NOT ILIKE %s")
+            sub_clauses = [f"COALESCE(u.{col}, '') NOT ILIKE %s" for col in _TEXT_MATCH_COLUMNS]
+            sub_clauses.append("COALESCE(u.aliases::text, '') NOT ILIKE %s")
             where.append("(" + " AND ".join(sub_clauses) + ")")
             params.extend([pat] * (len(_TEXT_MATCH_COLUMNS) + 1))
+
+    # ── OHLCV 이력 필터 (로드맵 A2) ──
+    # OHLCV 결측 종목은 m.* IS NULL → 조건 관대하게 통과 (백필 이전 호환)
+    if include_ohlcv_filters and cfg is not None:
+        # 유동성 (시장별 통화 분기)
+        if cfg.min_daily_value_krw > 0 or cfg.min_daily_value_usd > 0:
+            where.append(
+                "(m.avg_daily_value IS NULL OR "
+                " (u.market IN ('KOSPI', 'KOSDAQ', 'KONEX') AND m.avg_daily_value >= %s)"
+                " OR (u.market IN ('NASDAQ', 'NYSE', 'AMEX') AND m.avg_daily_value >= %s)"
+                " OR u.market NOT IN ('KOSPI', 'KOSDAQ', 'KONEX', 'NASDAQ', 'NYSE', 'AMEX'))"
+            )
+            params.extend([int(cfg.min_daily_value_krw), int(cfg.min_daily_value_usd)])
+
+        # 60일 고점 대비 낙폭 — (latest_close / high_60d) >= (1 - max_drawdown/100)
+        if cfg.max_drawdown_60d_pct > 0:
+            threshold = 1.0 - (cfg.max_drawdown_60d_pct / 100.0)
+            where.append(
+                "(m.high_60d IS NULL OR m.latest_close IS NULL OR m.high_60d <= 0 OR "
+                " (m.latest_close / m.high_60d) >= %s)"
+            )
+            params.append(threshold)
 
     where_sql = " AND ".join(where)
     return where_sql, params
 
 
-def _execute_screen(db_cfg: DatabaseConfig, spec: dict, *, limit: int) -> list[dict]:
-    """단일 SELECT 실행. fallback 없음."""
-    where_sql, params = _build_where_clauses(spec)
-    sql = f"""
-        SELECT ticker, market, asset_name, asset_name_en, sector_norm, sector_krx,
-               sector_gics, industry, market_cap_krw, market_cap_bucket,
-               last_price, last_price_ccy, last_price_at, aliases
-        FROM stock_universe
-        WHERE {where_sql}
-        ORDER BY market_cap_krw ASC NULLS LAST
-        LIMIT %s
+def _ohlcv_metrics_cte(window_days: int) -> tuple[str, list]:
+    """stock_universe_ohlcv 기반 종목별 메트릭 CTE.
+
+    윈도우: 최근 window_days (기본 90) 거래일.
+    60일 고점(high_60d)은 최근 60일, 유동성(avg_daily_value)은 최근 60일.
+    latest_close는 윈도우 내 가장 최근 trade_date의 close.
+
+    Returns:
+        (cte_sql, params)  — cte_sql은 'WITH ohlcv_metrics AS (...)' 형태
     """
-    params_with_limit = params + [int(limit)]
+    sql = """
+    WITH
+    ohlcv_base AS (
+        SELECT ticker, market, trade_date, close, volume,
+               ROW_NUMBER() OVER (PARTITION BY ticker, market ORDER BY trade_date DESC) AS rn
+        FROM stock_universe_ohlcv
+        WHERE trade_date >= CURRENT_DATE - (%s::int)
+    ),
+    ohlcv_metrics AS (
+        SELECT ticker, market,
+               AVG(close * volume) FILTER (WHERE rn <= 60) AS avg_daily_value,
+               MAX(close) FILTER (WHERE rn <= 60) AS high_60d,
+               MAX(CASE WHEN rn = 1 THEN close END) AS latest_close
+        FROM ohlcv_base
+        GROUP BY ticker, market
+    )
+    """
+    return sql, [int(window_days)]
+
+
+def _execute_screen(
+    db_cfg: DatabaseConfig,
+    spec: dict,
+    *,
+    limit: int,
+    cfg: ScreenerConfig | None = None,
+    include_ohlcv_filters: bool = False,
+) -> list[dict]:
+    """단일 SELECT 실행. fallback 없음.
+
+    Args:
+        include_ohlcv_filters: True면 OHLCV 메트릭 CTE + LEFT JOIN 추가 후 필터 적용.
+    """
+    where_sql, where_params = _build_where_clauses(
+        spec, cfg=cfg, include_ohlcv_filters=include_ohlcv_filters
+    )
+
+    if include_ohlcv_filters and cfg is not None:
+        cte_sql, cte_params = _ohlcv_metrics_cte(cfg.ohlcv_window_days)
+        sql = f"""
+            {cte_sql}
+            SELECT u.ticker, u.market, u.asset_name, u.asset_name_en, u.sector_norm,
+                   u.sector_krx, u.sector_gics, u.industry, u.market_cap_krw,
+                   u.market_cap_bucket, u.last_price, u.last_price_ccy, u.last_price_at,
+                   u.aliases
+            FROM stock_universe u
+            LEFT JOIN ohlcv_metrics m
+              ON UPPER(u.ticker) = UPPER(m.ticker) AND UPPER(u.market) = UPPER(m.market)
+            WHERE {where_sql}
+            ORDER BY u.market_cap_krw ASC NULLS LAST
+            LIMIT %s
+        """
+        params_with_limit = cte_params + where_params + [int(limit)]
+    else:
+        sql = f"""
+            SELECT u.ticker, u.market, u.asset_name, u.asset_name_en, u.sector_norm,
+                   u.sector_krx, u.sector_gics, u.industry, u.market_cap_krw,
+                   u.market_cap_bucket, u.last_price, u.last_price_ccy, u.last_price_at,
+                   u.aliases
+            FROM stock_universe u
+            WHERE {where_sql}
+            ORDER BY u.market_cap_krw ASC NULLS LAST
+            LIMIT %s
+        """
+        params_with_limit = where_params + [int(limit)]
 
     conn = get_connection(db_cfg)
     try:
@@ -232,7 +326,12 @@ def screen(
 
     fallback_log: list[str] = []
     current_spec = dict(spec)
-    rows = _execute_screen(db_cfg, current_spec, limit=max_candidates)
+    # 1차: OHLCV 필터 ON (cfg.ohlcv_filters_enabled 기본 True)
+    use_ohlcv = bool(cfg.ohlcv_filters_enabled)
+    rows = _execute_screen(
+        db_cfg, current_spec, limit=max_candidates,
+        cfg=cfg, include_ohlcv_filters=use_ohlcv,
+    )
 
     retries = 0
     while not rows and retries < cfg.spec_screener_max_retries:
@@ -241,7 +340,10 @@ def screen(
         if expanded:
             current_spec = expanded
             fallback_log.append(f"market_cap_range ±{cfg.spec_screener_fallback_expand_pct}% 확장")
-            rows = _execute_screen(db_cfg, current_spec, limit=max_candidates)
+            rows = _execute_screen(
+                db_cfg, current_spec, limit=max_candidates,
+                cfg=cfg, include_ohlcv_filters=use_ohlcv,
+            )
             retries += 1
             if rows:
                 break
@@ -252,7 +354,10 @@ def screen(
             dropped_kw = (current_spec.get("required_keywords") or [])[-1]
             current_spec = dropped
             fallback_log.append(f"required_keyword 제거: '{dropped_kw}'")
-            rows = _execute_screen(db_cfg, current_spec, limit=max_candidates)
+            rows = _execute_screen(
+                db_cfg, current_spec, limit=max_candidates,
+                cfg=cfg, include_ohlcv_filters=use_ohlcv,
+            )
             retries += 1
             if rows:
                 break
@@ -262,7 +367,21 @@ def screen(
                 current_spec = dict(current_spec)
                 current_spec.pop("market_cap_range_krw", None)
                 fallback_log.append("market_cap_range 제거 (sector만으로 최종 시도)")
-                rows = _execute_screen(db_cfg, current_spec, limit=max_candidates)
+                rows = _execute_screen(
+                    db_cfg, current_spec, limit=max_candidates,
+                    cfg=cfg, include_ohlcv_filters=use_ohlcv,
+                )
+                retries += 1
+                if rows:
+                    break
+            # 최후의 수단: OHLCV 필터 해제 (백필 결측·지나치게 엄격한 임계치 보호)
+            if use_ohlcv:
+                use_ohlcv = False
+                fallback_log.append("OHLCV 필터 해제 (최후 수단)")
+                rows = _execute_screen(
+                    db_cfg, current_spec, limit=max_candidates,
+                    cfg=cfg, include_ohlcv_filters=False,
+                )
                 retries += 1
                 if rows:
                     break

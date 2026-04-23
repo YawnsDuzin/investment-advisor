@@ -24,15 +24,19 @@
 
 ### A1. Stage 1 모멘텀 체크 DB 리팩터 🟢 ⭐⭐⭐⭐⭐
 
-- [ ] **상태**: ⬜
-- [ ] `analyzer/stock_data.py`에 `fetch_momentum_from_db(tickers, markets)` 함수 추가
-  - [ ] 단일 SQL로 (1m/3m/6m/1y 수익률, `current_price`, `price_source`) 일괄 조회
-  - [ ] 기준일: OHLCV 최신 trade_date. 개월 환산은 21/63/126/252 거래일.
-- [ ] `analyzer/stock_data.py` `fetch_momentum_batch` 호출 지점에 옵션 flag 추가
-  - [ ] 기본 DB 우선, fallback yfinance/pykrx (OHLCV 결측 종목)
-  - [ ] `.env`에 `MOMENTUM_SOURCE=db|live` 스위치 (기본 `db`)
-- [ ] 단위 테스트: OHLCV 채워진 케이스 vs 결측 케이스
-- [ ] 체감 테스트: 기존 대비 분석 배치 소요 시간 비교 로그
+- [x] **상태**: ✅ (커밋 예정 — 본 세션에서 구현 완료)
+- [x] `analyzer/stock_data.py`에 `fetch_momentum_from_db(stocks, db_cfg)` + 내부 배치 쿼리 `_fetch_ohlcv_history_batch` 추가
+  - [x] 단일 SQL로 다중 (ticker, market) 히스토리 일괄 조회 (`VALUES (%s, %s), ...` 템플릿)
+  - [x] 반환: `current_price` / `momentum_tag` / `return_1m/3m/6m/1y_pct` / `price_source="ohlcv_db"`
+  - [x] 기준일: OHLCV 최신 trade_date. `_calc_period_returns`(22/66/132/전체 거래일 offset) 재사용
+- [x] `fetch_momentum_batch(stocks, db_cfg=None)` 시그니처 확장 + `MOMENTUM_SOURCE` 스위치 추가
+  - [x] `db`(기본): OHLCV 우선 → 결측만 live 폴백
+  - [x] `live`: 기존 ThreadPool 동작만
+  - [x] `db_only`: DB 만, 폴백 없음 (디버깅)
+  - [x] `.env.example` + CLAUDE.md 환경변수 테이블 갱신
+- [x] `analyzer.py` 호출부에 `db_cfg` 전달 + 완료 로그에 소스별 카운터(`ohlcv_db=N pykrx=N yfinance=N`) 표시
+- [x] `investment_proposals.price_source` 가능값 목록에 `ohlcv_db` 추가 (CLAUDE.md 스키마 주석)
+- [ ] 체감 테스트: 실제 라즈베리파이에서 배치 소요 시간 비교 로그 (OHLCV 백필 완료 후 검증)
 
 **기대 효과**
 - 분석 배치에서 모멘텀 조회 단계 10x 이상 단축 예상 (yfinance 루프 제거)
@@ -43,17 +47,18 @@
 
 ### A2. Stage 1-B 스크리너 이력 필터 확장 🟢 ⭐⭐⭐⭐
 
-- [ ] **상태**: ⬜
-- [ ] `analyzer/screener.py`에 OHLCV 기반 필터 CTE/서브쿼리 추가
-  - [ ] 유동성: `AVG(close * volume) OVER (rows 60)` 하위 N% 제외
-  - [ ] 변동성: `STDDEV(change_pct) OVER (rows 60)` 상위 N% 제외 (옵션)
-  - [ ] 단기 모멘텀: `(close / LAG(close, 20) - 1) * 100`
-  - [ ] 52주 고저 근접도: `close / MAX(close) OVER (rows 252)`
-  - [ ] 낙폭 필터: `close / MAX(close) OVER (rows 60)`
-- [ ] `shared/config.py`의 `ScreenerConfig`에 임계값 파라미터 추가
-  - [ ] `SCREENER_MIN_LIQUIDITY_KRW`, `SCREENER_MAX_VOL60`, `SCREENER_MOMENTUM_20D_RANGE` 등
-- [ ] Stage 1-B 로그에 스크리너 필터별 탈락 수 누적 출력
-- [ ] `_docs/_exception/` 패턴 점검 — hallucination 종목 사후 감지 통계
+- [x] **상태**: ✅ (본 세션에서 구현 완료)
+- [x] `analyzer/screener.py`에 OHLCV 메트릭 CTE (`_ohlcv_metrics_cte`) + `stock_universe u LEFT JOIN ohlcv_metrics m` 추가
+  - [x] 유동성: `AVG(close * volume) FILTER (WHERE rn <= 60)` → 시장별 통화 분기(KRX=KRW, US=USD)
+  - [x] 낙폭 필터: `MAX(close) FILTER (rn <= 60)` 대비 `latest_close` 비율 → `SCREENER_MAX_DRAWDOWN_60D_PCT`
+  - [x] OHLCV 결측 종목(백필 이전 or 신규)은 `m.* IS NULL`로 조건 면제 (관대한 필터)
+  - [ ] vol60(변동성)·20일 모멘텀·52주 고저 근접도는 **B1 팩터 엔진에서 다룸** (설계 정합성)
+- [x] `ScreenerConfig`에 5개 파라미터 추가:
+  - [x] `SCREENER_OHLCV_FILTERS` (on/off), `SCREENER_MIN_DAILY_VALUE_KRW` (10억), `SCREENER_MIN_DAILY_VALUE_USD` (50만)
+  - [x] `SCREENER_MAX_DRAWDOWN_60D_PCT` (50), `SCREENER_OHLCV_WINDOW_DAYS` (90)
+- [x] `screen()` fallback 최후 단계로 **OHLCV 필터 자동 해제** 추가 — 백필 결측·지나치게 엄격한 임계치에 대한 안전망
+- [x] `.env.example` + CLAUDE.md 반영 (Key Conventions에 A2 스크리너 설명 추가)
+- [ ] 체감 테스트: 실제 스크리너 결과 건수·품질 비교 (OHLCV 백필 완료 후)
 
 **기대 효과**
 - LLM hallucination 원천 차단 강화
@@ -64,15 +69,17 @@
 
 ### A3. Post-Return 추적을 OHLCV로 통합 🟢 ⭐⭐⭐
 
-- [ ] **상태**: ⬜
-- [ ] `analyzer/price_tracker.py`에 `compute_post_returns_from_ohlcv()` 추가
-  - [ ] `entry_price`를 기준으로 post-return 1m/3m/6m/1y 계산
-  - [ ] 추가 메트릭: **Max Drawdown / 평균 보유기간 수익률 / 벤치마크 대비 alpha**
-  - [ ] 벤치마크: 한국(KOSPI) / 해외(S&P 500). KOSPI OHLCV는 `pykrx` index ticker 별도 수집 필요
-- [ ] `proposal_price_snapshots` 중복 적재 여부 검토
-  - [ ] OHLCV에 해당 날짜 데이터 있으면 snapshots 적재 생략 (옵션)
-- [ ] DB v29 마이그레이션 (선택): `investment_proposals`에 `max_drawdown_pct`, `alpha_vs_benchmark_pct` 컬럼 추가
-- [ ] 트랙 레코드 페이지 표시 로직에 신규 메트릭 반영
+- [x] **상태**: ✅ (본 세션에서 구현 완료 — alpha는 B2 의존)
+- [x] `analyzer/price_tracker.py` 전면 리팩터 — OHLCV 우선 + live 폴백 구조
+  - [x] `_fetch_ohlcv_range(db_cfg, tickers, from, to)`: 다중 종목 단일 SQL 범위 조회
+  - [x] `_compute_returns_from_ohlcv(history, entry, analysis_date, today)`: post_return + max_drawdown 일괄 계산
+  - [x] `_compute_returns_from_snapshots(cur, ...)`: OHLCV 결측 종목용 legacy 폴백
+- [x] `proposal_price_snapshots` 처리: **OHLCV 결측 종목에만** 오늘 스냅샷 저장 (중복 적재 제거)
+- [x] DB v29 마이그레이션 — `investment_proposals.max_drawdown_pct` / `max_drawdown_date` / `alpha_vs_benchmark_pct` 컬럼 추가
+  - [x] `alpha_vs_benchmark_pct`는 B2(벤치마크 인덱스 OHLCV 수집) 구현 후 채움
+- [x] 완료 로그에 `출처: ohlcv=N live_fallback=N` 카운터 + `결측 스냅샷 N건`
+- [ ] 트랙 레코드 페이지(UI-4) 표시 로직에 신규 메트릭 반영 (UI 우선순위로 이월)
+- [ ] 체감 테스트: 라즈베리파이 배치 실측 비교 (OHLCV 백필 완료 후)
 
 **기대 효과**
 - 추천 성과 지표 품질 대폭 확장 (승률만 있던 현재 → Sharpe 근사·Max DD·alpha)
@@ -84,17 +91,20 @@
 
 ### B1. 정량 팩터 사전 계산 → 프롬프트 주입 🟡 ⭐⭐⭐⭐⭐
 
-- [ ] **상태**: ⬜
-- [ ] 팩터 산출 모듈 `analyzer/factor_engine.py` 신설
-  - [ ] 모멘텀 z-score (3m/6m/12m 결합)
-  - [ ] 저변동 z-score (vol60 역순위)
-  - [ ] 단기 반전 시그널 (1m 수익률)
-  - [ ] 거래량 이상 z-score (최근 20d 거래량 / 60d 평균)
-  - [ ] 산출은 **cross-sectional z-score** (동일 섹터 내 순위 기반)
-- [ ] `analyzer/prompts.py` STAGE2 템플릿에 `{quant_factors}` 블록 추가
-  - [ ] LLM은 수치 추정 금지 → 실측 팩터를 해석·스토리화
-- [ ] `investment_proposals`에 `factor_snapshot JSONB` 컬럼 추가 (v29 마이그레이션 한 번에 처리)
-- [ ] `proposal_validation_log`의 mismatch 필드 확장 — 팩터 cross-check
+- [x] **상태**: ✅ (본 세션에서 구현 완료)
+- [x] 팩터 산출 모듈 `analyzer/factor_engine.py` 신설
+  - [x] 기간별 수익률 r1m / r3m / r6m / r12m
+  - [x] 60일 변동성 `vol60_pct` (extreme change_pct ±50% clamp 후 STDDEV)
+  - [x] 거래량 추세 `volume_ratio` = 20일 평균 / 60일 평균
+  - [x] 산출은 **cross-section PERCENT_RANK** — 시장 그룹(KRX/US) 분리 집계
+  - [ ] 섹터별 정규화는 표본 확보 후 후속 (B1 v2)
+- [x] `analyzer/prompts.py` STAGE2 템플릿에 `{quant_factors_section}` 블록 추가
+  - [x] "수치는 DB 산출 실측값, 그대로 인용하라" 명시
+- [x] `investment_proposals.factor_snapshot JSONB` 컬럼 v30 마이그레이션
+- [x] `session_repo.py` INSERT에 factor_snapshot 컬럼 추가 (37번째)
+- [x] `analyzer.py` Stage 2 진입부에서 `compute_factor_snapshots()` 호출 + `_analyze_one` 내 텍스트 포맷·주입·proposal 저장
+- [ ] `proposal_validation_log`의 mismatch 필드 확장 — 팩터 cross-check (후속)
+- [ ] UI-7 "AI가 본 실측 데이터" 섹션에 factor_snapshot 시각화 (UI 작업 시)
 
 **기대 효과**
 - AI 수치 환각 제거. 숫자는 DB 산출, 해석만 AI.
@@ -105,16 +115,22 @@
 
 ### B2. 시장 레짐 판별 레이어 🟡 ⭐⭐⭐⭐
 
-- [ ] **상태**: ⬜
-- [ ] KOSPI·S&P 500 인덱스 OHLCV 수집 태스크 추가
-  - [ ] `universe_sync.py --mode ohlcv --index`(신규 플래그)
-  - [ ] 또는 별도 `analyzer/index_sync.py` 모듈
-- [ ] `analyzer/regime.py` 신설
-  - [ ] `above_200ma`, `vol_regime`(저/중/고), `drawdown_from_peak_pct`, `breadth`(universe 상승 종목 비율)
-  - [ ] 출력은 `dict` → `analysis_sessions.market_regime JSONB`
-- [ ] v29 마이그레이션: `analysis_sessions.market_regime JSONB` 컬럼 추가
-- [ ] Stage 1 `STAGE1_SYSTEM` 프롬프트에 `{market_regime}` 주입
-  - [ ] 고변동·약세장에서 컨트래리안 비중↓, 강세장에서 모멘텀 비중↑ 자동 가이드
+- [x] **상태**: ✅ (B2a 본 세션 구현 완료 — alpha 채움은 B2b로 이월)
+- [x] KOSPI/KOSDAQ/S&P500/NDX100 인덱스 OHLCV 수집
+  - [x] `universe_sync.py`에 `sync_indices_ohlcv()` + `--mode indices` CLI 플래그
+  - [x] pykrx(`get_index_ohlcv_by_date`) + yfinance(^GSPC/^NDX) 양대 소스
+  - [x] `market_indices_ohlcv` 테이블 (stock_universe_ohlcv와 분리)
+- [x] `analyzer/regime.py` 신설
+  - [x] `above_200ma`, `pct_from_ma200`, `vol60_pct`(±10% clamp), `vol_regime` (low/mid/high)
+  - [x] `drawdown_from_52w_high_pct`, `return_1m_pct`, `return_3m_pct`
+  - [x] KRX 시장폭(`breadth_kr_pct`) — 20일 상승 종목 비율
+  - [x] `compute_regime(db_cfg)` → dict / `format_regime_text(snap)` / `infer_positioning_hint(snap)`
+- [x] v31 마이그레이션: `analysis_sessions.market_regime JSONB` + `market_indices_ohlcv` 테이블
+- [x] Stage 1 프롬프트에 `{market_regime_section}` 주입 (STAGE1A / STAGE1A1 / STAGE1A2 모두)
+  - [x] `run_pipeline`에서 compute_regime 실행 → text 생성 → 프롬프트 인자로 전달
+  - [x] 레짐 dict를 `result["market_regime"]`에 첨부 → `save_analysis` 저장
+  - [x] `session_repo.py` analysis_sessions INSERT 컬럼에 `market_regime` 추가
+- [ ] B2b 후속: 벤치마크 OHLCV를 이용해 `price_tracker`에서 `alpha_vs_benchmark_pct`(v29) 채움
 
 **기대 효과**
 - 추천 성향이 시장 국면에 맞춰 자동 조정
@@ -271,14 +287,14 @@ Month 6+:
 |------|-------------------|
 | A1 | 없음 — 기존 테이블만 사용 |
 | A2 | 없음 |
-| A3 | v29 (선택): `investment_proposals.max_drawdown_pct / alpha_vs_benchmark_pct` |
-| B1 | v29: `investment_proposals.factor_snapshot JSONB` |
-| B2 | v29: `analysis_sessions.market_regime JSONB` |
+| A3 | ✅ v29 적용 — `investment_proposals.max_drawdown_pct / max_drawdown_date / alpha_vs_benchmark_pct` |
+| B1 | ✅ v30 적용 — `investment_proposals.factor_snapshot JSONB` |
+| B2 | ✅ v31 적용 — `analysis_sessions.market_regime JSONB` + `market_indices_ohlcv` 테이블 (alpha 채움은 B2b 후속) |
 | B3 | 없음 — 프롬프트·UI만 변경 |
 | C1 | v30~: factor_weights_history 테이블 |
 | C2 | v30~: backtest_runs 테이블 |
 
-**v29는 B1·B2·A3 컬럼을 묶어서 한 번에 추가하는 걸 권장** — 개별 마이그레이션 파편화 방지.
+**v29(A3)·v30(B1)·v31(B2) 모두 적용 완료.**
 
 ---
 

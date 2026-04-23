@@ -707,6 +707,7 @@ async def stage1a1_analyze_issues(
     model: str | None = None,
     timeout_sec: int = 600,
     bond_yield_section: str = "",
+    market_regime_section: str = "",
 ) -> dict:
     """Stage 1-A1: 이슈만 분석 (테마 제외) — 출력 8~10KB로 안정화.
 
@@ -716,6 +717,7 @@ async def stage1a1_analyze_issues(
     prompt = STAGE1A1_PROMPT.format(
         news_text=news_text, date=date,
         bond_yield_section=bond_yield_section,
+        market_regime_section=market_regime_section,
     )
     start = time.time()
     response = await _query_claude(
@@ -738,6 +740,7 @@ async def stage1a2_build_themes(
     model: str | None = None,
     timeout_sec: int = 600,
     bond_yield_section: str = "",
+    market_regime_section: str = "",
 ) -> dict:
     """Stage 1-A2: 이슈 목록을 받아 투자 테마 4~6개 발굴."""
     keys_section = _format_existing_theme_keys(existing_keys or [])
@@ -747,6 +750,7 @@ async def stage1a2_build_themes(
         issues_context=issues_context,
         existing_theme_keys_section=keys_section,
         bond_yield_section=bond_yield_section,
+        market_regime_section=market_regime_section,
     )
     start = time.time()
     response = await _query_claude(
@@ -768,6 +772,7 @@ async def stage1a_discover_themes(
     model: str | None = None,
     timeout_sec: int = 600,
     bond_yield_section: str = "",
+    market_regime_section: str = "",
 ) -> dict:
     """Stage 1-A: 이슈 분석 + 테마 발굴 오케스트레이터.
 
@@ -782,6 +787,7 @@ async def stage1a_discover_themes(
         news_text, date, max_turns,
         model=model, timeout_sec=timeout_sec,
         bond_yield_section=bond_yield_section,
+        market_regime_section=market_regime_section,
     )
 
     if issues_result.get("error"):
@@ -808,6 +814,7 @@ async def stage1a_discover_themes(
         existing_keys=existing_keys,
         model=model, timeout_sec=timeout_sec,
         bond_yield_section=bond_yield_section,
+        market_regime_section=market_regime_section,
     )
 
     if themes_result.get("error"):
@@ -846,6 +853,7 @@ async def stage1a_discover_themes_legacy_single_call(
     model: str | None = None,
     timeout_sec: int = 600,
     bond_yield_section: str = "",
+    market_regime_section: str = "",
 ) -> dict:
     """Stage 1-A 단일 호출 버전 — 2026-04-22 이전 경로 (디버깅·비교용으로만 보존)."""
     keys_section = _format_existing_theme_keys(existing_keys or [])
@@ -853,6 +861,7 @@ async def stage1a_discover_themes_legacy_single_call(
         news_text=news_text, date=date,
         existing_theme_keys_section=keys_section,
         bond_yield_section=bond_yield_section,
+        market_regime_section=market_regime_section,
     )
     start = time.time()
     response = await _query_claude(
@@ -1086,6 +1095,7 @@ async def stage2_analyze_stock(
     ticker: str, asset_name: str, market: str,
     theme_context: str, date: str, max_turns: int = 6,
     stock_data_text: str = "",
+    quant_factors_text: str = "",
     investor_data_text: str = "",
     short_selling_text: str = "",
     model: str | None = None,
@@ -1096,6 +1106,13 @@ async def stage2_analyze_stock(
     if stock_data_text:
         stock_data_section = f"\n\n## 실시간 시장 데이터 (조회 시점: {date})\n\n{stock_data_text}\n"
 
+    quant_factors_section = ""
+    if quant_factors_text:
+        quant_factors_section = (
+            "\n\n## 정량 팩터 스냅샷 (DB 산출 실측값 — 그대로 인용하세요)\n\n"
+            f"{quant_factors_text}\n"
+        )
+
     investor_section = f"\n\n{investor_data_text}\n" if investor_data_text else ""
     short_section = f"\n\n{short_selling_text}\n" if short_selling_text else ""
 
@@ -1103,6 +1120,7 @@ async def stage2_analyze_stock(
         ticker=ticker, asset_name=asset_name,
         market=market, theme_context=theme_context, date=date,
         stock_data_section=stock_data_section,
+        quant_factors_section=quant_factors_section,
         investor_data_section=investor_section,
         short_selling_section=short_section,
     )
@@ -1154,6 +1172,23 @@ async def run_pipeline(
     except Exception as e:
         log.warning(f"국채 금리 조회 실패 (무시): {e}")
 
+    # ── 시장 레짐 스냅샷 (로드맵 B2) ──
+    market_regime_snap: dict = {}
+    market_regime_text = ""
+    if db_cfg is not None:
+        try:
+            from analyzer.regime import compute_regime, format_regime_text, infer_positioning_hint
+            market_regime_snap = compute_regime(db_cfg)
+            if market_regime_snap:
+                body = format_regime_text(market_regime_snap)
+                hint = infer_positioning_hint(market_regime_snap)
+                header = "\n\n## 시장 레짐 스냅샷 (DB 산출 — 국면 지표)"
+                if hint:
+                    header += f"\n**종합 국면:** {hint}\n"
+                market_regime_text = f"{header}\n{body}\n"
+        except Exception as e:
+            log.warning(f"[regime] 스냅샷 계산 실패 (무시): {e}")
+
     # ── 최근 추천 이력 조회 (중복 방지용) ──
     recent_recs = []
     existing_keys = []
@@ -1184,6 +1219,7 @@ async def run_pipeline(
             model=cfg.model_analysis,
             timeout_sec=timeout,
             bond_yield_section=bond_yield_text,
+            market_regime_section=market_regime_text,
         )
 
         if result.get("error"):
@@ -1200,6 +1236,7 @@ async def run_pipeline(
                 model=cfg.model_analysis,
                 timeout_sec=timeout,
                 bond_yield_section=bond_yield_text,
+                market_regime_section=market_regime_text,
             )
             if not retry_result.get("error") and len(retry_result.get("themes", [])) > len(result.get("themes", [])):
                 result = retry_result
@@ -1213,6 +1250,10 @@ async def run_pipeline(
     themes = result.get("themes", [])
     issues = result.get("issues", [])
     log.info(f"[Stage 1-A] 완료 — 이슈 {len(issues)}건, 테마 {len(themes)}건")
+
+    # B2: 레짐 스냅샷을 결과 dict에 첨부 → save_analysis가 analysis_sessions.market_regime에 저장
+    if market_regime_snap:
+        result["market_regime"] = market_regime_snap
 
     # ── Stage 1-B: 테마별 투자 제안 생성 (체크포인트 지원) ──
     if checkpoint and checkpoint.has("stage1b"):
@@ -1317,14 +1358,18 @@ async def run_pipeline(
 
         if all_proposals:
             log.info(f"[모멘텀 체크] {len(all_proposals)}종목 기간별 수익률 조회 (1m/3m/6m/1y)...")
-            momentum_map = fetch_momentum_batch([
-                {"ticker": p["ticker"], "market": p.get("market", "")}
-                for p in all_proposals
-            ])
+            momentum_map = fetch_momentum_batch(
+                [
+                    {"ticker": p["ticker"], "market": p.get("market", "")}
+                    for p in all_proposals
+                ],
+                db_cfg=db_cfg,
+            )
 
             run_count = 0
             fallback_count = 0
             anomaly_count = 0
+            source_stats = {"ohlcv_db": 0, "pykrx": 0, "yfinance_close": 0, "other": 0}
             for p in all_proposals:
                 ticker = p["ticker"].strip().upper()
                 mdata = momentum_map.get(ticker)
@@ -1338,6 +1383,8 @@ async def run_pipeline(
                             p[key] = mdata[key]
                     if mdata["momentum_tag"] == "already_run":
                         run_count += 1
+                    src = mdata.get("price_source") or "other"
+                    source_stats[src if src in source_stats else "other"] += 1
                 else:
                     # 모멘텀 체크 실패 → fetch_stock_data로 현재가만 재시도
                     try:
@@ -1383,7 +1430,13 @@ async def run_pipeline(
                 log.info(f"[모멘텀 체크] {fallback_count}종목 개별 재조회로 가격 확보")
             if anomaly_count:
                 log.warning(f"[모멘텀 체크] {anomaly_count}종목 가격 이상 감지 (penny stock 등) — 위 경고 참고")
-            log.info(f"[모멘텀 체크] 완료 — {len(momentum_map)}/{len(all_proposals)}종목 조회 성공")
+            log.info(
+                f"[모멘텀 체크] 완료 — {len(momentum_map)}/{len(all_proposals)}종목 조회 성공 "
+                f"(출처: ohlcv_db={source_stats['ohlcv_db']} "
+                f"pykrx={source_stats['pykrx']} "
+                f"yfinance={source_stats['yfinance_close']} "
+                f"기타={source_stats['other']})"
+            )
 
     # ── AI 추정 가격 제거: yfinance 미조회 종목의 current_price를 null로 ──
     if not cfg.enable_stock_data:
@@ -1487,6 +1540,18 @@ async def run_pipeline(
     except Exception as e:
         log.warning(f"KRX 수급/공매도 조회 실패 (무시): {e}")
 
+    # ── 정량 팩터 스냅샷 (로드맵 B1) ──
+    factor_map: dict[tuple[str, str], dict] = {}
+    if db_cfg is not None:
+        try:
+            from analyzer.factor_engine import compute_factor_snapshots
+            factor_map = compute_factor_snapshots(
+                db_cfg,
+                [(p["ticker"], p.get("market", "")) for p, _ in stock_targets],
+            )
+        except Exception as e:
+            log.warning(f"[factor] 스냅샷 계산 실패 (무시): {e}")
+
     log.info(f"[Stage 2] 종목 심층분석 시작 — {len(stock_targets)}종목 (병렬 실행)")
 
     _STAGE2_REQUIRED_FIELDS = ("factor_scores", "sentiment_score", "recommendation")
@@ -1520,10 +1585,23 @@ async def run_pipeline(
                 sd = stock_data_map.get(ticker.upper())
                 sd_text = format_stock_data_text(sd) if sd else ""
 
+                # 정량 팩터 스냅샷 (B1)
+                tk_upper = ticker.upper()
+                mk_upper = (market or "").strip().upper()
+                factor_snap = factor_map.get((tk_upper, mk_upper))
+                factors_text = ""
+                if factor_snap:
+                    try:
+                        from analyzer.factor_engine import format_factor_snapshot_text
+                        factors_text = format_factor_snapshot_text(factor_snap)
+                    except Exception:
+                        factors_text = ""
+                    # proposal에 저장 (session_repo가 JSONB로 삽입)
+                    proposal["factor_snapshot"] = factor_snap
+
                 # KRX 확장 데이터 포맷팅
                 inv_text = ""
                 sht_text = ""
-                tk_upper = ticker.upper()
                 if tk_upper in investor_map:
                     inv_text = format_investor_data_text(investor_map[tk_upper])
                 if tk_upper in short_map:
@@ -1552,6 +1630,7 @@ async def run_pipeline(
                         market=market, theme_context=theme_name,
                         date=date, max_turns=turns_for_attempt,
                         stock_data_text=sd_text,
+                        quant_factors_text=factors_text,
                         investor_data_text=inv_text,
                         short_selling_text=sht_text,
                         model=cfg.model_analysis,
