@@ -39,6 +39,74 @@
     </div>
 </div>
 
+{# 테마 성과 (로드맵 UI-2) — 구성 종목 평균 수익률 vs 벤치마크 #}
+<div class="card" id="theme-performance-card" style="margin-bottom:28px;">
+    <div class="card-header">
+        <span style="display:inline-flex;align-items:center;gap:6px;">
+            <i data-lucide="trending-up" style="width:16px;height:16px;color:var(--accent);" aria-hidden="true"></i>
+            <strong>테마 성과 (구성 종목 평균 vs 벤치마크)</strong>
+        </span>
+    </div>
+    <div id="theme-performance-body" style="padding:10px 14px;">
+        <div class="tr-loading" style="color:var(--text-muted);font-size:13px;">불러오는 중…</div>
+    </div>
+</div>
+
+<script>
+(function() {
+    const themeKey = {{ tracking.theme_key|tojson }};
+    function fmt(v) {
+        if (v == null) return '-';
+        return (v > 0 ? '+' : '') + v.toFixed(2) + '%';
+    }
+    function cls(v) {
+        if (v == null) return '';
+        return v >= 0 ? 'positive' : 'negative';
+    }
+
+    fetch('/themes/by-key/' + encodeURIComponent(themeKey) + '/performance')
+        .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+        .then(function(data) {
+            const body = document.getElementById('theme-performance-body');
+            if (!data.n_stocks) {
+                body.innerHTML = '<div style="color:var(--text-muted);font-size:13px;">테마 구성 종목의 OHLCV 이력이 없습니다.</div>';
+                return;
+            }
+            const bench = data.benchmark || {};
+            const bCode = bench.code || '-';
+            const bR = bench.returns || {};
+            const tR = data.theme_returns || {};
+            const spreads = data.spreads || {};
+            const counts = data.counts || {};
+
+            let html = '<table style="width:100%;font-size:13px;border-collapse:collapse;">';
+            html += '<thead><tr style="color:var(--text-muted);border-bottom:1px solid var(--border);">';
+            html += '<th style="text-align:left;padding:6px 8px;">기간</th>';
+            html += '<th style="text-align:right;padding:6px 8px;">테마 평균 <span style="font-size:11px;">(n)</span></th>';
+            html += '<th style="text-align:right;padding:6px 8px;">' + bCode + '</th>';
+            html += '<th style="text-align:right;padding:6px 8px;">스프레드 (α)</th>';
+            html += '</tr></thead><tbody>';
+            [['r1m','1M'],['r3m','3M'],['r6m','6M']].forEach(function(kv) {
+                const k = kv[0], label = kv[1];
+                html += '<tr style="border-bottom:1px solid var(--border-light, var(--border));">';
+                html += '<td style="padding:6px 8px;font-weight:500;">' + label + '</td>';
+                html += '<td style="padding:6px 8px;text-align:right;font-variant-numeric:tabular-nums;" class="' + cls(tR[k]) + '">' +
+                        fmt(tR[k]) + ' <span style="color:var(--text-muted);font-size:11px;">(' + (counts[k] || 0) + ')</span></td>';
+                html += '<td style="padding:6px 8px;text-align:right;font-variant-numeric:tabular-nums;" class="' + cls(bR[k]) + '">' + fmt(bR[k]) + '</td>';
+                html += '<td style="padding:6px 8px;text-align:right;font-variant-numeric:tabular-nums;font-weight:600;" class="' + cls(spreads[k]) + '">' + fmt(spreads[k]) + '</td>';
+                html += '</tr>';
+            });
+            html += '</tbody></table>';
+            html += '<div style="margin-top:6px;font-size:11px;color:var(--text-muted);">구성 종목 ' + data.n_stocks + '개 중 OHLCV 매칭 분 평균. 스프레드는 벤치마크 대비 초과수익(α).</div>';
+            body.innerHTML = html;
+        })
+        .catch(function(err) {
+            document.getElementById('theme-performance-body').innerHTML =
+                '<div style="color:var(--text-muted);font-size:12px;">성과 조회 실패: ' + err.message + '</div>';
+        });
+})();
+</script>
+
 {% if history %}
 <div class="section-title">일자별 추이</div>
 <div class="history-timeline">

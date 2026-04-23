@@ -39,6 +39,9 @@
 {# 오늘의 이상 시그널 (로드맵 UI-3) — market_signals 기반 클라이언트 fetch #}
 {% include "partials/dashboard/_signals_today.html" %}
 
+{# 섹터 모멘텀 히트맵 (로드맵 UI-3) — stock_universe × OHLCV JOIN 집계 #}
+{% include "partials/dashboard/_sector_heatmap.html" %}
+
 {% if news_by_category %}
 {% include "partials/dashboard/_news_by_category.html" %}
 {% endif %}
