@@ -1,0 +1,29 @@
+[Unit]
+Description=Investment Advisor daily analyzer batch
+Documentation=https://github.com/yawnsduzin/investment-advisor
+After=network-online.target postgresql.service
+Wants=network-online.target
+# 가격/OHLCV sync가 먼저 끝난 뒤 분석 — 실패해도 분석은 진행
+After=universe-sync-price.service
+
+[Service]
+Type=oneshot
+User=__SYSTEM_USER__
+Group=__SYSTEM_USER__
+WorkingDirectory=__INSTALL_DIR__
+EnvironmentFile=__INSTALL_DIR__/.env
+Environment=PYTHONUNBUFFERED=1
+Environment=PATH=__INSTALL_DIR__/venv/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=__VENV_PYTHON__ -m analyzer.main
+# 대형 분석 배치 여유 타임아웃 (90분)
+TimeoutStartSec=5400
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=5
+
+Restart=no
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

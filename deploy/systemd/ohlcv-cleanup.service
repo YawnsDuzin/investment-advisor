@@ -1,0 +1,24 @@
+[Unit]
+Description=Investment Advisor - OHLCV retention 초과 row 정리 (Phase 7)
+Documentation=https://github.com/yawnsduzin/investment-advisor
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=__SYSTEM_USER__
+Group=__SYSTEM_USER__
+WorkingDirectory=__INSTALL_DIR__
+Environment=PYTHONUNBUFFERED=1
+# retention 일수는 .env의 OHLCV_RETENTION_DAYS / OHLCV_DELISTED_RETENTION_DAYS를 따름
+ExecStart=__VENV_PYTHON__ -m analyzer.universe_sync --mode cleanup
+TimeoutStartSec=900
+Nice=19
+IOSchedulingClass=idle
+
+Restart=no
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

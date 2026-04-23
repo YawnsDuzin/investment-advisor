@@ -9,7 +9,7 @@ from shared.db.migrations import run_migrations
 
 
 # ── 스키마 버전 관리 ──────────────────────────────
-SCHEMA_VERSION = 26  # v26: Evidence Validation Layer (Phase 3 — recommendation-engine-redesign)
+SCHEMA_VERSION = 27  # v27: stock_universe_ohlcv — 일별 OHLCV 이력 테이블 (Phase 7, ohlcv-history)
 
 
 def _create_base_schema(cur) -> None:
