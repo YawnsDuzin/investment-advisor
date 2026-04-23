@@ -115,16 +115,22 @@
 
 ### B2. 시장 레짐 판별 레이어 🟡 ⭐⭐⭐⭐
 
-- [ ] **상태**: ⬜
-- [ ] KOSPI·S&P 500 인덱스 OHLCV 수집 태스크 추가
-  - [ ] `universe_sync.py --mode ohlcv --index`(신규 플래그)
-  - [ ] 또는 별도 `analyzer/index_sync.py` 모듈
-- [ ] `analyzer/regime.py` 신설
-  - [ ] `above_200ma`, `vol_regime`(저/중/고), `drawdown_from_peak_pct`, `breadth`(universe 상승 종목 비율)
-  - [ ] 출력은 `dict` → `analysis_sessions.market_regime JSONB`
-- [ ] v29 마이그레이션: `analysis_sessions.market_regime JSONB` 컬럼 추가
-- [ ] Stage 1 `STAGE1_SYSTEM` 프롬프트에 `{market_regime}` 주입
-  - [ ] 고변동·약세장에서 컨트래리안 비중↓, 강세장에서 모멘텀 비중↑ 자동 가이드
+- [x] **상태**: ✅ (B2a 본 세션 구현 완료 — alpha 채움은 B2b로 이월)
+- [x] KOSPI/KOSDAQ/S&P500/NDX100 인덱스 OHLCV 수집
+  - [x] `universe_sync.py`에 `sync_indices_ohlcv()` + `--mode indices` CLI 플래그
+  - [x] pykrx(`get_index_ohlcv_by_date`) + yfinance(^GSPC/^NDX) 양대 소스
+  - [x] `market_indices_ohlcv` 테이블 (stock_universe_ohlcv와 분리)
+- [x] `analyzer/regime.py` 신설
+  - [x] `above_200ma`, `pct_from_ma200`, `vol60_pct`(±10% clamp), `vol_regime` (low/mid/high)
+  - [x] `drawdown_from_52w_high_pct`, `return_1m_pct`, `return_3m_pct`
+  - [x] KRX 시장폭(`breadth_kr_pct`) — 20일 상승 종목 비율
+  - [x] `compute_regime(db_cfg)` → dict / `format_regime_text(snap)` / `infer_positioning_hint(snap)`
+- [x] v31 마이그레이션: `analysis_sessions.market_regime JSONB` + `market_indices_ohlcv` 테이블
+- [x] Stage 1 프롬프트에 `{market_regime_section}` 주입 (STAGE1A / STAGE1A1 / STAGE1A2 모두)
+  - [x] `run_pipeline`에서 compute_regime 실행 → text 생성 → 프롬프트 인자로 전달
+  - [x] 레짐 dict를 `result["market_regime"]`에 첨부 → `save_analysis` 저장
+  - [x] `session_repo.py` analysis_sessions INSERT 컬럼에 `market_regime` 추가
+- [ ] B2b 후속: 벤치마크 OHLCV를 이용해 `price_tracker`에서 `alpha_vs_benchmark_pct`(v29) 채움
 
 **기대 효과**
 - 추천 성향이 시장 국면에 맞춰 자동 조정
@@ -283,12 +289,12 @@ Month 6+:
 | A2 | 없음 |
 | A3 | ✅ v29 적용 — `investment_proposals.max_drawdown_pct / max_drawdown_date / alpha_vs_benchmark_pct` |
 | B1 | ✅ v30 적용 — `investment_proposals.factor_snapshot JSONB` |
-| B2 | v31 예정: `analysis_sessions.market_regime JSONB` (A3에서 이미 추가된 `alpha_vs_benchmark_pct` 채움) |
+| B2 | ✅ v31 적용 — `analysis_sessions.market_regime JSONB` + `market_indices_ohlcv` 테이블 (alpha 채움은 B2b 후속) |
 | B3 | 없음 — 프롬프트·UI만 변경 |
 | C1 | v30~: factor_weights_history 테이블 |
 | C2 | v30~: backtest_runs 테이블 |
 
-**v29(A3)·v30(B1) 적용 완료.** B2는 v31에서 `analysis_sessions.market_regime JSONB` 추가 예정.
+**v29(A3)·v30(B1)·v31(B2) 모두 적용 완료.**
 
 ---
 
