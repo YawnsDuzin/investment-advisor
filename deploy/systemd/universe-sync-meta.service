@@ -1,0 +1,25 @@
+[Unit]
+Description=Investment Advisor - Universe 메타(섹터/시총) 주간 동기화
+Documentation=https://github.com/yawnsduzin/investment-advisor
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=__SYSTEM_USER__
+Group=__SYSTEM_USER__
+WorkingDirectory=__INSTALL_DIR__
+Environment=PYTHONUNBUFFERED=1
+ExecStart=__VENV_PYTHON__ -m analyzer.universe_sync --mode meta --market ALL
+# yfinance 메타 sync는 ~5분 소요. 여유 있게 20분.
+TimeoutStartSec=1200
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=5
+
+Restart=no
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

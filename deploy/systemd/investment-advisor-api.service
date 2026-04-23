@@ -1,0 +1,23 @@
+[Unit]
+Description=Investment Advisor API (FastAPI)
+Documentation=https://github.com/yawnsduzin/investment-advisor
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__SYSTEM_USER__
+Group=__SYSTEM_USER__
+WorkingDirectory=__INSTALL_DIR__
+EnvironmentFile=__INSTALL_DIR__/.env
+Environment=PYTHONUNBUFFERED=1
+Environment=PATH=__INSTALL_DIR__/venv/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=__VENV_PYTHON__ -m api.main
+Restart=always
+RestartSec=5
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

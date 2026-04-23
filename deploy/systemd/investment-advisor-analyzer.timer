@@ -1,0 +1,11 @@
+[Unit]
+Description=Investment Advisor - 일일 분석 배치 (매일 03:00 KST)
+
+[Timer]
+# 매일 03:00 KST 실행. 부팅 후 놓친 시점이 있다면 즉시 실행.
+OnCalendar=*-*-* 03:00:00 Asia/Seoul
+Persistent=true
+Unit=investment-advisor-analyzer.service
+
+[Install]
+WantedBy=timers.target
