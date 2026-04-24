@@ -119,6 +119,38 @@
 
 .screener-row { cursor: pointer; }
 .screener-row.row-selected { background: rgba(79,140,255,0.08); }
+
+/* PR-6: 모바일 최적화 */
+.pp-filter-field input[type="date"] { width: 140px; }
+
+/* 테이블 모드(≥769)에서만 테마 셀 말줄임 — 스택 모드에선 전체 표시 */
+@media (min-width: 769px) {
+    .screener-table td[data-label="테마"] {
+        max-width: 160px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .screener-table td[data-label="날짜"] { white-space: nowrap; }
+}
+
+@media (max-width: 768px) {
+    /* 필터 폼: date input을 유연 폭으로 */
+    .pp-filter-field { flex: 1 1 140px; min-width: 120px; }
+    .pp-filter-field input[type="date"] { width: 100%; }
+    /* 고급필터 토글 버튼 터치 타겟 */
+    .pp-filter-adv-toggle { min-height: 40px; padding: 8px 12px; font-size: 13px; }
+
+    /* 메모 저장/삭제 버튼 터치 타겟 */
+    .pp-panel-tabpanel[data-pp-tab="memo"] .btn { min-height: 40px; padding: 8px 14px; font-size: 13px; }
+
+    /* 우측 슬라이드 패널이 바텀 시트일 때 탭 수평 스크롤 가능 */
+    .pp-panel-tabs { overflow-x: auto; scrollbar-width: none; }
+    .pp-panel-tabs::-webkit-scrollbar { display: none; }
+
+    /* info·external 링크 아이콘은 아주 작으므로 터치 타겟 확보 */
+    .screener-table td a[title="기초정보"] { min-width: 28px; min-height: 28px; display: inline-flex; align-items: center; justify-content: center; }
+}
 </style>
 {% endblock %}
 
@@ -165,11 +197,11 @@
     <div class="pp-filters-advanced" id="pp-filters-advanced"{% if not adv_active %} hidden{% endif %}>
         <div class="pp-filter-field">
             <label>시작일</label>
-            <input type="date" name="date_from" class="filter-input" value="{{ date_from or '' }}" style="width:140px;">
+            <input type="date" name="date_from" class="filter-input" value="{{ date_from or '' }}">
         </div>
         <div class="pp-filter-field">
             <label>종료일</label>
-            <input type="date" name="date_to" class="filter-input" value="{{ date_to or '' }}" style="width:140px;">
+            <input type="date" name="date_to" class="filter-input" value="{{ date_to or '' }}">
         </div>
         <select name="asset_type" class="filter-select">
             <option value="">자산 전체</option>
@@ -202,8 +234,8 @@
 </form>
 
 {% if proposals %}
-<div class="table-wrap">
-<table class="screener-table">
+<div class="table-wrap table-stack-mobile-wrap">
+<table class="screener-table table-stack-mobile">
     <thead>
         <tr>
             {% if current_user %}<th style="width:36px;"></th>{% endif %}
@@ -226,39 +258,39 @@
         {% for p in proposals %}
         <tr class="screener-row" data-proposal-id="{{ p.id }}">
             {% if current_user %}
-            <td style="text-align:center;">
+            <td data-label="관심" style="text-align:center;">
                 <span class="watchlist-toggle{% if p.ticker in watched_tickers %} watched{% endif %}" data-ticker="{{ p.ticker }}" data-name="{{ p.asset_name }}" onclick="event.stopPropagation(); toggleWatch(this);" title="관심 종목">
                     {% if p.ticker in watched_tickers %}&#9733;{% else %}&#9734;{% endif %}
                 </span>
             </td>
             {% endif %}
-            <td><span class="badge badge-{{ p.action }}">{{ p.action|upper }}</span></td>
-            <td style="font-weight:600;">{{ p.asset_name }}</td>
-            <td>
+            <td data-label="Action"><span class="badge badge-{{ p.action }}">{{ p.action|upper }}</span></td>
+            <td data-label="종목" style="font-weight:600;">{{ p.asset_name }}</td>
+            <td data-label="티커">
                 <a href="/pages/proposals/history/{{ p.ticker }}" style="color:var(--accent);" onclick="event.stopPropagation();">{{ p.ticker }}</a>
                 <a href="/pages/stocks/{{ p.ticker }}{% if p.market %}?market={{ p.market }}{% endif %}" style="font-size:10px;color:var(--text-muted);margin-left:4px;border:1px solid var(--border);border-radius:3px;padding:1px 4px;" onclick="event.stopPropagation();" title="기초정보">info</a>
                 <span onclick="event.stopPropagation();">{{ external_links(p.ticker, p.market or '') }}</span>
                 {% if p.market %}<span style="font-size:11px;color:var(--text-muted);">{{ p.market }}</span>{% endif %}
             </td>
-            <td><span class="badge badge-{{ p.conviction }}">{{ p.conviction }}</span></td>
-            <td>
+            <td data-label="확신도"><span class="badge badge-{{ p.conviction }}">{{ p.conviction }}</span></td>
+            <td data-label="비중">
                 <span class="alloc-bar" style="width:40px;"><span class="alloc-bar-fill" style="width:{{ (p.target_allocation|float)|int }}%"></span></span>
                 {{ p.target_allocation }}%
             </td>
-            <td>{{ p.current_price|fmt_price(p.currency) }}</td>
-            <td>{% if p.target_price_low and p.target_price_high %}{{ p.target_price_low|fmt_price(p.currency) }}~{{ p.target_price_high|fmt_price(p.currency) }}{% else %}-{% endif %}</td>
-            <td>
+            <td data-label="현재가">{{ p.current_price|fmt_price(p.currency) }}</td>
+            <td data-label="목표가">{% if p.target_price_low and p.target_price_high %}{{ p.target_price_low|fmt_price(p.currency) }}~{{ p.target_price_high|fmt_price(p.currency) }}{% else %}-{% endif %}</td>
+            <td data-label="상승여력">
                 {% if p.upside_pct %}
                 <span class="{% if p.upside_pct > 0 %}upside-positive{% else %}upside-negative{% endif %}">
                     {% if p.upside_pct > 0 %}+{% endif %}{{ p.upside_pct }}%
                 </span>
                 {% else %}-{% endif %}
             </td>
-            <td>{% if p.quant_score %}<span class="score-display">{{ p.quant_score }}/5</span>{% else %}-{% endif %}</td>
-            <td>{% if p.discovery_type %}<span style="font-size:12px;padding:2px 8px;border-radius:5px;background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.2);color:var(--green);white-space:nowrap;">{{ p.discovery_type }}</span>{% else %}-{% endif %}</td>
-            <td>{% if p.time_horizon %}<span style="font-size:12px;color:var(--text-muted);white-space:nowrap;">{{ p.time_horizon }}</span>{% else %}-{% endif %}</td>
-            <td style="font-size:12px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{{ p.theme_name }}">{{ p.theme_name }}</td>
-            <td style="font-size:12px;color:var(--text-muted);white-space:nowrap;">{{ p.analysis_date }}</td>
+            <td data-label="Q점수">{% if p.quant_score %}<span class="score-display">{{ p.quant_score }}/5</span>{% else %}-{% endif %}</td>
+            <td data-label="발굴유형">{% if p.discovery_type %}<span style="font-size:12px;padding:2px 8px;border-radius:5px;background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.2);color:var(--green);white-space:nowrap;">{{ p.discovery_type }}</span>{% else %}-{% endif %}</td>
+            <td data-label="투자기간">{% if p.time_horizon %}<span style="font-size:12px;color:var(--text-muted);white-space:nowrap;">{{ p.time_horizon }}</span>{% else %}-{% endif %}</td>
+            <td data-label="테마" style="font-size:12px;" title="{{ p.theme_name }}">{{ p.theme_name }}</td>
+            <td data-label="날짜" style="font-size:12px;color:var(--text-muted);">{{ p.analysis_date }}</td>
         </tr>
         {% endfor %}
     </tbody>

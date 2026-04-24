@@ -11,6 +11,29 @@
     .nav-menu li a > i[data-lucide] { width: 16px; height: 16px; flex-shrink: 0; }
     .nav-menu li a > .nav-label { flex: 1; }
     .nav-menu li a > .nav-badge { margin-left: auto; }
+
+    /* PR-6: 유저 드롭다운 — 좁은 뷰포트 overflow 방지 */
+    .user-dropdown-menu { max-width: calc(100vw - 24px); }
+
+    /* PR-6: 모바일 헤더 버튼·아이콘 터치 타겟 ≥40px */
+    @media (max-width: 768px) {
+        .header-right .btn,
+        .header-right .btn-primary {
+            min-height: 40px;
+            padding: 8px 14px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .header-noti {
+            min-width: 40px;
+            min-height: 40px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .user-dropdown-trigger { min-height: 40px; padding: 6px 10px 6px 6px; }
+    }
     </style>
     {% block head %}{% endblock %}
 </head>

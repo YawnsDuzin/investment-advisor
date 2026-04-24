@@ -59,6 +59,14 @@
 }
 @media (max-width: 768px) {
     .wl-tabs-tab { padding: 8px 12px; font-size: 13px; }
+    /* PR-6: 삭제/해제/업그레이드 버튼 터치 타겟 ≥36px */
+    .wl-tabs-panel .btn {
+        min-height: 36px;
+        padding: 8px 12px !important;
+        font-size: 12px !important;
+    }
+    /* 한도 표시 행이 모바일에서 세로 정렬되도록 */
+    .wl-tabs-limit-row { gap: 6px; }
 }
 </style>
 {% endblock %}

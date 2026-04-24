@@ -26,6 +26,13 @@
 }
 .theme-deep[open] > summary::before { transform: rotate(90deg); }
 .theme-deep-body { padding-top: 10px; }
+
+/* PR-6: 모바일 최적화 — scenario 3열을 1열로, 매크로 테이블 가로 스크롤 */
+@media (max-width: 768px) {
+    .scenario-grid { grid-template-columns: 1fr !important; gap: 10px; }
+    .theme-deep-body .macro-impact-table,
+    .theme-deep-body table { display: block; overflow-x: auto; white-space: nowrap; }
+}
 </style>
 {% endblock %}
 
