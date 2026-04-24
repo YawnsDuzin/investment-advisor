@@ -1,0 +1,12 @@
+[Unit]
+Description=Investment Advisor - 월간 섹터 리프레시 (매월 1일 03:45 KST)
+
+[Timer]
+# 매월 1일 03:45 KST — 03:00 analyzer + 03:30 meta-sync 이후 실행
+# 일요일 04:00 ohlcv-cleanup과 겹치면 DB 부하 → 평일 오전으로 분리
+OnCalendar=*-*-01 03:45:00 Asia/Seoul
+Persistent=true
+Unit=monthly-sector-refresh.service
+
+[Install]
+WantedBy=timers.target

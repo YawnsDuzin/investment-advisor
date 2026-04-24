@@ -151,6 +151,8 @@ def _validate_sector(proposal: dict, universe: dict) -> ValidationFinding | None
     if not actual_norm:
         return None
     # AI 제시값을 sector_norm으로 정규화 (KRX/GICS/industry 모두 시도)
+    # AI가 제시하는 sector 문자열은 정형 분류 코드가 아닌 자유 텍스트라 ticker/name은 의도적으로 미전달
+    # — _validate_sector는 "AI vs stock_universe.sector_norm" 비교이므로 티커 override가 끼면 tautology.
     ai_norm = normalize_sector(
         sector_krx=ai_sector_raw,
         sector_gics=ai_sector_raw,

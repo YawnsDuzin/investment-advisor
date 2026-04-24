@@ -10,9 +10,21 @@ if _env_path.exists():
         line = line.strip()
         if not line or line.startswith("#"):
             continue
-        if "=" in line:
-            key, _, value = line.partition("=")
-            os.environ.setdefault(key.strip(), value.strip())
+        if "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key = key.strip()
+        value = value.strip()
+        # 값이 따옴표로 감싸지지 않은 경우: 공백+'#' 이후를 인라인 주석으로 간주하여 제거
+        if value and value[0] not in ("'", '"'):
+            for i, ch in enumerate(value):
+                if ch == "#" and i > 0 and value[i - 1].isspace():
+                    value = value[:i].rstrip()
+                    break
+        # 따옴표 쌍 벗김 ("value" / 'value')
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
+            value = value[1:-1]
+        os.environ.setdefault(key, value)
 
 
 @dataclass
