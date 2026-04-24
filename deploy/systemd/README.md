@@ -9,7 +9,7 @@
 |---|---|---|
 | `__INSTALL_DIR__` | `/home/pi/investment-advisor` | 프로젝트 clone 경로 (루트 디렉터리) |
 | `__VENV_PYTHON__` | `/home/pi/investment-advisor/venv/bin/python` | 가상환경 Python 절대경로 |
-| `__SYSTEM_USER__` | `pi` | 서비스 실행 유저 (프로젝트 소유자) |
+| `__SYSTEM_USER__` | `dzp` | 서비스 실행 유저 (프로젝트 소유자) |
 
 ## Unit 일람
 
@@ -51,7 +51,7 @@ cd /home/pi/investment-advisor/deploy/systemd
 # 1. 플레이스홀더 치환 → /etc/systemd/system/ 에 복사
 INSTALL_DIR=/home/pi/investment-advisor
 VENV_PYTHON=$INSTALL_DIR/venv/bin/python
-SYSTEM_USER=pi
+SYSTEM_USER=dzp
 
 for f in *.service *.timer; do
   sed -e "s|__INSTALL_DIR__|$INSTALL_DIR|g" \
