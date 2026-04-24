@@ -19,17 +19,6 @@
 {% include "partials/dashboard/_hero_row2.html" %}
 
 {# ════════════════════════════════════════════════════
-   TIER 3 — Deep Dive (맥락 분석)
-   ════════════════════════════════════════════════════ #}
-{% include "partials/dashboard/_market_summary.html" %}
-
-{% if bond_yields %}
-{% include "partials/dashboard/_yield_curve.html" %}
-{% endif %}
-
-{% include "partials/dashboard/_themes_list.html" %}
-
-{# ════════════════════════════════════════════════════
    TIER 2 — Today's Action (핵심 투자 판단)
    ════════════════════════════════════════════════════ #}
 {% if top_picks %}
@@ -39,12 +28,10 @@
 {# 오늘의 이상 시그널 (로드맵 UI-3) — market_signals 기반 클라이언트 fetch #}
 {% include "partials/dashboard/_signals_today.html" %}
 
-{# 섹터 모멘텀 히트맵 (로드맵 UI-3) — stock_universe × OHLCV JOIN 집계 #}
-{% include "partials/dashboard/_sector_heatmap.html" %}
-
-{% if news_by_category %}
-{% include "partials/dashboard/_news_by_category.html" %}
-{% endif %}
+{# ════════════════════════════════════════════════════
+   TIER 3 — Deep Dive (맥락 분석) — 탭으로 묶음 (PR-2)
+   ════════════════════════════════════════════════════ #}
+{% include "partials/dashboard/_deep_dive_tabs.html" %}
 
 {% else %}
 <div class="empty-state">
