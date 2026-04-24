@@ -3,6 +3,32 @@
 {% block title %}Themes — AlphaSignal{% endblock %}
 {% block page_title %}투자 테마{% endblock %}
 
+{% block head %}
+<style>
+/* PR-3: 테마 심화 정보(시나리오·매크로) 접힘 토글 */
+.theme-deep { margin-top: 14px; border-top: 1px dashed var(--border); padding-top: 12px; }
+.theme-deep > summary {
+    cursor: pointer;
+    color: var(--accent);
+    font-weight: 500;
+    font-size: 13px;
+    list-style: none;
+    padding: 4px 0;
+    user-select: none;
+}
+.theme-deep > summary::-webkit-details-marker { display: none; }
+.theme-deep > summary::before {
+    content: '▶';
+    font-size: 10px;
+    display: inline-block;
+    margin-right: 6px;
+    transition: transform 0.15s;
+}
+.theme-deep[open] > summary::before { transform: rotate(90deg); }
+.theme-deep-body { padding-top: 10px; }
+</style>
+{% endblock %}
+
 {% block content %}
 <form class="filters" method="get" action="/pages/themes">
     <select name="horizon" class="filter-select">
@@ -29,10 +55,8 @@
     {{ theme_header(theme, tk if tk else none) }}
     <div class="detail-text">{{ theme.description }}</div>
     {{ indicator_tags(theme.key_indicators) }}
-    {{ scenario_grid(theme.scenarios) }}
-    {{ macro_impact_table(theme.macro_impacts) }}
 
-    {# Themes: 종목은 태그로 간결하게 (상세는 Stocks 페이지에서) #}
+    {# Themes: 종목 태그는 탐색성을 위해 상시 표시 #}
     {% if theme.proposals %}
     <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px;">
         {% for p in theme.proposals %}
@@ -46,12 +70,27 @@
         {% endfor %}
     </div>
     {% endif %}
+
+    {# 심화 정보: 시나리오 + 매크로 영향 — 기본 접힘 #}
+    {% if theme.scenarios or theme.macro_impacts %}
+    <details class="theme-deep">
+        <summary>시나리오 · 매크로 영향 보기</summary>
+        <div class="theme-deep-body">
+            {{ scenario_grid(theme.scenarios) }}
+            {{ macro_impact_table(theme.macro_impacts) }}
+        </div>
+    </details>
+    {% endif %}
 </div>
 {% endfor %}
 {% else %}
 <div class="empty-state">
     <h3>조건에 맞는 테마 없음</h3>
     <p>필터를 조정하거나 분석을 먼저 실행하세요.</p>
+    <div style="margin-top:12px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
+        <a href="/pages/themes" class="btn">필터 초기화</a>
+        <a href="/" class="btn btn-primary">Dashboard 보기</a>
+    </div>
 </div>
 {% endif %}
 {% endblock %}

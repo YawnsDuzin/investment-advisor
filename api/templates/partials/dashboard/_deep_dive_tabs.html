@@ -1,0 +1,102 @@
+{#
+  Dashboard — Deep Dive Tabs (PR-2)
+  5개 영역(시장 요약 / 테마 / 섹터 히트맵 / 채권곡선 / 뉴스)을 탭으로 묶어
+  대시보드 세로 길이 축소 + Deep Dive 정보 탐색성 유지.
+  CONTEXT 의존: bond_yields, news_by_category (나머지는 각 partial이 자체 처리)
+#}
+<style>
+.dd-tabs { margin-top: 24px; }
+.dd-tabs-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 16px;
+    overflow-x: auto;
+    scrollbar-width: thin;
+}
+.dd-tabs-tab {
+    background: transparent;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    padding: 10px 16px;
+    color: var(--text-muted);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: color 0.15s, border-color 0.15s;
+}
+.dd-tabs-tab:hover { color: var(--text); }
+.dd-tabs-tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+    font-weight: 600;
+}
+.dd-tabs-panel { display: none; }
+.dd-tabs-panel.active { display: block; }
+@media (max-width: 768px) {
+    .dd-tabs-tab { padding: 8px 12px; font-size: 13px; }
+}
+</style>
+
+<div class="dd-tabs" id="dd-tabs">
+    <div class="dd-tabs-nav" role="tablist" aria-label="Deep Dive">
+        <button type="button" class="dd-tabs-tab active" data-dd-target="dd-market" role="tab" aria-selected="true">시장 요약</button>
+        <button type="button" class="dd-tabs-tab" data-dd-target="dd-themes" role="tab" aria-selected="false">테마</button>
+        <button type="button" class="dd-tabs-tab" data-dd-target="dd-sectors" role="tab" aria-selected="false">섹터 히트맵</button>
+        {% if bond_yields %}
+        <button type="button" class="dd-tabs-tab" data-dd-target="dd-yield" role="tab" aria-selected="false">채권 곡선</button>
+        {% endif %}
+        {% if news_by_category %}
+        <button type="button" class="dd-tabs-tab" data-dd-target="dd-news" role="tab" aria-selected="false">뉴스</button>
+        {% endif %}
+    </div>
+
+    <div class="dd-tabs-panel active" id="dd-market" role="tabpanel">
+        {% include "partials/dashboard/_market_summary.html" %}
+    </div>
+    <div class="dd-tabs-panel" id="dd-themes" role="tabpanel">
+        {% include "partials/dashboard/_themes_list.html" %}
+    </div>
+    <div class="dd-tabs-panel" id="dd-sectors" role="tabpanel">
+        {% include "partials/dashboard/_sector_heatmap.html" %}
+    </div>
+    {% if bond_yields %}
+    <div class="dd-tabs-panel" id="dd-yield" role="tabpanel">
+        {% include "partials/dashboard/_yield_curve.html" %}
+    </div>
+    {% endif %}
+    {% if news_by_category %}
+    <div class="dd-tabs-panel" id="dd-news" role="tabpanel">
+        {% include "partials/dashboard/_news_by_category.html" %}
+    </div>
+    {% endif %}
+</div>
+
+<script>
+(function() {
+    var root = document.getElementById('dd-tabs');
+    if (!root) return;
+    var tabs = root.querySelectorAll('.dd-tabs-tab');
+    var panels = root.querySelectorAll('.dd-tabs-panel');
+    tabs.forEach(function(tab) {
+        tab.addEventListener('click', function() {
+            var target = tab.getAttribute('data-dd-target');
+            tabs.forEach(function(t) {
+                t.classList.remove('active');
+                t.setAttribute('aria-selected', 'false');
+            });
+            panels.forEach(function(p) { p.classList.remove('active'); });
+            tab.classList.add('active');
+            tab.setAttribute('aria-selected', 'true');
+            var panel = document.getElementById(target);
+            if (panel) {
+                panel.classList.add('active');
+                // Chart.js 리사이즈 트리거 (숨김 상태에서 생성된 canvas 재렌더)
+                window.dispatchEvent(new Event('resize'));
+            }
+        });
+    });
+})();
+</script>

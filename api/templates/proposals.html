@@ -3,73 +3,202 @@
 {% block title %}Proposals — AlphaSignal{% endblock %}
 {% block page_title %}종목 스크리너{% endblock %}
 
+{% block head %}
+<style>
+/* PR-4: 필터 핵심/고급 분리 */
+.pp-filters { display: flex; flex-direction: column; gap: 8px; }
+.pp-filters-primary, .pp-filters-advanced {
+    display: flex; flex-wrap: wrap; gap: 8px; align-items: end;
+}
+.pp-filter-field { display: flex; flex-direction: column; gap: 2px; }
+.pp-filter-field label { font-size: 11px; color: var(--text-muted); }
+.pp-filter-adv-toggle {
+    background: transparent;
+    border: 1px dashed var(--border);
+    color: var(--text-muted);
+    font-size: 12px;
+    padding: 6px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+}
+.pp-filter-adv-toggle:hover { color: var(--text); border-color: var(--accent); }
+.pp-filters-advanced[hidden] { display: none; }
+.pp-filter-active-badge {
+    background: rgba(79,140,255,0.15);
+    color: var(--accent);
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 8px;
+    margin-left: 4px;
+}
+
+/* PR-4: 우측 슬라이드 상세 패널 */
+.pp-panel {
+    position: fixed;
+    top: 0; right: 0;
+    width: 560px;
+    max-width: 100vw;
+    height: 100vh;
+    background: var(--bg-card);
+    border-left: 1px solid var(--border);
+    transform: translateX(100%);
+    transition: transform 0.22s ease;
+    z-index: 200;
+    display: none;
+    flex-direction: column;
+    box-shadow: -8px 0 24px rgba(0,0,0,0.35);
+}
+.pp-panel.mounted { display: flex; }
+.pp-panel.open { transform: translateX(0); }
+.pp-panel-backdrop {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.55);
+    z-index: 199;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.22s;
+}
+.pp-panel-backdrop.open { opacity: 1; pointer-events: auto; }
+.pp-panel-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    gap: 12px;
+}
+.pp-panel-title { font-size: 16px; font-weight: 600; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.pp-panel-close {
+    background: transparent; border: 0; color: var(--text-muted);
+    font-size: 22px; line-height: 1; cursor: pointer; padding: 4px 8px;
+}
+.pp-panel-close:hover { color: var(--text); }
+.pp-panel-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    padding: 0 8px;
+}
+.pp-panel-tab {
+    background: transparent; border: 0;
+    border-bottom: 2px solid transparent;
+    padding: 10px 14px;
+    color: var(--text-muted);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+}
+.pp-panel-tab:hover { color: var(--text); }
+.pp-panel-tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+.pp-panel-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 20px 20px;
+}
+.pp-panel-tabpanel { display: none; }
+.pp-panel-tabpanel.active { display: block; }
+.pp-panel-cta {
+    display: flex; gap: 8px;
+    padding: 12px 20px;
+    border-top: 1px solid var(--border);
+    background: var(--bg-card);
+}
+.pp-panel-cta .detail-cta-btn { flex: 1; }
+
+@media (max-width: 768px) {
+    .pp-panel {
+        top: auto; bottom: 0; right: 0; left: 0;
+        width: 100%;
+        height: 88vh;
+        transform: translateY(100%);
+        border-left: 0;
+        border-top: 1px solid var(--border);
+        border-top-left-radius: 16px;
+        border-top-right-radius: 16px;
+    }
+    .pp-panel.open { transform: translateY(0); }
+}
+
+.screener-row { cursor: pointer; }
+.screener-row.row-selected { background: rgba(79,140,255,0.08); }
+</style>
+{% endblock %}
+
 {% block content %}
-<form class="filters" method="get" action="/pages/proposals" style="display:flex;flex-wrap:wrap;gap:8px;align-items:end;">
-    {# 1행: 날짜 범위 + 기존 필터 #}
-    <div style="display:flex;flex-direction:column;gap:2px;">
-        <label style="font-size:11px;color:var(--text-muted);">시작일</label>
-        <input type="date" name="date_from" class="filter-input" value="{{ date_from or '' }}" style="width:140px;">
+{% set adv_active = (date_from or date_to or asset_type or sector or discovery_type or time_horizon) %}
+<form class="filters pp-filters" method="get" action="/pages/proposals">
+    {# 핵심 필터 — 항상 노출 #}
+    <div class="pp-filters-primary">
+        <select name="action" class="filter-select">
+            <option value="">Action 전체</option>
+            <option value="buy" {% if action == 'buy' %}selected{% endif %}>Buy</option>
+            <option value="sell" {% if action == 'sell' %}selected{% endif %}>Sell</option>
+            <option value="hold" {% if action == 'hold' %}selected{% endif %}>Hold</option>
+            <option value="watch" {% if action == 'watch' %}selected{% endif %}>Watch</option>
+        </select>
+        <select name="conviction" class="filter-select">
+            <option value="">확신도 전체</option>
+            <option value="high" {% if conviction == 'high' %}selected{% endif %}>High</option>
+            <option value="medium" {% if conviction == 'medium' %}selected{% endif %}>Medium</option>
+            <option value="low" {% if conviction == 'low' %}selected{% endif %}>Low</option>
+        </select>
+        <select name="market" class="filter-select">
+            <option value="">시장 전체</option>
+            {% for m in market_options %}
+            <option value="{{ m }}" {% if market == m %}selected{% endif %}>{{ m }}</option>
+            {% endfor %}
+        </select>
+        <input type="text" name="ticker" class="filter-input" placeholder="티커 검색 (예: NVDA)" value="{{ ticker or '' }}">
+        <select name="sort" class="filter-select">
+            <option value="">정렬: 최신순</option>
+            <option value="upside" {% if sort == 'upside' %}selected{% endif %}>상승여력순</option>
+            <option value="quant" {% if sort == 'quant' %}selected{% endif %}>Q점수순</option>
+            <option value="allocation" {% if sort == 'allocation' %}selected{% endif %}>비중순</option>
+            <option value="conviction_sort" {% if sort == 'conviction_sort' %}selected{% endif %}>확신도순</option>
+        </select>
+        <button type="submit" class="btn btn-primary">필터</button>
+        <button type="button" class="pp-filter-adv-toggle" id="pp-filter-adv-toggle" aria-expanded="{{ 'true' if adv_active else 'false' }}">
+            고급 필터{% if adv_active %}<span class="pp-filter-active-badge">활성</span>{% endif %}
+        </button>
+        <a href="/pages/proposals" class="btn" style="background:var(--bg-secondary);color:var(--text-muted);text-decoration:none;padding:6px 14px;border-radius:6px;font-size:13px;">초기화</a>
     </div>
-    <div style="display:flex;flex-direction:column;gap:2px;">
-        <label style="font-size:11px;color:var(--text-muted);">종료일</label>
-        <input type="date" name="date_to" class="filter-input" value="{{ date_to or '' }}" style="width:140px;">
+
+    {# 고급 필터 — 기본 접힘 (활성 필터 있으면 펼침) #}
+    <div class="pp-filters-advanced" id="pp-filters-advanced"{% if not adv_active %} hidden{% endif %}>
+        <div class="pp-filter-field">
+            <label>시작일</label>
+            <input type="date" name="date_from" class="filter-input" value="{{ date_from or '' }}" style="width:140px;">
+        </div>
+        <div class="pp-filter-field">
+            <label>종료일</label>
+            <input type="date" name="date_to" class="filter-input" value="{{ date_to or '' }}" style="width:140px;">
+        </div>
+        <select name="asset_type" class="filter-select">
+            <option value="">자산 전체</option>
+            <option value="stock" {% if asset_type == 'stock' %}selected{% endif %}>Stock</option>
+            <option value="etf" {% if asset_type == 'etf' %}selected{% endif %}>ETF</option>
+            <option value="commodity" {% if asset_type == 'commodity' %}selected{% endif %}>Commodity</option>
+            <option value="currency" {% if asset_type == 'currency' %}selected{% endif %}>Currency</option>
+            <option value="bond" {% if asset_type == 'bond' %}selected{% endif %}>Bond</option>
+            <option value="crypto" {% if asset_type == 'crypto' %}selected{% endif %}>Crypto</option>
+        </select>
+        <select name="sector" class="filter-select">
+            <option value="">섹터 전체</option>
+            {% for s in sector_options %}
+            <option value="{{ s }}" {% if sector == s %}selected{% endif %}>{{ s }}</option>
+            {% endfor %}
+        </select>
+        <select name="discovery_type" class="filter-select">
+            <option value="">발굴유형 전체</option>
+            {% for d in discovery_type_options %}
+            <option value="{{ d }}" {% if discovery_type == d %}selected{% endif %}>{{ d }}</option>
+            {% endfor %}
+        </select>
+        <select name="time_horizon" class="filter-select">
+            <option value="">투자기간 전체</option>
+            {% for h in time_horizon_options %}
+            <option value="{{ h }}" {% if time_horizon == h %}selected{% endif %}>{{ h }}</option>
+            {% endfor %}
+        </select>
     </div>
-    <select name="action" class="filter-select">
-        <option value="">Action 전체</option>
-        <option value="buy" {% if action == 'buy' %}selected{% endif %}>Buy</option>
-        <option value="sell" {% if action == 'sell' %}selected{% endif %}>Sell</option>
-        <option value="hold" {% if action == 'hold' %}selected{% endif %}>Hold</option>
-        <option value="watch" {% if action == 'watch' %}selected{% endif %}>Watch</option>
-    </select>
-    <select name="asset_type" class="filter-select">
-        <option value="">자산 전체</option>
-        <option value="stock" {% if asset_type == 'stock' %}selected{% endif %}>Stock</option>
-        <option value="etf" {% if asset_type == 'etf' %}selected{% endif %}>ETF</option>
-        <option value="commodity" {% if asset_type == 'commodity' %}selected{% endif %}>Commodity</option>
-        <option value="currency" {% if asset_type == 'currency' %}selected{% endif %}>Currency</option>
-        <option value="bond" {% if asset_type == 'bond' %}selected{% endif %}>Bond</option>
-        <option value="crypto" {% if asset_type == 'crypto' %}selected{% endif %}>Crypto</option>
-    </select>
-    <select name="conviction" class="filter-select">
-        <option value="">확신도 전체</option>
-        <option value="high" {% if conviction == 'high' %}selected{% endif %}>High</option>
-        <option value="medium" {% if conviction == 'medium' %}selected{% endif %}>Medium</option>
-        <option value="low" {% if conviction == 'low' %}selected{% endif %}>Low</option>
-    </select>
-    <select name="market" class="filter-select">
-        <option value="">시장 전체</option>
-        {% for m in market_options %}
-        <option value="{{ m }}" {% if market == m %}selected{% endif %}>{{ m }}</option>
-        {% endfor %}
-    </select>
-    <select name="sector" class="filter-select">
-        <option value="">섹터 전체</option>
-        {% for s in sector_options %}
-        <option value="{{ s }}" {% if sector == s %}selected{% endif %}>{{ s }}</option>
-        {% endfor %}
-    </select>
-    <select name="discovery_type" class="filter-select">
-        <option value="">발굴유형 전체</option>
-        {% for d in discovery_type_options %}
-        <option value="{{ d }}" {% if discovery_type == d %}selected{% endif %}>{{ d }}</option>
-        {% endfor %}
-    </select>
-    <select name="time_horizon" class="filter-select">
-        <option value="">투자기간 전체</option>
-        {% for h in time_horizon_options %}
-        <option value="{{ h }}" {% if time_horizon == h %}selected{% endif %}>{{ h }}</option>
-        {% endfor %}
-    </select>
-    <input type="text" name="ticker" class="filter-input" placeholder="티커 검색 (예: NVDA)" value="{{ ticker or '' }}">
-    <select name="sort" class="filter-select">
-        <option value="">정렬: 최신순</option>
-        <option value="upside" {% if sort == 'upside' %}selected{% endif %}>상승여력순</option>
-        <option value="quant" {% if sort == 'quant' %}selected{% endif %}>Q점수순</option>
-        <option value="allocation" {% if sort == 'allocation' %}selected{% endif %}>비중순</option>
-        <option value="conviction_sort" {% if sort == 'conviction_sort' %}selected{% endif %}>확신도순</option>
-    </select>
-    <button type="submit" class="btn btn-primary">필터</button>
-    <a href="/pages/proposals" class="btn" style="background:var(--bg-secondary);color:var(--text-muted);text-decoration:none;padding:6px 14px;border-radius:6px;font-size:13px;">초기화</a>
 </form>
 
 {% if proposals %}
@@ -95,7 +224,7 @@
     </thead>
     <tbody>
         {% for p in proposals %}
-        <tr class="screener-row" data-idx="{{ loop.index0 }}">
+        <tr class="screener-row" data-proposal-id="{{ p.id }}">
             {% if current_user %}
             <td style="text-align:center;">
                 <span class="watchlist-toggle{% if p.ticker in watched_tickers %} watched{% endif %}" data-ticker="{{ p.ticker }}" data-name="{{ p.asset_name }}" onclick="event.stopPropagation(); toggleWatch(this);" title="관심 종목">
@@ -131,132 +260,122 @@
             <td style="font-size:12px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{{ p.theme_name }}">{{ p.theme_name }}</td>
             <td style="font-size:12px;color:var(--text-muted);white-space:nowrap;">{{ p.analysis_date }}</td>
         </tr>
-        <tr class="detail-row" data-idx="{{ loop.index0 }}" style="display:none;">
-            <td colspan="{% if current_user %}14{% else %}13{% endif %}" style="padding:0;">
-                <div class="detail-panel" data-proposal="{{ p.id }}">
-                    {# Sticky CTA 바 (모바일 고정, PC는 상단 노출) — UI-13 #}
-                    {% if current_user %}
-                    <div class="detail-sticky-cta">
-                        <button type="button" class="detail-cta-btn" onclick="event.stopPropagation(); addWatch{{ p.id }}();" title="관심 종목 추가">
-                            <i data-lucide="star" aria-hidden="true"></i> 관심
-                        </button>
-                        <button type="button" class="detail-cta-btn" onclick="event.stopPropagation(); subscribeTicker('{{ p.ticker }}', this);" title="알림 구독">
-                            <i data-lucide="bell" aria-hidden="true"></i> 알림
-                        </button>
-                        <button type="button" class="detail-cta-btn" onclick="event.stopPropagation(); focusMemo({{ p.id }});" title="메모 작성">
-                            <i data-lucide="edit-3" aria-hidden="true"></i> 메모
-                        </button>
-                    </div>
-                    {% endif %}
-
-                    {# 전체 섹션 한번에 표시 — 탭 제거 #}
-                    <div class="detail-section" id="overview-{{ p.id }}">
-                        <div class="detail-section-title">개요</div>
-                        {% if p.sector or p.discovery_type or p.price_momentum_check or p.supply_chain_position or p.vendor_tier or (p.sentiment_score is not none and p.sentiment_score != None) %}
-                        <div class="detail-meta-tags">
-                            {% if p.sector %}
-                            <span class="meta-tag meta-tag-sector">{{ p.sector }}</span>
-                            {% endif %}
-                            {% if p.discovery_type %}
-                            <span class="meta-tag meta-tag-discovery">{{ p.discovery_type }}</span>
-                            {% endif %}
-                            {% if p.price_momentum_check %}
-                            <span class="meta-tag meta-tag-momentum">모멘텀: {{ p.price_momentum_check }}</span>
-                            {% endif %}
-                            {% if p.supply_chain_position %}
-                            <span class="meta-tag meta-tag-supply">공급망: {{ p.supply_chain_position }}</span>
-                            {% endif %}
-                            {% if p.vendor_tier %}
-                            <span class="badge badge-tier{{ p.vendor_tier }}" style="font-size:12px;">Tier {{ p.vendor_tier }}</span>
-                            {% endif %}
-                            {% if p.sentiment_score is not none and p.sentiment_score != None %}
-                            <span class="meta-tag meta-tag-neutral">센티먼트 {{ p.sentiment_score }}</span>
-                            {% endif %}
-                            {# KRX 확장 데이터 뱃지 #}
-                            {% if p.foreign_net_buy_signal == 'strong_buy' %}
-                            <span class="meta-tag" style="background:var(--success);color:#fff;"><i data-lucide="landmark" aria-hidden="true"></i>외인 강력매수</span>
-                            {% elif p.foreign_net_buy_signal == 'buy' %}
-                            <span class="meta-tag" style="background:#2d6a4f;color:#fff;"><i data-lucide="landmark" aria-hidden="true"></i>외인 순매수</span>
-                            {% elif p.foreign_net_buy_signal == 'sell' %}
-                            <span class="meta-tag" style="background:var(--danger);color:#fff;"><i data-lucide="landmark" aria-hidden="true"></i>외인 순매도</span>
-                            {% endif %}
-                            {% if p.squeeze_risk == 'high' %}
-                            <span class="meta-tag" style="background:#d00;color:#fff;"><i data-lucide="zap" aria-hidden="true"></i>숏스퀴즈 위험</span>
-                            {% elif p.squeeze_risk == 'medium' %}
-                            <span class="meta-tag" style="background:#e85d04;color:#fff;"><i data-lucide="alert-octagon" aria-hidden="true"></i>공매도 과열</span>
-                            {% endif %}
-                            {% if p.index_membership %}
-                            {% for idx in p.index_membership %}
-                            <span class="meta-tag meta-tag-neutral"><i data-lucide="pin" aria-hidden="true"></i>{{ idx }}</span>
-                            {% endfor %}
-                            {% endif %}
-                        </div>
-                        {% else %}
-                        <div style="color:var(--text-muted);font-size:13px;">추가 메타 정보 없음</div>
-                        {% endif %}
-                    </div>
-
-                    {% if p.return_1m_pct is not none or p.return_3m_pct is not none or p.return_6m_pct is not none or p.return_1y_pct is not none %}
-                    <div class="detail-section" id="returns-{{ p.id }}">
-                        <div class="detail-section-title">수익률</div>
-                        <div class="detail-return-grid">
-                            {% for key, label in [('return_1m_pct', '1개월'), ('return_3m_pct', '3개월'), ('return_6m_pct', '6개월'), ('return_1y_pct', '1년')] %}
-                            {% if p[key] is not none %}
-                            {% set val = p[key] | float %}
-                            <div class="detail-return-chip {% if val < 0 %}negative{% else %}positive{% endif %}">
-                                <div class="detail-return-label">{{ label }}</div>
-                                <div class="detail-return-value">{% if val > 0 %}+{% endif %}{{ "%.1f"|format(val) }}%</div>
-                            </div>
-                            {% endif %}
-                            {% endfor %}
-                        </div>
-                        <div style="margin-top:4px;font-size:10px;color:var(--text-muted);">
-                            * 추천 당일 기준 과거 N개월 모멘텀 — 추천 이후 수익률이 아님
-                        </div>
-                    </div>
-                    {% endif %}
-
-                    {% if p.rationale or p.risk_factors or p.entry_condition or p.exit_condition %}
-                    <div class="detail-section" id="analysis-{{ p.id }}">
-                        <div class="detail-section-title">분석</div>
-                        {% if p.rationale %}
-                        <div class="detail-block"><strong class="detail-label">근거</strong><div>{{ p.rationale|nl_numbered }}</div></div>
-                        {% endif %}
-                        {% if p.risk_factors %}
-                        <div class="detail-block"><strong class="detail-label">리스크</strong><div>{{ p.risk_factors|nl_numbered }}</div></div>
-                        {% endif %}
-                        {% if p.entry_condition or p.exit_condition %}
-                        <div class="detail-cond-grid">
-                            {% if p.entry_condition %}
-                            <div><strong class="detail-label" style="color:var(--green);">진입 조건</strong><div>{{ p.entry_condition }}</div></div>
-                            {% endif %}
-                            {% if p.exit_condition %}
-                            <div><strong class="detail-label" style="color:var(--red);">청산 조건</strong><div>{{ p.exit_condition }}</div></div>
-                            {% endif %}
-                        </div>
-                        {% endif %}
-                    </div>
-                    {% endif %}
-
-                    {% if current_user %}
-                    <div class="detail-section" id="memo-{{ p.id }}">
-                        <div class="detail-section-title">메모</div>
-                        <div style="display:flex;gap:6px;align-items:flex-start;">
-                            <textarea class="memo-input" id="memo-{{ p.id }}" rows="2" placeholder="이 제안에 대한 메모..." style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px 8px;color:var(--text);font-size:12px;resize:vertical;" onclick="event.stopPropagation();">{{ user_memos.get(p.id, '') }}</textarea>
-                            <button onclick="event.stopPropagation(); saveMemo({{ p.id }});" class="btn" style="font-size:12px;padding:4px 12px;white-space:nowrap;">저장</button>
-                            {% if user_memos.get(p.id) %}
-                            <button onclick="event.stopPropagation(); deleteMemo({{ p.id }});" class="btn" style="font-size:12px;padding:4px 8px;color:var(--red);background:none;">삭제</button>
-                            {% endif %}
-                        </div>
-                    </div>
-                    {% endif %}
-                </div>
-            </td>
-        </tr>
         {% endfor %}
     </tbody>
 </table>
 </div>
+
+{# 우측 슬라이드 상세 패널 — 행 클릭 시 JS로 해당 proposal 활성화 #}
+<div class="pp-panel-backdrop" id="pp-panel-backdrop" onclick="closeProposalPanel()"></div>
+<aside class="pp-panel mounted" id="pp-panel" aria-hidden="true" aria-label="제안 상세">
+    {# 공통 헤더 + 탭 + CTA 골격. 내부 탭 패널은 각 proposal별로 서버 렌더 #}
+    <div class="pp-panel-header">
+        <div class="pp-panel-title" id="pp-panel-title">—</div>
+        <button type="button" class="pp-panel-close" onclick="closeProposalPanel()" aria-label="닫기">&times;</button>
+    </div>
+    <div class="pp-panel-tabs" role="tablist">
+        <button type="button" class="pp-panel-tab active" data-pp-tab="overview" role="tab" aria-selected="true">개요</button>
+        <button type="button" class="pp-panel-tab" data-pp-tab="returns" role="tab" aria-selected="false">수익률</button>
+        <button type="button" class="pp-panel-tab" data-pp-tab="analysis" role="tab" aria-selected="false">분석</button>
+        {% if current_user %}
+        <button type="button" class="pp-panel-tab" data-pp-tab="memo" role="tab" aria-selected="false">메모</button>
+        {% endif %}
+    </div>
+    <div class="pp-panel-body" id="pp-panel-body">
+        {# proposal별 detail 블록. data-proposal-id + data-pp-tab 기반으로 스위칭 #}
+        {% for p in proposals %}
+        <div class="pp-panel-content" data-proposal-id="{{ p.id }}" hidden>
+            <div class="pp-panel-tabpanel active" data-pp-tab="overview">
+                {% if p.sector or p.discovery_type or p.price_momentum_check or p.supply_chain_position or p.vendor_tier or (p.sentiment_score is not none and p.sentiment_score != None) or p.foreign_net_buy_signal or p.squeeze_risk or p.index_membership %}
+                <div class="detail-meta-tags">
+                    {% if p.sector %}<span class="meta-tag meta-tag-sector">{{ p.sector }}</span>{% endif %}
+                    {% if p.discovery_type %}<span class="meta-tag meta-tag-discovery">{{ p.discovery_type }}</span>{% endif %}
+                    {% if p.price_momentum_check %}<span class="meta-tag meta-tag-momentum">모멘텀: {{ p.price_momentum_check }}</span>{% endif %}
+                    {% if p.supply_chain_position %}<span class="meta-tag meta-tag-supply">공급망: {{ p.supply_chain_position }}</span>{% endif %}
+                    {% if p.vendor_tier %}<span class="badge badge-tier{{ p.vendor_tier }}" style="font-size:12px;">Tier {{ p.vendor_tier }}</span>{% endif %}
+                    {% if p.sentiment_score is not none and p.sentiment_score != None %}<span class="meta-tag meta-tag-neutral">센티먼트 {{ p.sentiment_score }}</span>{% endif %}
+                    {% if p.foreign_net_buy_signal == 'strong_buy' %}<span class="meta-tag" style="background:var(--success);color:#fff;"><i data-lucide="landmark" aria-hidden="true"></i>외인 강력매수</span>
+                    {% elif p.foreign_net_buy_signal == 'buy' %}<span class="meta-tag" style="background:#2d6a4f;color:#fff;"><i data-lucide="landmark" aria-hidden="true"></i>외인 순매수</span>
+                    {% elif p.foreign_net_buy_signal == 'sell' %}<span class="meta-tag" style="background:var(--danger);color:#fff;"><i data-lucide="landmark" aria-hidden="true"></i>외인 순매도</span>{% endif %}
+                    {% if p.squeeze_risk == 'high' %}<span class="meta-tag" style="background:#d00;color:#fff;"><i data-lucide="zap" aria-hidden="true"></i>숏스퀴즈 위험</span>
+                    {% elif p.squeeze_risk == 'medium' %}<span class="meta-tag" style="background:#e85d04;color:#fff;"><i data-lucide="alert-octagon" aria-hidden="true"></i>공매도 과열</span>{% endif %}
+                    {% if p.index_membership %}{% for idx in p.index_membership %}<span class="meta-tag meta-tag-neutral"><i data-lucide="pin" aria-hidden="true"></i>{{ idx }}</span>{% endfor %}{% endif %}
+                </div>
+                {% else %}
+                <div style="color:var(--text-muted);font-size:13px;">추가 메타 정보 없음</div>
+                {% endif %}
+            </div>
+
+            <div class="pp-panel-tabpanel" data-pp-tab="returns">
+                {% if p.return_1m_pct is not none or p.return_3m_pct is not none or p.return_6m_pct is not none or p.return_1y_pct is not none %}
+                <div class="detail-return-grid">
+                    {% for key, label in [('return_1m_pct', '1개월'), ('return_3m_pct', '3개월'), ('return_6m_pct', '6개월'), ('return_1y_pct', '1년')] %}
+                    {% if p[key] is not none %}
+                    {% set val = p[key] | float %}
+                    <div class="detail-return-chip {% if val < 0 %}negative{% else %}positive{% endif %}">
+                        <div class="detail-return-label">{{ label }}</div>
+                        <div class="detail-return-value">{% if val > 0 %}+{% endif %}{{ "%.1f"|format(val) }}%</div>
+                    </div>
+                    {% endif %}
+                    {% endfor %}
+                </div>
+                <div style="margin-top:8px;font-size:10px;color:var(--text-muted);">
+                    * 추천 당일 기준 과거 N개월 모멘텀 — 추천 이후 수익률이 아님
+                </div>
+                {% else %}
+                <div style="color:var(--text-muted);font-size:13px;">수익률 데이터 없음</div>
+                {% endif %}
+            </div>
+
+            <div class="pp-panel-tabpanel" data-pp-tab="analysis">
+                {% if p.rationale or p.risk_factors or p.entry_condition or p.exit_condition %}
+                {% if p.rationale %}
+                <div class="detail-block"><strong class="detail-label">근거</strong><div>{{ p.rationale|nl_numbered }}</div></div>
+                {% endif %}
+                {% if p.risk_factors %}
+                <div class="detail-block"><strong class="detail-label">리스크</strong><div>{{ p.risk_factors|nl_numbered }}</div></div>
+                {% endif %}
+                {% if p.entry_condition or p.exit_condition %}
+                <div class="detail-cond-grid">
+                    {% if p.entry_condition %}<div><strong class="detail-label" style="color:var(--green);">진입 조건</strong><div>{{ p.entry_condition }}</div></div>{% endif %}
+                    {% if p.exit_condition %}<div><strong class="detail-label" style="color:var(--red);">청산 조건</strong><div>{{ p.exit_condition }}</div></div>{% endif %}
+                </div>
+                {% endif %}
+                {% else %}
+                <div style="color:var(--text-muted);font-size:13px;">분석 데이터 없음</div>
+                {% endif %}
+            </div>
+
+            {% if current_user %}
+            <div class="pp-panel-tabpanel" data-pp-tab="memo">
+                <div style="display:flex;gap:6px;align-items:flex-start;flex-direction:column;">
+                    <textarea class="memo-input" id="memo-{{ p.id }}" rows="5" placeholder="이 제안에 대한 메모..." style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:13px;resize:vertical;">{{ user_memos.get(p.id, '') }}</textarea>
+                    <div style="display:flex;gap:6px;">
+                        <button onclick="saveMemo({{ p.id }});" class="btn btn-primary" style="font-size:12px;padding:4px 14px;">저장</button>
+                        {% if user_memos.get(p.id) %}
+                        <button onclick="deleteMemo({{ p.id }});" class="btn" style="font-size:12px;padding:4px 10px;color:var(--red);background:none;">삭제</button>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% if current_user %}
+    <div class="pp-panel-cta">
+        <button type="button" class="detail-cta-btn" id="pp-cta-watch" onclick="panelAddWatch()" title="관심 종목 추가">
+            <i data-lucide="star" aria-hidden="true"></i> 관심
+        </button>
+        <button type="button" class="detail-cta-btn" id="pp-cta-subscribe" onclick="panelSubscribe(this)" title="알림 구독">
+            <i data-lucide="bell" aria-hidden="true"></i> 알림
+        </button>
+        <button type="button" class="detail-cta-btn" onclick="switchPanelTab('memo'); focusPanelMemo();" title="메모 작성">
+            <i data-lucide="edit-3" aria-hidden="true"></i> 메모
+        </button>
+    </div>
+    {% endif %}
+</aside>
 
 {% else %}
 <div class="empty-state">
@@ -268,25 +387,156 @@
 
 {% block scripts %}
 <script>
-// 데이터 행 클릭 시 바로 아래 상세 행 토글
-document.querySelectorAll('.screener-row').forEach(function(row) {
-    row.style.cursor = 'pointer';
-    row.addEventListener('click', function() {
-        var idx = row.getAttribute('data-idx');
-        var detail = document.querySelector('.detail-row[data-idx="' + idx + '"]');
-        var isOpen = detail.style.display !== 'none';
-        // 모든 상세 행 닫기
-        document.querySelectorAll('.detail-row').forEach(function(d) { d.style.display = 'none'; });
-        document.querySelectorAll('.screener-row').forEach(function(r) { r.classList.remove('row-selected'); });
-        // 토글
-        if (!isOpen) {
-            detail.style.display = 'table-row';
-            row.classList.add('row-selected');
-        }
+// PR-4: 고급 필터 토글
+(function() {
+    var btn = document.getElementById('pp-filter-adv-toggle');
+    var panel = document.getElementById('pp-filters-advanced');
+    if (!btn || !panel) return;
+    btn.addEventListener('click', function() {
+        var isOpen = !panel.hasAttribute('hidden');
+        if (isOpen) panel.setAttribute('hidden', '');
+        else panel.removeAttribute('hidden');
+        btn.setAttribute('aria-expanded', isOpen ? 'false' : 'true');
     });
+})();
+
+// PR-4: 우측 슬라이드 패널 시스템
+var _currentProposalId = null;
+var _proposalMeta = {};  // {id: {ticker, name, title}}
+
+(function() {
+    document.querySelectorAll('.screener-row').forEach(function(row) {
+        // 메타 수집 (ticker/name)
+        var cells = row.cells;
+        var nameCell = cells[row.cells.length - 13] || cells[2];  // 종목 열
+        var tickerLink = row.querySelector('a[href*="/proposals/history/"]');
+        var ticker = tickerLink ? tickerLink.textContent.trim() : '';
+        var name = nameCell ? nameCell.textContent.trim() : ticker;
+        var id = row.getAttribute('data-proposal-id');
+        var actionBadge = row.querySelector('.badge');
+        var actionText = actionBadge ? actionBadge.textContent.trim() : '';
+        _proposalMeta[id] = { ticker: ticker, name: name, title: actionText + ' · ' + name + ' (' + ticker + ')' };
+
+        row.addEventListener('click', function(e) {
+            if (e.defaultPrevented) return;
+            openProposalPanel(id);
+        });
+    });
+})();
+
+function openProposalPanel(id) {
+    _currentProposalId = id;
+    var panel = document.getElementById('pp-panel');
+    var backdrop = document.getElementById('pp-panel-backdrop');
+    var title = document.getElementById('pp-panel-title');
+    if (!panel || !backdrop) return;
+
+    // 모든 detail 콘텐츠 숨김, 현재 것만 표시
+    document.querySelectorAll('.pp-panel-content').forEach(function(c) { c.setAttribute('hidden', ''); });
+    var current = document.querySelector('.pp-panel-content[data-proposal-id="' + id + '"]');
+    if (current) current.removeAttribute('hidden');
+
+    // 타이틀
+    if (title && _proposalMeta[id]) title.textContent = _proposalMeta[id].title;
+
+    // 행 선택 시각화
+    document.querySelectorAll('.screener-row').forEach(function(r) { r.classList.remove('row-selected'); });
+    var row = document.querySelector('.screener-row[data-proposal-id="' + id + '"]');
+    if (row) row.classList.add('row-selected');
+
+    // 첫 탭으로 초기화
+    switchPanelTab('overview');
+
+    // CTA 관심 상태 동기화
+    syncPanelWatchState();
+
+    panel.classList.add('open');
+    panel.setAttribute('aria-hidden', 'false');
+    backdrop.classList.add('open');
+
+    // Lucide 아이콘 재주입 (숨김 상태에서 렌더된 SVG들)
+    if (window.lucide && typeof lucide.createIcons === 'function') lucide.createIcons();
+}
+
+function closeProposalPanel() {
+    var panel = document.getElementById('pp-panel');
+    var backdrop = document.getElementById('pp-panel-backdrop');
+    if (panel) { panel.classList.remove('open'); panel.setAttribute('aria-hidden', 'true'); }
+    if (backdrop) backdrop.classList.remove('open');
+    document.querySelectorAll('.screener-row').forEach(function(r) { r.classList.remove('row-selected'); });
+    _currentProposalId = null;
+}
+
+function switchPanelTab(tabKey) {
+    document.querySelectorAll('.pp-panel-tab').forEach(function(t) {
+        var match = t.getAttribute('data-pp-tab') === tabKey;
+        t.classList.toggle('active', match);
+        t.setAttribute('aria-selected', match ? 'true' : 'false');
+    });
+    if (!_currentProposalId) return;
+    var content = document.querySelector('.pp-panel-content[data-proposal-id="' + _currentProposalId + '"]');
+    if (!content) return;
+    content.querySelectorAll('.pp-panel-tabpanel').forEach(function(p) {
+        p.classList.toggle('active', p.getAttribute('data-pp-tab') === tabKey);
+    });
+}
+
+document.querySelectorAll('.pp-panel-tab').forEach(function(t) {
+    t.addEventListener('click', function() { switchPanelTab(t.getAttribute('data-pp-tab')); });
 });
 
-// 워치리스트 토글
+// Esc 로 닫기
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        var panel = document.getElementById('pp-panel');
+        if (panel && panel.classList.contains('open')) closeProposalPanel();
+    }
+});
+
+// CTA: 관심 종목 추가 — 테이블 행의 별표 토글 재사용
+function panelAddWatch() {
+    if (!_currentProposalId) return;
+    var row = document.querySelector('.screener-row[data-proposal-id="' + _currentProposalId + '"]');
+    if (!row) return;
+    var star = row.querySelector('.watchlist-toggle');
+    if (star) toggleWatch(star);
+    syncPanelWatchState();
+}
+
+function syncPanelWatchState() {
+    var btn = document.getElementById('pp-cta-watch');
+    if (!btn || !_currentProposalId) return;
+    var row = document.querySelector('.screener-row[data-proposal-id="' + _currentProposalId + '"]');
+    var star = row ? row.querySelector('.watchlist-toggle') : null;
+    var watched = star && star.classList.contains('watched');
+    btn.style.color = watched ? 'var(--green)' : '';
+    btn.title = watched ? '관심 해제' : '관심 종목 추가';
+}
+
+async function panelSubscribe(btn) {
+    if (!_currentProposalId) return;
+    var meta = _proposalMeta[_currentProposalId];
+    if (!meta) return;
+    var res = await fetch('/api/subscriptions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sub_type: 'ticker', sub_key: meta.ticker, label: meta.ticker })
+    });
+    if (res.ok || res.status === 200) {
+        btn.style.color = 'var(--green)';
+        btn.title = '구독 중';
+    }
+}
+
+function focusPanelMemo() {
+    if (!_currentProposalId) return;
+    setTimeout(function() {
+        var ta = document.getElementById('memo-' + _currentProposalId);
+        if (ta) ta.focus();
+    }, 150);
+}
+
+// 기존 워치리스트 별표 토글 (행 인라인 버튼용)
 async function toggleWatch(el) {
     var ticker = el.dataset.ticker;
     var isWatched = el.classList.contains('watched');
@@ -303,7 +553,7 @@ async function toggleWatch(el) {
     }
 }
 
-// 메모 저장
+// 메모 저장/삭제
 async function saveMemo(proposalId) {
     var textarea = document.getElementById('memo-' + proposalId);
     var content = textarea.value.trim();
@@ -319,50 +569,12 @@ async function saveMemo(proposalId) {
     }
 }
 
-// 메모 삭제
 async function deleteMemo(proposalId) {
     var res = await fetch('/api/proposals/' + proposalId + '/memo', { method: 'DELETE' });
     if (res.ok) {
         var textarea = document.getElementById('memo-' + proposalId);
-        textarea.value = '';
+        if (textarea) textarea.value = '';
     }
 }
-
-// Sticky CTA: 메모 textarea 로 스크롤 + 포커스
-function focusMemo(proposalId) {
-    var ta = document.getElementById('memo-' + proposalId);
-    if (!ta) return;
-    ta.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    setTimeout(function() { ta.focus(); }, 200);
-}
-
-// Sticky CTA: 티커별 알림 구독 (전역 헬퍼)
-async function subscribeTicker(ticker, btn) {
-    var res = await fetch('/api/subscriptions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sub_type: 'ticker', sub_key: ticker, label: ticker })
-    });
-    if (res.ok || res.status === 200) {
-        btn.style.color = 'var(--green)';
-        btn.title = '구독 중';
-    }
-    // 402는 전역 fetch 인터셉터가 업그레이드 모달 표시
-}
-
-// Sticky CTA: 제안별 워치리스트 추가 (Jinja 루프 내 인라인 바인딩은 페이지 로드 시 생성)
-{% for p in proposals %}
-async function addWatch{{ p.id }}() {
-    var res = await fetch('/api/watchlist/{{ p.ticker }}', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ asset_name: '{{ (p.asset_name or p.ticker)|replace("'", "\\'") }}' })
-    });
-    if (res.ok) {
-        var star = document.querySelector('.watchlist-star[data-ticker="{{ p.ticker }}"]');
-        if (star) { star.classList.add('watched'); star.innerHTML = '&#9733;'; }
-    }
-}
-{% endfor %}
 </script>
 {% endblock %}
