@@ -1,0 +1,26 @@
+[Unit]
+Description=Investment Advisor - 월간 섹터 분류 리프레시 (KOSDAQ 신규 상장 자동 커버)
+Documentation=https://github.com/yawnsduzin/investment-advisor
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=__SYSTEM_USER__
+Group=__SYSTEM_USER__
+WorkingDirectory=__INSTALL_DIR__
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONIOENCODING=utf-8
+# yfinance 백필 ~21분 + 재정규화 <1초 + 리포트 ~3분 = 여유 40분
+ExecStart=__VENV_PYTHON__ -m tools.monthly_sector_refresh
+TimeoutStartSec=2400
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=5
+
+Restart=no
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

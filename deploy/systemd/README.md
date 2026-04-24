@@ -32,13 +32,21 @@
 | `ohlcv-cleanup.service` | OHLCV retention 초과 row 정리 (`--mode cleanup`) | `ohlcv-cleanup.timer` |
 | `ohlcv-cleanup.timer` | 매주 일요일 04:00 KST | 위 service 트리거 |
 
+### C. 섹터 분류 유지보수 (P1-ext2 이후)
+
+| 파일 | 역할 | 트리거 |
+|---|---|---|
+| `monthly-sector-refresh.service` | KOSDAQ 신규 상장 industry 백필 + KRX 재정규화 + 분포 리포트 | `monthly-sector-refresh.timer` |
+| `monthly-sector-refresh.timer` | 매월 1일 03:45 KST | 위 service 트리거 |
+
 ## 실행 타임라인 (KST)
 
 ```
-02:30  universe-sync-price   ← 최신 가격 + OHLCV 수집
-03:00  investment-advisor-analyzer  ← 분석 배치 (sync 결과 사용)
-03:30  universe-sync-meta    ← 주간 메타 (일요일만)
-04:00  ohlcv-cleanup         ← retention 정리 (일요일만)
+02:30  universe-sync-price       ← 최신 가격 + OHLCV 수집 (매일)
+03:00  investment-advisor-analyzer  ← 분석 배치 (매일)
+03:30  universe-sync-meta        ← 주간 메타 (일요일만)
+03:45  monthly-sector-refresh    ← 월간 섹터 리프레시 (매월 1일)
+04:00  ohlcv-cleanup             ← retention 정리 (일요일만)
 ```
 
 세 배치가 겹치지 않게 분리됨. API 서버는 상시 기동이므로 타이머 없음.
@@ -77,8 +85,11 @@ sudo systemctl enable --now universe-sync-price.timer \
                               universe-sync-meta.timer \
                               ohlcv-cleanup.timer
 
-# 5. 상태 확인
-sudo systemctl list-timers --all | grep -E "investment-advisor|universe|ohlcv"
+# 5. 섹터 분류 월간 유지보수 활성화 (P1-ext2 이후)
+sudo systemctl enable --now monthly-sector-refresh.timer
+
+# 6. 상태 확인
+sudo systemctl list-timers --all | grep -E "investment-advisor|universe|ohlcv|sector"
 sudo systemctl status investment-advisor-api.service
 journalctl -u investment-advisor-analyzer.service -n 100 --no-pager
 ```
@@ -90,9 +101,11 @@ journalctl -u investment-advisor-analyzer.service -n 100 --no-pager
 sudo systemctl start investment-advisor-analyzer.service
 sudo systemctl start universe-sync-price.service
 sudo systemctl start ohlcv-cleanup.service
+sudo systemctl start monthly-sector-refresh.service
 
 # 로그 실시간 관찰
 journalctl -u universe-sync-price.service -f
+journalctl -u monthly-sector-refresh.service -f
 journalctl -u investment-advisor-api.service -f
 ```
 
@@ -104,11 +117,13 @@ sudo systemctl disable --now \
   investment-advisor-analyzer.timer \
   universe-sync-price.timer \
   universe-sync-meta.timer \
-  ohlcv-cleanup.timer
+  ohlcv-cleanup.timer \
+  monthly-sector-refresh.timer
 
 sudo rm /etc/systemd/system/investment-advisor-*.{service,timer}
 sudo rm /etc/systemd/system/universe-sync-*.{service,timer}
 sudo rm /etc/systemd/system/ohlcv-cleanup.{service,timer}
+sudo rm /etc/systemd/system/monthly-sector-refresh.{service,timer}
 sudo systemctl daemon-reload
 ```
 

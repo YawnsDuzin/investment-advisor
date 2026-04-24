@@ -637,9 +637,18 @@ STAGE1B1_PROMPT = """## 분석 날짜: {date}
 
 스펙 작성 시 다음 원칙을 따르세요:
 1. **value_chain_tier**: primary/secondary/tertiary 중 1~2개. 얼리 시그널 발굴이 목표라면 secondary/tertiary 위주.
-2. **sector_norm**: 우리 시스템의 정규화된 섹터 키 중에서 1~3개 선택.
-   사용 가능한 키: `semiconductors, it_hardware, it_software, communication, finance, healthcare,
-   consumer_discretionary, consumer_staples, energy, materials, industrials, utilities, real_estate`.
+2. **sector_norm**: 우리 시스템의 정규화된 섹터 키 중에서 1~3개 선택 (2026-04-24 P1-ext2 이후 28버킷).
+   사용 가능한 키:
+   - IT: `semiconductors, it_hardware, it_software, communication`
+   - 금융: `banks, insurance, capital_markets, holding_co`
+   - 의료: `biotech, pharma_medtech`
+   - 소비: `consumer_discretionary, consumer_staples, media_entertainment, real_estate`
+   - 제조·운송: `industrials, autos, aerospace_defense, transport_logistics, shipbuilding, construction`
+   - 자원·소재: `energy, chemicals, battery_materials, steel_metals, nonmetallic, paper_wood`
+   - 기타: `utilities, other`
+   ※ 구 키 `finance/healthcare/materials`는 deprecated — 사용 금지 (세분 키 사용).
+   ※ 세분 선택 예시: 반도체 테마는 `semiconductors`(장비·소재 포함), 배터리는 `battery_materials`,
+     방산 테마는 `aerospace_defense`, 조선은 `shipbuilding`, 바이오 신약은 `biotech`, 제약/의료기기는 `pharma_medtech`.
 3. **market_cap_bucket**: small/mid/large/mega 중 적합한 것 1~3개. 얼리 시그널은 small/mid.
 4. **market_cap_range_krw**: [최소, 최대] (KRW 환산). 예) [3000억, 2조원] = [300_000_000_000, 2_000_000_000_000].
 5. **required_keywords**: stock_universe의 asset_name/sector_krx/industry/aliases에 ILIKE 매칭될 키워드 3~6개.

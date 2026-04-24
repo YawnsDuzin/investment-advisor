@@ -1,4 +1,4 @@
-"""Stock Universe 동기화 — Phase 1a (KRX) + Phase 1b (US: S&P500 + Nasdaq100).
+"""Stock Universe 동기화 -Phase 1a (KRX) + Phase 1b (US: S&P500 + Nasdaq100).
 
 `stock_universe` 테이블을 갱신한다.
 
@@ -7,8 +7,8 @@
        시드는 `python -m tools.refresh_us_universe`로 갱신 (Wikipedia 1회 fetch)
 
 모드:
-- meta (주간):  종목 리스트·종목명·업종·시총·상장상태 — 느린 데이터
-- price (일별): last_price·last_price_at — 빠른 데이터
+- meta (주간):  종목 리스트·종목명·업종·시총·상장상태 -느린 데이터
+- price (일별): last_price·last_price_at -빠른 데이터
 - auto: 마지막 meta_synced_at이 7일 초과 시 meta 포함, 그 외 price만
 
 CLI:
@@ -103,10 +103,10 @@ def _fetch_market_snapshot(date: str, market: str) -> dict[str, dict]:
     # 시총 + 상장주식수 (배치 1회)
     cap_df = pykrx_stock.get_market_cap(date, market=market)
     if cap_df is None or cap_df.empty:
-        _log.warning(f"[{market}] {date} 시총 데이터 없음 — 휴장일/조회 실패 가능")
+        _log.warning(f"[{market}] {date} 시총 데이터 없음 -휴장일/조회 실패 가능")
         return out
 
-    # OHLCV (배치 1회) — 종가 추출용
+    # OHLCV (배치 1회) -종가 추출용
     ohlcv_df = pykrx_stock.get_market_ohlcv(date, market=market)
     close_map: dict[str, float] = {}
     if ohlcv_df is not None and not ohlcv_df.empty and "종가" in ohlcv_df.columns:
@@ -116,7 +116,7 @@ def _fetch_market_snapshot(date: str, market: str) -> dict[str, dict]:
             except (TypeError, ValueError):
                 pass
 
-    # 종목명: 개별 조회 (배치 API 부재 — 한 번 빌드 후 캐시)
+    # 종목명: 개별 조회 (배치 API 부재 -한 번 빌드 후 캐시)
     for tk, row in cap_df.iterrows():
         ticker = str(tk)
         name = pykrx_stock.get_market_ticker_name(ticker)
@@ -147,7 +147,7 @@ def _fetch_sector_map(date: str, market: str) -> dict[str, str]:
     """
     fn = getattr(pykrx_stock, "get_market_sector_classifications", None)
     if fn is None:
-        _log.warning("pykrx.get_market_sector_classifications 미지원 — sector_krx 비어 있음")
+        _log.warning("pykrx.get_market_sector_classifications 미지원 -sector_krx 비어 있음")
         return {}
     try:
         df = fn(date, market=market)
@@ -258,7 +258,13 @@ def sync_meta_krx(db_cfg: DatabaseConfig, *, markets: tuple[str, ...] = _MARKET_
             if is_pref:
                 preferred_skipped += 1
             sector_krx = sectors.get(ticker)
-            sector_norm = normalize_sector(sector_krx=sector_krx, warn_on_miss=False)
+            sector_norm = normalize_sector(
+                ticker=ticker,
+                asset_name=name,
+                market=market,
+                sector_krx=sector_krx,
+                warn_on_miss=False,
+            )
             mcap = info["market_cap_krw"]
             bucket = market_cap_bucket(mcap)
             close = info.get("close")
@@ -271,7 +277,7 @@ def sync_meta_krx(db_cfg: DatabaseConfig, *, markets: tuple[str, ...] = _MARKET_
             seen_tickers.add((ticker, market))
 
     if not rows:
-        _log.warning("동기화 결과가 비어 있습니다 — 휴장일이거나 pykrx 인증 문제")
+        _log.warning("동기화 결과가 비어 있습니다 -휴장일이거나 pykrx 인증 문제")
         return {"upserted": 0, "preferred_skipped": 0, "markets": per_market,
                 "duration_sec": (datetime.now(KST) - started).total_seconds()}
 
@@ -306,7 +312,7 @@ def sync_meta_krx(db_cfg: DatabaseConfig, *, markets: tuple[str, ...] = _MARKET_
 
 def sync_prices_krx(db_cfg: DatabaseConfig, *, markets: tuple[str, ...] = _MARKET_LABELS,
                     with_ohlcv: bool = False) -> dict:
-    """KRX 가격(일별) 동기화 — 종가만 갱신.
+    """KRX 가격(일별) 동기화 -종가만 갱신.
 
     이미 메타가 있는 종목 위주이며, 신규 종목이 있으면 INSERT하되 sector 등은 NULL로 남긴다 (다음 meta sync에서 채워짐).
 
@@ -376,10 +382,10 @@ def sync_prices_krx(db_cfg: DatabaseConfig, *, markets: tuple[str, ...] = _MARKE
 
 _US_MARKET_LABELS = ("NASDAQ", "NYSE")
 
-# 시드 위치 (Wikipedia 1회 fetch 결과 — `python -m tools.refresh_us_universe`로 갱신)
+# 시드 위치 (Wikipedia 1회 fetch 결과 -`python -m tools.refresh_us_universe`로 갱신)
 _US_SEED_PATH = Path(__file__).resolve().parent.parent / "shared" / "seeds_data" / "us_universe.json"
 
-# 환율 가정 (시총 버킷 산정용 — 정밀할 필요 없음, 다양성 제약 buckets 용도)
+# 환율 가정 (시총 버킷 산정용 -정밀할 필요 없음, 다양성 제약 buckets 용도)
 # 향후 fx_rate 테이블로 분리 예정.
 _USD_TO_KRW = 1400
 
@@ -425,10 +431,10 @@ def _filter_seed(seed: list[dict], index_filter: str | None) -> list[dict]:
 
 def sync_meta_us(db_cfg: DatabaseConfig, *, index_filter: str | None = None,
                  max_workers: int = 5) -> dict:
-    """US 메타데이터(주간) 동기화 — 시드 + yfinance 시총·섹터 보강.
+    """US 메타데이터(주간) 동기화 -시드 + yfinance 시총·섹터 보강.
 
     시드 데이터(asset_name/sector_gics/industry/indices)는 항상 사용.
-    yfinance에서 marketCap, exchange만 추가 조회 (개별 호출 — 동시 max_workers).
+    yfinance에서 marketCap, exchange만 추가 조회 (개별 호출 -동시 max_workers).
     """
     _ensure_yfinance()
     from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -473,12 +479,15 @@ def sync_meta_us(db_cfg: DatabaseConfig, *, index_filter: str | None = None,
 
             sector_gics = info.get("sector") or entry.get("sector_gics")
             industry = info.get("industry") or entry.get("industry")
+            asset_name = entry.get("asset_name") or info.get("shortName") or ticker
             sector_norm = normalize_sector(
+                ticker=ticker,
+                asset_name=asset_name,
+                market=market,
                 sector_gics=sector_gics,
                 industry=industry,
                 warn_on_miss=False,
             )
-            asset_name = entry.get("asset_name") or info.get("shortName") or ticker
             aliases = {"indices": entry.get("indices", [])}
 
             rows.append((
@@ -489,7 +498,7 @@ def sync_meta_us(db_cfg: DatabaseConfig, *, index_filter: str | None = None,
             ))
 
     if not rows:
-        _log.warning("US 메타 동기화 결과가 비어 있습니다 — yfinance 전체 실패")
+        _log.warning("US 메타 동기화 결과가 비어 있습니다 -yfinance 전체 실패")
         return {"upserted": 0, "failed": failed, "markets": per_market,
                 "duration_sec": (datetime.now(KST) - started).total_seconds()}
 
@@ -535,11 +544,11 @@ def sync_meta_us(db_cfg: DatabaseConfig, *, index_filter: str | None = None,
 
 def sync_prices_us(db_cfg: DatabaseConfig, *, index_filter: str | None = None,
                    with_ohlcv: bool = False) -> dict:
-    """US 가격(일별) 동기화 — yfinance batch download (group_by='ticker', threads=True).
+    """US 가격(일별) 동기화 -yfinance batch download (group_by='ticker', threads=True).
 
     **update-only**: DB에 이미 메타가 있는 종목만 가격을 갱신한다.
     시드에 있지만 DB에 메타가 없는 신규 종목은 무시 (meta sync에서 등록되어야 함).
-    이는 같은 티커가 잘못된 시장으로 중복 INSERT되는 것을 방지한다 — 시장 정보는
+    이는 같은 티커가 잘못된 시장으로 중복 INSERT되는 것을 방지한다 -시장 정보는
     yfinance(meta sync)가 권위 있는 출처.
 
     with_ohlcv=True이면 동일 yf.download 응답에서 OHLCV를 추출하여 stock_universe_ohlcv에도 UPSERT.
@@ -566,14 +575,14 @@ def sync_prices_us(db_cfg: DatabaseConfig, *, index_filter: str | None = None,
         existing = {tk: v for tk, v in existing.items() if tk in seed_tickers}
 
     if not existing:
-        _log.warning("US 가격 동기화: DB에 메타가 등록된 US 종목이 없습니다 — meta sync 먼저 실행하세요.")
+        _log.warning("US 가격 동기화: DB에 메타가 등록된 US 종목이 없습니다 -meta sync 먼저 실행하세요.")
         return {"updated": 0, "missing": 0,
                 "duration_sec": (datetime.now(KST) - started).total_seconds()}
 
     all_tickers = sorted(existing.keys())
     _log.info(f"US 가격 동기화 시작 (DB 등록 {len(all_tickers)}종목)")
 
-    # yfinance batch download — period='5d'면 휴장/지연 대비 안전한 마지막 유효 종가 확보
+    # yfinance batch download -period='5d'면 휴장/지연 대비 안전한 마지막 유효 종가 확보
     df = yf.download(
         tickers=all_tickers,
         period="5d",
@@ -623,7 +632,7 @@ def sync_prices_us(db_cfg: DatabaseConfig, *, index_filter: str | None = None,
 
     ohlcv_upserted = 0
     if with_ohlcv:
-        # 동일 df에서 OHLCV 추출 — 5일치 반환되지만 trade_date PK로 중복 UPSERT 안전
+        # 동일 df에서 OHLCV 추출 -5일치 반환되지만 trade_date PK로 중복 UPSERT 안전
         ticker_to_market = {tk: existing[tk][0] for tk in all_tickers}
         ohlcv_rows, _ = _us_ohlcv_rows_from_df(df, ticker_to_market)
         ohlcv_upserted = _upsert_ohlcv_rows(db_cfg, ohlcv_rows)
@@ -688,7 +697,7 @@ def _krx_trading_days(start: datetime, end: datetime) -> list[str]:
         return [d.strftime("%Y%m%d") for d in days]
     except (AttributeError, TypeError):
         pass
-    # fallback: 평일만 — 공휴일은 pykrx가 빈 DataFrame을 반환하면 skip 처리
+    # fallback: 평일만 -공휴일은 pykrx가 빈 DataFrame을 반환하면 skip 처리
     out: list[str] = []
     d = start
     while d <= end:
@@ -774,7 +783,7 @@ def sync_ohlcv_krx_day(db_cfg: DatabaseConfig, *, date: str,
 
 def sync_ohlcv_krx_range(db_cfg: DatabaseConfig, *, start_date: datetime, end_date: datetime,
                          markets: tuple[str, ...] = _MARKET_LABELS) -> dict:
-    """KRX 날짜 범위 백필 — 거래일마다 get_market_ohlcv 호출.
+    """KRX 날짜 범위 백필 -거래일마다 get_market_ohlcv 호출.
 
     ~250 거래일 × 2 시장 = ~500 API 호출 (1년 기준). 세션 인증 1회 유지 시 ~10~15분 소요.
     오래된 날짜부터 순차 진행하여 change_pct 계산 순서 자연스럽게 맞춤.
@@ -803,7 +812,7 @@ def sync_ohlcv_krx_range(db_cfg: DatabaseConfig, *, start_date: datetime, end_da
         if i % 50 == 0 or i == len(days):
             flushed = _upsert_ohlcv_rows(db_cfg, batch_rows)
             total += flushed
-            _log.info(f"[OHLCV/KRX] {i}/{len(days)}일 처리 — 누적 {total}건 upsert")
+            _log.info(f"[OHLCV/KRX] {i}/{len(days)}일 처리 -누적 {total}건 upsert")
             batch_rows = []
 
     duration = (datetime.now(KST) - started).total_seconds()
@@ -812,7 +821,7 @@ def sync_ohlcv_krx_range(db_cfg: DatabaseConfig, *, start_date: datetime, end_da
 
 
 def _fetch_us_ohlcv_df(tickers: list[str], period: str):
-    """yfinance batch download wrapper — single-ticker vs multi-ticker 차이 흡수."""
+    """yfinance batch download wrapper -single-ticker vs multi-ticker 차이 흡수."""
     _ensure_yfinance()
     if not tickers:
         return None
@@ -910,7 +919,7 @@ def _us_ohlcv_rows_from_df(df, ticker_to_market: dict[str, str]) -> tuple[list[t
 def sync_ohlcv_us(db_cfg: DatabaseConfig, *, days: int, index_filter: str | None = None,
                   chunk_size: int = 100, retry_failed: bool = True,
                   max_retry_budget: int = 30, retry_sleep_sec: float = 2.0) -> dict:
-    """US 일별 OHLCV 백필/증분 — yfinance batch download.
+    """US 일별 OHLCV 백필/증분 -yfinance batch download.
 
     Args:
         days: 과거 N일 (yfinance period=f"{days}d")
@@ -945,7 +954,7 @@ def sync_ohlcv_us(db_cfg: DatabaseConfig, *, days: int, index_filter: str | None
         registered = {tk: mk for tk, mk in registered.items() if tk in seed_tickers}
 
     if not registered:
-        _log.warning("[OHLCV/US] 대상 종목 없음 — meta sync 먼저 실행하세요.")
+        _log.warning("[OHLCV/US] 대상 종목 없음 -meta sync 먼저 실행하세요.")
         return {"upserted": 0, "chunks": 0,
                 "failed_tickers": [], "retried_ok": [], "still_failed": [],
                 "duration_sec": (datetime.now(KST) - started).total_seconds()}
@@ -987,7 +996,7 @@ def sync_ohlcv_us(db_cfg: DatabaseConfig, *, days: int, index_filter: str | None
         if retry_failed:
             if len(failed_tickers) > max_retry_budget:
                 _log.warning(
-                    f"[OHLCV/US] 실패 {len(failed_tickers)}건이 재시도 한도({max_retry_budget}) 초과 — "
+                    f"[OHLCV/US] 실패 {len(failed_tickers)}건이 재시도 한도({max_retry_budget}) 초과 -"
                     "systemic 장애 의심, 단건 재시도 skip. `--ticker` 로 수동 재실행하세요."
                 )
                 still_failed = list(failed_tickers)
@@ -1029,7 +1038,7 @@ def sync_ohlcv_us(db_cfg: DatabaseConfig, *, days: int, index_filter: str | None
 
 
 def sync_ohlcv_ticker(db_cfg: DatabaseConfig, *, ticker: str, days: int) -> dict:
-    """단건 ticker 백필 — 신규 상장 종목 개별 백필 용도.
+    """단건 ticker 백필 -신규 상장 종목 개별 백필 용도.
 
     stock_universe에서 market을 조회하여 적절한 데이터 소스(pykrx/yfinance) 선택.
     """
@@ -1186,9 +1195,9 @@ def recompute_change_pct(db_cfg: DatabaseConfig) -> int:
             conn.commit()
             if overflow_rows:
                 _log.warning(
-                    f"[OHLCV] change_pct 계산값이 한계(|{_CHANGE_PCT_ABS_LIMIT}%|) 초과 — "
+                    f"[OHLCV] change_pct 계산값이 한계(|{_CHANGE_PCT_ABS_LIMIT}%|) 초과 -"
                     f"{len(overflow_rows)}건 (상위 20개 샘플 출력). "
-                    f"역분할/수정주가 미반영/상폐 직전 이상 체결 의심 — 해당 row는 NULL 유지."
+                    f"역분할/수정주가 미반영/상폐 직전 이상 체결 의심 -해당 row는 NULL 유지."
                 )
                 for tk, mk, dt, close, prev, raw in overflow_rows:
                     _log.warning(
@@ -1199,7 +1208,7 @@ def recompute_change_pct(db_cfg: DatabaseConfig) -> int:
             conn.rollback()
             _log.warning(f"[OHLCV] change_pct 오버플로우 사전 스캔 실패 (UPDATE는 계속 시도): {e}")
 
-        # 2) 가드 포함 UPDATE — 실패해도 예외 전파 안 함
+        # 2) 가드 포함 UPDATE -실패해도 예외 전파 안 함
         try:
             with conn.cursor() as cur:
                 cur.execute(update_sql, (_CHANGE_PCT_ABS_LIMIT,))
@@ -1209,7 +1218,7 @@ def recompute_change_pct(db_cfg: DatabaseConfig) -> int:
         except Exception as e:
             conn.rollback()
             _log.error(
-                f"[OHLCV] change_pct 재계산 실패 — 이 단계를 건너뛰고 계속 진행합니다. "
+                f"[OHLCV] change_pct 재계산 실패 -이 단계를 건너뛰고 계속 진행합니다. "
                 f"원인: {type(e).__name__}: {e}"
             )
             updated = 0
@@ -1296,7 +1305,7 @@ def _fetch_index_rows_pykrx(index_code: str, code: str, days: int) -> list[tuple
 def _fetch_index_rows_yfinance(index_code: str, symbol: str, days: int) -> list[tuple]:
     """yfinance로 US 지수 OHLCV 조회."""
     if yf is None:
-        _log.error(f"[INDEX/{index_code}] yfinance 미설치 — 수집 불가")
+        _log.error(f"[INDEX/{index_code}] yfinance 미설치 -수집 불가")
         return []
     try:
         period = f"{max(days, 30)}d"
@@ -1364,7 +1373,7 @@ def sync_indices_ohlcv(db_cfg: DatabaseConfig, *, days: int,
     for code in targets:
         spec = _INDEX_SPECS.get(code)
         if not spec:
-            _log.warning(f"[INDEX] 알 수 없는 index_code '{code}' — skip")
+            _log.warning(f"[INDEX] 알 수 없는 index_code '{code}' -skip")
             continue
         if spec["source"] == "pykrx":
             rows = _fetch_index_rows_pykrx(code, spec["code"], days)
@@ -1389,6 +1398,155 @@ def sync_indices_ohlcv(db_cfg: DatabaseConfig, *, days: int,
             conn.close()
         _log.info(f"[INDEX] 총 {len(all_rows)}건 UPSERT 완료")
     return result
+
+
+# ── 한국 종목 industry 백필 (P0-B) ─────────────
+# 구조적 한계: pykrx는 KRX 대분류 업종만 제공하여 `stock_universe.industry`가 전부 NULL.
+# 이 탓에 `_INDUSTRY_OVERRIDES`의 영문 키워드(semiconductor/biotech/software 등)가
+# 한국 종목에 대해 발동하지 않는다. yfinance 한국 티커 포맷(`{ticker}.KS`/`.KQ`)으로
+# sector/industry 를 가져와 UPDATE.
+# 커버리지: 대형주 ~80%, 중소형 ~50%, 신규 상장 낮음 (yfinance 한계).
+# 백필 후 `_INDUSTRY_OVERRIDES` 영문 키워드 정상 작동 → 재정규화로 세분화 완성.
+
+def _yf_kr_ticker(ticker: str, market: str) -> str:
+    """한국 종목 → yfinance 티커 포맷."""
+    suffix = ".KS" if market == "KOSPI" else ".KQ"
+    return f"{ticker}{suffix}"
+
+
+def backfill_industry_kr(db_cfg: DatabaseConfig, *,
+                         markets: tuple[str, ...] = _MARKET_LABELS,
+                         only_missing: bool = True,
+                         max_workers: int = 3,
+                         sleep_ms: int = 150,
+                         max_retries: int = 2,
+                         retry_backoff_sec: float = 1.5,
+                         limit: int | None = None,
+                         progress_every: int = 100) -> dict:
+    """한국 종목 industry/sector_gics 를 yfinance 에서 수집 → UPDATE.
+
+    Args:
+        markets: 대상 한국 시장.
+        only_missing: True면 industry IS NULL 인 종목만 (증분), False면 전체 재수집.
+        max_workers: 동시 yfinance 호출 수.
+        sleep_ms: 티커당 sleep (rate limit 회피).
+        limit: 테스트용 최대 처리 건수 (None=무제한).
+        progress_every: N건마다 진행 로그.
+
+    Returns:
+        {"target": N, "fetched": N, "updated": N, "failed": N, "duration_sec": ...}
+    """
+    _ensure_yfinance()
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    started = datetime.now(KST)
+
+    where = "market = ANY(%s) AND listed = TRUE"
+    params: list = [list(markets)]
+    if only_missing:
+        where += " AND industry IS NULL"
+    sql_select = f"""
+        SELECT ticker, market, asset_name
+        FROM stock_universe
+        WHERE {where}
+        ORDER BY market_cap_krw DESC NULLS LAST
+    """
+    if limit:
+        sql_select += f" LIMIT {int(limit)}"
+
+    conn = get_connection(db_cfg)
+    try:
+        with conn.cursor() as cur:
+            cur.execute(sql_select, params)
+            targets = [(row[0], row[1], row[2]) for row in cur.fetchall()]
+    finally:
+        conn.close()
+
+    _log.info(
+        f"[industry/KR] 대상 {len(targets)}종목 "
+        f"(markets={markets}, only_missing={only_missing})"
+    )
+    if not targets:
+        return {"target": 0, "fetched": 0, "updated": 0, "failed": 0,
+                "duration_sec": (datetime.now(KST) - started).total_seconds()}
+
+    def _fetch_one(tk: str, mk: str) -> tuple[str, str, dict | None]:
+        yf_tk = _yf_kr_ticker(tk, mk)
+        for attempt in range(max_retries + 1):
+            try:
+                info = yf.Ticker(yf_tk).info or {}
+                sector = info.get("sector")
+                industry = info.get("industry")
+                if sector or industry:
+                    if sleep_ms > 0:
+                        time.sleep(sleep_ms / 1000.0)
+                    return tk, mk, {"sector": sector, "industry": industry}
+                # 빈 응답 — 일시적 rate limit 가능성이므로 backoff 후 retry
+            except Exception as e:
+                _log.debug(f"[industry/KR] {yf_tk} 시도 {attempt+1} 예외: {type(e).__name__}: {e}")
+            if attempt < max_retries:
+                time.sleep(retry_backoff_sec * (attempt + 1))
+        if sleep_ms > 0:
+            time.sleep(sleep_ms / 1000.0)
+        return tk, mk, None
+
+    fetched: list[tuple[str, str, str | None, str | None]] = []
+    failed = 0
+    done = 0
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        futures = [pool.submit(_fetch_one, tk, mk) for tk, mk, _ in targets]
+        for fut in as_completed(futures):
+            tk, mk, info = fut.result()
+            done += 1
+            if info is None:
+                failed += 1
+            else:
+                fetched.append((tk, mk, info.get("sector"), info.get("industry")))
+            if done % progress_every == 0:
+                _log.info(
+                    f"[industry/KR] 진행 {done}/{len(targets)} "
+                    f"(수집 {len(fetched)} / 실패 {failed})"
+                )
+
+    _log.info(
+        f"[industry/KR] yfinance 수집 완료: {len(fetched)}/{len(targets)} "
+        f"(실패 {failed}, 커버리지 {len(fetched) * 100 // max(len(targets), 1)}%)"
+    )
+
+    if not fetched:
+        return {"target": len(targets), "fetched": 0, "updated": 0, "failed": failed,
+                "duration_sec": (datetime.now(KST) - started).total_seconds()}
+
+    # ── UPDATE: industry + sector_gics 채움. sector_norm은 별도 renormalize 배치에서 재계산 ──
+    # 여기서 sector_norm을 바로 재계산해도 되지만, 책임 분리를 위해 저장만 하고 후속 배치에 위임.
+    update_sql = """
+        UPDATE stock_universe
+        SET sector_gics = COALESCE(%s, sector_gics),
+            industry    = COALESCE(%s, industry),
+            meta_synced_at = %s
+        WHERE ticker = %s AND market = %s
+    """
+    updated = 0
+    conn = get_connection(db_cfg)
+    try:
+        with conn.cursor() as cur:
+            for tk, mk, sector, industry in fetched:
+                cur.execute(update_sql, (sector, industry, started, tk, mk))
+                updated += cur.rowcount
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+    duration = (datetime.now(KST) - started).total_seconds()
+    _log.info(
+        f"[industry/KR] UPDATE 완료: {updated}건 / {duration:.1f}s -"
+        "후속 단계: `python -m tools.renormalize_sectors --apply --market KRX` 실행"
+    )
+    return {"target": len(targets), "fetched": len(fetched), "updated": updated,
+            "failed": failed, "duration_sec": duration}
 
 
 def cleanup_ohlcv(db_cfg: DatabaseConfig, *, retention_days: int,
@@ -1496,18 +1654,18 @@ def sync_auto(db_cfg: DatabaseConfig, *, krx_enabled: bool = True,
 
     if krx_enabled:
         if _meta_is_stale(db_cfg, markets=("KOSPI", "KOSDAQ")):
-            _log.info("[KRX] 메타 stale — meta 동기화 실행")
+            _log.info("[KRX] 메타 stale -meta 동기화 실행")
             result["krx"] = {"mode": "meta", "data": sync_meta_krx(db_cfg)}
         else:
-            _log.info("[KRX] 메타 신선 — price만")
+            _log.info("[KRX] 메타 신선 -price만")
             result["krx"] = {"mode": "price", "data": sync_prices_krx(db_cfg)}
 
     if us_enabled:
         if _meta_is_stale(db_cfg, markets=("NASDAQ", "NYSE")):
-            _log.info("[US] 메타 stale — meta 동기화 실행 (yfinance, ~5분 소요)")
+            _log.info("[US] 메타 stale -meta 동기화 실행 (yfinance, ~5분 소요)")
             result["us"] = {"mode": "meta", "data": sync_meta_us(db_cfg)}
         else:
-            _log.info("[US] 메타 신선 — price만")
+            _log.info("[US] 메타 신선 -price만")
             result["us"] = {"mode": "price", "data": sync_prices_us(db_cfg)}
 
     return result
@@ -1520,7 +1678,8 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         description="Stock Universe 동기화 (Phase 1a KRX + Phase 1b US + Phase 7 OHLCV 이력)"
     )
     p.add_argument("--mode",
-                   choices=("meta", "price", "auto", "ohlcv", "backfill", "cleanup", "indices"),
+                   choices=("meta", "price", "auto", "ohlcv", "backfill", "cleanup",
+                            "indices", "industry_kr"),
                    default="auto",
                    help=("meta: 주간 메타/시총/업종 | "
                          "price: 일별 가격 (+ OHLCV if OHLCV_ON_PRICE_SYNC=true) | "
@@ -1528,7 +1687,12 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                          "ohlcv: 특정 1일 OHLCV 재수집 (--date 필수) | "
                          "backfill: 과거 N일 OHLCV 일괄 수집 (--days 또는 --ticker) | "
                          "cleanup: retention 초과 OHLCV row 삭제 | "
-                         "indices: 벤치마크 지수(KOSPI/S&P500 등) OHLCV 수집 — 로드맵 B2"))
+                         "indices: 벤치마크 지수(KOSPI/S&P500 등) OHLCV 수집 -로드맵 B2 | "
+                         "industry_kr: 한국 종목 industry/sector_gics yfinance 백필 -P0-B"))
+    p.add_argument("--all", action="store_true",
+                   help="industry_kr 모드에서 industry NULL 필터 해제 (전체 재수집)")
+    p.add_argument("--limit", type=int, default=None,
+                   help="industry_kr 테스트용 최대 처리 건수")
     p.add_argument("--market",
                    choices=("KOSPI", "KOSDAQ", "KRX", "US", "SP500", "NDX", "ALL"),
                    default="ALL",
@@ -1556,7 +1720,7 @@ def _resolve_targets(market_arg: str, krx_cfg_enabled: bool, us_cfg_enabled: boo
     """--market 인자 + UniverseConfig 결합 → (krx_markets, us_index_filter).
 
     krx_markets: () 면 KRX 동기화 안 함
-    us_index_filter: 'SP500'/'NDX100'/'ALL_US'/None — None이면 US 동기화 안 함
+    us_index_filter: 'SP500'/'NDX100'/'ALL_US'/None -None이면 US 동기화 안 함
     """
     krx_markets: tuple[str, ...] = ()
     us_filter: str | None = None
@@ -1641,7 +1805,7 @@ def _run_mode_backfill(cfg: AppConfig, args: argparse.Namespace,
 
 
 def _safe_recompute_change_pct(db_cfg: DatabaseConfig, *, stage: str) -> int:
-    """recompute_change_pct 래퍼 — 내부에서 이미 대부분의 예외를 흡수하지만,
+    """recompute_change_pct 래퍼 -내부에서 이미 대부분의 예외를 흡수하지만,
     추가 안전망으로 호출부에서도 BaseException 외의 모든 예외를 WARNING으로 전환하여
     상위 배치(backfill/ohlcv/price 모드)의 비정상 종료를 방지한다.
 
@@ -1654,7 +1818,7 @@ def _safe_recompute_change_pct(db_cfg: DatabaseConfig, *, stage: str) -> int:
         return recompute_change_pct(db_cfg)
     except Exception as e:
         _log.warning(
-            f"[{stage}] change_pct 재계산 호출 중 예외 — 이 단계를 건너뜁니다. "
+            f"[{stage}] change_pct 재계산 호출 중 예외 -이 단계를 건너뜁니다. "
             f"원인: {type(e).__name__}: {e}"
         )
         return 0
@@ -1676,6 +1840,21 @@ def main(argv: list[str] | None = None) -> int:
     # ── OHLCV 전용 모드 (대상 판별 불필요한 cleanup 먼저) ─────
     if args.mode == "cleanup":
         _log.info(f"결과: {_run_mode_cleanup(cfg, args)}")
+        return 0
+
+    if args.mode == "industry_kr":
+        # KRX 시장만 대상. --market 으로 KOSPI/KOSDAQ 개별 지정도 허용.
+        if args.market in ("KOSPI", "KOSDAQ"):
+            target_markets = (args.market,)
+        else:
+            target_markets = _MARKET_LABELS
+        result = backfill_industry_kr(
+            cfg.db,
+            markets=target_markets,
+            only_missing=not args.all,
+            limit=args.limit,
+        )
+        _log.info(f"결과: {result}")
         return 0
 
     if args.mode == "indices":
@@ -1724,10 +1903,10 @@ def main(argv: list[str] | None = None) -> int:
         else:
             if _meta_is_stale(cfg.db, markets=("KOSPI", "KOSDAQ"),
                               max_age_days=cfg.universe.meta_stale_days):
-                _log.info("[KRX] 메타 stale — meta 동기화")
+                _log.info("[KRX] 메타 stale -meta 동기화")
                 result["krx"] = {"mode": "meta", "data": sync_meta_krx(cfg.db, markets=krx_markets)}
             else:
-                _log.info("[KRX] 메타 신선 — price만")
+                _log.info("[KRX] 메타 신선 -price만")
                 result["krx"] = {"mode": "price",
                                  "data": sync_prices_krx(cfg.db, markets=krx_markets,
                                                          with_ohlcv=with_ohlcv)}
@@ -1742,10 +1921,10 @@ def main(argv: list[str] | None = None) -> int:
         else:
             if _meta_is_stale(cfg.db, markets=("NASDAQ", "NYSE"),
                               max_age_days=cfg.universe.meta_stale_days):
-                _log.info("[US] 메타 stale — meta 동기화 (yfinance, ~5분 예상)")
+                _log.info("[US] 메타 stale -meta 동기화 (yfinance, ~5분 예상)")
                 result["us"] = {"mode": "meta", "data": sync_meta_us(cfg.db, index_filter=index_filter)}
             else:
-                _log.info("[US] 메타 신선 — price만")
+                _log.info("[US] 메타 신선 -price만")
                 result["us"] = {"mode": "price",
                                 "data": sync_prices_us(cfg.db, index_filter=index_filter,
                                                        with_ohlcv=with_ohlcv)}
