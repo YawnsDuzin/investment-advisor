@@ -326,3 +326,13 @@ class TestStockCockpitPage:
         assert "// ── § 1 가격 차트 ──" in body
         assert "// ── § 2-A 벤치마크 상대성과 ──" in body
         assert "// ── § 6 추천 이력 타임라인 ──" in body
+
+        # Assertions migrated from Phase 1 tests that previously checked HTML body
+        # (now relocated since JS lives in external file)
+        assert "/overview" in body          # § Hero / § 2-B / § 5 fetch
+        assert "/proposals" in body          # § 1 markers / § 6 timeline fetch
+        assert "/ohlcv" in body              # § 1 chart + § 2-A stock data
+        assert "/api/indices/" in body       # § 2-A benchmark data
+        assert "function escHtml" in body    # XSS guard helper (Phase 1 Task 6)
+        assert "&amp;" in body and "&lt;" in body and "&gt;" in body  # escape literals
+        assert "renderTimeline" in body or "timeline-card" in body  # § 6 marker
