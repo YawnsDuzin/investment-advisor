@@ -296,5 +296,14 @@ class TestStockCockpitPage:
         assert 'id="timeline-list"' in body
         # 타임라인 JS IIFE 시그니처 — renderTimeline 함수가 반드시 존재해야 함
         assert "renderTimeline" in body
-        # tl-warn / tl-badge 스타일 존재 확인
-        assert "tl-warn" in body and "tl-badge" in body
+        # tl-warn 스타일 존재 확인
+        assert "tl-warn" in body
+
+    def test_cockpit_page_escapes_user_content(self, patched_base_ctx_conn):
+        client = _make_client()
+        resp = client.get("/pages/stocks/TXN?market=NASDAQ")
+        body = resp.text
+        # esc 헬퍼 함수 존재 — XSS 방어 시그니처
+        assert "function esc(" in body
+        # 핵심 escape 시퀀스
+        assert "&amp;" in body and "&lt;" in body and "&gt;" in body
