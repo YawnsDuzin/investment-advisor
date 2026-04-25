@@ -1,0 +1,99 @@
+"""education_topics 시드 데이터 검증 — 카운트·JSON·slug 유니크·V35 멱등성."""
+import json
+
+from shared.db.migrations.seeds_education import (
+    ALL_TOPICS,
+    NEW_TOPICS_V24,
+)
+
+
+def test_total_topic_count():
+    """v35 후 총 40 토픽."""
+    assert len(ALL_TOPICS) == 40, f"expected 40, got {len(ALL_TOPICS)}"
+
+
+def test_category_distribution():
+    """카테고리별 분포 검증."""
+    from collections import Counter
+    counts = Counter(t["category"] for t in ALL_TOPICS)
+    assert counts == {
+        "basics": 10,
+        "analysis": 6,
+        "risk": 5,
+        "macro": 4,
+        "practical": 4,
+        "stories": 8,
+        "tools": 3,
+    }, f"unexpected distribution: {counts}"
+
+
+def test_all_slugs_unique():
+    """모든 slug 유니크."""
+    slugs = [t["slug"] for t in ALL_TOPICS]
+    assert len(slugs) == len(set(slugs)), "duplicate slugs"
+
+
+def test_required_keys_present():
+    """모든 토픽에 필수 키 존재."""
+    required = {"category", "slug", "title", "summary", "content",
+                "examples", "difficulty", "sort_order"}
+    for t in ALL_TOPICS:
+        assert required <= set(t.keys()), f"missing keys in {t.get('slug')}"
+
+
+def test_examples_valid_json():
+    """examples 컬럼이 valid JSON 직렬화 가능."""
+    for t in ALL_TOPICS:
+        parsed = json.loads(t["examples"])
+        assert isinstance(parsed, list), f"{t['slug']}: examples not list"
+        for ex in parsed:
+            assert "title" in ex and "description" in ex, \
+                f"{t['slug']}: example missing title/description"
+
+
+def test_content_min_length():
+    """content 최소 분량 (800자 이상)."""
+    for t in ALL_TOPICS:
+        assert len(t["content"]) >= 800, \
+            f"{t['slug']} content too short ({len(t['content'])} chars)"
+
+
+def test_difficulty_valid():
+    """difficulty는 beginner/intermediate/advanced 중 하나."""
+    valid = {"beginner", "intermediate", "advanced"}
+    for t in ALL_TOPICS:
+        assert t["difficulty"] in valid, \
+            f"{t['slug']}: invalid difficulty {t['difficulty']}"
+
+
+def test_v35_new_topics_count():
+    """V35 신규 14 토픽 노출."""
+    from shared.db.migrations.seeds_education import NEW_TOPICS_V35
+    assert len(NEW_TOPICS_V35) == 14, f"expected 14, got {len(NEW_TOPICS_V35)}"
+
+
+def test_v35_topics_disjoint_from_v24():
+    """V35 신규 slug는 V24와 겹치지 않음."""
+    from shared.db.migrations.seeds_education import NEW_TOPICS_V35
+    v24_slugs = {t["slug"] for t in NEW_TOPICS_V24}
+    v35_slugs = {t["slug"] for t in NEW_TOPICS_V35}
+    assert v24_slugs.isdisjoint(v35_slugs), \
+        f"overlap: {v24_slugs & v35_slugs}"
+
+
+def test_tools_category_exists():
+    """tools 카테고리에 정확히 3 토픽."""
+    tools = [t for t in ALL_TOPICS if t["category"] == "tools"]
+    assert len(tools) == 3, f"expected 3 tools topics, got {len(tools)}"
+    assert {t["slug"] for t in tools} == {
+        "factor-six-axes",
+        "market-regime-reading",
+        "pre-market-briefing-guide",
+    }
+
+
+def test_edu_categories_label_includes_tools():
+    """라우터 라벨 매핑에 tools 추가됨."""
+    from api.routes.education import _EDU_CATEGORIES
+    assert "tools" in _EDU_CATEGORIES
+    assert _EDU_CATEGORIES["tools"] == "도구·시스템 가이드"
