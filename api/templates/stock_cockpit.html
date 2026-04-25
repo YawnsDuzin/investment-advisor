@@ -464,7 +464,7 @@
     var firstDate = seriesData[0].date;
     var lastDate = seriesData[seriesData.length - 1].date;
     var markers = buildMarkers(proposalsCache, firstDate, lastDate);
-    if (markers.length) lineSeries.setMarkers(markers);
+    lineSeries.setMarkers(markers);  // 빈 배열 전달이 마커 클리어 역할
   }
 
   function applyData(d) {
