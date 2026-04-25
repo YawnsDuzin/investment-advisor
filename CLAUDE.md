@@ -15,7 +15,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **AI**: Claude Code SDK (`claude-agent-sdk`) — 멀티스테이지 분석 파이프라인
 - **Backend**: FastAPI + Uvicorn (REST API + HTML 서빙)
 - **Template**: Jinja2 (다크 테마 UI)
-- **Database**: PostgreSQL + psycopg2 (스키마 자동 마이그레이션 v1~v31)
+- **Database**: PostgreSQL + psycopg2 (스키마 자동 마이그레이션 v1~v34)
 - **News**: feedparser + httpx (RSS 수집)
 - **Stock Data**: yfinance (해외 주가/재무 데이터) + pykrx (한국 주식 크로스체크/폴백)
 - **Async**: anyio (async/sync 브릿지)
@@ -28,8 +28,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```
 investment-advisor/
 ├── shared/              ← 공용: config(.env 로드), db(마이그레이션+저장), logger(DB 로그), pg_setup(자동 설치), tier_limits(구독 티어 제한)
-├── analyzer/            ← 배치: main(엔트리) → news_collector(RSS) → stock_data(주가조회) → analyzer(2단계) → recommender(Top Picks) → price_tracker(수익률추적) → checkpoint(중단점복구) → krx_data(KRX수급/공매도)
-├── api/                 ← 웹: main(FastAPI) → routes/(pages, sessions, themes, proposals, stocks, chat, education, inquiry, admin, auth, user_admin, watchlist, track_record)
+├── analyzer/            ← 배치: main(엔트리) → news_collector(RSS) → stock_data(주가조회) → analyzer(2단계) → recommender(Top Picks) → price_tracker(수익률추적) → checkpoint(중단점복구) → krx_data(KRX수급/공매도) → overnight_us(US 오버나이트 집계) → briefing_main(프리마켓 브리핑 엔트리)
+├── api/                 ← 웹: main(FastAPI) → routes/(pages, sessions, themes, proposals, stocks, chat, education, inquiry, admin, auth, user_admin, watchlist, track_record, briefing)
 │   ├── auth/            ← JWT 인증 모듈: dependencies, jwt_handler, password, models
 │   ├── chat_engine.py   ← Claude SDK 기반 테마 채팅 엔진
 │   ├── education_engine.py ← Claude SDK 기반 투자 교육 AI 튜터 엔진
@@ -59,6 +59,9 @@ cp .env.example .env     # Linux/Mac
 # 분석 실행 (배치)
 python -m analyzer.main
 
+# 프리마켓 브리핑 실행 (KST 06:30 자동 / 수동 실행 가능)
+python -m analyzer.briefing_main
+
 # API 서버 (개발)
 python -m api.main
 # 또는: uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
@@ -81,9 +84,10 @@ python -m tools.ohlcv_health_check         # OHLCV 무결성·결측 검사
 python -m tools.monthly_sector_refresh     # sector_norm 28버킷 월간 리프레시
 python -m tools.build_css                  # static/css 빌드
 
-# 라즈베리파이 24/7 운영 (systemd)
+# 라즈베리파이 24/7 운영 (systemd) — 매일 06:30 KST 일괄 (sync→briefing→analyzer)
 sudo systemctl enable --now investment-advisor-api.service       # API 상시 기동
-sudo systemctl enable --now investment-advisor-analyzer.timer    # 매일 03:00 배치
+sudo systemctl enable --now investment-advisor-analyzer.timer    # 매일 06:30 메인 분석
+sudo systemctl enable --now pre-market-briefing.timer            # 매일 06:30 프리마켓 브리핑
 ```
 
 - 웹 UI: `http://localhost:8000`
@@ -191,7 +195,7 @@ sudo systemctl enable --now investment-advisor-analyzer.timer    # 매일 03:00 
 
 ## DB Schema
 
-`schema_version` 테이블로 버전 관리. `init_db()` 호출 시 자동 마이그레이션 (현재 v31).
+`schema_version` 테이블로 버전 관리. `init_db()` 호출 시 자동 마이그레이션 (현재 v34).
 
 **테이블 관계 (CASCADE):**
 ```
@@ -257,6 +261,7 @@ stock_universe_ohlcv (v27, 종목별 일별 OHLCV 이력, PK `(ticker, market, t
 - `investment_proposals.factor_snapshot JSONB`(v30) — Stage 2 저장 시 팩터 스냅샷을 그대로 기록. UI "AI가 본 실측 데이터" 섹션(UI-7 예정)의 데이터 소스.
 - **시장 레짐 레이어(로드맵 B2)** — `analyzer/regime.py`가 `market_indices_ohlcv`(v31)에서 KOSPI/KOSDAQ/S&P500/NDX100 인덱스의 `above_200ma`, `pct_from_ma200`, `vol60_pct`(±10% clamp), `vol_regime`(low/mid/high), `drawdown_from_52w_high_pct`, `return_1m/3m_pct`를 산출. 추가로 `stock_universe_ohlcv`에서 KRX 시장폭(20일 상승 종목 비율) 집계. `run_pipeline` 초기에 `compute_regime(db_cfg)` 호출 → `format_regime_text()` + `infer_positioning_hint()`로 STAGE1A/1A1/1A2 프롬프트에 `{market_regime_section}` 주입. AI는 국면에 맞춰 테마 신뢰도·리스크 톤 조정.
 - `analysis_sessions.market_regime JSONB`(v31) — Stage 1 진입 시점의 레짐 스냅샷 영속화. `market_indices_ohlcv`(v31) 테이블은 `analyzer/universe_sync.py --mode indices`로 수집 (pykrx KRX·yfinance US).
+- `pre_market_briefings`(v34) — 프리마켓 브리핑 결과 영속화. PK `briefing_date`, 컬럼 `source_trade_date / status / us_summary JSONB / briefing_data JSONB / regime_snapshot JSONB`. `analyzer/briefing_main.py`가 매일 KST 06:30 미국 OHLCV 집계(`analyzer/overnight_us.py`) + Claude SDK 브리핑 생성 + sector_norm 공통키로 한국 수혜 매핑 + 화이트리스트 검증 + 워치리스트/구독 알림 자동 생성. `pre-market-briefing.timer` (06:30) systemd unit으로 트리거. UI는 `/pages/briefing` (`api/templates/briefing.html`). 운영 매뉴얼: `_docs/20260425101355_pre_market_briefing.md`.
 
 ## Key Conventions
 

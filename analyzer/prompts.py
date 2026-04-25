@@ -917,3 +917,115 @@ STAGE3_PROMPT = """## 오늘의 Top Picks 재정렬 요청
 }}
 ```
 """
+
+
+# ── 프리마켓 브리핑: 미국 오버나이트 → 한국 수혜 매핑 ──────────────────
+
+BRIEFING_SYSTEM = SYSTEM_PROMPT_BASE + """
+
+추가 역할: 한국 투자자 대상 프리마켓 브리핑 작성자.
+미국 시장 마감 직후(KST 06:30) 오버나이트 데이터를 받아, KOSPI 개장(09:00) 전에
+한국 종목에 미칠 영향을 정리한다.
+
+핵심 원칙:
+- **수치는 절대 추정 금지** — 제공된 실측 데이터(US 종가 change_pct, 섹터 평균,
+  KR 후보군의 시총·1M 수익률)만 사용. 새로운 숫자를 만들거나 계산하지 말 것.
+- **한국 종목은 제공된 "한국 시장 수혜 후보" 리스트 안에서만 선택** — 발명 금지.
+  후보에 없는 종목을 추천하면 즉시 무효 처리됨.
+- **수혜 강도 판단**: 미국 섹터의 평균 등락률·Top movers의 시총·뉴스 카탈리스트를
+  종합해 "갭 상승 강력 / 갭 상승 유력 / 상승 기대 / 보조적 수혜 / 영향 제한적" 5단계로 분류.
+- **카탈리스트 추론**: 각 미국 섹터가 왜 움직였는지 1줄로 설명 (HBM 수요, AI 전력 수주 등).
+  근거 없이 "기대감"·"전망 호조" 같은 모호한 표현 금지.
+
+## 출력 형식 엄수
+1. 응답은 반드시 **단일 ```json 코드블록**으로만 출력.
+2. JSON 바깥에는 어떤 텍스트도 출력 금지.
+3. 문자열 값은 한 줄로 작성, 줄바꿈 필요시 `\\n`으로 이스케이프.
+4. 메타 주석(`(이하 계속)` 등) 일체 금지."""
+
+
+BRIEFING_PROMPT = """## 분석 날짜: {date} (KST 프리마켓 브리핑)
+
+{regime_section}
+
+{us_summary_section}
+
+{kr_candidates_section}
+
+---
+
+## 분석 요청 — 프리마켓 브리핑 생성
+
+위 실측 데이터를 바탕으로 다음 두 단계 분석을 수행하세요.
+
+### 1단계: 미국 핵심 상승 섹터·종목 정리
+
+미국 시장에서 실제로 의미 있게 움직인 섹터·종목을 4~6개 그룹으로 정리.
+각 그룹에 대해:
+- `sector_norm`: 위 표의 sector_norm 영문 키 그대로 사용
+- `label`: 한국어 그룹명 (예: "반도체 (SEMICONDUCTORS)")
+- `top_movers`: 해당 섹터의 Top 종목 3~6개 (제공된 ticker/change_pct만 사용)
+- `catalyst`: 왜 움직였나 1~2 문장 (HBM 수요·AI 전력 수주 등 구체적 단서 명시)
+
+### 2단계: 한국 시장 수혜 시나리오
+
+위 미국 섹터별로 한국 시장에서의 영향을 매핑하세요.
+- `sector_norm`: 미국 섹터와 동일한 키 사용 (KR 후보 풀의 키로 매칭)
+- `label`: 한국어 그룹명 + 수혜 강도 (예: "반도체 메모리 — 최우선 수혜")
+- `strength`: 위 5단계 분류 중 하나 — `gap_up_strong`/`gap_up_likely`/`upside_expected`/`partial_benefit`/`limited`
+- `korean_picks`: **한국 시장 수혜 후보 리스트에서만** 2~5개 선택
+  각 종목에 대해:
+    - `ticker`: 후보 풀의 ticker 그대로
+    - `asset_name`: 후보 풀의 asset_name 그대로
+    - `market`: KOSPI 또는 KOSDAQ
+    - `expected_open_change_pct`: 예상 시초가 갭 범위 (예: "+3~5%", "+1~2%", "보합")
+    - `rationale`: 왜 수혜받는가 1문장 (HBM 점유율, 미국공장 수주 연동 등)
+- `catalysts_kr`: 한국 측 주의 카탈리스트 1~2 문장
+- `related_etfs`: 후보군에서 발견한 ETF/관련주 키워드 0~5개 (선택)
+
+### 3단계: 짧은 모닝 브리핑 코멘트
+
+장 시작 전 투자자에게 전달할 1단락 요약 (300자 이내). 톤은 차분하고 단정적.
+"오늘 챙겨봐야 할 것 1줄 + 미국 어떤 섹터가 어떻게 움직였는지 1~2줄 + 한국 시장 영향 1~2줄".
+
+## 출력 형식
+
+```json
+{{
+  "us_summary": {{
+    "trade_date": "{trade_date}",
+    "headline": "오늘 미국 시장 한 줄 요약",
+    "groups": [
+      {{
+        "sector_norm": "semiconductors",
+        "label": "반도체 (SEMICONDUCTORS)",
+        "top_movers": [
+          {{"ticker": "MU", "change_pct": 8.45}},
+          {{"ticker": "AMD", "change_pct": 6.67}}
+        ],
+        "catalyst": "HBM 슈퍼사이클 + AI 메모리 수요 확장으로 메모리 3사 동반 강세."
+      }}
+    ]
+  }},
+  "kr_impact": [
+    {{
+      "sector_norm": "semiconductors",
+      "label": "반도체 메모리 — 최우선 수혜",
+      "strength": "gap_up_strong",
+      "korean_picks": [
+        {{
+          "ticker": "005930",
+          "asset_name": "삼성전자",
+          "market": "KOSPI",
+          "expected_open_change_pct": "+3~5%",
+          "rationale": "마이크론 +8.45% 동조 + HBM4E 수요 직결."
+        }}
+      ],
+      "catalysts_kr": "오전 외국인 순매수 진입 가능성 / 마이크론 가이던스 컨퍼런스 모멘텀 연장.",
+      "related_etfs": ["KODEX 반도체", "TIGER 반도체TOP10"]
+    }}
+  ],
+  "morning_brief": "오늘 챙겨야 할 핵심은 반도체 메모리 흐름. ..."
+}}
+```
+"""

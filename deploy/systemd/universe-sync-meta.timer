@@ -1,8 +1,9 @@
 [Unit]
-Description=Investment Advisor - Universe 메타 주간 실행 (매주 일요일 03:30 KST)
+Description=Investment Advisor - Universe 메타 주간 실행 (매주 일요일 07:30 KST)
 
 [Timer]
-OnCalendar=Sun *-*-* 03:30:00 Asia/Seoul
+# 매주 일요일 07:30 KST — 06:30 메인 배치(sync→briefing→analyzer) 완료 후 실행
+OnCalendar=Sun *-*-* 07:30:00 Asia/Seoul
 Persistent=true
 Unit=universe-sync-meta.service
 

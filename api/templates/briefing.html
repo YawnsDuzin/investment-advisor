@@ -1,0 +1,235 @@
+{% extends "base.html" %}
+{% block title %}프리마켓 브리핑 — AlphaSignal{% endblock %}
+{% block page_title %}프리마켓 브리핑{% endblock %}
+
+{% block head %}
+<style>
+.brief-meta { color: var(--text-muted); font-size: 13px; margin-bottom: 18px; }
+.brief-meta .badge { display: inline-block; padding: 2px 8px; border-radius: 6px; background: var(--bg-elevated); margin-left: 6px; font-size: 12px; }
+.brief-meta .badge-success { background: rgba(46, 204, 113, 0.15); color: #2ecc71; }
+.brief-meta .badge-partial { background: rgba(241, 196, 15, 0.15); color: #f1c40f; }
+
+.brief-section { margin: 28px 0 20px; }
+.brief-section h3 { font-size: 17px; margin: 0 0 12px; display: flex; align-items: center; gap: 8px; }
+.brief-section h3 .num { color: var(--text-muted); font-size: 14px; }
+
+.brief-headline {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.08), rgba(34, 211, 238, 0.04));
+    border: 1px solid rgba(99, 102, 241, 0.18);
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin-bottom: 18px;
+    line-height: 1.55;
+}
+.brief-morning {
+    background: var(--bg-elevated);
+    border-left: 3px solid var(--accent);
+    padding: 14px 18px;
+    border-radius: 6px;
+    line-height: 1.65;
+    color: var(--text);
+    font-size: 14.5px;
+}
+
+.us-group, .kr-group {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 18px;
+    margin-bottom: 12px;
+    background: var(--bg-card, var(--bg-elevated));
+}
+.us-group-header, .kr-group-header {
+    display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 8px; margin-bottom: 10px;
+}
+.us-group-title, .kr-group-title { font-weight: 600; font-size: 15px; display: flex; align-items: center; gap: 8px; }
+.us-group-title .icon, .kr-group-title .icon { font-size: 18px; }
+
+.movers-row { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; }
+.mover-pill { display: inline-flex; gap: 4px; align-items: center; padding: 2px 8px; background: var(--bg); border: 1px solid var(--border); border-radius: 14px; }
+.mover-pos { color: #2ecc71; font-weight: 600; }
+.mover-neg { color: #e74c3c; font-weight: 600; }
+.brief-catalyst { color: var(--text-muted); font-size: 13px; margin-top: 6px; line-height: 1.55; }
+
+.strength-badge {
+    padding: 3px 10px; border-radius: 6px; font-size: 12px; font-weight: 600;
+}
+.strength-gap_up_strong  { background: rgba(231, 76, 60, 0.15); color: #ff7675; }
+.strength-gap_up_likely  { background: rgba(241, 196, 15, 0.18); color: #f6c245; }
+.strength-upside_expected{ background: rgba(99, 102, 241, 0.18); color: #818cf8; }
+.strength-partial_benefit{ background: rgba(155, 155, 155, 0.18); color: #a0a8b8; }
+.strength-limited        { background: rgba(80, 90, 100, 0.18); color: #6b7280; }
+
+.kr-pick {
+    display: grid;
+    grid-template-columns: 110px 1fr auto;
+    gap: 12px;
+    padding: 8px 0;
+    border-top: 1px solid var(--border);
+    align-items: center;
+    font-size: 13.5px;
+}
+.kr-pick:first-child { border-top: none; }
+.kr-pick-name { font-weight: 600; }
+.kr-pick-ticker { color: var(--text-muted); font-size: 12px; }
+.kr-pick-rationale { color: var(--text-muted); font-size: 12.5px; }
+.kr-pick-gap { font-weight: 600; color: #2ecc71; white-space: nowrap; }
+.kr-pick-gap-loss { color: #e74c3c; }
+
+.related-etfs { font-size: 12px; color: var(--text-muted); margin-top: 8px; }
+.related-etfs span { display: inline-block; padding: 2px 8px; background: var(--bg); border-radius: 4px; margin-right: 4px; }
+
+.empty-brief {
+    text-align: center; padding: 60px 20px; color: var(--text-muted);
+}
+
+@media (max-width: 768px) {
+    .kr-pick { grid-template-columns: 1fr; gap: 4px; }
+    .kr-pick-gap { justify-self: start; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+{% if not briefing %}
+<div class="empty-brief">
+    <h3>{% if requested_date %}{{ requested_date }} 브리핑이 없습니다{% else %}오늘의 브리핑이 아직 준비되지 않았습니다{% endif %}</h3>
+    <p>매일 KST 06:30 미국 장 마감 직후 자동 생성됩니다.</p>
+</div>
+{% else %}
+
+<div class="brief-meta">
+    📅 {{ briefing.briefing_date }} (KST)
+    {% if briefing.source_trade_date %}
+        · 미국 거래일 {{ briefing.source_trade_date }}
+    {% endif %}
+    {% if briefing.status == 'success' %}
+        <span class="badge badge-success">정상</span>
+    {% elif briefing.status == 'partial' %}
+        <span class="badge badge-partial">부분 데이터</span>
+    {% else %}
+        <span class="badge">{{ briefing.status }}</span>
+    {% endif %}
+    {% if briefing.generated_at %}
+        · 생성 {{ briefing.generated_at[:16].replace('T', ' ') }}
+    {% endif %}
+</div>
+
+{# ── 모닝 브리핑 (LLM headline) ── #}
+{% set bd = briefing.briefing_data or {} %}
+{% set us = bd.get('us_summary', {}) or {} %}
+{% set kr = bd.get('kr_impact', []) or [] %}
+
+{% if us.get('headline') %}
+<div class="brief-headline">
+    <strong>📰 {{ us.headline }}</strong>
+</div>
+{% endif %}
+
+{# ── 1. 미국 시장 핵심 상승 섹터 ── #}
+{% if us.get('groups') %}
+<div class="brief-section">
+    <h3><span class="num">①</span> 오늘 S&P500 핵심 상승 섹터 & 종목</h3>
+    {% for g in us.get('groups', []) %}
+    <div class="us-group">
+        <div class="us-group-header">
+            <div class="us-group-title">
+                <span class="icon">{% if loop.index == 1 %}🔵{% elif loop.index == 2 %}⚡{% elif loop.index == 3 %}🍎{% elif loop.index == 4 %}💊{% else %}📈{% endif %}</span>
+                {{ g.label or g.sector_norm }}
+            </div>
+            <div class="movers-row">
+                {% for m in g.get('top_movers', []) %}
+                <span class="mover-pill">
+                    <strong>{{ m.ticker }}</strong>
+                    <span class="{% if m.change_pct and m.change_pct >= 0 %}mover-pos{% else %}mover-neg{% endif %}">
+                        {{ '%+.2f' % (m.change_pct or 0) }}%
+                    </span>
+                </span>
+                {% endfor %}
+            </div>
+        </div>
+        {% if g.catalyst %}
+        <div class="brief-catalyst">{{ g.catalyst }}</div>
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+{# ── 2. 한국 시장 수혜 시나리오 ── #}
+{% if kr %}
+<div class="brief-section">
+    <h3><span class="num">②</span> 코스피 / 코스닥 섹터별 수혜 시나리오</h3>
+    {% for grp in kr %}
+    <div class="kr-group">
+        <div class="kr-group-header">
+            <div class="kr-group-title">{{ grp.label or grp.sector_norm }}</div>
+            {% if grp.strength %}
+            <span class="strength-badge strength-{{ grp.strength }}">
+                {% if grp.strength == 'gap_up_strong' %}갭 상승 강력
+                {% elif grp.strength == 'gap_up_likely' %}갭 상승 유력
+                {% elif grp.strength == 'upside_expected' %}상승 기대
+                {% elif grp.strength == 'partial_benefit' %}보조적 수혜
+                {% elif grp.strength == 'limited' %}영향 제한적
+                {% else %}{{ grp.strength }}{% endif %}
+            </span>
+            {% endif %}
+        </div>
+
+        {% for p in grp.get('korean_picks', []) %}
+        <div class="kr-pick">
+            <div>
+                <div class="kr-pick-name">{{ p.asset_name }}</div>
+                <div class="kr-pick-ticker">{{ p.ticker }} · {{ p.market }}</div>
+            </div>
+            <div class="kr-pick-rationale">{{ p.rationale }}</div>
+            {% if p.expected_open_change_pct %}
+            <div class="kr-pick-gap {% if '-' in p.expected_open_change_pct %}kr-pick-gap-loss{% endif %}">
+                {{ p.expected_open_change_pct }}
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+
+        {% if grp.catalysts_kr %}
+        <div class="brief-catalyst" style="margin-top:10px;">📌 {{ grp.catalysts_kr }}</div>
+        {% endif %}
+
+        {% if grp.related_etfs %}
+        <div class="related-etfs">
+            관련:
+            {% for etf in grp.related_etfs %}<span>{{ etf }}</span>{% endfor %}
+        </div>
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+{# ── 3. 모닝 브리핑 코멘트 ── #}
+{% if bd.get('morning_brief') %}
+<div class="brief-section">
+    <h3><span class="num">③</span> 모닝 코멘트</h3>
+    <div class="brief-morning">{{ bd.morning_brief }}</div>
+</div>
+{% endif %}
+
+{# ── 4. 시장 레짐 (옵션, 디버깅용) ── #}
+{% if briefing.regime_snapshot and briefing.regime_snapshot.get('indices') %}
+<div class="brief-section">
+    <h3 style="font-size:14px;color:var(--text-muted);">참고: 시장 레짐</h3>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;font-size:12.5px;color:var(--text-muted);">
+    {% for code, data in briefing.regime_snapshot.indices.items() %}
+        <div style="padding:6px 10px;background:var(--bg-elevated);border-radius:6px;">
+            <strong>{{ code }}</strong>
+            {% if data.get('return_1m_pct') is not none %} · 1M {{ '%+.2f' % data.return_1m_pct }}%{% endif %}
+            {% if data.get('vol_regime') %} · vol {{ data.vol_regime }}{% endif %}
+            {% if data.get('above_200ma') is not none %} · 200MA {% if data.above_200ma %}↑{% else %}↓{% endif %}{% endif %}
+        </div>
+    {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+{% endif %}
+{% endblock %}

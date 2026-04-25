@@ -1,0 +1,13 @@
+[Unit]
+Description=Investment Advisor - 프리마켓 브리핑 트리거 (매일 06:30 KST)
+
+[Timer]
+# 매일 06:30 KST — 미국 장 마감 직후 (EDT 16:00 → 05:00 KST / EST 16:00 → 06:00 KST)
+# 06:30 = EST 기준 +30분 안전 마진. universe-sync-price.service `After=` 의존성으로
+# 같은 06:30 트랜잭션 안에서 sync 완료 후 자동 실행됨.
+OnCalendar=*-*-* 06:30:00 Asia/Seoul
+Persistent=true
+Unit=pre-market-briefing.service
+
+[Install]
+WantedBy=timers.target

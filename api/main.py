@@ -111,6 +111,11 @@ app.include_router(inquiry.pages_router)
 app.include_router(marketing.pages_router)
 app.include_router(dashboard.pages_router)
 
+# 프리마켓 브리핑 (KST 06:30 생성)
+from api.routes import briefing as _briefing_routes
+app.include_router(_briefing_routes.router)
+app.include_router(_briefing_routes.pages_router)
+
 
 if __name__ == "__main__":
     import uvicorn
