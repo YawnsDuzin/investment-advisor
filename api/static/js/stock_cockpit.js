@@ -234,7 +234,9 @@
   var container = document.getElementById('price-chart');
   container.innerHTML = '';
   var chart = LightweightCharts.createChart(container, {
+    width: container.clientWidth,  // 초기 width 명시 — autoSize 가 후속 resize 추적
     height: 380,
+    autoSize: true,                 // 컨테이너 width 변경 자동 추적 (ResizeObserver)
     layout: { background: { color: 'transparent' }, textColor: '#a0a0a0' },
     grid: { vertLines: { color: '#2a2a2a' }, horzLines: { color: '#2a2a2a' } },
     rightPriceScale: { borderColor: '#3a3a3a' },
@@ -397,7 +399,9 @@
   var container = document.getElementById('benchmark-chart');
   container.innerHTML = '';
   var chart = LightweightCharts.createChart(container, {
+    width: container.clientWidth,  // 초기 width 명시 — autoSize 가 후속 resize 추적
     height: 260,
+    autoSize: true,                 // 컨테이너 width 변경 자동 추적
     layout: { background: { color: 'transparent' }, textColor: '#a0a0a0' },
     grid: { vertLines: { color: '#2a2a2a' }, horzLines: { color: '#2a2a2a' } },
     rightPriceScale: { borderColor: '#3a3a3a' },
