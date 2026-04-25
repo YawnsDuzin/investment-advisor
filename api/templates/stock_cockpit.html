@@ -437,6 +437,36 @@
     return fetch(url).then(function(r) { return r.ok ? r.json() : Promise.reject(r.status); });
   }
 
+  var proposalsCache = null;  // 추천 마커 원본 (한 번만 fetch)
+
+  function buildMarkers(items, firstDate, lastDate) {
+    var markers = items
+      .filter(function(it) {
+        var dt = (it.created_at || it.analysis_date || '').slice(0, 10);
+        return dt >= firstDate && dt <= lastDate;
+      })
+      .map(function(it) {
+        var positive = (it.post_return_3m_pct == null) || it.post_return_3m_pct >= 0;
+        return {
+          time: (it.created_at || it.analysis_date).slice(0, 10),
+          position: 'belowBar',
+          color: positive ? '#27ae60' : '#c0392b',
+          shape: 'arrowUp',
+          text: '추천' + (it.entry_price ? ' @' + c.fmtPrice(it.entry_price, '') : ''),
+        };
+      });
+    markers.sort(function(a, b) { return a.time < b.time ? -1 : a.time > b.time ? 1 : 0; });
+    return markers;
+  }
+
+  function refreshMarkers(seriesData) {
+    if (!proposalsCache || !proposalsCache.length || !seriesData.length) return;
+    var firstDate = seriesData[0].date;
+    var lastDate = seriesData[seriesData.length - 1].date;
+    var markers = buildMarkers(proposalsCache, firstDate, lastDate);
+    if (markers.length) lineSeries.setMarkers(markers);
+  }
+
   function applyData(d) {
     if (!d.series || !d.series.length) {
       container.innerHTML = '<div class="chart-placeholder">OHLCV 데이터 수집 대기 중</div>';
@@ -452,31 +482,18 @@
     ma200Series.setData(movingAvg(d.series, 200));
     volSeries.setData(vols);
 
-    // 추천 마커 (별도 fetch)
-    fetch('/api/stocks/' + encodeURIComponent(c.ticker) + '/proposals')
-      .then(function(r) { return r.ok ? r.json() : null; })
-      .then(function(p) {
-        if (!p || !p.items || !p.items.length) return;
-        var firstDate = d.series[0].date;
-        var lastDate = d.series[d.series.length - 1].date;
-        var markers = p.items
-          .filter(function(it) {
-            var dt = (it.created_at || it.analysis_date || '').slice(0, 10);
-            return dt >= firstDate && dt <= lastDate;
-          })
-          .map(function(it) {
-            var positive = (it.post_return_3m_pct == null) || it.post_return_3m_pct >= 0;
-            return {
-              time: (it.created_at || it.analysis_date).slice(0, 10),
-              position: 'belowBar',
-              color: positive ? '#27ae60' : '#c0392b',
-              shape: 'arrowUp',
-              text: '추천' + (it.entry_price ? ' @' + it.entry_price : ''),
-            };
-          });
-        if (markers.length) lineSeries.setMarkers(markers);
-      })
-      .catch(function() { /* 마커는 옵션 */ });
+    if (proposalsCache === null) {
+      // 첫 로드 시에만 proposals fetch
+      fetch('/api/stocks/' + encodeURIComponent(c.ticker) + '/proposals')
+        .then(function(r) { return r.ok ? r.json() : null; })
+        .then(function(p) {
+          proposalsCache = (p && p.items) ? p.items : [];
+          refreshMarkers(d.series);
+        })
+        .catch(function() { proposalsCache = []; });
+    } else {
+      refreshMarkers(d.series);
+    }
 
     chart.timeScale().fitContent();
   }
