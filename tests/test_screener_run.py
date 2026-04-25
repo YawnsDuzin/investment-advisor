@@ -197,3 +197,46 @@ def test_run_ma200_proximity_filter():
         sql, params = _last_sql(fake)
         assert "m.ma200_proximity" in sql
         assert 0.95 in [float(p) if isinstance(p, (int, float)) else None for p in params]
+
+
+# ──────────────────────────────────────────────
+# Task 4: is_top_pick 뱃지 + top_picks_recent CTE
+# ──────────────────────────────────────────────
+
+def test_run_includes_top_picks_recent_cte_and_is_top_pick_flag():
+    """결과에 is_top_pick 플래그 + CTE에 top_picks_recent + LEFT JOIN."""
+    from fastapi.testclient import TestClient
+    from api.main import app
+    rows = [
+        {"ticker": "005930", "market": "KOSPI", "asset_name": "삼성전자",
+         "is_top_pick": True, "r1m": 4.0},
+        {"ticker": "000660", "market": "KOSPI", "asset_name": "SK하이닉스",
+         "is_top_pick": False, "r1m": 2.0},
+    ]
+    with _override_db(rows=rows) as fake:
+        client = TestClient(app)
+        r = client.post("/api/screener/run", json={"volume_ratio_min": 1.0})
+        assert r.status_code == 200
+        sql, _ = _last_sql(fake)
+        assert "top_picks_recent" in sql
+        assert "is_top_pick" in sql
+        assert "daily_top_picks" in sql
+        assert "LEFT JOIN top_picks_recent" in sql
+        data = r.json()
+        assert data["rows"][0]["is_top_pick"] is True
+        assert data["rows"][1]["is_top_pick"] is False
+
+
+def test_run_includes_is_top_pick_even_without_ohlcv_join():
+    """OHLCV 필터 없을 때도 is_top_pick 은 항상 반환."""
+    from fastapi.testclient import TestClient
+    from api.main import app
+    rows = [{"ticker": "AAPL", "market": "NASDAQ", "asset_name": "Apple",
+             "is_top_pick": False}]
+    with _override_db(rows=rows) as fake:
+        client = TestClient(app)
+        r = client.post("/api/screener/run", json={})
+        assert r.status_code == 200
+        sql, _ = _last_sql(fake)
+        assert "top_picks_recent" in sql
+        assert "is_top_pick" in sql

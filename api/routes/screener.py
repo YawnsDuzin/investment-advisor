@@ -318,6 +318,17 @@ def run_screener(
                    CASE WHEN m.v60>0 THEN m.v20/m.v60 END AS volume_ratio
             FROM metrics m
             LEFT JOIN ytd_anchor y ON y.ticker=m.ticker AND y.market=m.market
+        ),
+        top_picks_recent AS (
+            -- 가장 최근 analysis_date (최근 7일 이내) 의 Top Picks 종목 식별
+            SELECT DISTINCT UPPER(p.ticker) AS ticker, UPPER(p.market) AS market
+            FROM investment_proposals p
+            JOIN daily_top_picks d ON d.proposal_id = p.id
+            WHERE d.analysis_date = (
+                SELECT MAX(analysis_date)
+                FROM daily_top_picks
+                WHERE analysis_date >= CURRENT_DATE - INTERVAL '7 days'
+            )
         )
         """
         sql = f"""
@@ -329,19 +340,35 @@ def run_screener(
                m.avg_daily_value, m.vol60_pct, m.volume_ratio,
                m.high_52w_proximity, m.ma200_proximity, m.drawdown_60d_pct,
                m.r1m, m.r3m, m.r6m, m.r1y, m.ytd,
-               m.sparkline_60d
+               m.sparkline_60d,
+               (tp.ticker IS NOT NULL) AS is_top_pick
         FROM stock_universe u
         LEFT JOIN ohlcv_metrics m
           ON UPPER(u.ticker) = UPPER(m.ticker) AND UPPER(u.market) = UPPER(m.market)
+        LEFT JOIN top_picks_recent tp
+          ON tp.ticker = UPPER(u.ticker) AND tp.market = UPPER(u.market)
         WHERE {where_sql}
         ORDER BY {order_by}
         LIMIT %s
         """
     else:
         sql = f"""
+        WITH top_picks_recent AS (
+            SELECT DISTINCT UPPER(p.ticker) AS ticker, UPPER(p.market) AS market
+            FROM investment_proposals p
+            JOIN daily_top_picks d ON d.proposal_id = p.id
+            WHERE d.analysis_date = (
+                SELECT MAX(analysis_date)
+                FROM daily_top_picks
+                WHERE analysis_date >= CURRENT_DATE - INTERVAL '7 days'
+            )
+        )
         SELECT u.ticker, u.market, u.asset_name, u.asset_name_en, u.sector_norm,
-               u.market_cap_krw, u.market_cap_bucket, u.last_price, u.last_price_ccy
+               u.market_cap_krw, u.market_cap_bucket, u.last_price, u.last_price_ccy,
+               (tp.ticker IS NOT NULL) AS is_top_pick
         FROM stock_universe u
+        LEFT JOIN top_picks_recent tp
+          ON tp.ticker = UPPER(u.ticker) AND tp.market = UPPER(u.market)
         WHERE {where_sql}
         ORDER BY {order_by}
         LIMIT %s
