@@ -112,9 +112,11 @@ def page_today_briefing(
     conn = ctx["_conn"]
     row = _fetch_briefing(conn)
     return templates.TemplateResponse(
-        "briefing.html",
-        {**ctx, "briefing": _serialize_briefing(row) if row else None,
-         "is_today": True},
+        request=request,
+        name="briefing.html",
+        context={**ctx,
+                 "briefing": _serialize_briefing(row) if row else None,
+                 "is_today": True},
     )
 
 
@@ -127,7 +129,10 @@ def page_briefing_by_date(
     conn = ctx["_conn"]
     row = _fetch_briefing(conn, briefing_date)
     return templates.TemplateResponse(
-        "briefing.html",
-        {**ctx, "briefing": _serialize_briefing(row) if row else None,
-         "is_today": False, "requested_date": str(briefing_date)},
+        request=request,
+        name="briefing.html",
+        context={**ctx,
+                 "briefing": _serialize_briefing(row) if row else None,
+                 "is_today": False,
+                 "requested_date": str(briefing_date)},
     )

@@ -7,8 +7,8 @@
 
 | 플레이스홀더 | 예시 | 설명 |
 |---|---|---|
-| `__INSTALL_DIR__` | `/home/pi/investment-advisor` | 프로젝트 clone 경로 (루트 디렉터리) |
-| `__VENV_PYTHON__` | `/home/pi/investment-advisor/venv/bin/python` | 가상환경 Python 절대경로 |
+| `__INSTALL_DIR__` | `/home/dzp/dzp-main/program/investment-advisor` | 프로젝트 clone 경로 (루트 디렉터리) |
+| `__VENV_PYTHON__` | `/home/dzp/dzp-main/program/investment-advisor/venv/bin/python` | 가상환경 Python 절대경로 |
 | `__SYSTEM_USER__` | `dzp` | 서비스 실행 유저 (프로젝트 소유자) |
 
 ## Unit 일람
@@ -69,10 +69,10 @@ API 서버는 상시 기동이므로 타이머 없음.
 ## 설치 절차 (라즈베리파이)
 
 ```bash
-cd /home/pi/investment-advisor/deploy/systemd
+cd /home/dzp/dzp-main/program/investment-advisor/deploy/systemd
 
 # 1. 플레이스홀더 치환 → /etc/systemd/system/ 에 복사
-INSTALL_DIR=/home/pi/investment-advisor
+INSTALL_DIR=/home/dzp/dzp-main/program/investment-advisor
 VENV_PYTHON=$INSTALL_DIR/venv/bin/python
 SYSTEM_USER=dzp
 
