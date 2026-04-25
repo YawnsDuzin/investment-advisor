@@ -514,5 +514,88 @@
     });
   });
 })();
+
+// ── § 2-A 벤치마크 상대성과 ──
+(function() {
+  var c = window.__cockpit;
+  if (!c || typeof LightweightCharts === 'undefined') return;
+
+  // 시장 → 벤치마크 자동 선택
+  var BENCH_MAP = {
+    'KOSPI':  ['KOSPI', 'KOSDAQ'],
+    'KOSDAQ': ['KOSDAQ', 'KOSPI'],
+    'NASDAQ': ['NDX100', 'SP500'],
+    'NYSE':   ['SP500', 'NDX100'],
+  };
+  var benches = BENCH_MAP[c.market] || ['SP500'];
+  var defaultBench = benches[0];
+
+  // 벤치마크 토글 버튼 동적 생성
+  var toggleEl = document.getElementById('benchmark-toggle');
+  toggleEl.innerHTML = '';
+  benches.forEach(function(code, i) {
+    var btn = document.createElement('button');
+    btn.dataset.bench = code;
+    btn.textContent = code;
+    if (i === 0) btn.classList.add('active');
+    toggleEl.appendChild(btn);
+  });
+
+  var container = document.getElementById('benchmark-chart');
+  container.innerHTML = '';
+  var chart = LightweightCharts.createChart(container, {
+    height: 260,
+    layout: { background: { color: 'transparent' }, textColor: '#a0a0a0' },
+    grid: { vertLines: { color: '#2a2a2a' }, horzLines: { color: '#2a2a2a' } },
+    rightPriceScale: { borderColor: '#3a3a3a' },
+    timeScale: { borderColor: '#3a3a3a' },
+  });
+  var stockLine = chart.addLineSeries({ color: '#4ea3ff', lineWidth: 2, title: c.ticker });
+  var benchLine = chart.addLineSeries({ color: '#f1c40f', lineWidth: 2, title: defaultBench });
+
+  function normalize(series) {
+    if (!series.length) return [];
+    var base = series[0].close;
+    if (!base || base === 0) return [];
+    return series.map(function(p) { return { time: p.date, value: +(p.close / base * 100).toFixed(2) }; });
+  }
+
+  function loadAndRender(benchCode) {
+    var stockUrl = '/api/stocks/' + encodeURIComponent(c.ticker) + '/ohlcv?days=360' +
+                   (c.market ? '&market=' + encodeURIComponent(c.market) : '');
+    var benchUrl = '/api/indices/' + benchCode + '/ohlcv?days=360';
+    Promise.all([
+      fetch(stockUrl).then(function(r) { return r.ok ? r.json() : Promise.reject(); }),
+      fetch(benchUrl).then(function(r) { return r.ok ? r.json() : Promise.reject(); }),
+    ]).then(function(results) {
+      var stockData = results[0].series || [];
+      var benchData = results[1].series || [];
+      if (!stockData.length || !benchData.length) {
+        container.innerHTML = '<div class="chart-placeholder">데이터 부족</div>';
+        return;
+      }
+      // 두 시리즈의 공통 시작일 정렬
+      var commonStart = stockData[0].date > benchData[0].date ? stockData[0].date : benchData[0].date;
+      var s = stockData.filter(function(p) { return p.date >= commonStart; });
+      var b = benchData.filter(function(p) { return p.date >= commonStart; });
+      stockLine.setData(normalize(s));
+      benchLine.setData(normalize(b));
+      benchLine.applyOptions({ title: benchCode });
+      chart.timeScale().fitContent();
+    }).catch(function() {
+      container.innerHTML = '<div class="chart-placeholder">벤치마크 데이터 조회 실패</div>';
+    });
+  }
+
+  loadAndRender(defaultBench);
+
+  document.querySelectorAll('#benchmark-toggle button').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      document.querySelectorAll('#benchmark-toggle button').forEach(function(b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      loadAndRender(btn.dataset.bench);
+    });
+  });
+})();
 </script>
 {% endblock %}

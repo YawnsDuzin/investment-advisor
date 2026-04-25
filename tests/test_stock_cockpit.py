@@ -280,3 +280,11 @@ class TestStockCockpitPage:
         assert 'id="price-chart"' in body
         # OHLCV API 경로
         assert "/api/stocks/" in body and "/ohlcv" in body
+
+    def test_cockpit_page_includes_benchmark_section(self, patched_base_ctx_conn):
+        client = _make_client()
+        resp = client.get("/pages/stocks/TXN?market=NASDAQ")
+        body = resp.text
+        assert 'id="benchmark-chart"' in body
+        # 벤치마크 API 경로
+        assert "/api/indices/" in body
