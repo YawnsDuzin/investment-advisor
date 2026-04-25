@@ -400,6 +400,10 @@ def compute_sector_pctiles(
     def _pctile_pkg(value_key, value_label, pctile_key):
         v = _g(value_key)
         p = _g(pctile_key) if sufficient else None
+        # SQL `PERCENT_RANK() OVER (ORDER BY x NULLS FIRST)` 는 NULL value 에도 0.0 분위
+        # 부여 → "상위 100% (꼴찌)" 오해. value 없으면 분위·순위도 의미 없음 → null 강제.
+        if v is None:
+            p = None
         return {
             value_label: float(v) if v is not None else None,
             "sector_pctile": float(p) if p is not None else None,
