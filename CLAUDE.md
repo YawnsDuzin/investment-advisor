@@ -63,6 +63,24 @@ python -m analyzer.main
 python -m api.main
 # 또는: uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
 
+# 테스트 (pytest + tests/conftest.py가 psycopg2·feedparser·claude_agent_sdk를 mock 처리 — DB/SDK 토큰 불필요)
+pytest                                           # 전체
+pytest tests/test_tier_limits.py                 # 단일 파일
+pytest tests/test_track_record.py::test_name -v  # 단일 테스트 함수
+pytest -k "tier" -v                              # 이름 매칭
+
+# 유니버스·OHLCV·인덱스 동기화 (DB 필요)
+python -m analyzer.universe_sync --mode backfill   # stock_universe 시드 갱신
+python -m analyzer.universe_sync --mode ohlcv      # 일별 OHLCV 수집 (기본 800일 rolling)
+python -m analyzer.universe_sync --mode cleanup    # retention 초과 OHLCV/상폐 종목 정리
+python -m analyzer.universe_sync --mode indices    # market_indices_ohlcv 수집 (B2 레짐)
+
+# 운영 도구
+python -m tools.refresh_us_universe        # S&P500/NDX100 시드 pandas.read_html로 갱신 (lxml 필요)
+python -m tools.ohlcv_health_check         # OHLCV 무결성·결측 검사
+python -m tools.monthly_sector_refresh     # sector_norm 28버킷 월간 리프레시
+python -m tools.build_css                  # static/css 빌드
+
 # 라즈베리파이 24/7 운영 (systemd)
 sudo systemctl enable --now investment-advisor-api.service       # API 상시 기동
 sudo systemctl enable --now investment-advisor-analyzer.timer    # 매일 03:00 배치
