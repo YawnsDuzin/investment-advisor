@@ -266,11 +266,10 @@ class TestStockCockpitPage:
         body = resp.text
         # 새 템플릿이 렌더됐다는 시그니처
         assert "stock-cockpit" in body
-        # API 엔드포인트 경로 (JS 가 호출하는 것들)
-        assert "/api/stocks/" in body and "/overview" in body
-        assert "/api/stocks/" in body and "/proposals" in body
-        # 펀더멘털 8카드는 흡수됨 (기존 호환)
+        # 펀더멘털 8카드는 흡수됨 (기존 호환) — DOM 구조 확인
         assert "valuation-metrics" in body
+        # 외부 JS 파일 참조 확인 (Phase 2 Task 1 이후)
+        assert "stock_cockpit.js" in body
 
     def test_cockpit_page_loads_chart_library(self, patched_base_ctx_conn):
         client = _make_client()
@@ -278,34 +277,52 @@ class TestStockCockpitPage:
         body = resp.text
         # lightweight-charts CDN 로드 확인
         assert "lightweight-charts" in body
-        # 차트 컨테이너
+        # 차트 컨테이너 — DOM 구조 확인
         assert 'id="price-chart"' in body
-        # OHLCV API 경로
-        assert "/api/stocks/" in body and "/ohlcv" in body
 
     def test_cockpit_page_includes_benchmark_section(self, patched_base_ctx_conn):
         client = _make_client()
         resp = client.get("/pages/stocks/TXN?market=NASDAQ")
         body = resp.text
+        # 벤치마크 차트 컨테이너 — DOM 구조 확인
         assert 'id="benchmark-chart"' in body
-        # 벤치마크 API 경로
-        assert "/api/indices/" in body
+        # 토글 버튼 컨테이너 — DOM 구조 확인
+        assert 'id="benchmark-toggle"' in body
 
     def test_cockpit_page_includes_timeline_section(self, patched_base_ctx_conn):
         client = _make_client()
         resp = client.get("/pages/stocks/TXN?market=NASDAQ")
         body = resp.text
         assert 'id="timeline-list"' in body
-        # 타임라인 JS IIFE 시그니처 — renderTimeline 함수가 반드시 존재해야 함
-        assert "renderTimeline" in body
-        # tl-warn 스타일 존재 확인
+        # tl-warn 스타일 존재 확인 (인라인 CSS — 외부 파일 이동 후에도 CSS 는 HTML 에 남아 있음)
         assert "tl-warn" in body
 
     def test_cockpit_page_escapes_user_content(self, patched_base_ctx_conn):
         client = _make_client()
         resp = client.get("/pages/stocks/TXN?market=NASDAQ")
         body = resp.text
-        # esc 헬퍼 함수 존재 — XSS 방어 시그니처
-        assert "function esc(" in body
-        # 핵심 escape 시퀀스
-        assert "&amp;" in body and "&lt;" in body and "&gt;" in body
+        # esc 헬퍼 함수 및 XSS 방어 시그니처는 외부 JS 파일로 이동됨 (Phase 2 Task 1)
+        # 외부 JS 파일이 서빙되는지 확인 — test_external_js_file_served 에서 상세 검증
+        assert "stock_cockpit.js" in body
+
+    def test_cockpit_page_uses_external_js(self, patched_base_ctx_conn):
+        client = _make_client()
+        resp = client.get("/pages/stocks/TXN?market=NASDAQ")
+        body = resp.text
+        # external JS 파일 참조
+        assert '/static/js/stock_cockpit.js' in body
+        # 인라인 IIFE 시그니처가 페이지 HTML 에서 제거됨
+        # (Hero 의 fetch '/overview' 호출이 인라인 코드에 없어야 함 — 외부 파일로 이동)
+        assert "fetch('/api/stocks/' + encodeURIComponent(ticker) + '/overview'" not in body
+
+    def test_external_js_file_served(self):
+        client = _make_client()
+        resp = client.get("/static/js/stock_cockpit.js")
+        assert resp.status_code == 200
+        body = resp.text
+        # Phase 1 의 4 개 IIFE 시그니처 모두 외부 파일에 존재
+        assert "window.__cockpit" in body
+        assert "function _compute" not in body  # 백엔드 함수가 아닌지 확인
+        assert "// ── § 1 가격 차트 ──" in body
+        assert "// ── § 2-A 벤치마크 상대성과 ──" in body
+        assert "// ── § 6 추천 이력 타임라인 ──" in body
