@@ -336,3 +336,13 @@ class TestStockCockpitPage:
         assert "function escHtml" in body    # XSS guard helper (Phase 1 Task 6)
         assert "&amp;" in body and "&lt;" in body and "&gt;" in body  # escape literals
         assert "renderTimeline" in body or "timeline-card" in body  # § 6 marker
+
+    def test_chart_uses_overlay_pattern(self):
+        client = _make_client()
+        resp = client.get("/static/js/stock_cockpit.js")
+        body = resp.text
+        # overlay 패턴 시그니처 — innerHTML 에러 출력 제거
+        assert "container.innerHTML = '<div class=\"chart-placeholder\">차트 데이터 조회 실패</div>'" not in body
+        assert "container.innerHTML = '<div class=\"chart-placeholder\">벤치마크 데이터 조회 실패</div>'" not in body
+        # 새 overlay 시그니처 — class="chart-overlay"
+        assert "chart-overlay" in body

@@ -227,6 +227,24 @@
     crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
   });
 
+  // overlay 셋업 — 에러 시 차트 인스턴스 보존하며 메시지만 덮어씌움
+  container.style.position = 'relative';
+  var overlay = document.createElement('div');
+  overlay.className = 'chart-overlay';
+  overlay.style.cssText =
+    'position:absolute;top:0;left:0;width:100%;height:100%;display:none;' +
+    'align-items:center;justify-content:center;text-align:center;color:var(--text-muted);' +
+    'background:var(--bg-card);border-radius:10px;z-index:10;';
+  container.appendChild(overlay);
+
+  function showOverlay(msg) {
+    overlay.textContent = msg;
+    overlay.style.display = 'flex';
+  }
+  function hideOverlay() {
+    overlay.style.display = 'none';
+  }
+
   var lineSeries = chart.addLineSeries({ color: '#4ea3ff', lineWidth: 2 });
   var ma50Series = chart.addLineSeries({
     color: '#f5a623', lineWidth: 1, title: 'MA50', priceLineVisible: false, lastValueVisible: false,
@@ -290,9 +308,10 @@
 
   function applyData(d) {
     if (!d.series || !d.series.length) {
-      container.innerHTML = '<div class="chart-placeholder">OHLCV 데이터 수집 대기 중</div>';
+      showOverlay('OHLCV 데이터 수집 대기 중');
       return;
     }
+    hideOverlay();
     var prices = d.series.map(function(p) { return { time: p.date, value: p.close }; });
     var vols = d.series.map(function(p) {
       return { time: p.date, value: p.volume || 0,
@@ -319,7 +338,7 @@
 
   loadOhlcv(currentRange).then(applyData)
     .catch(function() {
-      container.innerHTML = '<div class="chart-placeholder">차트 데이터 조회 실패</div>';
+      showOverlay('차트 데이터 조회 실패');
     });
 
   // 기간 토글
@@ -369,6 +388,24 @@
     rightPriceScale: { borderColor: '#3a3a3a' },
     timeScale: { borderColor: '#3a3a3a' },
   });
+  // overlay 셋업 — 에러 시 차트 인스턴스 보존하며 메시지만 덮어씌움
+  container.style.position = 'relative';
+  var overlay = document.createElement('div');
+  overlay.className = 'chart-overlay';
+  overlay.style.cssText =
+    'position:absolute;top:0;left:0;width:100%;height:100%;display:none;' +
+    'align-items:center;justify-content:center;text-align:center;color:var(--text-muted);' +
+    'background:var(--bg-card);border-radius:10px;z-index:10;';
+  container.appendChild(overlay);
+
+  function showOverlay(msg) {
+    overlay.textContent = msg;
+    overlay.style.display = 'flex';
+  }
+  function hideOverlay() {
+    overlay.style.display = 'none';
+  }
+
   var stockLine = chart.addLineSeries({ color: '#4ea3ff', lineWidth: 2, title: c.ticker });
   var benchLine = chart.addLineSeries({ color: '#f1c40f', lineWidth: 2, title: defaultBench });
 
@@ -390,9 +427,10 @@
       var stockData = results[0].series || [];
       var benchData = results[1].series || [];
       if (!stockData.length || !benchData.length) {
-        container.innerHTML = '<div class="chart-placeholder">데이터 부족</div>';
+        showOverlay('데이터 부족');
         return;
       }
+      hideOverlay();
       // 두 시리즈의 공통 시작일 정렬
       var commonStart = stockData[0].date > benchData[0].date ? stockData[0].date : benchData[0].date;
       var s = stockData.filter(function(p) { return p.date >= commonStart; });
@@ -402,7 +440,7 @@
       benchLine.applyOptions({ title: benchCode });
       chart.timeScale().fitContent();
     }).catch(function() {
-      container.innerHTML = '<div class="chart-placeholder">벤치마크 데이터 조회 실패</div>';
+      showOverlay('벤치마크 데이터 조회 실패');
     });
   }
 
