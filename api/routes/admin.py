@@ -20,6 +20,11 @@ from shared.logger import (
 from api.auth.dependencies import require_role
 from api.auth.models import UserInDB
 from api.deps import get_db_cfg as _get_cfg, get_db_conn, make_page_ctx
+from api.routes.admin_systemd import (
+    _systemd_available,
+    _summarize_unit,
+    MANAGED_UNITS,
+)
 
 router = APIRouter(prefix="/admin", tags=["관리자"])
 
@@ -43,13 +48,24 @@ def _broadcast(msg: str | None):
 
 @router.get("")
 def admin_page(ctx: dict = Depends(make_page_ctx("admin"))):
-    """관리자 페이지"""
+    """관리자 페이지 — systemd unit 상태를 컨텍스트로 주입."""
     from fastapi.responses import RedirectResponse
     if ctx["auth_enabled"]:
         if ctx["_user"] is None:
             return RedirectResponse("/auth/login?next=/admin", status_code=302)
         if ctx["_user"].role != "admin":
             raise HTTPException(status_code=403, detail="접근 권한이 없습니다")
+
+    avail, plat = _systemd_available()
+    units_dict: dict = {}
+    if avail:
+        try:
+            units_dict = {u["key"]: _summarize_unit(u) for u in MANAGED_UNITS}
+        except Exception as e:
+            print(f"[admin_page] unit summary 실패: {e}")
+    ctx["systemd_available"] = avail
+    ctx["systemd_platform"] = plat
+    ctx["units"] = units_dict
     return templates.TemplateResponse(request=ctx["request"], name="admin.html", context=ctx)
 
 
@@ -75,9 +91,58 @@ def get_logs(after: int = Query(default=0, ge=0), _admin: Optional[UserInDB] = D
     }
 
 
+def _stream_via_systemd_analyzer():
+    """γ 정책 Linux 경로: systemctl start + journalctl -f 스트리밍."""
+    import subprocess as _sp
+
+    start_proc = _sp.run(
+        ["sudo", "-n", "systemctl", "start", "investment-advisor-analyzer.service"],
+        capture_output=True, text=True, timeout=10, check=False,
+    )
+    if start_proc.returncode != 0:
+        err_text = start_proc.stderr.strip() or "systemctl start 실패"
+
+        def err_stream():
+            yield f"data: [오류] systemctl start 실패: {err_text}\n\n"
+            yield "event: done\ndata: failed\n\n"
+        return StreamingResponse(err_stream(), media_type="text/event-stream")
+
+    def stream():
+        yield "data: [시작] systemctl start 완료. journalctl 추적 중...\n\n"
+        proc = _sp.Popen(
+            ["journalctl", "-u", "investment-advisor-analyzer.service",
+             "-f", "--no-pager", "-o", "cat", "--since", "now"],
+            stdout=_sp.PIPE, stderr=_sp.STDOUT, bufsize=1, text=True,
+        )
+        try:
+            for line in iter(proc.stdout.readline, ""):
+                yield f"data: {line.rstrip()}\n\n"
+                if "[완료]" in line or "분석이 성공적으로 완료" in line:
+                    break
+        finally:
+            proc.terminate()
+            try:
+                proc.wait(timeout=2)
+            except _sp.TimeoutExpired:
+                proc.kill()
+        yield "event: done\ndata: finished\n\n"
+
+    return StreamingResponse(stream(), media_type="text/event-stream")
+
+
 @router.post("/run")
 def run_analysis(_admin: Optional[UserInDB] = Depends(require_role("admin"))):
-    """분석 파이프라인 실행 (SSE 스트리밍)"""
+    """분석 파이프라인 실행 (SSE 스트리밍).
+
+    γ 정책: Linux + systemd unit 설치되어 있으면 systemctl 경로로 위임.
+    그 외(Windows 개발 등)는 in-process subprocess 경로로 fallback.
+    """
+    # γ 정책 분기 — Linux + analyzer.service 설치 환경
+    avail, _ = _systemd_available()
+    analyzer_unit_path = "/etc/systemd/system/investment-advisor-analyzer.service"
+    if avail and os.path.exists(analyzer_unit_path):
+        return _stream_via_systemd_analyzer()
+
     # SSE stream — B2.5 Pattern A 예외: stream lifecycle과 FastAPI Depends yield 충돌 회피
     global _running, _process, _log_lines
 
