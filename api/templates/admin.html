@@ -250,11 +250,13 @@ document.addEventListener('click', (ev) => {
 
 /* ───────────── systemd 로그 모달 ───────────── */
 function openSystemdLog(key, label) {
-    document.getElementById('systemdLogTitle').textContent = `journal — ${label || key}`;
+    document.getElementById('systemdLogTitle').textContent = `journal — ${label || key} (최신순)`;
     document.getElementById('systemdLogPanel').textContent = '';
     document.getElementById('systemdLogModal').classList.add('active');
     if (window.attachSseLog) {
-        window.attachSseLog('systemdLogPanel', `/admin/systemd/units/${key}/logs/stream`);
+        window.attachSseLog('systemdLogPanel',
+                            `/admin/systemd/units/${key}/logs/stream`,
+                            { reverse: true });
     }
 }
 function closeSystemdLog() {
