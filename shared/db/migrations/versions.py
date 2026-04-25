@@ -1306,6 +1306,46 @@ def _migrate_to_v32(cur) -> None:
     print("[DB] v32 마이그레이션 완료 — market_signals 테이블 (로드맵 Step 3-2)")
 
 
+def _migrate_to_v34(cur) -> None:
+    """v34: pre_market_briefings — 프리마켓 브리핑 결과 영속화.
+
+    매일 KST 06:30 배치(`analyzer.briefing_main`)가 미국 오버나이트 데이터와
+    한국 수혜 매핑 LLM 결과를 한 row로 저장한다. UI `/pages/briefing` 카드 + 알림.
+
+    구조 (모두 JSONB):
+      - us_summary: stock_universe_ohlcv 집계 원본 (top_movers/sector_aggregates/indices)
+      - briefing_data: LLM 출력 — us_summary.groups + kr_impact + morning_brief
+      - regime_snapshot: analyzer.regime.compute_regime() 결과 (B2)
+      - status: success / partial / skipped / failed
+      - source_trade_date: 미국 OHLCV 거래일 (briefing_date 와 다름 — KST/EST 시차)
+
+    PK = briefing_date (하루 1건). 재실행 시 UPSERT로 갱신.
+    """
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS pre_market_briefings (
+            briefing_date     DATE PRIMARY KEY,
+            source_trade_date DATE,
+            status            VARCHAR(20) NOT NULL DEFAULT 'success',
+            us_summary        JSONB,
+            briefing_data     JSONB,
+            regime_snapshot   JSONB,
+            error_message     TEXT,
+            generated_at      TIMESTAMPTZ DEFAULT NOW(),
+            updated_at        TIMESTAMPTZ DEFAULT NOW()
+        );
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_pre_market_briefings_status
+            ON pre_market_briefings(status, briefing_date DESC);
+    """)
+
+    cur.execute("""
+        INSERT INTO schema_version (version) VALUES (34)
+        ON CONFLICT (version) DO NOTHING;
+    """)
+    print("[DB] v34 마이그레이션 완료 — pre_market_briefings 테이블 (프리마켓 브리핑)")
+
+
 def _migrate_to_v33(cur) -> None:
     """v33: screener_presets — 사용자 커스텀 스크리너 프리셋 저장 (로드맵 UI-6).
 

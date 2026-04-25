@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from shared.config import DatabaseConfig, AuthConfig
 from shared.db import init_db
 from api.routes import (
-    sessions, themes, proposals, chat, admin,
+    sessions, themes, proposals, chat, admin, admin_systemd,
     auth as auth_routes, user_admin, watchlist, track_record,
     stocks, education, inquiry, marketing, dashboard,
 )
@@ -88,6 +88,7 @@ app.include_router(proposals.pages_router)
 app.include_router(chat.router)
 app.include_router(chat.pages_router)
 app.include_router(admin.router)
+app.include_router(admin_systemd.router)
 app.include_router(user_admin.router)
 app.include_router(watchlist.router)
 app.include_router(watchlist.pages_router)
@@ -110,6 +111,11 @@ app.include_router(inquiry.pages_router)
 
 app.include_router(marketing.pages_router)
 app.include_router(dashboard.pages_router)
+
+# 프리마켓 브리핑 (KST 06:30 생성)
+from api.routes import briefing as _briefing_routes
+app.include_router(_briefing_routes.router)
+app.include_router(_briefing_routes.pages_router)
 
 
 if __name__ == "__main__":

@@ -9,7 +9,7 @@ from shared.db.migrations import run_migrations
 
 
 # ── 스키마 버전 관리 ──────────────────────────────
-SCHEMA_VERSION = 33  # v33: screener_presets — 커스텀 스크리너 프리셋 (로드맵 UI-6)
+SCHEMA_VERSION = 34  # v34: pre_market_briefings — 프리마켓 브리핑 결과 영속화
 
 
 def _create_base_schema(cur) -> None:

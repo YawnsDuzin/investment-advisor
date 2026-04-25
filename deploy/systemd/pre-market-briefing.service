@@ -1,12 +1,10 @@
 [Unit]
-Description=Investment Advisor daily analyzer batch
+Description=Investment Advisor - 프리마켓 브리핑 (KST 06:30, 미국 장 마감 직후)
 Documentation=https://github.com/yawnsduzin/investment-advisor
 After=network-online.target postgresql.service
 Wants=network-online.target
-# 가격/OHLCV sync → 프리마켓 브리핑 → 분석 순서. After= 만으로 의존 순서만 강제,
-# 선행 unit 실패해도 분석은 진행 (Wants/Requires 사용 안 함).
+# 가격/OHLCV sync가 먼저 끝난 뒤 브리핑 — 같은 06:30 트랜잭션에서 순서 보장
 After=universe-sync-price.service
-After=pre-market-briefing.service
 
 [Service]
 Type=oneshot
@@ -16,9 +14,9 @@ WorkingDirectory=__INSTALL_DIR__
 EnvironmentFile=__INSTALL_DIR__/.env
 Environment=PYTHONUNBUFFERED=1
 Environment=PATH=__INSTALL_DIR__/venv/bin:/usr/local/bin:/usr/bin:/bin
-ExecStart=__VENV_PYTHON__ -m analyzer.main
-# 대형 분석 배치 여유 타임아웃 (90분)
-TimeoutStartSec=5400
+ExecStart=__VENV_PYTHON__ -m analyzer.briefing_main
+# Claude SDK + DB 집계 — 30분 여유
+TimeoutStartSec=1800
 Nice=10
 IOSchedulingClass=best-effort
 IOSchedulingPriority=5

@@ -1,9 +1,11 @@
 [Unit]
-Description=Investment Advisor - 일일 분석 배치 (매일 03:00 KST)
+Description=Investment Advisor - 일일 분석 배치 (매일 06:30 KST)
 
 [Timer]
-# 매일 03:00 KST 실행. 부팅 후 놓친 시점이 있다면 즉시 실행.
-OnCalendar=*-*-* 03:00:00 Asia/Seoul
+# 매일 06:30 KST 실행. 부팅 후 놓친 시점이 있다면 즉시 실행.
+# universe-sync-price.service 와 같은 06:30 트랜잭션에서 `After=` 의존성으로
+# 순서 보장 (sync → briefing → analyzer 순으로 직렬 실행됨).
+OnCalendar=*-*-* 06:30:00 Asia/Seoul
 Persistent=true
 Unit=investment-advisor-analyzer.service
 
