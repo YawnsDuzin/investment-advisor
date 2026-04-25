@@ -755,7 +755,7 @@
     };
   }
 
-  // 외국인 + 기관 일별 순매수 막대
+  // 외국인 + 기관 일별 순매수 — grouped bar (나란히), 색상 고정 (부호는 0 기준 위/아래 위치로 표현)
   function flowBarConfig(flowPoints) {
     return {
       type: 'bar',
@@ -765,17 +765,13 @@
           {
             label: '외국인',
             data: flowPoints.map(function(p) { return p.foreign; }),
-            backgroundColor: flowPoints.map(function(p) {
-              return (p.foreign != null && p.foreign < 0) ? '#c0392b' : '#27ae60';
-            }),
+            backgroundColor: '#4ea3ff',  // 파랑 — 외국인 정체성 고정
             borderWidth: 0,
           },
           {
             label: '기관',
             data: flowPoints.map(function(p) { return p.institution; }),
-            backgroundColor: flowPoints.map(function(p) {
-              return (p.institution != null && p.institution < 0) ? '#c0392b88' : '#27ae6088';
-            }),
+            backgroundColor: '#f5a623',  // 주황 — 기관 정체성 고정
             borderWidth: 0,
           },
         ],
@@ -785,14 +781,27 @@
         maintainAspectRatio: false,
         plugins: {
           legend: { labels: { color: '#a0a0a0', font: { size: 10 }, boxWidth: 10 } },
-          tooltip: { mode: 'index', intersect: false,
-                     callbacks: { label: function(ctx) { return ctx.dataset.label + ': ' + ctx.raw + '억'; } } },
+          tooltip: {
+            mode: 'index', intersect: false,
+            callbacks: {
+              label: function(ctx) {
+                var v = ctx.raw;
+                if (v == null) return ctx.dataset.label + ': -';
+                var sign = v > 0 ? '+' : '';
+                return ctx.dataset.label + ': ' + sign + v + '억';
+              },
+            },
+          },
         },
         scales: {
-          x: { stacked: true, ticks: { color: '#a0a0a0', font: { size: 9 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 6 },
+          // grouped (stacked: false) — 같은 시점에 외국인·기관 막대 나란히
+          x: { ticks: { color: '#a0a0a0', font: { size: 9 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 6 },
                grid: { display: false } },
           y: { ticks: { color: '#a0a0a0', font: { size: 10 } },
-               grid: { color: 'rgba(255,255,255,0.04)' } },
+               grid: { color: 'rgba(255,255,255,0.04)',
+                       // 0 기준선 강조
+                       lineWidth: function(ctx) { return ctx.tick.value === 0 ? 1 : 0.5; },
+                       color: function(ctx) { return ctx.tick.value === 0 ? '#a0a0a0' : 'rgba(255,255,255,0.04)'; } } },
         },
       },
     };
