@@ -344,6 +344,97 @@ def get_stock_overview(
 
 
 # ──────────────────────────────────────────────
+# Stock Cockpit — 추천 이력 타임라인 API
+# ──────────────────────────────────────────────
+@router.get("/{ticker}/proposals")
+def get_stock_proposals(ticker: str):
+    """이 종목의 모든 investment_proposals 시계열 + validation_log 조인."""
+    cfg = AppConfig()
+    tk = ticker.strip().upper()
+
+    conn = get_connection(cfg.db)
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                SELECT
+                    p.id, s.analysis_date, p.created_at,
+                    t.id AS theme_id, t.theme_name, t.theme_validity,
+                    p.action, p.conviction, p.discovery_type,
+                    p.rationale, p.entry_price,
+                    p.target_price_low, p.target_price_high,
+                    p.post_return_1m_pct, p.post_return_3m_pct,
+                    p.post_return_6m_pct, p.post_return_1y_pct,
+                    p.max_drawdown_pct, p.max_drawdown_date,
+                    p.alpha_vs_benchmark_pct
+                FROM investment_proposals p
+                JOIN investment_themes t ON p.theme_id = t.id
+                JOIN analysis_sessions s ON t.session_id = s.id
+                WHERE UPPER(p.ticker) = %s
+                ORDER BY s.analysis_date DESC, p.id DESC
+            """, (tk,))
+            prop_rows = cur.fetchall()
+
+            if prop_rows:
+                proposal_ids = [r["id"] for r in prop_rows]
+                cur.execute("""
+                    SELECT proposal_id, field_name, mismatch_pct, mismatch
+                    FROM proposal_validation_log
+                    WHERE proposal_id = ANY(%s) AND mismatch = TRUE
+                """, (proposal_ids,))
+                validation_rows = cur.fetchall()
+            else:
+                validation_rows = []
+    finally:
+        conn.close()
+
+    # 검증 mismatch 를 proposal_id 별로 그룹화
+    mismatches_by_pid = {}
+    for vr in validation_rows:
+        pid = vr["proposal_id"]
+        mismatches_by_pid.setdefault(pid, []).append({
+            "field_name": vr["field_name"],
+            "mismatch_pct": (
+                round(float(vr["mismatch_pct"]), 2)
+                if vr.get("mismatch_pct") is not None else None
+            ),
+        })
+
+    def _f(v):
+        return float(v) if v is not None else None
+
+    def _d(v):
+        return v.isoformat() if v is not None else None
+
+    items = []
+    for r in prop_rows:
+        items.append({
+            "proposal_id": r["id"],
+            "analysis_date": _d(r["analysis_date"]),
+            "created_at": _d(r["created_at"]),
+            "theme_id": r["theme_id"],
+            "theme_name": r["theme_name"],
+            "theme_validity": r["theme_validity"],
+            "action": r["action"],
+            "conviction": r["conviction"],
+            "discovery_type": r["discovery_type"],
+            "rationale": r["rationale"],
+            "entry_price": _f(r["entry_price"]),
+            "target_price_low": _f(r["target_price_low"]),
+            "target_price_high": _f(r["target_price_high"]),
+            "post_return_1m_pct": _f(r["post_return_1m_pct"]),
+            "post_return_3m_pct": _f(r["post_return_3m_pct"]),
+            "post_return_6m_pct": _f(r["post_return_6m_pct"]),
+            "post_return_1y_pct": _f(r["post_return_1y_pct"]),
+            "max_drawdown_pct": _f(r["max_drawdown_pct"]),
+            "max_drawdown_date": _d(r["max_drawdown_date"]),
+            "alpha_vs_benchmark_pct": _f(r["alpha_vs_benchmark_pct"]),
+            "validation_mismatches": mismatches_by_pid.get(r["id"], []),
+        })
+
+    return {"ticker": tk, "count": len(items), "items": items}
+
+
+# ──────────────────────────────────────────────
 # Stock Fundamentals Page (종목 기초정보 페이지)
 # ──────────────────────────────────────────────
 @pages_router.get("/{ticker}")

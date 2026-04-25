@@ -167,3 +167,60 @@ class TestComputeAiScore:
         """반환 dict에 반드시 4개 키가 존재한다."""
         result = self._fn(None, None, None)
         assert set(result.keys()) == {"ai_score", "factor_score", "hist_score", "consensus_score"}
+
+
+class TestStockProposalsAPI:
+    """GET /api/stocks/{ticker}/proposals"""
+
+    def test_proposals_returns_timeline(self):
+        from api.routes.stocks import get_stock_proposals
+
+        prop_rows = [
+            {
+                "id": 12345, "analysis_date": date(2026, 4, 15),
+                "created_at": date(2026, 4, 15), "theme_id": 99,
+                "theme_name": "AI 반도체 인프라", "theme_validity": "active",
+                "action": "buy", "conviction": "high",
+                "discovery_type": "early_signal",
+                "rationale": "엣지 AI 침투 가속", "entry_price": Decimal("245.30"),
+                "target_price_low": Decimal("290.00"),
+                "target_price_high": Decimal("310.00"),
+                "post_return_1m_pct": Decimal("8.4"),
+                "post_return_3m_pct": Decimal("12.4"),
+                "post_return_6m_pct": None, "post_return_1y_pct": None,
+                "max_drawdown_pct": Decimal("-6.2"),
+                "max_drawdown_date": date(2026, 4, 20),
+                "alpha_vs_benchmark_pct": Decimal("5.1"),
+            },
+        ]
+        validation_rows = [
+            {"proposal_id": 12345, "field_name": "current_price",
+             "mismatch_pct": Decimal("-2.1"), "mismatch": True},
+        ]
+
+        conn = _fake_conn([prop_rows, validation_rows])
+
+        with patch("api.routes.stocks.get_connection", return_value=conn):
+            result = get_stock_proposals(ticker="TXN")
+
+        assert result["ticker"] == "TXN"
+        assert result["count"] == 1
+        item = result["items"][0]
+        assert item["proposal_id"] == 12345
+        assert item["theme_name"] == "AI 반도체 인프라"
+        assert item["entry_price"] == 245.30
+        assert item["post_return_3m_pct"] == 12.4
+        assert item["max_drawdown_pct"] == -6.2
+        assert item["max_drawdown_date"] == "2026-04-20"
+        assert len(item["validation_mismatches"]) == 1
+        assert item["validation_mismatches"][0]["field_name"] == "current_price"
+
+    def test_proposals_empty_for_unknown_ticker(self):
+        from api.routes.stocks import get_stock_proposals
+
+        conn = _fake_conn([[], []])
+        with patch("api.routes.stocks.get_connection", return_value=conn):
+            result = get_stock_proposals(ticker="UNKNOWN")
+
+        assert result["count"] == 0
+        assert result["items"] == []
