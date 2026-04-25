@@ -28,6 +28,8 @@ from datetime import datetime
 from typing import Iterable
 from zoneinfo import ZoneInfo
 
+from psycopg2.extras import RealDictCursor
+
 from shared.config import DatabaseConfig
 from shared.db import get_connection
 from shared.logger import get_logger
@@ -288,10 +290,11 @@ def compute_sector_pctiles(
     if not grp:
         return None
     members = _MARKET_GROUPS[grp]
+    sector = None  # 로그에서 NameError 회피
 
     conn = get_connection(db_cfg)
     try:
-        with conn.cursor() as cur:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
             # 1) 종목의 sector_norm 조회
             cur.execute(
                 "SELECT sector_norm AS sector FROM stock_universe "
@@ -300,15 +303,9 @@ def compute_sector_pctiles(
                 (tk, mk),
             )
             sector_row = cur.fetchone()
-            if not sector_row:
+            if not sector_row or not sector_row.get("sector"):
                 return None
-            # tuple cursor 호환 — sector_row 가 dict 또는 tuple
-            try:
-                sector = sector_row["sector"]
-            except (KeyError, TypeError):
-                sector = sector_row[0]
-            if not sector:
-                return None
+            sector = sector_row["sector"]
 
             # 2) 섹터 cross-section
             sql = f"""
@@ -374,7 +371,7 @@ def compute_sector_pctiles(
             cur.execute(sql, (int(window_days), list(members), sector, tk, mk))
             rows = cur.fetchall()
     except Exception as e:
-        _log.warning(f"[factor] sector_pctile {tk}/{mk} 실패: {e}")
+        _log.warning(f"[factor] sector_pctile {tk}/{mk}/{sector} 실패: {e}")
         try:
             conn.rollback()
         except Exception:
@@ -395,14 +392,7 @@ def compute_sector_pctiles(
     r = rows[0]
 
     def _g(k):
-        try:
-            return r[k]
-        except (KeyError, TypeError):
-            cols = ["ticker", "market", "r1m", "r3m", "r6m", "r12m",
-                    "vol60", "volume_ratio", "r1m_pctile", "r3m_pctile",
-                    "r6m_pctile", "r12m_pctile", "low_vol_pctile",
-                    "volume_pctile", "sector_size"]
-            return r[cols.index(k)]
+        return r[k]
 
     sector_size = int(_g("sector_size") or 0)
     sufficient = sector_size >= min_sector_size

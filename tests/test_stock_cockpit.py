@@ -67,6 +67,7 @@ class TestStockOverviewAPI:
         factor_row = {
             "factor_snapshot": {
                 "r1m_pctile": 0.7, "r3m_pctile": 0.8, "r6m_pctile": 0.85, "r12m_pctile": 0.78,
+                "low_vol_pctile": 0.55, "volume_pctile": 0.88,
             },
         }
         krx_row = {
@@ -415,13 +416,14 @@ class TestComputeSectorPctiles:
         from analyzer.factor_engine import compute_sector_pctiles
 
         market_group_row = {"sector": "ObscureSector"}
-        # sector_size=3 (< 5 임계) — pctile 계산 skip
+        # sector_size=3 (< 5 임계) — DB 가 pctile 값을 줘도 함수가 suppressed 해야
         sector_row = {
             "ticker": "TXN", "market": "NASDAQ",
             "r1m": 5.0, "r3m": 10.0, "r6m": 20.0, "r12m": 30.0,
             "vol60": 15.0, "volume_ratio": 1.0,
-            "r1m_pctile": None, "r3m_pctile": None, "r6m_pctile": None, "r12m_pctile": None,
-            "low_vol_pctile": None, "volume_pctile": None,
+            # 실제 DB 가 PERCENT_RANK 결과를 줘도 sector_size<5 이면 함수가 NULL 처리해야
+            "r1m_pctile": 0.5, "r3m_pctile": 0.78, "r6m_pctile": 0.6, "r12m_pctile": 0.4,
+            "low_vol_pctile": 0.5, "volume_pctile": 0.7,
             "sector_size": 3,
         }
         conn = _fake_conn([market_group_row, [sector_row]])
