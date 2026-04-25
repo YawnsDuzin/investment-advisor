@@ -1,7 +1,7 @@
 # Stock Cockpit Phase 2 — 정량 팩터 / 시장 레짐 / KRX 확장 설계
 
 - 작성: 2026-04-25 KST
-- 상태: Draft → 사용자 리뷰 대기
+- 상태: Phase 2 구현 완료 (커밋 ed93d8e ~ 068644e + Task 8 docs) — Phase 3 별도 spec 으로 분리 예정. Phase 2 backlog: 아래 § "Phase 2 후속 backlog" 참조
 - 전제: Phase 1 구현 완료 ([_docs/20260425170650_stock-cockpit-design.md](20260425170650_stock-cockpit-design.md), 커밋 `c5a5a87 ~ 7a15c40`)
 - 범위: Cockpit 페이지 § 2-B / § 3 / § 5 추가 + Phase 1 backlog CKPT-1/2/3 통합 + JS 파일 분리
 
@@ -223,3 +223,65 @@ Phase 2 완료 후:
 - Phase 3 spec 분리 (§ 7 등장 테마 카드 + Hero sticky + 모바일 반응형)
 - CKPT-4/5 (pre-existing test 깨짐) — Phase 와 무관, 별도 cleanup 시점에
 - 섹터 평균 PER/PBR 인프라 검토 — yfinance 배치 캐시 가치 평가 (Phase 2 § 3 가 채택한 B 안의 보완재로)
+
+## Phase 2 후속 Backlog (구현 후 발견)
+
+Phase 2 구현 중 코드 리뷰에서 발견된 후속 patch 항목들. Phase 3 시작 전 또는 별도 cleanup 시점 처리.
+
+### CKPT-P2-1: § 1 + § 2-A overlay 헬퍼 추출
+
+**현황:** Task 2 에서 `chart-overlay` 패턴을 § 1 + § 2-A 두 IIFE 에 도입. 같은 ~12줄 setup + showOverlay/hideOverlay 함수가 중복.
+
+**Patch 방안:** `window.__cockpit.attachOverlay(container) -> {showOverlay, hideOverlay}` 헬퍼로 추출. IIFE-0 (Hero) 본문 끝에 정의. § 1/§ 2-A IIFE 가 호출만.
+
+**대상:** `api/static/js/stock_cockpit.js`
+
+### CKPT-P2-2: stockCache + proposalsCache 동시성 race 통일 처리
+
+**현황:** Task 3 의 `stockCache`/`fetchStock()` 와 Task 4 ($1) 의 `proposalsCache` 는 동일 race 패턴 (concurrent first-call 시 중복 fetch 가능). 영향 작음 (사용자 클릭 빈도 낮음).
+
+**Patch 방안:** `fetchStock` 패턴에 in-flight promise sentinel 추가:
+```js
+var stockFetch = null;
+function fetchStock() {
+  if (stockCache) return Promise.resolve(stockCache);
+  if (stockFetch) return stockFetch;
+  stockFetch = fetch(...).then(...).finally(() => { stockFetch = null; });
+  return stockFetch;
+}
+```
+같은 패턴을 `proposalsCache` (§ 1 IIFE) 에도 적용.
+
+**대상:** `api/static/js/stock_cockpit.js`
+
+### CKPT-P2-3: factor_engine SQL CTE 헬퍼 분리
+
+**현황:** Task 4 의 `compute_sector_pctiles` 와 기존 `_compute_group_factors` 가 `ranked` → `univ` → `factors` CTE 3개를 거의 동일하게 사용. JOIN 구조 차이 때문에 완전 공유는 어려움.
+
+**Patch 방안:** `_factor_cte_sql(extra_join: str = '', extra_where: str = '') -> str` 빌더로 CTE 부분만 추출. 두 함수가 builder 호출.
+
+**대상:** `analyzer/factor_engine.py`
+
+### CKPT-P2-4: § 5 squeeze gauge 색상 — `#eab308` → `var(--orange)`
+
+**현황:** Task 7 의 `sqMap.mid.color` 가 하드코딩 `#eab308`. 프로젝트 팔레트는 `var(--orange) = #fbbf24` 정의됨.
+
+**Patch 방안:** `'#eab308'` → `'var(--orange)'` 치환. 단 inline style 에서 CSS var 작동 확인 필요.
+
+**대상:** `api/static/js/stock_cockpit.js`
+
+### CKPT-P2-5: § 1 차트 IIFE — `container.style.position = 'relative'` 위치 정리
+
+**현황:** Task 2 에서 plan 은 `container.innerHTML = ''` 직후를 명시했으나 구현은 `createChart()` 다음 줄. 동작 동일, 가독성만.
+
+**Patch 방안:** position 설정 라인을 `container.innerHTML = ''` 직후로 이동.
+
+**대상:** `api/static/js/stock_cockpit.js`
+
+### CKPT-P2-6: § 6 timeline IIFE 의 `esc()` → `c.escHtml` 통일
+
+**현황:** Phase 1 Task 6 fix 시 `escHtml` 을 `window.__cockpit` export 에 추가했으나 § 6 timeline IIFE 는 여전히 local `esc()` 함수 정의 사용. 기능 동일, 중복.
+
+**Patch 방안:** local `esc()` 정의 제거하고 호출부를 `c.escHtml(...)` 로 변경.
+
+**대상:** `api/static/js/stock_cockpit.js`
