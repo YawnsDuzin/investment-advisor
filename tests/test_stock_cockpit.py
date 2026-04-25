@@ -411,6 +411,23 @@ class TestStockCockpitPage:
         assert "factor-radar" in body
         assert "type: 'radar'" in body or 'type: "radar"' in body
 
+    def test_cockpit_page_includes_krx_section(self, patched_base_ctx_conn):
+        client = _make_client()
+        resp = client.get("/pages/stocks/TXN?market=NASDAQ")
+        body = resp.text
+        # § 5 자리 마크업 (외국주 페이지여도 마크업은 존재 — JS가 hide)
+        assert 'id="sec-krx"' in body
+        assert 'id="krx-foreign-donut"' in body
+
+    def test_external_js_has_krx_iife(self):
+        client = _make_client()
+        resp = client.get("/static/js/stock_cockpit.js")
+        body = resp.text
+        assert "// ── § 5 KRX 확장 ──" in body
+        assert "krx-foreign-donut" in body
+        # 외국주 hide 로직
+        assert "KOSPI" in body and "KOSDAQ" in body
+
 
 class TestComputeSectorPctiles:
     """analyzer.factor_engine.compute_sector_pctiles — 섹터 단위 cross-section pctile."""

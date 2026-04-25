@@ -693,3 +693,105 @@
       emptyEl.style.display = 'block';
     });
 })();
+
+// ── § 5 KRX 확장 ──
+(function() {
+  var c = window.__cockpit;
+  if (!c) return;
+
+  var KRX_MARKETS = ['KOSPI', 'KOSDAQ'];
+  var section = document.getElementById('sec-krx');
+  if (!section) return;
+
+  // 한국주가 아니면 섹션 통째 hide
+  if (KRX_MARKETS.indexOf((c.market || '').toUpperCase()) < 0) {
+    section.style.display = 'none';
+    return;
+  }
+  section.style.display = 'block';
+
+  var contentEl = document.getElementById('krx-content');
+  var emptyEl = document.getElementById('krx-empty');
+
+  var qs = c.market ? ('?market=' + encodeURIComponent(c.market)) : '';
+  fetch('/api/stocks/' + encodeURIComponent(c.ticker) + '/overview' + qs)
+    .then(function(r) { return r.ok ? r.json() : Promise.reject(); })
+    .then(function(d) {
+      var krx = d.krx_extended;
+      if (!krx) {
+        contentEl.style.display = 'none';
+        emptyEl.style.display = 'block';
+        return;
+      }
+
+      // 외국인 보유 도넛
+      var fp = krx.foreign_ownership_pct;
+      if (fp != null && typeof Chart !== 'undefined') {
+        var canvas = document.getElementById('krx-foreign-donut');
+        new Chart(canvas, {
+          type: 'doughnut',
+          data: {
+            labels: ['외국인', '내국인'],
+            datasets: [{
+              data: [fp, Math.max(0, 100 - fp)],
+              backgroundColor: ['#4ea3ff', 'rgba(255,255,255,0.08)'],
+              borderWidth: 0,
+            }],
+          },
+          options: {
+            responsive: true,
+            cutout: '70%',
+            plugins: { legend: { display: false }, tooltip: { enabled: false } },
+          },
+        });
+        document.getElementById('krx-foreign-pct').textContent = c.fmtNum(fp) + '%';
+      } else {
+        document.getElementById('krx-foreign-pct').textContent = '-';
+      }
+
+      // 외국인 순매수 신호
+      var sigEl = document.getElementById('krx-foreign-signal');
+      var sig = krx.foreign_net_buy_signal;
+      var sigMap = {
+        'positive': { text: '▲ 순매수 우세', color: 'var(--green)' },
+        'neutral': { text: '◆ 중립', color: 'var(--text-muted)' },
+        'negative': { text: '▼ 순매도 우세', color: 'var(--red)' },
+      };
+      var sigInfo = sigMap[sig] || { text: '-', color: 'var(--text-muted)' };
+      sigEl.textContent = sigInfo.text;
+      sigEl.style.color = sigInfo.color;
+
+      // 숏스퀴즈 게이지
+      var sq = krx.squeeze_risk;
+      var sqMap = {
+        'low':  { width: 25, color: 'var(--green)',  label: '낮음' },
+        'mid':  { width: 60, color: '#eab308',       label: '중간' },
+        'high': { width: 90, color: 'var(--red)',    label: '높음' },
+      };
+      var sqInfo = sqMap[sq] || { width: 0, color: 'var(--text-muted)', label: '-' };
+      var fillEl = document.getElementById('krx-squeeze-fill');
+      fillEl.style.width = sqInfo.width + '%';
+      fillEl.style.background = sqInfo.color;
+      document.getElementById('krx-squeeze-label').textContent = sqInfo.label;
+
+      // 지수 편입 배지
+      var idxEl = document.getElementById('krx-index-membership');
+      var indices = krx.index_membership || [];
+      if (indices.length === 0) {
+        idxEl.innerHTML = '<span style="color:var(--text-muted);font-size:13px;">미편입</span>';
+      } else {
+        indices.forEach(function(idx) {
+          var span = document.createElement('span');
+          span.textContent = idx;
+          span.style.cssText = 'display:inline-block;padding:3px 8px;background:rgba(78,163,255,0.15);' +
+                               'border:1px solid rgba(78,163,255,0.4);border-radius:4px;font-size:12px;color:var(--accent);';
+          idxEl.appendChild(span);
+        });
+      }
+    })
+    .catch(function() {
+      contentEl.style.display = 'none';
+      emptyEl.textContent = 'KRX 확장 데이터 조회 실패';
+      emptyEl.style.display = 'block';
+    });
+})();

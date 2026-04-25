@@ -157,6 +157,44 @@
     </div>
   </section>
 
+  {# ─────────────── § 5. KRX 확장 (한국주만) ─────────────── #}
+  <section class="cockpit-section" id="sec-krx" style="display:none;">
+    <div class="cockpit-section-head"><h3>KRX 확장 (외국인·공매도·지수)</h3></div>
+    <div id="krx-content" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;">
+      <div class="fund-card">
+        <h4 class="fund-card-title">외국인 보유</h4>
+        <div style="position:relative;height:160px;">
+          <canvas id="krx-foreign-donut"></canvas>
+          <div id="krx-foreign-pct" style="position:absolute;top:50%;left:50%;
+               transform:translate(-50%,-50%);font-size:18px;font-weight:700;"></div>
+        </div>
+      </div>
+      <div class="fund-card">
+        <h4 class="fund-card-title">외국인 순매수 신호</h4>
+        <div id="krx-foreign-signal" style="text-align:center;padding:32px 0;font-size:18px;font-weight:700;"></div>
+      </div>
+      <div class="fund-card">
+        <h4 class="fund-card-title">숏스퀴즈 위험</h4>
+        <div style="padding:14px 0;">
+          <div id="krx-squeeze-bar" style="height:14px;background:var(--bg);
+               border:1px solid var(--border);border-radius:7px;overflow:hidden;">
+            <div id="krx-squeeze-fill" style="height:100%;width:0%;background:var(--green);transition:width 0.3s;"></div>
+          </div>
+          <div id="krx-squeeze-label" style="text-align:center;margin-top:8px;font-size:13px;"></div>
+        </div>
+      </div>
+      <div class="fund-card">
+        <h4 class="fund-card-title">지수 편입</h4>
+        <div id="krx-index-membership" style="display:flex;flex-wrap:wrap;gap:6px;padding:10px 0;"></div>
+      </div>
+    </div>
+    <div id="krx-empty" style="display:none;color:var(--text-muted);
+         padding:14px;background:var(--bg-card);border-radius:10px;
+         border:1px solid var(--border);font-size:13px;text-align:center;">
+      추천 데이터 없음 — 한국주 KRX 수급 정보는 추천 발생 후 누적됩니다.
+    </div>
+  </section>
+
   {# ─────────────── § 6. 추천 이력 타임라인 ─────────────── #}
   <section class="cockpit-section" id="sec-timeline">
     <div class="cockpit-section-head"><h3>AI 추천 이력</h3></div>
