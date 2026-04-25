@@ -62,7 +62,7 @@ class TestStockOverviewAPI:
             "proposal_count": 4,
             "avg_post_return_3m_pct": Decimal("12.4"),
             "avg_alpha_vs_benchmark_pct": Decimal("5.1"),
-            "latest_consensus": "BUY",
+            # latest_consensus 는 backend SQL 에서 제거됨 — 핸들러가 setdefault(None) 처리
         }
         factor_row = {
             "factor_snapshot": {
@@ -93,9 +93,9 @@ class TestStockOverviewAPI:
         # AI 점수 산식 검증
         # factor_score = (0.7+0.8+0.85+0.78)/4 = 0.7825
         # hist_score = clamp(12.4/30, 0, 1) ≈ 0.4133
-        # consensus_score = BUY → 0.75
-        # score = 100*(0.5*0.7825 + 0.3*0.4133 + 0.2*0.75) ≈ 66.5 → round → 67
-        assert result["stats"]["ai_score"] == 67
+        # consensus_score = 항상 중립 (0.5) — DB 컬럼 없음, CKPT-P2-8
+        # score = 100*(0.5*0.7825 + 0.3*0.4133 + 0.2*0.5) = 62
+        assert result["stats"]["ai_score"] == 62
         assert result["score_breakdown"]["weights"] == {"factor": 0.5, "hist": 0.3, "consensus": 0.2}
         # Phase 2 — factor_snapshot raw exposure (§ 2-B 가 사용)
         assert result["factor_snapshot"] == factor_row["factor_snapshot"]
@@ -114,7 +114,7 @@ class TestStockOverviewAPI:
         latest_rows = []
         stats_row = {
             "proposal_count": 0, "avg_post_return_3m_pct": None,
-            "avg_alpha_vs_benchmark_pct": None, "latest_consensus": None,
+            "avg_alpha_vs_benchmark_pct": None,
         }
         factor_row = {}
         krx_row = None

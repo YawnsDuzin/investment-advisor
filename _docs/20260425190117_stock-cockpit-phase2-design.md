@@ -284,6 +284,17 @@ function fetchStock() {
 
 **대상:** `api/static/js/stock_cockpit.js`
 
+### CKPT-P2-8 (✅ 핫픽스 완료): AI 종합 점수의 consensus 컴포넌트 — backend SQL bug
+
+**해결됨 (커밋 e937f18):** Phase 1 spec 이 `investment_proposals.analyst_recommendation` 컬럼을 가정했으나 실제 schema 에 존재하지 않음 (yfinance `.info` 의 frontend-only 데이터). production 라즈베리파이에서 `psycopg2.errors.UndefinedColumn` 으로 `/overview` 가 500 반환. mock 테스트가 dict fixture 라 검증 못 함 (Phase 1+2 final review 둘 다 누락).
+
+**핫픽스:** `get_stock_overview` 의 sub-select 제거 → `latest_consensus = None` 강제. `_compute_ai_score` 가 중립 0.5 사용. AI 점수 = `0.5*factor + 0.3*hist + 0.1` 형태 (consensus 신호 임시 상실).
+
+**후속 개선 옵션 (CKPT-P2-9):**
+- (A) frontend 에서 `/fundamentals` 응답의 `analyst.recommendation` 으로 ai_score 재계산 (overview 응답에 `consensus_pending: true` 표시)
+- (B) `stock_universe` 또는 신규 캐시 테이블에 `analyst_recommendation` 컬럼 추가 + 주기적 yfinance batch
+- (A) 가 가벼움 (DB 인프라 변경 0)
+
 ### CKPT-P2-6: § 6 timeline IIFE 의 `esc()` → `c.escHtml` 통일
 
 **현황:** Phase 1 Task 6 fix 시 `escHtml` 을 `window.__cockpit` export 에 추가했으나 § 6 timeline IIFE 는 여전히 local `esc()` 함수 정의 사용. 기능 동일, 중복.

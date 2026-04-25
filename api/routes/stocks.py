@@ -269,22 +269,20 @@ def get_stock_overview(
             latest_rows = cur.fetchall()
 
             # 3) 추천 통계 — 같은 ticker 모든 proposals 집계
+            # 주의: AI 종합 점수의 consensus 컴포넌트는 현재 yfinance .info 에만 존재 (DB 컬럼 없음).
+            # backend 에서는 항상 중립 (None) 으로 처리 → _compute_ai_score 가 0.5 사용.
+            # 후속 backlog: CKPT-P2-8 (frontend 에서 /fundamentals 응답으로 enrichment).
             cur.execute("""
                 SELECT
                     COUNT(*) AS proposal_count,
                     AVG(post_return_3m_pct) AS avg_post_return_3m_pct,
-                    AVG(alpha_vs_benchmark_pct) AS avg_alpha_vs_benchmark_pct,
-                    (
-                        SELECT analyst_recommendation
-                        FROM investment_proposals
-                        WHERE UPPER(ticker) = %s
-                          AND analyst_recommendation IS NOT NULL
-                        ORDER BY created_at DESC LIMIT 1
-                    ) AS latest_consensus
+                    AVG(alpha_vs_benchmark_pct) AS avg_alpha_vs_benchmark_pct
                 FROM investment_proposals
                 WHERE UPPER(ticker) = %s
-            """, (tk, tk))
+            """, (tk,))
             stats = cur.fetchone() or {}
+            # consensus 키는 명시적 None — 산식 안전
+            stats.setdefault("latest_consensus", None)
 
             # 4) 최신 factor_snapshot — 가장 최근 추천에서
             cur.execute("""
