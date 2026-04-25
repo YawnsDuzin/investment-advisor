@@ -1,7 +1,9 @@
 """종목 기초정보 조회 API + 종목 페이지"""
 from fastapi import APIRouter, Depends, HTTPException, Query
+from psycopg2 import ProgrammingError as _Psycopg2ProgrammingError
 from psycopg2.extras import RealDictCursor
 
+from analyzer.factor_engine import compute_sector_pctiles
 from analyzer.stock_data import fetch_fundamentals
 from api.auth.dependencies import get_current_user_required
 from api.auth.models import UserInDB
@@ -293,6 +295,23 @@ def get_stock_overview(
                 ORDER BY created_at DESC LIMIT 1
             """, (tk,))
             factor_row = cur.fetchone() or {}
+
+            # 5) KRX 확장 (한국주만 채워짐, 외국주는 모든 컬럼 NULL → 응답 None)
+            cur.execute("""
+                SELECT
+                    foreign_ownership_pct, foreign_net_buy_signal,
+                    squeeze_risk, index_membership
+                FROM investment_proposals
+                WHERE UPPER(ticker) = %s
+                  AND (
+                      foreign_ownership_pct IS NOT NULL OR
+                      foreign_net_buy_signal IS NOT NULL OR
+                      squeeze_risk IS NOT NULL OR
+                      index_membership IS NOT NULL
+                  )
+                ORDER BY created_at DESC LIMIT 1
+            """, (tk,))
+            krx_row = cur.fetchone()
     finally:
         conn.close()
 
@@ -350,7 +369,44 @@ def get_stock_overview(
             "consensus_score": score["consensus_score"],
             "weights": dict(_AI_SCORE_WEIGHTS),
         },
+        # Phase 2 — factor_snapshot raw (§ 2-B 사용)
+        "factor_snapshot": factor_row.get("factor_snapshot") if factor_row else None,
+        # Phase 2 — krx_extended (§ 5 사용)
+        "krx_extended": (
+            {
+                "foreign_ownership_pct": (
+                    float(krx_row["foreign_ownership_pct"])
+                    if krx_row.get("foreign_ownership_pct") is not None else None
+                ),
+                "foreign_net_buy_signal": krx_row.get("foreign_net_buy_signal"),
+                "squeeze_risk": krx_row.get("squeeze_risk"),
+                "index_membership": (
+                    list(krx_row["index_membership"])
+                    if krx_row.get("index_membership") else None
+                ),
+            }
+            if krx_row else None
+        ),
     }
+
+
+# ──────────────────────────────────────────────
+# Stock Cockpit — 섹터 팩터 분위 API
+# ──────────────────────────────────────────────
+@router.get("/{ticker}/sector-stats")
+def get_stock_sector_stats(
+    ticker: str,
+    market: str = Query(default="", description="시장 코드"),
+):
+    """섹터 내 6축 팩터 분위 — § 3 섹터 컨텍스트."""
+    cfg = AppConfig()
+    result = compute_sector_pctiles(cfg.db, ticker, market)
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"종목 '{ticker}' 의 섹터 정보가 없습니다",
+        )
+    return result
 
 
 # ──────────────────────────────────────────────
@@ -454,8 +510,24 @@ def stock_fundamentals_page(
     ctx: dict = Depends(make_page_ctx("proposals")),
 ):
     """Stock Cockpit — 종합 종목 페이지 (in-place 교체)."""
+    # § 3 시장 레짐 — 최신 분석 세션의 market_regime JSONB
+    regime = None
+    conn = ctx.get("_conn")
+    if conn is not None:
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(
+                    "SELECT market_regime FROM analysis_sessions "
+                    "ORDER BY analysis_date DESC LIMIT 1"
+                )
+                row = cur.fetchone()
+                if row:
+                    regime = row.get("market_regime")
+        except _Psycopg2ProgrammingError:
+            regime = None  # 마이그레이션 v31 이전 — market_regime 컬럼 없음
     return templates.TemplateResponse(request=ctx["request"], name="stock_cockpit.html", context={
         **ctx,
         "ticker": ticker.upper(),
         "market": market.upper(),
+        "regime": regime,
     })

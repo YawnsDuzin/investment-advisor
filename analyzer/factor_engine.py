@@ -28,6 +28,8 @@ from datetime import datetime
 from typing import Iterable
 from zoneinfo import ZoneInfo
 
+from psycopg2.extras import RealDictCursor
+
 from shared.config import DatabaseConfig
 from shared.db import get_connection
 from shared.logger import get_logger
@@ -254,6 +256,170 @@ def _compute_group_factors(
         }
 
     return {"universe_size": universe_size, "per_ticker": per_ticker}
+
+
+def compute_sector_pctiles(
+    db_cfg: DatabaseConfig,
+    ticker: str,
+    market: str,
+    *,
+    window_days: int = 300,
+    min_sector_size: int = 5,
+) -> dict | None:
+    """단일 종목에 대한 섹터 내 6축 팩터 분위 계산.
+
+    같은 sector_norm + 같은 시장 그룹(KRX/US) 안에서 cross-section PERCENT_RANK.
+    섹터 표본이 min_sector_size 미만이면 pctile NULL (원시값은 채움).
+
+    Returns:
+        {
+            "ticker": str, "sector": str | None, "sector_size": int,
+            "ranks": {
+                "r1m": {"value_pct": float|None, "sector_pctile": float|None, "sector_top_pct": int|None},
+                "r3m": {...}, "r6m": {...}, "r12m": {...},
+                "low_vol": {"value_pct": float|None, "sector_pctile": ..., "sector_top_pct": ...},
+                "volume": {"value_ratio": float|None, "sector_pctile": ..., "sector_top_pct": ...},
+            },
+            "computed_at": ISO datetime str,
+        }
+        or None if ticker 가 stock_universe 에 없거나 sector_norm NULL.
+    """
+    tk = ticker.strip().upper()
+    mk = (market or "").strip().upper()
+    grp = _market_group(mk)
+    if not grp:
+        return None
+    members = _MARKET_GROUPS[grp]
+    sector = None  # 로그에서 NameError 회피
+
+    conn = get_connection(db_cfg)
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # 1) 종목의 sector_norm 조회
+            cur.execute(
+                "SELECT sector_norm AS sector FROM stock_universe "
+                "WHERE UPPER(ticker) = %s AND UPPER(market) = %s "
+                "  AND sector_norm IS NOT NULL LIMIT 1",
+                (tk, mk),
+            )
+            sector_row = cur.fetchone()
+            if not sector_row or not sector_row.get("sector"):
+                return None
+            sector = sector_row["sector"]
+
+            # 2) 섹터 cross-section
+            sql = f"""
+            WITH ranked AS (
+                SELECT o.ticker, UPPER(o.market) AS market, o.trade_date, o.close,
+                       o.volume, o.change_pct,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY o.ticker, UPPER(o.market)
+                           ORDER BY o.trade_date DESC
+                       ) AS rn
+                FROM stock_universe_ohlcv o
+                JOIN stock_universe u
+                  ON UPPER(u.ticker) = UPPER(o.ticker)
+                 AND UPPER(u.market) = UPPER(o.market)
+                WHERE o.trade_date >= CURRENT_DATE - (%s::int)
+                  AND UPPER(o.market) = ANY(%s)
+                  AND u.sector_norm = %s
+                  AND u.listed = TRUE
+            ),
+            univ AS (
+                SELECT ticker, market,
+                       MAX(CASE WHEN rn = 1 THEN close END) AS close_latest,
+                       MAX(CASE WHEN rn = {_PERIOD_OFFSETS['r1m']} THEN close END) AS close_1m,
+                       MAX(CASE WHEN rn = {_PERIOD_OFFSETS['r3m']} THEN close END) AS close_3m,
+                       MAX(CASE WHEN rn = {_PERIOD_OFFSETS['r6m']} THEN close END) AS close_6m,
+                       MAX(CASE WHEN rn = {_PERIOD_OFFSETS['r12m']} THEN close END) AS close_12m,
+                       STDDEV(LEAST(GREATEST(change_pct, -50), 50))
+                           FILTER (WHERE rn <= 60) AS vol60,
+                       AVG(volume) FILTER (WHERE rn <= 20) AS vol_avg_20,
+                       AVG(volume) FILTER (WHERE rn <= 60) AS vol_avg_60
+                FROM ranked
+                GROUP BY ticker, market
+            ),
+            factors AS (
+                SELECT ticker, market,
+                       CASE WHEN close_1m  IS NOT NULL AND close_1m  > 0 THEN (close_latest - close_1m)  / close_1m  * 100 END AS r1m,
+                       CASE WHEN close_3m  IS NOT NULL AND close_3m  > 0 THEN (close_latest - close_3m)  / close_3m  * 100 END AS r3m,
+                       CASE WHEN close_6m  IS NOT NULL AND close_6m  > 0 THEN (close_latest - close_6m)  / close_6m  * 100 END AS r6m,
+                       CASE WHEN close_12m IS NOT NULL AND close_12m > 0 THEN (close_latest - close_12m) / close_12m * 100 END AS r12m,
+                       vol60,
+                       CASE WHEN vol_avg_60 IS NOT NULL AND vol_avg_60 > 0
+                            THEN vol_avg_20 / vol_avg_60 END AS volume_ratio
+                FROM univ
+                WHERE close_latest IS NOT NULL
+            ),
+            ranked_pctile AS (
+                SELECT f.*,
+                       PERCENT_RANK() OVER (ORDER BY r1m  NULLS FIRST) AS r1m_pctile,
+                       PERCENT_RANK() OVER (ORDER BY r3m  NULLS FIRST) AS r3m_pctile,
+                       PERCENT_RANK() OVER (ORDER BY r6m  NULLS FIRST) AS r6m_pctile,
+                       PERCENT_RANK() OVER (ORDER BY r12m NULLS FIRST) AS r12m_pctile,
+                       1 - PERCENT_RANK() OVER (ORDER BY vol60 DESC NULLS LAST) AS low_vol_pctile,
+                       PERCENT_RANK() OVER (ORDER BY volume_ratio NULLS FIRST) AS volume_pctile,
+                       COUNT(*) OVER () AS sector_size
+                FROM factors f
+            )
+            SELECT ticker, market, r1m, r3m, r6m, r12m, vol60, volume_ratio,
+                   r1m_pctile, r3m_pctile, r6m_pctile, r12m_pctile,
+                   low_vol_pctile, volume_pctile, sector_size
+            FROM ranked_pctile
+            WHERE UPPER(ticker) = %s AND UPPER(market) = %s
+            """
+            cur.execute(sql, (int(window_days), list(members), sector, tk, mk))
+            rows = cur.fetchall()
+    except Exception as e:
+        _log.warning(f"[factor] sector_pctile {tk}/{mk}/{sector} 실패: {e}")
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        return None
+    finally:
+        conn.close()
+
+    if not rows:
+        return {
+            "ticker": tk, "sector": sector, "sector_size": 0,
+            "ranks": {k: {"value_pct": None, "value_ratio": None,
+                          "sector_pctile": None, "sector_top_pct": None}
+                      for k in ("r1m", "r3m", "r6m", "r12m", "low_vol", "volume")},
+            "computed_at": datetime.now(_KST).isoformat(timespec="seconds"),
+        }
+
+    r = rows[0]
+
+    def _g(k):
+        return r[k]
+
+    sector_size = int(_g("sector_size") or 0)
+    sufficient = sector_size >= min_sector_size
+
+    def _pctile_pkg(value_key, value_label, pctile_key):
+        v = _g(value_key)
+        p = _g(pctile_key) if sufficient else None
+        return {
+            value_label: float(v) if v is not None else None,
+            "sector_pctile": float(p) if p is not None else None,
+            "sector_top_pct": int(round((1 - float(p)) * 100)) if p is not None else None,
+        }
+
+    return {
+        "ticker": tk,
+        "sector": sector,
+        "sector_size": sector_size,
+        "ranks": {
+            "r1m":     _pctile_pkg("r1m", "value_pct", "r1m_pctile"),
+            "r3m":     _pctile_pkg("r3m", "value_pct", "r3m_pctile"),
+            "r6m":     _pctile_pkg("r6m", "value_pct", "r6m_pctile"),
+            "r12m":    _pctile_pkg("r12m", "value_pct", "r12m_pctile"),
+            "low_vol": _pctile_pkg("vol60", "value_pct", "low_vol_pctile"),
+            "volume":  _pctile_pkg("volume_ratio", "value_ratio", "volume_pctile"),
+        },
+        "computed_at": datetime.now(_KST).isoformat(timespec="seconds"),
+    }
 
 
 def _pctile_top_pct(pctile: float | None) -> str:

@@ -11,6 +11,12 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 
+def _fake_db_cfg():
+    """factor_engine 등 외부 모듈에 넘길 가짜 DatabaseConfig — 어차피 get_connection 이 patch 됨."""
+    from shared.config import DatabaseConfig
+    return DatabaseConfig()
+
+
 def _fake_conn(fetch_sequence):
     """fetchone/fetchall 호출 순서대로 값 반환하는 가짜 커넥션."""
     cur = MagicMock()
@@ -61,10 +67,17 @@ class TestStockOverviewAPI:
         factor_row = {
             "factor_snapshot": {
                 "r1m_pctile": 0.7, "r3m_pctile": 0.8, "r6m_pctile": 0.85, "r12m_pctile": 0.78,
+                "low_vol_pctile": 0.55, "volume_pctile": 0.88,
             },
         }
+        krx_row = {
+            "foreign_ownership_pct": 18.5,
+            "foreign_net_buy_signal": "positive",
+            "squeeze_risk": "low",
+            "index_membership": ["KOSPI200", "KRX300"],
+        }
 
-        conn = _fake_conn([meta_row, latest_rows, stats_row, factor_row])
+        conn = _fake_conn([meta_row, latest_rows, stats_row, factor_row, krx_row])
 
         with patch("api.routes.stocks.get_connection", return_value=conn):
             result = get_stock_overview(ticker="TXN", market="NASDAQ")
@@ -84,6 +97,13 @@ class TestStockOverviewAPI:
         # score = 100*(0.5*0.7825 + 0.3*0.4133 + 0.2*0.75) ≈ 66.5 → round → 67
         assert result["stats"]["ai_score"] == 67
         assert result["score_breakdown"]["weights"] == {"factor": 0.5, "hist": 0.3, "consensus": 0.2}
+        # Phase 2 — factor_snapshot raw exposure (§ 2-B 가 사용)
+        assert result["factor_snapshot"] == factor_row["factor_snapshot"]
+        # Phase 2 — krx_extended (§ 5 가 사용)
+        assert result["krx_extended"]["foreign_ownership_pct"] == 18.5
+        assert result["krx_extended"]["foreign_net_buy_signal"] == "positive"
+        assert result["krx_extended"]["squeeze_risk"] == "low"
+        assert result["krx_extended"]["index_membership"] == ["KOSPI200", "KRX300"]
 
     def test_overview_zero_proposals_uses_neutral_score(self):
         from api.routes.stocks import get_stock_overview
@@ -97,8 +117,9 @@ class TestStockOverviewAPI:
             "avg_alpha_vs_benchmark_pct": None, "latest_consensus": None,
         }
         factor_row = {}
+        krx_row = None
 
-        conn = _fake_conn([meta_row, latest_rows, stats_row, factor_row])
+        conn = _fake_conn([meta_row, latest_rows, stats_row, factor_row, krx_row])
 
         with patch("api.routes.stocks.get_connection", return_value=conn):
             result = get_stock_overview(ticker="FOO", market="NASDAQ")
@@ -108,6 +129,8 @@ class TestStockOverviewAPI:
         assert result["latest"] is None
         assert result["stats"]["proposal_count"] == 0
         assert result["stats"]["avg_post_return_3m_pct"] is None
+        assert result["factor_snapshot"] is None
+        assert result["krx_extended"] is None
 
 
 class TestComputeAiScore:
@@ -231,7 +254,7 @@ class TestStockProposalsAPI:
 
 def _patch_fake_conn_for_base_ctx():
     cur = MagicMock()
-    cur.fetchone.return_value = [0]
+    cur.fetchone.return_value = {"market_regime": None}  # market_regime 쿼리용 dict
 
     @contextmanager
     def _cursor(**kwargs):
@@ -266,11 +289,10 @@ class TestStockCockpitPage:
         body = resp.text
         # 새 템플릿이 렌더됐다는 시그니처
         assert "stock-cockpit" in body
-        # API 엔드포인트 경로 (JS 가 호출하는 것들)
-        assert "/api/stocks/" in body and "/overview" in body
-        assert "/api/stocks/" in body and "/proposals" in body
-        # 펀더멘털 8카드는 흡수됨 (기존 호환)
+        # 펀더멘털 8카드는 흡수됨 (기존 호환) — DOM 구조 확인
         assert "valuation-metrics" in body
+        # 외부 JS 파일 참조 확인 (Phase 2 Task 1 이후)
+        assert "stock_cockpit.js" in body
 
     def test_cockpit_page_loads_chart_library(self, patched_base_ctx_conn):
         client = _make_client()
@@ -278,34 +300,230 @@ class TestStockCockpitPage:
         body = resp.text
         # lightweight-charts CDN 로드 확인
         assert "lightweight-charts" in body
-        # 차트 컨테이너
+        # 차트 컨테이너 — DOM 구조 확인
         assert 'id="price-chart"' in body
-        # OHLCV API 경로
-        assert "/api/stocks/" in body and "/ohlcv" in body
 
     def test_cockpit_page_includes_benchmark_section(self, patched_base_ctx_conn):
         client = _make_client()
         resp = client.get("/pages/stocks/TXN?market=NASDAQ")
         body = resp.text
+        # 벤치마크 차트 컨테이너 — DOM 구조 확인
         assert 'id="benchmark-chart"' in body
-        # 벤치마크 API 경로
-        assert "/api/indices/" in body
+        # 토글 버튼 컨테이너 — DOM 구조 확인
+        assert 'id="benchmark-toggle"' in body
 
     def test_cockpit_page_includes_timeline_section(self, patched_base_ctx_conn):
         client = _make_client()
         resp = client.get("/pages/stocks/TXN?market=NASDAQ")
         body = resp.text
         assert 'id="timeline-list"' in body
-        # 타임라인 JS IIFE 시그니처 — renderTimeline 함수가 반드시 존재해야 함
-        assert "renderTimeline" in body
-        # tl-warn 스타일 존재 확인
+        # tl-warn 스타일 존재 확인 (인라인 CSS — 외부 파일 이동 후에도 CSS 는 HTML 에 남아 있음)
         assert "tl-warn" in body
 
     def test_cockpit_page_escapes_user_content(self, patched_base_ctx_conn):
         client = _make_client()
         resp = client.get("/pages/stocks/TXN?market=NASDAQ")
         body = resp.text
-        # esc 헬퍼 함수 존재 — XSS 방어 시그니처
-        assert "function esc(" in body
-        # 핵심 escape 시퀀스
-        assert "&amp;" in body and "&lt;" in body and "&gt;" in body
+        # esc 헬퍼 함수 및 XSS 방어 시그니처는 외부 JS 파일로 이동됨 (Phase 2 Task 1)
+        # 외부 JS 파일이 서빙되는지 확인 — test_external_js_file_served 에서 상세 검증
+        assert "stock_cockpit.js" in body
+
+    def test_cockpit_page_uses_external_js(self, patched_base_ctx_conn):
+        client = _make_client()
+        resp = client.get("/pages/stocks/TXN?market=NASDAQ")
+        body = resp.text
+        # external JS 파일 참조
+        assert '/static/js/stock_cockpit.js' in body
+        # 인라인 IIFE 시그니처가 페이지 HTML 에서 제거됨
+        # (Hero 의 fetch '/overview' 호출이 인라인 코드에 없어야 함 — 외부 파일로 이동)
+        assert "fetch('/api/stocks/' + encodeURIComponent(ticker) + '/overview'" not in body
+
+    def test_external_js_file_served(self):
+        client = _make_client()
+        resp = client.get("/static/js/stock_cockpit.js")
+        assert resp.status_code == 200
+        body = resp.text
+        # Phase 1 의 4 개 IIFE 시그니처 모두 외부 파일에 존재
+        assert "window.__cockpit" in body
+        assert "function _compute" not in body  # 백엔드 함수가 아닌지 확인
+        assert "// ── § 1 가격 차트 ──" in body
+        assert "// ── § 2-A 벤치마크 상대성과 ──" in body
+        assert "// ── § 6 추천 이력 타임라인 ──" in body
+
+        # Assertions migrated from Phase 1 tests that previously checked HTML body
+        # (now relocated since JS lives in external file)
+        assert "/overview" in body          # § Hero / § 2-B / § 5 fetch
+        assert "/proposals" in body          # § 1 markers / § 6 timeline fetch
+        assert "/ohlcv" in body              # § 1 chart + § 2-A stock data
+        assert "/api/indices/" in body       # § 2-A benchmark data
+        assert "function escHtml" in body    # XSS guard helper (Phase 1 Task 6)
+        assert "&amp;" in body and "&lt;" in body and "&gt;" in body  # escape literals
+        assert "renderTimeline" in body or "timeline-card" in body  # § 6 marker
+
+    def test_chart_uses_overlay_pattern(self):
+        client = _make_client()
+        resp = client.get("/static/js/stock_cockpit.js")
+        body = resp.text
+        # overlay 패턴 시그니처 — innerHTML 에러 출력 제거
+        assert "container.innerHTML = '<div class=\"chart-placeholder\">차트 데이터 조회 실패</div>'" not in body
+        assert "container.innerHTML = '<div class=\"chart-placeholder\">벤치마크 데이터 조회 실패</div>'" not in body
+        # 새 overlay 시그니처 — class="chart-overlay"
+        assert "chart-overlay" in body
+
+    def test_benchmark_iife_uses_cache_and_alignment(self):
+        client = _make_client()
+        resp = client.get("/static/js/stock_cockpit.js")
+        body = resp.text
+        # § 2-A 의 stockCache 시그니처
+        assert "stockCache" in body
+        # 양쪽 모두 존재하는 첫 거래일 정렬 시그니처
+        assert "commonAlignedStart" in body or "alignFirstCommonDate" in body
+
+    def test_cockpit_page_includes_regime_banner(self, patched_base_ctx_conn):
+        client = _make_client()
+        resp = client.get("/pages/stocks/TXN?market=NASDAQ")
+        body = resp.text
+        # § 3 시장 레짐 자리 마크업 (regime context 가 None 이라도 _regime_banner 가 자체 가드)
+        assert 'id="sec-regime"' in body
+        # 섹터 분위 표 자리
+        assert 'id="sector-stats-table"' in body
+
+    def test_external_js_has_sector_stats_iife(self):
+        client = _make_client()
+        resp = client.get("/static/js/stock_cockpit.js")
+        body = resp.text
+        assert "// ── § 3 섹터 팩터 분위 ──" in body
+        assert "/sector-stats" in body
+        assert "sector-stats-table" in body
+
+    def test_cockpit_page_loads_chartjs(self, patched_base_ctx_conn):
+        client = _make_client()
+        resp = client.get("/pages/stocks/TXN?market=NASDAQ")
+        body = resp.text
+        assert "chart.js" in body or "chart.umd.min.js" in body
+        assert 'id="factor-radar"' in body
+
+    def test_external_js_has_factor_radar_iife(self):
+        client = _make_client()
+        resp = client.get("/static/js/stock_cockpit.js")
+        body = resp.text
+        assert "// ── § 2-B 정량 팩터 레이더 ──" in body
+        assert "factor-radar" in body
+        assert "type: 'radar'" in body or 'type: "radar"' in body
+
+    def test_cockpit_page_includes_krx_section(self, patched_base_ctx_conn):
+        client = _make_client()
+        resp = client.get("/pages/stocks/TXN?market=NASDAQ")
+        body = resp.text
+        # § 5 자리 마크업 (외국주 페이지여도 마크업은 존재 — JS가 hide)
+        assert 'id="sec-krx"' in body
+        assert 'id="krx-foreign-donut"' in body
+
+    def test_external_js_has_krx_iife(self):
+        client = _make_client()
+        resp = client.get("/static/js/stock_cockpit.js")
+        body = resp.text
+        assert "// ── § 5 KRX 확장 ──" in body
+        assert "krx-foreign-donut" in body
+        # 외국주 hide 로직
+        assert "KOSPI" in body and "KOSDAQ" in body
+
+
+class TestComputeSectorPctiles:
+    """analyzer.factor_engine.compute_sector_pctiles — 섹터 단위 cross-section pctile."""
+
+    def test_returns_six_axis_pctiles_for_normal_sector(self):
+        from analyzer.factor_engine import compute_sector_pctiles
+
+        # SQL 결과 행 — 시장 그룹 결정에 사용 (1개 row)
+        market_group_row = {"sector": "Technology"}
+        # 섹터 cross-section 결과 — TXN 한 행, sector_size=12
+        sector_row = {
+            "ticker": "TXN", "market": "NASDAQ",
+            "r1m": 8.4, "r3m": 12.4, "r6m": 25.1, "r12m": 48.0,
+            "vol60": 18.5, "volume_ratio": 1.42,
+            "r1m_pctile": 0.78, "r3m_pctile": 0.85, "r6m_pctile": 0.70, "r12m_pctile": 0.92,
+            "low_vol_pctile": 0.55, "volume_pctile": 0.88,
+            "sector_size": 12,
+        }
+
+        conn = _fake_conn([market_group_row, [sector_row]])
+
+        with patch("analyzer.factor_engine.get_connection", return_value=conn):
+            result = compute_sector_pctiles(_fake_db_cfg(), "TXN", "NASDAQ")
+
+        assert result["ticker"] == "TXN"
+        assert result["sector"] == "Technology"
+        assert result["sector_size"] == 12
+        assert result["ranks"]["r3m"]["sector_pctile"] == 0.85
+        assert result["ranks"]["r3m"]["sector_top_pct"] == 15  # round((1-0.85)*100)
+        assert result["ranks"]["r3m"]["value_pct"] == 12.4
+        assert result["ranks"]["volume"]["value_ratio"] == 1.42
+        assert result["ranks"]["low_vol"]["sector_pctile"] == 0.55
+
+    def test_small_sector_returns_null_pctiles(self):
+        from analyzer.factor_engine import compute_sector_pctiles
+
+        market_group_row = {"sector": "ObscureSector"}
+        # sector_size=3 (< 5 임계) — DB 가 pctile 값을 줘도 함수가 suppressed 해야
+        sector_row = {
+            "ticker": "TXN", "market": "NASDAQ",
+            "r1m": 5.0, "r3m": 10.0, "r6m": 20.0, "r12m": 30.0,
+            "vol60": 15.0, "volume_ratio": 1.0,
+            # 실제 DB 가 PERCENT_RANK 결과를 줘도 sector_size<5 이면 함수가 NULL 처리해야
+            "r1m_pctile": 0.5, "r3m_pctile": 0.78, "r6m_pctile": 0.6, "r12m_pctile": 0.4,
+            "low_vol_pctile": 0.5, "volume_pctile": 0.7,
+            "sector_size": 3,
+        }
+        conn = _fake_conn([market_group_row, [sector_row]])
+        with patch("analyzer.factor_engine.get_connection", return_value=conn):
+            result = compute_sector_pctiles(_fake_db_cfg(), "TXN", "NASDAQ")
+
+        assert result["sector_size"] == 3
+        assert result["ranks"]["r3m"]["sector_pctile"] is None
+        assert result["ranks"]["r3m"]["sector_top_pct"] is None
+        # value 는 여전히 채워짐 (raw factor 는 sector size 무관)
+        assert result["ranks"]["r3m"]["value_pct"] == 10.0
+
+    def test_unknown_sector_returns_none(self):
+        from analyzer.factor_engine import compute_sector_pctiles
+
+        # 첫 쿼리 (sector + market_group 결정) 가 빈 결과
+        conn = _fake_conn([None])
+        with patch("analyzer.factor_engine.get_connection", return_value=conn):
+            result = compute_sector_pctiles(_fake_db_cfg(), "UNKNOWN", "NASDAQ")
+        assert result is None
+
+
+class TestStockSectorStatsAPI:
+    """GET /api/stocks/{ticker}/sector-stats"""
+
+    def test_sector_stats_returns_payload(self):
+        from api.routes.stocks import get_stock_sector_stats
+
+        sample = {
+            "ticker": "TXN", "sector": "Technology", "sector_size": 12,
+            "ranks": {
+                "r1m": {"value_pct": 8.4, "sector_pctile": 0.78, "sector_top_pct": 22},
+                "r3m": {"value_pct": 12.4, "sector_pctile": 0.85, "sector_top_pct": 15},
+                "r6m": {"value_pct": 25.1, "sector_pctile": 0.70, "sector_top_pct": 30},
+                "r12m": {"value_pct": 48.0, "sector_pctile": 0.92, "sector_top_pct": 8},
+                "low_vol": {"value_pct": 18.5, "sector_pctile": 0.55, "sector_top_pct": 45},
+                "volume": {"value_ratio": 1.42, "sector_pctile": 0.88, "sector_top_pct": 12},
+            },
+            "computed_at": "2026-04-25T19:00:00+09:00",
+        }
+        with patch("api.routes.stocks.compute_sector_pctiles", return_value=sample):
+            result = get_stock_sector_stats(ticker="TXN", market="NASDAQ")
+        assert result == sample
+
+    def test_sector_stats_404_for_unknown(self):
+        from fastapi import HTTPException
+        from api.routes.stocks import get_stock_sector_stats
+
+        with patch("api.routes.stocks.compute_sector_pctiles", return_value=None):
+            try:
+                get_stock_sector_stats(ticker="UNKNOWN", market="NASDAQ")
+                assert False, "expected HTTPException"
+            except HTTPException as e:
+                assert e.status_code == 404

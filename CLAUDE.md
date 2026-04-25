@@ -34,7 +34,7 @@ investment-advisor/
 │   ├── chat_engine.py   ← Claude SDK 기반 테마 채팅 엔진
 │   ├── education_engine.py ← Claude SDK 기반 투자 교육 AI 튜터 엔진
 │   ├── templates/       ← Jinja2 HTML (다크 테마 + 우측 상단 드롭다운 메뉴) + _macros/(공통 매크로 — common, theme, proposal, admin)
-│   └── static/css/ + static/js/(sse_log_viewer.js 공용 SSE 컨트롤러)
+│   └── static/css/ + static/js/(sse_log_viewer.js 공용 SSE 컨트롤러, stock_cockpit.js Cockpit 페이지 전용)
 ├── deploy/systemd/      ← systemd unit 템플릿 (API + 분석 배치 + universe sync + OHLCV cleanup — 플레이스홀더 치환 방식)
 ├── tools/               ← 운영 도구: refresh_us_universe(S&P500/NDX100 시드 갱신), ohlcv_health_check(OHLCV 무결성 검사)
 └── _docs/               ← 운영 문서 (분석 파이프라인, 라즈베리파이 매뉴얼)
