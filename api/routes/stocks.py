@@ -443,8 +443,8 @@ def stock_fundamentals_page(
     market: str = Query(default="", description="시장 코드"),
     ctx: dict = Depends(make_page_ctx("proposals")),
 ):
-    """종목 기초정보 페이지 — 온디맨드 yfinance 조회"""
-    return templates.TemplateResponse(request=ctx["request"], name="stock_fundamentals.html", context={
+    """Stock Cockpit — 종합 종목 페이지 (in-place 교체)."""
+    return templates.TemplateResponse(request=ctx["request"], name="stock_cockpit.html", context={
         **ctx,
         "ticker": ticker.upper(),
         "market": market.upper(),

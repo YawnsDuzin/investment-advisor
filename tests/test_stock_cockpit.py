@@ -225,3 +225,47 @@ class TestStockProposalsAPI:
 
         assert result["count"] == 0
         assert result["items"] == []
+
+
+def _patch_fake_conn_for_base_ctx():
+    cur = MagicMock()
+    cur.fetchone.return_value = [0]
+
+    @contextmanager
+    def _cursor(**kwargs):
+        yield cur
+
+    conn = MagicMock()
+    conn.cursor = _cursor
+    return conn
+
+
+@pytest.fixture
+def patched_base_ctx_conn(monkeypatch):
+    fake = _patch_fake_conn_for_base_ctx()
+    # api.deps.get_db_conn 이 shared.db.get_connection 을 호출 — 여기를 패치
+    monkeypatch.setattr("shared.db.connection.get_connection", lambda cfg: fake, raising=False)
+    monkeypatch.setattr("api.deps.get_connection", lambda cfg: fake, raising=False)
+    monkeypatch.setattr("shared.db.init_db", lambda cfg: None, raising=False)
+    return fake
+
+
+def _make_client():
+    from fastapi.testclient import TestClient
+    from api.main import app
+    return TestClient(app)
+
+
+class TestStockCockpitPage:
+    def test_cockpit_page_returns_200(self, patched_base_ctx_conn):
+        client = _make_client()
+        resp = client.get("/pages/stocks/TXN?market=NASDAQ")
+        assert resp.status_code == 200
+        body = resp.text
+        # 새 템플릿이 렌더됐다는 시그니처
+        assert "stock-cockpit" in body
+        # API 엔드포인트 경로 (JS 가 호출하는 것들)
+        assert "/api/stocks/" in body and "/overview" in body
+        assert "/api/stocks/" in body and "/proposals" in body
+        # 펀더멘털 8카드는 흡수됨 (기존 호환)
+        assert "valuation-metrics" in body
