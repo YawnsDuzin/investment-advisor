@@ -285,12 +285,13 @@ def get_stock_overview(
             stats.setdefault("latest_consensus", None)
 
             # 4) 최신 factor_snapshot — 가장 최근 추천에서
+            #    investment_proposals 에 created_at 컬럼 없음 → id DESC (SERIAL이라 시간순 동일)
             cur.execute("""
                 SELECT factor_snapshot
                 FROM investment_proposals
                 WHERE UPPER(ticker) = %s
                   AND factor_snapshot IS NOT NULL
-                ORDER BY created_at DESC LIMIT 1
+                ORDER BY id DESC LIMIT 1
             """, (tk,))
             factor_row = cur.fetchone() or {}
 
@@ -307,7 +308,7 @@ def get_stock_overview(
                       squeeze_risk IS NOT NULL OR
                       index_membership IS NOT NULL
                   )
-                ORDER BY created_at DESC LIMIT 1
+                ORDER BY id DESC LIMIT 1
             """, (tk,))
             krx_row = cur.fetchone()
     finally:
@@ -419,9 +420,10 @@ def get_stock_proposals(ticker: str):
     conn = get_connection(cfg.db)
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # 주의: investment_proposals 에 created_at 컬럼 없음 → analysis_sessions.created_at 사용
             cur.execute("""
                 SELECT
-                    p.id, s.analysis_date, p.created_at,
+                    p.id, s.analysis_date, s.created_at AS created_at,
                     t.id AS theme_id, t.theme_name, t.theme_validity,
                     p.action, p.conviction, p.discovery_type,
                     p.rationale, p.entry_price,
