@@ -1,4 +1,6 @@
 """종목 기초정보 조회 API + 종목 페이지"""
+import os
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from psycopg2 import ProgrammingError as _Psycopg2ProgrammingError
 from psycopg2.extras import RealDictCursor
@@ -510,10 +512,29 @@ def stock_fundamentals_page(
     ctx: dict = Depends(make_page_ctx("proposals")),
 ):
     """Stock Cockpit — 종합 종목 페이지 (in-place 교체)."""
-    # § 3 시장 레짐 — 최신 분석 세션의 market_regime JSONB
+    tk = ticker.upper()
+    mk = market.upper()
     regime = None
     conn = ctx.get("_conn")
     if conn is not None:
+        # market 미지정 시 stock_universe 에서 자동 조회 — § 4 yfinance 한국주
+        # .KS/.KQ 변환 + § 5 KRX 섹션 표시 분기에 필수.
+        if not mk:
+            try:
+                with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                    cur.execute(
+                        "SELECT market FROM stock_universe "
+                        "WHERE UPPER(ticker) = %s "
+                        "ORDER BY (CASE WHEN listed THEN 0 ELSE 1 END) LIMIT 1",
+                        (tk,),
+                    )
+                    urow = cur.fetchone()
+                    if urow and urow.get("market"):
+                        mk = urow["market"].upper()
+            except Exception:
+                pass  # universe 조회 실패해도 페이지 렌더는 계속
+
+        # § 3 시장 레짐 — 최신 분석 세션의 market_regime JSONB
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute(
@@ -525,9 +546,18 @@ def stock_fundamentals_page(
                     regime = row.get("market_regime")
         except _Psycopg2ProgrammingError:
             regime = None  # 마이그레이션 v31 이전 — market_regime 컬럼 없음
+
+    # 캐시 버스팅용 stock_cockpit.js mtime
+    js_mtime = 0
+    try:
+        js_mtime = int(os.path.getmtime("api/static/js/stock_cockpit.js"))
+    except OSError:
+        pass
+
     return templates.TemplateResponse(request=ctx["request"], name="stock_cockpit.html", context={
         **ctx,
-        "ticker": ticker.upper(),
-        "market": market.upper(),
+        "ticker": tk,
+        "market": mk,
         "regime": regime,
+        "js_version": js_mtime,
     })
