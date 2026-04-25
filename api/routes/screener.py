@@ -136,6 +136,15 @@ def run_screener(
         where.append("UPPER(u.market) = ANY(%s)")
         params.append([str(m).upper() for m in markets])
 
+    # 검색어 q — 티커/이름/영문이름 LIKE (2자 이상만)
+    q = (spec.get("q") or "").strip()
+    if len(q) >= 2:
+        where.append(
+            "(u.ticker ILIKE %s OR u.asset_name ILIKE %s OR u.asset_name_en ILIKE %s)"
+        )
+        pat = f"%{q}%"
+        params.extend([pat, pat, pat])
+
     # sector_norm
     sectors = spec.get("sectors")
     if sectors:
@@ -150,6 +159,12 @@ def run_screener(
     if mcap.get("max") is not None:
         where.append("u.market_cap_krw <= %s")
         params.append(float(mcap["max"]))
+
+    # 시총 버킷 (large/mid/small/micro)
+    buckets = spec.get("market_cap_buckets")
+    if buckets:
+        where.append("u.market_cap_bucket = ANY(%s)")
+        params.append([str(b) for b in buckets])
 
     # OHLCV 기반 필터 (m.*)
     if spec.get("min_daily_value_krw") is not None:
@@ -198,12 +213,46 @@ def run_screener(
         )
         params.append(float(spec["high_52w_proximity_min"]))
 
+    # 기간별 수익률 범위 (return_ranges: {1m/3m/6m/1y/ytd: {min, max}})
+    return_ranges = spec.get("return_ranges") or {}
+    PERIOD_TO_COL = {"1m": "r1m", "3m": "r3m", "6m": "r6m", "1y": "r1y", "ytd": "ytd"}
+    for period, col in PERIOD_TO_COL.items():
+        rg = return_ranges.get(period) or {}
+        if rg.get("min") is not None:
+            join_ohlcv = True
+            where.append(f"m.{col} IS NOT NULL AND m.{col} >= %s")
+            params.append(float(rg["min"]))
+        if rg.get("max") is not None:
+            join_ohlcv = True
+            where.append(f"m.{col} IS NOT NULL AND m.{col} <= %s")
+            params.append(float(rg["max"]))
+
+    # 60일 최대 낙폭 상한 (사용자 입력은 양수 절대값, SQL에선 음수로 비교)
+    mdd = spec.get("max_drawdown_60d_pct")
+    if mdd is not None:
+        join_ohlcv = True
+        where.append("m.drawdown_60d_pct IS NOT NULL AND m.drawdown_60d_pct >= %s")
+        params.append(-float(mdd))
+
+    # 200일 이동평균 근접도 하한
+    ma200_prox = spec.get("ma200_proximity_min")
+    if ma200_prox is not None:
+        join_ohlcv = True
+        where.append("m.ma200_proximity IS NOT NULL AND m.ma200_proximity >= %s")
+        params.append(float(ma200_prox))
+
     sort_map = {
-        "market_cap_desc":    "u.market_cap_krw DESC NULLS LAST",
-        "market_cap_asc":     "u.market_cap_krw ASC NULLS LAST",
-        "r1y_desc":           "m.r1y DESC NULLS LAST" if join_ohlcv else "u.market_cap_krw DESC NULLS LAST",
-        "volume_surge_desc":  "m.volume_ratio DESC NULLS LAST" if join_ohlcv else "u.market_cap_krw DESC NULLS LAST",
-        "name_asc":           "u.asset_name ASC",
+        "market_cap_desc":   "u.market_cap_krw DESC NULLS LAST",
+        "market_cap_asc":    "u.market_cap_krw ASC NULLS LAST",
+        "r1m_desc":          "m.r1m DESC NULLS LAST" if join_ohlcv else "u.market_cap_krw DESC NULLS LAST",
+        "r3m_desc":          "m.r3m DESC NULLS LAST" if join_ohlcv else "u.market_cap_krw DESC NULLS LAST",
+        "r6m_desc":          "m.r6m DESC NULLS LAST" if join_ohlcv else "u.market_cap_krw DESC NULLS LAST",
+        "r1y_desc":          "m.r1y DESC NULLS LAST" if join_ohlcv else "u.market_cap_krw DESC NULLS LAST",
+        "ytd_desc":          "m.ytd DESC NULLS LAST" if join_ohlcv else "u.market_cap_krw DESC NULLS LAST",
+        "volume_surge_desc": "m.volume_ratio DESC NULLS LAST" if join_ohlcv else "u.market_cap_krw DESC NULLS LAST",
+        "liquidity_desc":    "m.avg_daily_value DESC NULLS LAST" if join_ohlcv else "u.market_cap_krw DESC NULLS LAST",
+        "drawdown_asc":      "m.drawdown_60d_pct ASC NULLS LAST" if join_ohlcv else "u.market_cap_krw DESC NULLS LAST",
+        "name_asc":          "u.asset_name ASC",
     }
     order_by = sort_map.get(spec.get("sort") or "", "u.market_cap_krw DESC NULLS LAST")
 

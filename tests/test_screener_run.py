@@ -106,3 +106,94 @@ def test_run_keeps_sparkline_when_include_sparkline_true():
         assert r.status_code == 200
         data = r.json()
         assert "sparkline_60d" in data["rows"][0]
+
+
+# ──────────────────────────────────────────────
+# Task 3 신규 필터 테스트
+# ──────────────────────────────────────────────
+
+def test_run_q_filter_generates_ilike_clause_with_three_columns():
+    """q 가 있으면 ticker/asset_name/asset_name_en 3개 컬럼 ILIKE."""
+    from fastapi.testclient import TestClient
+    from api.main import app
+    with _override_db(rows=[]) as fake:
+        client = TestClient(app)
+        r = client.post("/api/screener/run", json={"q": "삼성"})
+        assert r.status_code == 200
+        sql, params = _last_sql(fake)
+        assert "ILIKE" in sql.upper()
+        assert "u.ticker" in sql and "u.asset_name" in sql and "u.asset_name_en" in sql
+        assert params.count("%삼성%") == 3
+
+
+def test_run_q_filter_short_keyword_rejected():
+    """q 가 2자 미만이면 SQL 에 안 들어감 (풀스캔 가드)."""
+    from fastapi.testclient import TestClient
+    from api.main import app
+    with _override_db(rows=[]) as fake:
+        client = TestClient(app)
+        r = client.post("/api/screener/run", json={"q": "a"})
+        assert r.status_code == 200
+        sql, params = _last_sql(fake)
+        assert "%a%" not in params
+
+
+def test_run_market_cap_buckets_filter():
+    from fastapi.testclient import TestClient
+    from api.main import app
+    with _override_db(rows=[]) as fake:
+        client = TestClient(app)
+        r = client.post("/api/screener/run",
+                        json={"market_cap_buckets": ["large", "mid"]})
+        assert r.status_code == 200
+        sql, params = _last_sql(fake)
+        assert "u.market_cap_bucket" in sql
+        assert ["large", "mid"] in params
+
+
+def test_run_return_ranges_filter_all_periods():
+    from fastapi.testclient import TestClient
+    from api.main import app
+    with _override_db(rows=[]) as fake:
+        client = TestClient(app)
+        spec = {
+            "return_ranges": {
+                "1m": {"min": -10, "max": 50},
+                "3m": {"min": 0},
+                "6m": {"max": 30},
+                "1y": {"min": -20, "max": 100},
+                "ytd": {"min": 5},
+            }
+        }
+        r = client.post("/api/screener/run", json=spec)
+        assert r.status_code == 200
+        sql, params = _last_sql(fake)
+        for col in ("m.r1m", "m.r3m", "m.r6m", "m.r1y", "m.ytd"):
+            assert col in sql
+        for v in (-10, 50, 0, 30, -20, 100, 5):
+            assert float(v) in [float(p) if isinstance(p, (int, float)) else None for p in params]
+
+
+def test_run_max_drawdown_60d_filter():
+    """사용자 입력은 절대값 양수, SQL 에선 부호 뒤집어 비교."""
+    from fastapi.testclient import TestClient
+    from api.main import app
+    with _override_db(rows=[]) as fake:
+        client = TestClient(app)
+        r = client.post("/api/screener/run", json={"max_drawdown_60d_pct": 15})
+        assert r.status_code == 200
+        sql, params = _last_sql(fake)
+        assert "drawdown_60d_pct" in sql
+        assert -15.0 in [float(p) if isinstance(p, (int, float)) else None for p in params]
+
+
+def test_run_ma200_proximity_filter():
+    from fastapi.testclient import TestClient
+    from api.main import app
+    with _override_db(rows=[]) as fake:
+        client = TestClient(app)
+        r = client.post("/api/screener/run", json={"ma200_proximity_min": 0.95})
+        assert r.status_code == 200
+        sql, params = _last_sql(fake)
+        assert "m.ma200_proximity" in sql
+        assert 0.95 in [float(p) if isinstance(p, (int, float)) else None for p in params]
