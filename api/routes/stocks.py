@@ -1,5 +1,6 @@
 """종목 기초정보 조회 API + 종목 페이지"""
 from fastapi import APIRouter, Depends, HTTPException, Query
+from psycopg2.extras import RealDictCursor
 
 from analyzer.stock_data import fetch_fundamentals
 from api.auth.dependencies import get_current_user_required
@@ -160,6 +161,184 @@ def get_index_ohlcv(
         "count": len(series),
         "latest": latest,
         "series": series,
+    }
+
+
+# ──────────────────────────────────────────────
+# Stock Cockpit — Hero overview API
+# ──────────────────────────────────────────────
+_AI_SCORE_WEIGHTS = {"factor": 0.5, "hist": 0.3, "consensus": 0.2}
+
+_CONSENSUS_MAP = {
+    "STRONG_BUY": 1.0, "BUY": 0.75, "HOLD": 0.5,
+    "SELL": 0.25, "STRONG_SELL": 0.0,
+}
+
+
+def _clamp(v, lo=0.0, hi=1.0):
+    return max(lo, min(hi, v))
+
+
+def _compute_ai_score(factor_snapshot, avg_post_return_3m, consensus):
+    """AI 종합 점수 0~100. 컴포넌트 누락 시 0.5 중립값."""
+    if factor_snapshot:
+        pctiles = [
+            factor_snapshot.get(k)
+            for k in ("r1m_pctile", "r3m_pctile", "r6m_pctile", "r12m_pctile")
+            if factor_snapshot.get(k) is not None
+        ]
+        factor_score = sum(pctiles) / len(pctiles) if pctiles else 0.5
+    else:
+        factor_score = 0.5
+
+    if avg_post_return_3m is None:
+        hist_score = 0.5
+    else:
+        hist_score = _clamp(float(avg_post_return_3m) / 30.0)
+
+    consensus_score = _CONSENSUS_MAP.get(
+        (consensus or "").upper(), 0.5
+    )
+
+    score = (
+        _AI_SCORE_WEIGHTS["factor"] * factor_score
+        + _AI_SCORE_WEIGHTS["hist"] * hist_score
+        + _AI_SCORE_WEIGHTS["consensus"] * consensus_score
+    )
+    return {
+        "ai_score": round(score * 100),
+        "factor_score": round(factor_score, 4),
+        "hist_score": round(hist_score, 4),
+        "consensus_score": round(consensus_score, 4),
+    }
+
+
+@router.get("/{ticker}/overview")
+def get_stock_overview(
+    ticker: str,
+    market: str = Query(default="", description="시장 코드"),
+):
+    """Cockpit Hero 종합 응답 — 메타 + 최신가 + 추천 통계 + AI 종합 점수."""
+    cfg = AppConfig()
+    tk = ticker.strip().upper()
+    mk = (market or "").strip().upper()
+
+    conn = get_connection(cfg.db)
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # 1) 종목 메타 — stock_universe 우선
+            if mk:
+                cur.execute("""
+                    SELECT name, sector, industry, currency, market
+                    FROM stock_universe
+                    WHERE UPPER(ticker) = %s AND UPPER(market) = %s
+                    LIMIT 1
+                """, (tk, mk))
+            else:
+                cur.execute("""
+                    SELECT name, sector, industry, currency, market
+                    FROM stock_universe
+                    WHERE UPPER(ticker) = %s
+                    ORDER BY (CASE WHEN listing_status='active' THEN 0 ELSE 1 END)
+                    LIMIT 1
+                """, (tk,))
+            meta = cur.fetchone() or {}
+
+            # 2) 최신 2 거래일 종가 — 변동률 계산용
+            cur.execute("""
+                SELECT trade_date, close, volume
+                FROM stock_universe_ohlcv
+                WHERE UPPER(ticker) = %s
+                  AND (%s = '' OR UPPER(market) = %s)
+                ORDER BY trade_date DESC
+                LIMIT 2
+            """, (tk, mk, mk))
+            latest_rows = cur.fetchall()
+
+            # 3) 추천 통계 — 같은 ticker 모든 proposals 집계
+            cur.execute("""
+                SELECT
+                    COUNT(*) AS proposal_count,
+                    AVG(post_return_3m_pct) AS avg_post_return_3m_pct,
+                    AVG(alpha_vs_benchmark_pct) AS avg_alpha_vs_benchmark_pct,
+                    (
+                        SELECT analyst_recommendation
+                        FROM investment_proposals
+                        WHERE UPPER(ticker) = %s
+                          AND analyst_recommendation IS NOT NULL
+                        ORDER BY created_at DESC LIMIT 1
+                    ) AS latest_consensus
+                FROM investment_proposals
+                WHERE UPPER(ticker) = %s
+            """, (tk, tk))
+            stats = cur.fetchone() or {}
+
+            # 4) 최신 factor_snapshot — 가장 최근 추천에서
+            cur.execute("""
+                SELECT factor_snapshot
+                FROM investment_proposals
+                WHERE UPPER(ticker) = %s
+                  AND factor_snapshot IS NOT NULL
+                ORDER BY created_at DESC LIMIT 1
+            """, (tk,))
+            factor_row = cur.fetchone() or {}
+    finally:
+        conn.close()
+
+    # 최신가 + 변동률
+    latest = None
+    if latest_rows:
+        last = latest_rows[0]
+        prev = latest_rows[1] if len(latest_rows) >= 2 else None
+        change_pct = None
+        if prev and prev.get("close") and float(prev["close"]) > 0:
+            change_pct = round(
+                (float(last["close"]) - float(prev["close"])) / float(prev["close"]) * 100,
+                2,
+            )
+        latest = {
+            "date": last["trade_date"].isoformat(),
+            "close": float(last["close"]) if last.get("close") is not None else None,
+            "change_pct": change_pct,
+            "volume": int(last["volume"]) if last.get("volume") is not None else None,
+            "source": "ohlcv_db",
+        }
+
+    score = _compute_ai_score(
+        factor_row.get("factor_snapshot"),
+        stats.get("avg_post_return_3m_pct"),
+        stats.get("latest_consensus"),
+    )
+
+    return {
+        "ticker": tk,
+        "market": meta.get("market") or mk or None,
+        "name": meta.get("name") or tk,
+        "sector": meta.get("sector"),
+        "industry": meta.get("industry"),
+        "currency": meta.get("currency"),
+        "latest": latest,
+        "stats": {
+            "ai_score": score["ai_score"],
+            "proposal_count": int(stats.get("proposal_count") or 0),
+            "avg_post_return_3m_pct": (
+                round(float(stats["avg_post_return_3m_pct"]), 2)
+                if stats.get("avg_post_return_3m_pct") is not None else None
+            ),
+            "alpha_vs_benchmark_pct": (
+                round(float(stats["avg_alpha_vs_benchmark_pct"]), 2)
+                if stats.get("avg_alpha_vs_benchmark_pct") is not None else None
+            ),
+            "factor_pctile_avg": (
+                round(score["factor_score"], 4) if factor_row.get("factor_snapshot") else None
+            ),
+        },
+        "score_breakdown": {
+            "factor_score": score["factor_score"],
+            "hist_score": score["hist_score"],
+            "consensus_score": score["consensus_score"],
+            "weights": _AI_SCORE_WEIGHTS,
+        },
     }
 
 
