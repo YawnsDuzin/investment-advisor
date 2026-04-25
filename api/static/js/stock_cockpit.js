@@ -409,6 +409,16 @@
   var stockLine = chart.addLineSeries({ color: '#4ea3ff', lineWidth: 2, title: c.ticker });
   var benchLine = chart.addLineSeries({ color: '#f1c40f', lineWidth: 2, title: defaultBench });
 
+  var stockCache = null;  // CKPT-3: stock OHLCV 응답 캐시 (토글 시 재조회 회피)
+
+  function fetchStock() {
+    if (stockCache) return Promise.resolve(stockCache);
+    var stockUrl = '/api/stocks/' + encodeURIComponent(c.ticker) + '/ohlcv?days=360' +
+                   (c.market ? '&market=' + encodeURIComponent(c.market) : '');
+    return fetch(stockUrl).then(function(r) { return r.ok ? r.json() : Promise.reject(); })
+      .then(function(d) { stockCache = d; return d; });
+  }
+
   function normalize(series) {
     if (!series.length) return [];
     var base = series[0].close;
@@ -417,11 +427,9 @@
   }
 
   function loadAndRender(benchCode) {
-    var stockUrl = '/api/stocks/' + encodeURIComponent(c.ticker) + '/ohlcv?days=360' +
-                   (c.market ? '&market=' + encodeURIComponent(c.market) : '');
     var benchUrl = '/api/indices/' + benchCode + '/ohlcv?days=360';
     Promise.all([
-      fetch(stockUrl).then(function(r) { return r.ok ? r.json() : Promise.reject(); }),
+      fetchStock(),
       fetch(benchUrl).then(function(r) { return r.ok ? r.json() : Promise.reject(); }),
     ]).then(function(results) {
       var stockData = results[0].series || [];
@@ -431,10 +439,22 @@
         return;
       }
       hideOverlay();
-      // 두 시리즈의 공통 시작일 정렬
-      var commonStart = stockData[0].date > benchData[0].date ? stockData[0].date : benchData[0].date;
-      var s = stockData.filter(function(p) { return p.date >= commonStart; });
-      var b = benchData.filter(function(p) { return p.date >= commonStart; });
+
+      // CKPT-2: 양쪽 모두 존재하는 첫 거래일을 기준일로 통일
+      var benchDates = new Set(benchData.map(function(p) { return p.date; }));
+      var commonAlignedStart = null;
+      for (var i = 0; i < stockData.length; i++) {
+        if (benchDates.has(stockData[i].date)) {
+          commonAlignedStart = stockData[i].date;
+          break;
+        }
+      }
+      if (!commonAlignedStart) {
+        showOverlay('두 시리즈에 공통 거래일이 없음');
+        return;
+      }
+      var s = stockData.filter(function(p) { return p.date >= commonAlignedStart; });
+      var b = benchData.filter(function(p) { return p.date >= commonAlignedStart; });
       stockLine.setData(normalize(s));
       benchLine.setData(normalize(b));
       benchLine.applyOptions({ title: benchCode });

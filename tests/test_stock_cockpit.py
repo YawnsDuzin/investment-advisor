@@ -346,3 +346,12 @@ class TestStockCockpitPage:
         assert "container.innerHTML = '<div class=\"chart-placeholder\">벤치마크 데이터 조회 실패</div>'" not in body
         # 새 overlay 시그니처 — class="chart-overlay"
         assert "chart-overlay" in body
+
+    def test_benchmark_iife_uses_cache_and_alignment(self):
+        client = _make_client()
+        resp = client.get("/static/js/stock_cockpit.js")
+        body = resp.text
+        # § 2-A 의 stockCache 시그니처
+        assert "stockCache" in body
+        # 양쪽 모두 존재하는 첫 거래일 정렬 시그니처
+        assert "commonAlignedStart" in body or "alignFirstCommonDate" in body
