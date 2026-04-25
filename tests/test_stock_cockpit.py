@@ -396,6 +396,21 @@ class TestStockCockpitPage:
         assert "/sector-stats" in body
         assert "sector-stats-table" in body
 
+    def test_cockpit_page_loads_chartjs(self, patched_base_ctx_conn):
+        client = _make_client()
+        resp = client.get("/pages/stocks/TXN?market=NASDAQ")
+        body = resp.text
+        assert "chart.js" in body or "chart.umd.min.js" in body
+        assert 'id="factor-radar"' in body
+
+    def test_external_js_has_factor_radar_iife(self):
+        client = _make_client()
+        resp = client.get("/static/js/stock_cockpit.js")
+        body = resp.text
+        assert "// ── § 2-B 정량 팩터 레이더 ──" in body
+        assert "factor-radar" in body
+        assert "type: 'radar'" in body or 'type: "radar"' in body
+
 
 class TestComputeSectorPctiles:
     """analyzer.factor_engine.compute_sector_pctiles — 섹터 단위 cross-section pctile."""

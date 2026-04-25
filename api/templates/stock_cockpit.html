@@ -86,6 +86,19 @@
     </div>
   </section>
 
+  {# ─────────────── § 2-B. 정량 팩터 레이더 ─────────────── #}
+  <section class="cockpit-section" id="sec-factor-radar">
+    <div class="cockpit-section-head"><h3>정량 팩터 분위 (시장 cross-section)</h3></div>
+    <div style="background:var(--bg-card);border:1px solid var(--border);
+         border-radius:10px;padding:12px;position:relative;">
+      <canvas id="factor-radar" style="max-height:340px;"></canvas>
+      <div id="factor-radar-empty" style="display:none;text-align:center;
+           padding:60px 0;color:var(--text-muted);font-size:13px;">
+        팩터 데이터 부족 — 첫 추천 발생 후 채워집니다.
+      </div>
+    </div>
+  </section>
+
   {# ─────────────── § 3. 시장 레짐 + 섹터 컨텍스트 ─────────────── #}
   <section class="cockpit-section" id="sec-regime">
     <div class="cockpit-section-head"><h3>시장 레짐 + 섹터 컨텍스트</h3></div>
@@ -160,6 +173,7 @@
 
 {% block scripts %}
 <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" defer></script>
 <style>
 .cockpit-hero {
   background:var(--bg-card); border:1px solid var(--border); border-radius:10px;

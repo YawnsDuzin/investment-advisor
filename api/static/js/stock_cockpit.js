@@ -609,3 +609,87 @@
       emptyEl.textContent = '섹터 분위 조회 실패';
     });
 })();
+
+// ── § 2-B 정량 팩터 레이더 ──
+(function() {
+  var c = window.__cockpit;
+  if (!c || typeof Chart === 'undefined') return;
+
+  var canvas = document.getElementById('factor-radar');
+  var emptyEl = document.getElementById('factor-radar-empty');
+  if (!canvas) return;
+
+  var qs = c.market ? ('?market=' + encodeURIComponent(c.market)) : '';
+  fetch('/api/stocks/' + encodeURIComponent(c.ticker) + '/overview' + qs)
+    .then(function(r) { return r.ok ? r.json() : Promise.reject(); })
+    .then(function(d) {
+      var snap = d.factor_snapshot;
+      if (!snap) {
+        canvas.style.display = 'none';
+        emptyEl.style.display = 'block';
+        return;
+      }
+
+      var labels = ['1m', '3m', '6m', '12m', '저변동', '거래량'];
+      var values = [
+        snap.r1m_pctile, snap.r3m_pctile, snap.r6m_pctile,
+        snap.r12m_pctile, snap.low_vol_pctile, snap.volume_pctile,
+      ].map(function(v) { return v != null ? +(v * 100).toFixed(1) : 0; });
+
+      // 시장 중앙선 (0.5) — 점선 데이터셋
+      var midline = labels.map(function() { return 50; });
+
+      new Chart(canvas, {
+        type: 'radar',
+        data: {
+          labels: labels,
+          datasets: [
+            {
+              label: c.ticker,
+              data: values,
+              backgroundColor: 'rgba(78, 163, 255, 0.18)',
+              borderColor: '#4ea3ff',
+              borderWidth: 2,
+              pointBackgroundColor: '#4ea3ff',
+            },
+            {
+              label: '시장 중앙 (50%ile)',
+              data: midline,
+              borderColor: 'rgba(160, 160, 160, 0.6)',
+              borderWidth: 1,
+              borderDash: [4, 4],
+              pointRadius: 0,
+              fill: false,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { labels: { color: '#a0a0a0', font: { size: 11 } } },
+            tooltip: {
+              callbacks: {
+                label: function(ctx) {
+                  return ctx.dataset.label + ': ' + ctx.raw + '%ile';
+                },
+              },
+            },
+          },
+          scales: {
+            r: {
+              min: 0, max: 100,
+              ticks: { display: false, stepSize: 20 },
+              grid: { color: '#2a2a2a' },
+              angleLines: { color: '#2a2a2a' },
+              pointLabels: { color: '#a0a0a0', font: { size: 12 } },
+            },
+          },
+        },
+      });
+    })
+    .catch(function() {
+      canvas.style.display = 'none';
+      emptyEl.textContent = '레이더 데이터 조회 실패';
+      emptyEl.style.display = 'block';
+    });
+})();
