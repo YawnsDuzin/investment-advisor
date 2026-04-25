@@ -150,3 +150,84 @@ sudo systemctl daemon-reload
 - `_docs/raspberry-pi-setup.md` §7 은 인라인(hand-edit) 방식의 최초 가이드였음.
 - 본 디렉터리(`deploy/systemd/`)는 **템플릿 파일 기반 관리**로 이를 대체한다. 향후 unit 추가·수정은 이쪽에 커밋하고, raspberry-pi-setup.md 는 본 디렉터리를 가리키도록 유지.
 - 경로 불일치 시 **본 디렉터리가 정본(source of truth)**.
+
+## 웹 UI에서 관리하기 (Admin → 운영 탭)
+
+라즈베리파이 SSH 없이 `/admin` 페이지의 **운영** 탭에서 unit 제어가 가능하다 (start/stop/restart/enable/disable + journalctl 라이브 로그). 백엔드 라우터는 `api/routes/admin_systemd.py`, 화이트리스트는 모듈 상단 `MANAGED_UNITS` 에 정의되어 있다.
+
+### 권한 설정 — sudoers NOPASSWD 화이트리스트
+
+API 서비스는 `__SYSTEM_USER__` 권한으로 실행되므로 `sudo systemctl ...` 호출에 비밀번호가 필요하다. 다음 화이트리스트를 등록하면 비밀번호 없이 지정된 명령만 실행 가능하다.
+
+```bash
+sudo visudo -f /etc/sudoers.d/investment-advisor-systemd
+```
+
+내용 (`dzp` 자리에 실제 운영 유저 치환):
+
+```
+Cmnd_Alias INV_SVC_ACTIONS = \
+  /bin/systemctl start   investment-advisor-analyzer.service, \
+  /bin/systemctl stop    investment-advisor-analyzer.service, \
+  /bin/systemctl restart investment-advisor-analyzer.service, \
+  /bin/systemctl start   universe-sync-price.service, \
+  /bin/systemctl stop    universe-sync-price.service, \
+  /bin/systemctl restart universe-sync-price.service, \
+  /bin/systemctl start   universe-sync-meta.service, \
+  /bin/systemctl stop    universe-sync-meta.service, \
+  /bin/systemctl restart universe-sync-meta.service, \
+  /bin/systemctl start   ohlcv-cleanup.service, \
+  /bin/systemctl stop    ohlcv-cleanup.service, \
+  /bin/systemctl restart ohlcv-cleanup.service, \
+  /bin/systemctl start   monthly-sector-refresh.service, \
+  /bin/systemctl stop    monthly-sector-refresh.service, \
+  /bin/systemctl restart monthly-sector-refresh.service, \
+  /bin/systemctl start   pre-market-briefing.service, \
+  /bin/systemctl stop    pre-market-briefing.service, \
+  /bin/systemctl restart pre-market-briefing.service
+
+Cmnd_Alias INV_TIMER_ACTIONS = \
+  /bin/systemctl enable  --now investment-advisor-analyzer.timer, \
+  /bin/systemctl disable --now investment-advisor-analyzer.timer, \
+  /bin/systemctl enable  --now universe-sync-price.timer, \
+  /bin/systemctl disable --now universe-sync-price.timer, \
+  /bin/systemctl enable  --now universe-sync-meta.timer, \
+  /bin/systemctl disable --now universe-sync-meta.timer, \
+  /bin/systemctl enable  --now ohlcv-cleanup.timer, \
+  /bin/systemctl disable --now ohlcv-cleanup.timer, \
+  /bin/systemctl enable  --now monthly-sector-refresh.timer, \
+  /bin/systemctl disable --now monthly-sector-refresh.timer, \
+  /bin/systemctl enable  --now pre-market-briefing.timer, \
+  /bin/systemctl disable --now pre-market-briefing.timer
+
+dzp ALL=(root) NOPASSWD: INV_SVC_ACTIONS, INV_TIMER_ACTIONS
+```
+
+검증:
+
+```bash
+sudo visudo -c -f /etc/sudoers.d/investment-advisor-systemd
+sudo chmod 0440 /etc/sudoers.d/investment-advisor-systemd
+sudo -u dzp sudo -n systemctl start investment-advisor-analyzer.service   # 비밀번호 묻지 않으면 OK
+```
+
+### journalctl 권한
+
+웹 UI의 "로그" 버튼이 `journalctl -u <unit> -f` 를 띄우려면 운영 유저가 `adm` 또는 `systemd-journal` 그룹에 속해야 한다:
+
+```bash
+sudo usermod -aG adm,systemd-journal dzp
+# 재로그인 필요
+```
+
+### 보안 주의
+
+- **API 자체 service**(`investment-advisor-api.service`) 는 sudoers에 포함하지 않는다 — 백엔드에서 self_protected 로 차단한다 (이중 방어). 웹 UI의 API 카드는 상태/로그만 보여주고 모든 mutation 버튼이 비활성화된다.
+- 화이트리스트 외 systemctl 명령(`daemon-reload`, `mask`, 임의 unit 등) 절대 추가 금지 — 권한 확장 위험.
+- `sudoers.d/*` 파일 권한은 반드시 `0440`. 그렇지 않으면 sudo가 무시한다.
+- 모든 mutation 호출은 `admin_audit_logs` (v17) 에 기록된다 (action: `systemd_<verb>` / `systemd_action_failed` / `systemd_invalid_target` / `systemd_self_protected_violation`).
+
+### 미지원 환경 동작
+
+- Windows / non-Linux: 운영 탭에 안내 메시지 노출, 모든 systemd 엔드포인트 503 반환.
+- 분석 실행은 systemd 미지원 시 자동으로 in-process subprocess(`python -m analyzer.main`) 경로로 fallback (γ 정책). 도구 탭의 "분석 실행" 버튼 한 개로 환경 자동 분기.
