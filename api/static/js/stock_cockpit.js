@@ -46,6 +46,11 @@
 
   // ── Hero (overview) — getOverview() 공유 promise 사용 (§ 2-B / § 5 도 같은 캐시) ──
   var qs = market ? ('?market=' + encodeURIComponent(market)) : '';
+
+  // _overviewPromise / getOverview 는 IIFE-0 본문 끝에서 정의 (window.__cockpit export 위해).
+  // 단, var 선언은 hoist 되어도 할당은 hoist 안 되므로 여기서 호출 시점에 _overviewPromise 가
+  // undefined → `=== null` 비교 false → return undefined → .then() TypeError 발생 가능.
+  // 방어: getOverview 안의 비교를 truthy 체크로 (아래 정의 부분에서 처리).
   getOverview()
     .then(function(d) {
       document.getElementById('hero-loading').style.display = 'none';
@@ -193,9 +198,11 @@
 
   // 차트/타임라인 모듈은 다음 task 들에서 추가됨
   // (window.__cockpit = {ticker, market, qs, fmtPrice, fmtPct, fmtBigNum, fmtNum, escHtml, getProposals, getOverview} 로 공유)
+  // 변수 선언은 hoist 되지만 할당은 hoist 안 됨 — IIFE-0 위에서 getOverview() 호출 가능.
+  // 따라서 truthy 체크 (!promise) 로 undefined·null 모두 안전 처리.
   var _proposalsPromise = null;
   function getProposals() {
-    if (_proposalsPromise === null) {
+    if (!_proposalsPromise) {
       _proposalsPromise = fetch('/api/stocks/' + encodeURIComponent(ticker) + '/proposals')
         .then(function(r) { return r.ok ? r.json() : Promise.reject(); });
     }
@@ -203,7 +210,7 @@
   }
   var _overviewPromise = null;
   function getOverview() {
-    if (_overviewPromise === null) {
+    if (!_overviewPromise) {
       _overviewPromise = fetch('/api/stocks/' + encodeURIComponent(ticker) + '/overview' + qs)
         .then(function(r) { return r.ok ? r.json() : Promise.reject(r.status); });
     }
