@@ -193,6 +193,9 @@
 .timeline-metrics strong { color:var(--text); font-variant-numeric:tabular-nums; }
 .tl-pos { color:var(--green); }
 .tl-neg { color:var(--red); }
+.tl-warn { color:var(--orange, #f5a623); font-size:11px; margin-left:6px; }
+.tl-badge { display:inline-block; padding:1px 6px; border-radius:3px; font-size:11px;
+  background:var(--bg); border:1px solid var(--border); color:var(--text-muted); }
 
 @media (max-width: 768px) {
   .fund-grid { grid-template-columns:1fr; }
@@ -596,6 +599,67 @@
       loadAndRender(btn.dataset.bench);
     });
   });
+})();
+
+// ── § 6 추천 이력 타임라인 ──
+(function() {
+  var c = window.__cockpit;
+  if (!c) return;
+
+  function pctSpan(v) {
+    if (v == null) return '<strong>-</strong>';
+    var cls = v > 0 ? 'tl-pos' : v < 0 ? 'tl-neg' : '';
+    return '<strong class="' + cls + '">' + (v > 0 ? '+' : '') + v.toFixed(2) + '%</strong>';
+  }
+
+  function renderTimeline(items) {
+    var listEl = document.getElementById('timeline-list');
+    var emptyEl = document.getElementById('timeline-empty');
+    if (!items || !items.length) {
+      emptyEl.style.display = 'block';
+      return;
+    }
+    items.forEach(function(it) {
+      var card = document.createElement('div');
+      card.className = 'timeline-card';
+      var dt = (it.created_at || it.analysis_date || '').slice(0, 10);
+      var entry = it.entry_price != null ? ' · 진입 ' + c.fmtPrice(it.entry_price, '') : '';
+      var validation = '';
+      if (it.validation_mismatches && it.validation_mismatches.length) {
+        validation = ' <span class="tl-warn" title="AI 제시값과 실측 mismatch">⚠ ' +
+                     it.validation_mismatches.length + '</span>';
+      }
+      card.innerHTML =
+        '<div class="timeline-card-head">' +
+          '<span class="timeline-date">' + dt + '</span>' +
+          '<a class="timeline-theme" href="/pages/themes#theme-' + it.theme_id + '">' +
+            (it.theme_name || '-') + '</a>' +
+        '</div>' +
+        '<div class="timeline-rationale">' +
+          (it.rationale || '').slice(0, 240) +
+          (it.rationale && it.rationale.length > 240 ? '...' : '') +
+        '</div>' +
+        '<div class="timeline-metrics">' +
+          '<span>' + (it.action || '-').toUpperCase() + ' · ' + (it.conviction || '-') + entry + validation + '</span>' +
+          '<span>1m ' + pctSpan(it.post_return_1m_pct) + '</span>' +
+          '<span>3m ' + pctSpan(it.post_return_3m_pct) + '</span>' +
+          '<span>6m ' + pctSpan(it.post_return_6m_pct) + '</span>' +
+          '<span>1y ' + pctSpan(it.post_return_1y_pct) + '</span>' +
+          '<span>MDD ' + pctSpan(it.max_drawdown_pct) + '</span>' +
+          '<span>α ' + pctSpan(it.alpha_vs_benchmark_pct) + '</span>' +
+        '</div>';
+      listEl.appendChild(card);
+    });
+  }
+
+  fetch('/api/stocks/' + encodeURIComponent(c.ticker) + '/proposals')
+    .then(function(r) { return r.ok ? r.json() : Promise.reject(); })
+    .then(function(d) { renderTimeline(d.items || []); })
+    .catch(function() {
+      var emptyEl = document.getElementById('timeline-empty');
+      emptyEl.textContent = '추천 이력 조회 실패';
+      emptyEl.style.display = 'block';
+    });
 })();
 </script>
 {% endblock %}

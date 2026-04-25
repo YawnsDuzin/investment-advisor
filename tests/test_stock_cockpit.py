@@ -288,3 +288,13 @@ class TestStockCockpitPage:
         assert 'id="benchmark-chart"' in body
         # 벤치마크 API 경로
         assert "/api/indices/" in body
+
+    def test_cockpit_page_includes_timeline_section(self, patched_base_ctx_conn):
+        client = _make_client()
+        resp = client.get("/pages/stocks/TXN?market=NASDAQ")
+        body = resp.text
+        assert 'id="timeline-list"' in body
+        # 타임라인 JS IIFE 시그니처 — renderTimeline 함수가 반드시 존재해야 함
+        assert "renderTimeline" in body
+        # tl-warn / tl-badge 스타일 존재 확인
+        assert "tl-warn" in body and "tl-badge" in body
