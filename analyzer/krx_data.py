@@ -706,3 +706,145 @@ def format_bond_yields_text(data: dict) -> str:
         lines.append(f"- CD 91일: {cd:.2f}%")
 
     return "\n".join(lines)
+
+
+# ── Phase 4: Cockpit § 5 — 페이지 진입 시 lazy fetch 통합 함수 ────────
+import time as _time
+
+_extended_cache: dict[str, tuple[float, dict]] = {}
+_EXTENDED_TTL = 3600  # 1시간
+
+
+def fetch_krx_extended(ticker: str) -> dict | None:
+    """한국주 § 5 KRX 확장 — 외국인 보유 / 순매수 / 공매도 / 지수 편입.
+
+    기존 helper (fetch_market_cap_info / fetch_investor_trading /
+    fetch_short_selling / check_index_membership) 조합 + 1시간 캐시.
+
+    Returns:
+        {
+            "market_type": "KRX",
+            "ownership_pct": 51.2,            # 외국인 보유율
+            "flow_signal": "positive"|"neutral"|"negative"|None,
+            "flow_summary": "외국인 5일 연속 순매수 (+1,200억원)",
+            "short_pct": 1.5,                 # 공매도 잔고 비중
+            "squeeze_risk": "low"|"medium"|"high"|None,
+            "index_membership": ["KOSPI200"], # 빈 배열 가능
+            "fetched_at": ISO datetime,
+        }
+        실패/비KRX 종목 → None.
+    """
+    raw_ticker = ticker.strip().upper()
+    if not raw_ticker.isdigit():
+        return None  # 한국주만
+
+    cache_key = f"krx:{raw_ticker}"
+    cached = _extended_cache.get(cache_key)
+    if cached and (_time.time() - cached[0]) < _EXTENDED_TTL:
+        return cached[1]
+
+    cap = fetch_market_cap_info(raw_ticker) or {}
+    flow = fetch_investor_trading(raw_ticker, days=20) or {}
+    short = fetch_short_selling(raw_ticker, days=20) or {}
+    indices = check_index_membership(raw_ticker)
+
+    # 외국인 순매수 신호 — 5일 누적 부호로 단순화
+    flow_signal = None
+    f5d = flow.get("foreign_net_buy_5d")
+    if f5d is not None:
+        flow_signal = "positive" if f5d > 0 else "negative" if f5d < 0 else "neutral"
+
+    result = {
+        "market_type": "KRX",
+        "ownership_pct": cap.get("foreign_ownership_pct"),
+        "flow_signal": flow_signal,
+        "flow_summary": flow.get("summary"),
+        "short_pct": short.get("short_balance_ratio_pct"),
+        "squeeze_risk": short.get("squeeze_risk"),
+        "index_membership": indices or [],
+        "fetched_at": datetime.now().isoformat(timespec="seconds"),
+    }
+    _extended_cache[cache_key] = (_time.time(), result)
+    return result
+
+
+def fetch_us_extended(ticker: str, market: str = "") -> dict | None:
+    """미국주 § 5 동등 데이터 — 기관 보유 / Insider 순매수 / Short interest / 지수 편입.
+
+    yfinance .info 기반 + 1시간 캐시. 데이터 누락 키는 None.
+
+    Returns:
+        {
+            "market_type": "US",
+            "ownership_pct": 89.3,            # heldPercentInstitutions × 100
+            "flow_signal": "positive"|"neutral"|"negative"|None,
+            "flow_summary": "Insider net buyers: 12 (3개월)",
+            "short_pct": 1.2,                 # shortPercentOfFloat × 100
+            "squeeze_risk": "low"|"medium"|"high"|None,
+            "index_membership": [],           # 현재 yfinance 미지원 — backlog
+            "fetched_at": ISO datetime,
+        }
+        외국주 아니거나 yfinance 실패 → None.
+    """
+    from analyzer.stock_data import _normalize_ticker
+
+    raw_ticker = ticker.strip().upper()
+    market = (market or "").strip().upper()
+    if market in ("KOSPI", "KOSDAQ", "KRX"):
+        return None  # 한국주는 fetch_krx_extended 가 담당
+
+    cache_key = f"us:{_normalize_ticker(raw_ticker, market)}"
+    cached = _extended_cache.get(cache_key)
+    if cached and (_time.time() - cached[0]) < _EXTENDED_TTL:
+        return cached[1]
+
+    try:
+        import yfinance as yf
+    except ImportError:
+        return None
+
+    try:
+        info = yf.Ticker(_normalize_ticker(raw_ticker, market)).info or {}
+    except Exception as e:
+        get_logger("US수급").warning(f"{raw_ticker} yfinance .info 실패: {e}")
+        return None
+
+    inst = info.get("heldPercentInstitutions")
+    short_float = info.get("shortPercentOfFloat")
+    insider_act = info.get("netSharePurchaseActivity") or {}
+
+    # Insider 순매수 신호 — netInfoCount 또는 매수자 수 기반 단순화
+    flow_signal = None
+    flow_summary = None
+    if isinstance(insider_act, dict):
+        buy_info = insider_act.get("buyInfoCount") or 0
+        sell_info = insider_act.get("sellInfoCount") or 0
+        net = (buy_info or 0) - (sell_info or 0)
+        if buy_info or sell_info:
+            flow_signal = "positive" if net > 0 else "negative" if net < 0 else "neutral"
+            flow_summary = f"Insider 매수 {buy_info}건 vs 매도 {sell_info}건"
+
+    # Short interest 위험도 — % 임계 단순화
+    squeeze_risk = None
+    short_pct_val = None
+    if short_float is not None:
+        short_pct_val = round(short_float * 100, 2)
+        if short_pct_val >= 10:
+            squeeze_risk = "high"
+        elif short_pct_val >= 5:
+            squeeze_risk = "medium"
+        else:
+            squeeze_risk = "low"
+
+    result = {
+        "market_type": "US",
+        "ownership_pct": round(inst * 100, 2) if inst is not None else None,
+        "flow_signal": flow_signal,
+        "flow_summary": flow_summary,
+        "short_pct": short_pct_val,
+        "squeeze_risk": squeeze_risk,
+        "index_membership": [],  # backlog: stock_universe.aliases 또는 위키피디아 백필
+        "fetched_at": datetime.now().isoformat(timespec="seconds"),
+    }
+    _extended_cache[cache_key] = (_time.time(), result)
+    return result
