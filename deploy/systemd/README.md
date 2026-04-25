@@ -27,6 +27,8 @@
 |---|---|---|
 | `universe-sync-price.service` | universe 가격 + OHLCV 일별 sync (`--mode price`, OHLCV 묻어감) | `universe-sync-price.timer` |
 | `universe-sync-price.timer` | 매일 06:30 KST | 위 service 트리거 |
+| `universe-sync-indices.service` | 시장 지수(KOSPI/KOSDAQ/SP500/NDX100) OHLCV 일별 sync (`--mode indices`) — `market_regime` 계산 입력 | `universe-sync-indices.timer` |
+| `universe-sync-indices.timer` | 매일 06:30 KST | 위 service 트리거 |
 | `universe-sync-meta.service` | universe 메타(섹터/시총) 주간 sync (`--mode meta`) | `universe-sync-meta.timer` |
 | `universe-sync-meta.timer` | 매주 일요일 07:30 KST | 위 service 트리거 |
 | `ohlcv-cleanup.service` | OHLCV retention 초과 row 정리 (`--mode cleanup`) | `ohlcv-cleanup.timer` |
@@ -52,9 +54,10 @@
 **06:30**에 시작하고, `After=` 의존성으로 직렬 실행 보장.
 
 ```
-06:30 (매일 트리거)
-  → universe-sync-price          ← KRX+US OHLCV 일괄 sync (먼저 종료)
-  → pre-market-briefing          ← After=universe-sync-price (sync 끝난 후)
+06:30 (매일 트리거 — 3 sync unit 동시 시작, 별도 테이블이라 충돌 없음)
+  → universe-sync-price          ← KRX+US 종목 OHLCV (stock_universe_ohlcv)
+  → universe-sync-indices        ← KOSPI/KOSDAQ/SP500/NDX100 인덱스 (market_indices_ohlcv) — regime 입력
+  → pre-market-briefing          ← After=sync-price + After=sync-indices
   → investment-advisor-analyzer  ← After=pre-market-briefing  (분석 배치)
 
 07:30  universe-sync-meta        ← 주간 메타 (일요일만)
@@ -97,6 +100,7 @@ sudo systemctl enable --now investment-advisor-analyzer.timer
 
 # 4. Universe / OHLCV 자동화 활성화
 sudo systemctl enable --now universe-sync-price.timer \
+                              universe-sync-indices.timer \
                               universe-sync-meta.timer \
                               ohlcv-cleanup.timer
 
@@ -134,6 +138,7 @@ sudo systemctl disable --now \
   investment-advisor-api.service \
   investment-advisor-analyzer.timer \
   universe-sync-price.timer \
+  universe-sync-indices.timer \
   universe-sync-meta.timer \
   ohlcv-cleanup.timer \
   monthly-sector-refresh.timer
@@ -173,6 +178,9 @@ Cmnd_Alias INV_SVC_ACTIONS = \
   /bin/systemctl start   universe-sync-price.service, \
   /bin/systemctl stop    universe-sync-price.service, \
   /bin/systemctl restart universe-sync-price.service, \
+  /bin/systemctl start   universe-sync-indices.service, \
+  /bin/systemctl stop    universe-sync-indices.service, \
+  /bin/systemctl restart universe-sync-indices.service, \
   /bin/systemctl start   universe-sync-meta.service, \
   /bin/systemctl stop    universe-sync-meta.service, \
   /bin/systemctl restart universe-sync-meta.service, \
@@ -191,6 +199,8 @@ Cmnd_Alias INV_TIMER_ACTIONS = \
   /bin/systemctl disable --now investment-advisor-analyzer.timer, \
   /bin/systemctl enable  --now universe-sync-price.timer, \
   /bin/systemctl disable --now universe-sync-price.timer, \
+  /bin/systemctl enable  --now universe-sync-indices.timer, \
+  /bin/systemctl disable --now universe-sync-indices.timer, \
   /bin/systemctl enable  --now universe-sync-meta.timer, \
   /bin/systemctl disable --now universe-sync-meta.timer, \
   /bin/systemctl enable  --now ohlcv-cleanup.timer, \

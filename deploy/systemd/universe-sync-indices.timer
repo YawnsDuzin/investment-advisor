@@ -1,0 +1,14 @@
+[Unit]
+Description=Investment Advisor - 시장 지수 OHLCV 매일 06:30 KST 실행
+
+[Timer]
+# 매일 06:30 KST. universe-sync-price와 동시 트리거되지만 별도 테이블
+# (market_indices_ohlcv) 이라 충돌 없음. pre-market-briefing.service /
+# investment-advisor-analyzer.service 가 `After=universe-sync-indices.service`
+# 의존성으로 이 unit 완료 후 자동 실행됨 — market_regime 스냅샷 입력 보장.
+OnCalendar=*-*-* 06:30:00 Asia/Seoul
+Persistent=true
+Unit=universe-sync-indices.service
+
+[Install]
+WantedBy=timers.target

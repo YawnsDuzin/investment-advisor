@@ -5,6 +5,7 @@ After=network-online.target postgresql.service
 Wants=network-online.target
 # 가격/OHLCV sync가 먼저 끝난 뒤 브리핑 — 같은 06:30 트랜잭션에서 순서 보장
 After=universe-sync-price.service
+After=universe-sync-indices.service
 
 [Service]
 Type=oneshot
