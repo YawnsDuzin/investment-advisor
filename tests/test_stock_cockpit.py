@@ -4,7 +4,7 @@ psycopg2가 conftest에서 mock되므로 get_connection → cursor → fetch 체
 가짜 객체로 꾸민다.
 """
 from contextlib import contextmanager
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
@@ -178,7 +178,7 @@ class TestStockProposalsAPI:
         prop_rows = [
             {
                 "id": 12345, "analysis_date": date(2026, 4, 15),
-                "created_at": date(2026, 4, 15), "theme_id": 99,
+                "created_at": datetime(2026, 4, 15, 8, 30), "theme_id": 99,
                 "theme_name": "AI 반도체 인프라", "theme_validity": "active",
                 "action": "buy", "conviction": "high",
                 "discovery_type": "early_signal",
@@ -212,13 +212,14 @@ class TestStockProposalsAPI:
         assert item["post_return_3m_pct"] == 12.4
         assert item["max_drawdown_pct"] == -6.2
         assert item["max_drawdown_date"] == "2026-04-20"
+        assert item["created_at"] == "2026-04-15T08:30:00"
         assert len(item["validation_mismatches"]) == 1
         assert item["validation_mismatches"][0]["field_name"] == "current_price"
 
     def test_proposals_empty_for_unknown_ticker(self):
         from api.routes.stocks import get_stock_proposals
 
-        conn = _fake_conn([[], []])
+        conn = _fake_conn([[]])
         with patch("api.routes.stocks.get_connection", return_value=conn):
             result = get_stock_proposals(ticker="UNKNOWN")
 
