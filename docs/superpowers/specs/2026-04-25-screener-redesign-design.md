@@ -365,17 +365,101 @@ SECTOR_LABELS = {
 
 ---
 
-## 10. 작업 단위 (Implementation Plan에서 세분화)
+## 10. AI Top Picks ↔ Screener 정체성 정리
 
-1. `api/routes/screener.py` — `/run` CTE/WHERE 확장, `/sectors` 신설, sector 라벨 const
-2. `api/templates/screener.html` — 탭/View/검색박스/컬럼 토글/스파크라인 렌더 + 모듈 IIFE 정리
-3. `api/static/css/src/14_screener.css` — 탭/뷰/sticky/모바일 미디어
-4. `tests/test_screener_run.py` — 신규 spec 필드 smoke
-5. (옵션) `tools/build_css.py` 한 번 실행해서 빌드 산출물 갱신
+본 작업과 함께 두 도구의 정체성을 명확히 하기 위해 **라벨 변경 + 양방향 cross-link**를 포함한다.
+
+### 10.1 분리 유지 결정
+
+메이저 서비스(Yahoo / Seeking Alpha / Zacks / Morningstar / 한국 증권사) 모두 큐레이션 추천과 스크리너를 **별도 메뉴로 분리** 운영. 본질적으로 다른 사용자 의도(수동 큐레이션 vs 능동 발굴)를 다루기 때문. 우리도 분리 유지.
+
+| 차원 | AI Top Picks (`/pages/proposals`) | Screener (`/pages/screener`) |
+|---|---|---|
+| 데이터 소스 | `daily_top_picks` + `investment_proposals` Stage 1·2 분석 | `stock_universe` + `stock_universe_ohlcv` 메트릭 |
+| AI 개입 | 높음 (Stage 1·2·3 Claude SDK) | 낮음 (룰 기반 필터) |
+| 갱신 | 매일 1회 배치 | 사용자 트리거 즉시 |
+| 결과 폭 | 좁음 (TopN + 근거/리스크 텍스트) | 넓음 (수십~수백 매칭) |
+| 사용자 의도 | "골라줘" | "내 기준으로 찾기" |
+
+### 10.2 라벨 변경 — `Stock Picks` → `AI Top Picks`
+
+이유:
+- "Stock Picks"는 정체성이 약함 (사용자가 만든 픽인지 AI가 큐레이션한 것인지 모호).
+- 사이드바 다른 항목(`AI Tutor`, `Theme Chat`)과 "AI" 접두 패턴 일관.
+- "AI"를 명시함으로써 Stage 1·2·3 분석 결과라는 점이 명확.
+
+영향 파일 (라벨 텍스트만 변경, URL/active_page 키는 유지):
+- `api/templates/base.html` (sidebar 1곳)
+- `api/templates/watchlist.html` (CTA/empty state 3곳)
+- `api/templates/dashboard.html` 또는 `partials/dashboard/_top_picks.html` (혹시 "Stock Picks" 라벨이 있는 경우 일괄 점검)
+- `api/templates/proposals.html` (페이지 헤더 타이틀)
+
+`active_page='proposals'` / URL `/pages/proposals` 는 변경하지 않음 — 라우트 정합성 깨면 안 됨. **표기 라벨만**.
+
+### 10.3 Cross-link (양방향)
+
+#### (a) Screener → AI Top Picks 식별 뱃지
+
+오늘의 `daily_top_picks` 에 포함된 종목이 Screener 결과에 등장하면 행에 **🏆 AI Pick** 뱃지 표시.
+
+API 변경 — `/api/screener/run` 응답에 `is_top_pick: bool` 추가:
+
+```sql
+-- CTE 추가 — 가장 최근 analysis_date 의 Top Picks 사용
+-- (KST 06:30 이전엔 오늘 픽이 없으므로 어제·지난 N일 픽으로 폴백)
+top_picks_recent AS (
+    SELECT DISTINCT UPPER(p.ticker) AS ticker, UPPER(p.market) AS market
+    FROM investment_proposals p
+    JOIN daily_top_picks d ON d.proposal_id = p.id
+    WHERE d.analysis_date = (
+        SELECT MAX(analysis_date)
+        FROM daily_top_picks
+        WHERE analysis_date >= CURRENT_DATE - INTERVAL '7 days'
+    )
+)
+-- SELECT 추가
+(tp.ticker IS NOT NULL) AS is_top_pick
+-- LEFT JOIN
+LEFT JOIN top_picks_recent tp
+  ON tp.ticker = UPPER(u.ticker) AND tp.market = UPPER(u.market)
+```
+
+`daily_top_picks.proposal_id INT REFERENCES investment_proposals(id)` (v15) 로 JOIN 키 확정. 7일 이상 픽이 없으면 결과는 모두 `is_top_pick=false` (스크리너는 정상 동작, 뱃지만 안 보임).
+
+뱃지 클릭 시 `/pages/proposals/history/{ticker}` 로 이동 (이미 행 클릭과 동일 — 별도 `aria-label` 만 추가).
+
+#### (b) AI Top Picks → Screener "비슷한 종목" CTA
+
+`api/templates/proposals.html` (또는 detail 매크로 `_macros/proposal.html`) 의 종목 카드에 작은 CTA 버튼:
+
+> 🔍 비슷한 종목 더 찾기 (Screener)
+
+링크 형태: `/pages/screener?sectors=<sector_norm>&market_cap_buckets=<bucket>` (URL 쿼리스트링으로 prefilled)
+
+Screener 페이지가 로드 시 `URLSearchParams` 를 읽어 spec 으로 변환 + 자동 실행. 클라이언트 한 줄 추가.
+
+### 10.4 작업 영향 요약
+
+- 신규 파일 없음
+- DB 스키마 변경 없음 (CTE 추가만)
+- 영향 파일: `base.html`, `watchlist.html`, `dashboard.html`/partials, `proposals.html`/macros, `screener.html`, `screener.py`
+- 사용자 입장에서: 사이드바 라벨 1자리 + 결과 표 뱃지 + 픽 카드 버튼 1개 (가벼운 변화)
 
 ---
 
-## 11. 결정 기록
+## 11. 작업 단위 (Implementation Plan에서 세분화)
+
+1. `api/routes/screener.py` — `/run` CTE/WHERE 확장, `/sectors` 신설, sector 라벨 const, `top_picks_today` CTE + `is_top_pick`
+2. `api/templates/screener.html` — 탭/View/검색박스/컬럼 토글/스파크라인 렌더 + 모듈 IIFE 정리, `is_top_pick` 뱃지, URL 쿼리스트링 prefill
+3. `api/static/css/src/14_screener.css` — 탭/뷰/sticky/모바일 미디어 + AI Pick 뱃지 스타일
+4. **라벨 변경**: `api/templates/base.html`, `api/templates/watchlist.html`, `api/templates/dashboard.html` (+ partials), `api/templates/proposals.html` 의 "Stock Picks" → "AI Top Picks"
+5. **Cross-link**: `api/templates/proposals.html` 또는 `_macros/proposal.html` 에 "🔍 비슷한 종목 더 찾기" 버튼
+6. `tests/test_screener_run.py` — 신규 spec 필드 + `is_top_pick` 플래그 smoke
+7. (옵션) `tools/build_css.py` 한 번 실행해서 빌드 산출물 갱신
+
+---
+
+## 12. 결정 기록
 
 | # | 질문 | 선택 | 이유 |
 |---|---|---|---|
@@ -385,3 +469,6 @@ SECTOR_LABELS = {
 | 4 | 정렬? | 단일 컬럼 클라이언트 정렬 | 다중 정렬은 UX 무거움 + 현 데이터로 가치 적음. |
 | 5 | 스파크라인? | Overview만, on/off 토글 | 시각적 가치 vs 페이로드 트레이드오프. 토글로 사용자 선택. |
 | 6 | DB 스키마 변경? | 없음 | 기존 `stock_universe` + `stock_universe_ohlcv` 만으로 모든 메트릭 산출. |
+| 7 | Stock Picks vs Screener 분리/통합? | **분리 유지** | Yahoo/Zacks/Morningstar/한국증권사 모두 분리. 사용자 의도(수동 큐레이션 vs 능동 발굴)가 본질적으로 다름. |
+| 8 | Stock Picks 라벨? | **`AI Top Picks` 로 변경** | 정체성 강화(AI 큐레이션 명시) + 사이드바 "AI" 접두 패턴(`AI Tutor` 등) 일관. URL/active_page 키는 유지. |
+| 9 | Cross-link? | **양방향** (Screener 결과에 AI Pick 뱃지, AI Top Picks 카드에 "비슷한 종목" Screener prefilled CTA) | 분리는 유지하되 두 도구를 잇는 가벼운 path 제공 — 사용자가 한 도구에서 다른 도구로 자연스럽게 흐름. |
