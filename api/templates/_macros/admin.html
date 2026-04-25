@@ -1,0 +1,63 @@
+{# 관리자 페이지 공용 매크로 — systemd unit 카드 + SSE 로그 패널 #}
+
+{# ───────────── 공용 SSE 로그 패널 ─────────────
+   panel_id: <pre> 의 id (attachSseLog 에서 참조)
+   height  : CSS 높이 (기본 360px)
+#}
+{% macro sse_log_panel(panel_id, height='360px') -%}
+<pre id="{{ panel_id }}"
+     style="height:{{ height }};overflow:auto;background:#0a0c10;color:#c0c4d0;
+            padding:12px;font-size:12px;line-height:1.5;border-radius:6px;
+            font-family:'Consolas','Monaco','Courier New',monospace;
+            margin:0;white-space:pre-wrap;word-break:break-all;"></pre>
+{%- endmacro %}
+
+
+{# ───────────── systemd unit 카드 ─────────────
+   unit dict:
+     key, label, category, service, timer, self_protected,
+     schedule, description, active ('active'/'inactive'/'failed'/...),
+     enabled (bool)
+#}
+{% macro unit_card(unit) -%}
+{% set protected = unit.self_protected %}
+<div class="card{% if protected %} admin-card-protected{% endif %}"
+     data-unit-key="{{ unit.key }}"
+     style="padding:14px 18px;margin-bottom:10px;">
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+    <div style="min-width:240px;flex:1;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-size:14px;font-weight:600;">{{ unit.label }}</span>
+        <span class="admin-status admin-status-{{ unit.active or 'inactive' }}"
+              data-status-badge="{{ unit.key }}">{{ unit.active or 'inactive' }}</span>
+      </div>
+      <div style="font-size:12px;color:var(--text-muted);margin-top:2px;">{{ unit.description }}</div>
+      <div class="admin-next-run">
+        <code style="font-size:11px;">{{ unit.service }}</code>
+        {% if unit.schedule %}· {{ unit.schedule }}{% endif %}
+      </div>
+    </div>
+    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+      {% if protected %}
+        <span style="font-size:11px;color:var(--text-muted);max-width:280px;text-align:right;">
+          이 서비스는 자기 자신을 제어할 수 없습니다 — SSH로 처리하세요
+        </span>
+      {% else %}
+        <button class="btn" data-systemd-action="start"   data-key="{{ unit.key }}">Start</button>
+        <button class="btn" data-systemd-action="stop"    data-key="{{ unit.key }}">Stop</button>
+        <button class="btn" data-systemd-action="restart" data-key="{{ unit.key }}">Restart</button>
+        {% if unit.timer %}
+          <button class="btn"
+                  data-systemd-action="{{ 'disable' if unit.enabled else 'enable' }}"
+                  data-key="{{ unit.key }}"
+                  data-toggle-enable="1">
+            {{ 'Disable' if unit.enabled else 'Enable' }}
+          </button>
+        {% endif %}
+      {% endif %}
+      <button class="btn" data-systemd-log="{{ unit.key }}"
+              data-label="{{ unit.label }}">로그</button>
+    </div>
+  </div>
+</div>
+{%- endmacro %}
