@@ -33,6 +33,13 @@ from shared.logger import get_logger
 _KST = ZoneInfo("Asia/Seoul")
 _log = get_logger("regime")
 
+# 집계 최소 행수 — 이 미만이면 NULL 처리 (라벨과 의미 불일치 방지)
+# Why: 200MA·52w 고점·60일 변동성 라벨은 충분한 표본을 전제하므로,
+#      backfill 부족 환경에서 짧은 평균이 그대로 노출되면 사용자 오독을 부른다.
+_MIN_ROWS_MA200 = 200
+_MIN_ROWS_52W = 200          # 252영업일 ≈ 1년. 보수적 근사로 200행이면 인정
+_MIN_ROWS_VOL60 = 60
+
 
 # index_code → 표시용 한글 이름
 _INDEX_LABELS = {
@@ -57,7 +64,11 @@ def _classify_vol(v: float | None) -> str:
 
 
 def _compute_index_regime(db_cfg: DatabaseConfig, index_code: str) -> dict | None:
-    """단일 인덱스의 regime 지표 계산."""
+    """단일 인덱스의 regime 지표 계산.
+
+    행수 가드: 표본이 임계 미만이면 해당 지표를 NULL로 떨어뜨려
+              "200MA"·"60D 변동성" 라벨이 짧은 평균을 가리지 않게 한다.
+    """
     sql = """
     WITH ranked AS (
         SELECT trade_date, close::float AS close, change_pct::float AS change_pct,
@@ -69,19 +80,29 @@ def _compute_index_regime(db_cfg: DatabaseConfig, index_code: str) -> dict | Non
     agg AS (
         SELECT
             MAX(CASE WHEN rn = 1 THEN close END) AS close_latest,
-            AVG(close) FILTER (WHERE rn <= 200) AS ma200,
-            MAX(close) FILTER (WHERE rn <= 252) AS high_52w,
-            STDDEV(LEAST(GREATEST(change_pct, -10), 10)) FILTER (WHERE rn <= 60) AS vol60,
+            AVG(close) FILTER (WHERE rn <= 200) AS ma200_raw,
+            COUNT(*) FILTER (WHERE rn <= 200) AS ma200_n,
+            MAX(close) FILTER (WHERE rn <= 252) AS high_52w_raw,
+            COUNT(*) FILTER (WHERE rn <= 252) AS high_52w_n,
+            STDDEV(LEAST(GREATEST(change_pct, -10), 10)) FILTER (WHERE rn <= 60) AS vol60_raw,
+            COUNT(*) FILTER (WHERE rn <= 60) AS vol60_n,
             MAX(CASE WHEN rn = 22 THEN close END) AS close_1m,
             MAX(CASE WHEN rn = 66 THEN close END) AS close_3m
         FROM ranked
     )
-    SELECT close_latest, ma200, high_52w, vol60, close_1m, close_3m FROM agg
+    SELECT
+        close_latest,
+        CASE WHEN ma200_n    >= %s THEN ma200_raw    ELSE NULL END AS ma200,
+        CASE WHEN high_52w_n >= %s THEN high_52w_raw ELSE NULL END AS high_52w,
+        CASE WHEN vol60_n    >= %s THEN vol60_raw    ELSE NULL END AS vol60,
+        close_1m, close_3m,
+        ma200_n, high_52w_n, vol60_n
+    FROM agg
     """
     conn = get_connection(db_cfg)
     try:
         with conn.cursor() as cur:
-            cur.execute(sql, (index_code,))
+            cur.execute(sql, (index_code, _MIN_ROWS_MA200, _MIN_ROWS_52W, _MIN_ROWS_VOL60))
             row = cur.fetchone()
     except Exception as e:
         _log.warning(f"[regime/{index_code}] 집계 실패: {e}")
@@ -95,7 +116,20 @@ def _compute_index_regime(db_cfg: DatabaseConfig, index_code: str) -> dict | Non
 
     if not row or row[0] is None:
         return None
-    close_latest, ma200, high_52w, vol60, close_1m, close_3m = row
+    (close_latest, ma200, high_52w, vol60, close_1m, close_3m,
+     ma200_n, high_52w_n, vol60_n) = row
+
+    # 행수 부족 경고 — 한 번만 (인덱스별)
+    if ma200 is None:
+        _log.info(
+            f"[regime/{index_code}] 200MA 데이터 부족 (n={ma200_n} < {_MIN_ROWS_MA200}) "
+            f"— 이격도/추세 NULL 처리"
+        )
+    if vol60 is None:
+        _log.info(
+            f"[regime/{index_code}] 60D 변동성 데이터 부족 (n={vol60_n} < {_MIN_ROWS_VOL60}) "
+            f"— 변동성 NULL 처리"
+        )
 
     def _pct_from(base: float | None) -> float | None:
         if base is None or float(base) <= 0:

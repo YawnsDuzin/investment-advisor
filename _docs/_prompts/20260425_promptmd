@@ -6,9 +6,182 @@
 
 [추가1] 미국 장 마감 시각 (KST): 감안해서, 06:30 분에 작업 실행되도록 통일하고,, 제안해준 전체적인 작업 진행해줘.
 
+/commit
+
 ========================
 
-deploy\systemd\README.md 에 설정되는 서비스를 웹페이지의 "관리자 메뉴"에서 수동으로 모두 처리 가능하도록 구현해줘.
+/prompt-improve deploy\systemd\README.md 에 설정되는 서비스를 웹페이지의 "관리자 메뉴"에서 수동으로 모두 처리 가능하도록 구현해줘. 
+
+[[개선된 프롬프트
+당신은 FastAPI + systemd 운영 자동화에 능숙한 풀스택 엔지니어입니다.
+
+## 배경
+투자 분석 시스템(이 저장소)은 라즈베리파이에서 systemd로 8개 unit(service+timer)을 운영한다.
+현재 `deploy/systemd/README.md`에 정의된 모든 unit을 SSH 없이 웹 UI에서 수동 제어할 수 있도록
+기존 관리자 페이지(`/admin`, `api/routes/admin.py`, `api/templates/admin.html`)를 확장한다.
+
+기존 자산:
+- 인증/권한: `api/auth/dependencies.require_role("admin")` — 모든 신규 엔드포인트에 적용
+- SSE 로그 스트리밍 패턴: `admin.py`의 `_broadcast` / `_subscribers` 구조 재활용
+- 감사 로그: `admin_audit_logs` 테이블(v17) — 모든 systemctl 액션 기록
+
+## 제어 대상 unit (deploy/systemd/README.md 기준)
+
+| 카테고리 | unit | 종류 |
+|---|---|---|
+| A. 필수 | investment-advisor-api.service | 상시 (Restart=always) |
+| A. 필수 | investment-advisor-analyzer.service + .timer | 매일 06:30 |
+| B. Universe/OHLCV | universe-sync-price.service + .timer | 매일 06:30 |
+| B. Universe/OHLCV | universe-sync-meta.service + .timer | 매주 일 07:30 |
+| B. Universe/OHLCV | ohlcv-cleanup.service + .timer | 매주 일 08:00 |
+| C. 섹터 | monthly-sector-refresh.service + .timer | 매월 1일 07:45 |
+| D. 브리핑 | pre-market-briefing.service + .timer | 매일 06:30 |
+
+## 작업 지시
+
+### 1. 백엔드 — `api/routes/admin.py` 확장 (또는 `api/routes/admin_systemd.py` 신규)
+
+다음 엔드포인트를 추가한다. 모두 `require_role("admin")` 의존성 + `admin_audit_logs` 기록.
+
+| Method | Path | 동작 |
+|---|---|---|
+| GET | `/admin/systemd/units` | 모든 관리 대상 unit의 상태 일괄 조회(active/inactive, enabled/disabled, 최근 실행시각, 다음 실행시각) |
+| GET | `/admin/systemd/units/{unit}` | 단일 unit 상세 (`systemctl show` + 최근 journal 50줄) |
+| POST | `/admin/systemd/units/{unit}/start` | `systemctl start` (1회 실행) |
+| POST | `/admin/systemd/units/{unit}/stop` | `systemctl stop` |
+| POST | `/admin/systemd/units/{unit}/restart` | `systemctl restart` |
+| POST | `/admin/systemd/units/{unit}/enable` | `systemctl enable --now` |
+| POST | `/admin/systemd/units/{unit}/disable` | `systemctl disable --now` |
+| GET | `/admin/systemd/units/{unit}/logs/stream` | journalctl -f SSE 스트리밍 (기존 `_broadcast` 패턴 재사용) |
+
+구현 요건:
+- **화이트리스트 강제**: 위 8개 unit 외에는 `400 Bad Request` 반환. 임의 unit 이름 주입 차단.
+- **OS 가드**: `platform.system() != "Linux"` 또는 `shutil.which("systemctl") is None`이면 `503 Service Unavailable` + `{"error": "systemd_unavailable", "platform": "..."}` 반환 (Windows 개발환경 대응).
+- **subprocess 호출**: `shell=False`, 인자 리스트로 전달, 타임아웃 10초. `sudo`는 systemd unit 화이트리스트 + sudoers `NOPASSWD` 사전 설정 가정 — README에 명시.
+- **상태 파싱**: `systemctl show <unit> --property=ActiveState,SubState,UnitFileState,LoadState` JSON 변환. 타이머는 `--property=NextElapseUSecRealtime,LastTriggerUSec` 추가.
+
+### 2. 프론트엔드 — `api/templates/admin.html` 확장
+
+기존 분석 실행 패널 아래 "systemd 서비스 관리" 섹션을 추가한다.
+
+요건:
+- 카테고리(A/B/C/D)별로 그룹핑된 카드 레이아웃
+- 각 unit 카드: unit명, 역할(README 1줄 설명), 현재 상태 뱃지(active/inactive 색상), 다음 실행 예정시각, 액션 버튼 4종(Start/Stop/Restart/Enable·Disable 토글)
+- 액션 버튼 클릭 시 confirm 다이얼로그 → fetch → 결과 토스트 표시 → 상태 자동 새로고침
+- "로그 보기" 버튼 → 모달 또는 우측 패널에서 SSE 실시간 스트리밍 (기존 분석 로그 SSE 컴포넌트 재사용)
+- systemd 미지원 환경(Windows)에서는 섹션 전체에 "이 환경에서는 systemd를 사용할 수 없습니다" 안내 + 모든 버튼 disabled
+
+### 3. 보안 / 감사
+- 모든 mutation 엔드포인트 호출 시 `admin_audit_logs`에 `action='systemd_<verb>'`, `target_email=NULL`, 상세 unit명을 `details`에 기록
+- 화이트리스트 위반 시도도 로그 기록 (보안 이벤트)
+
+### 4. README 갱신
+`deploy/systemd/README.md`에 "웹 UI에서 관리하기" 섹션 추가:
+- sudoers 설정 예시 (`/etc/sudoers.d/investment-advisor-systemd`): 8개 unit + 4개 verb로 NOPASSWD 명령 화이트리스트 명시
+- 보안 주의사항: sudoers 화이트리스트 외 명령은 절대 허용 금지
+
+## 출력 형식
+- 코드는 직접 파일에 적용 (Edit/Write)
+- 신규 모듈 생성 시 `api/routes/admin_systemd.py` 권장 (admin.py가 이미 큼)
+- 라우터는 `api/main.py`에 등록
+- 마이그레이션 없음 (admin_audit_logs 재활용)
+- 작업 후 변경 파일 목록 + 수동 검증 절차(Linux/Windows) 1줄씩 보고
+
+## 제약 조건
+- `superpowers:brainstorming` 스킬을 먼저 호출해 요구사항을 짧게 정렬한 뒤 구현 시작
+- TDD 강제는 아니나, subprocess 래퍼와 화이트리스트 검증은 단위 테스트 작성 (`tests/conftest.py`의 mock 패턴 따름)
+- 새 `.md` 문서를 만든다면 `_docs/YYYYMMDDHHMMSS_<slug>.md` 명명 규칙 준수
+- `.env`/secrets/sudoers 실제 파일은 생성하지 말고 README 예시로만 제공
+- "응답 톤" 섹션(천재 해커 페르소나) 유지
+
+
+[추가1] /prompt-improve deploy\systemd\README.md 에 설정되는 서비스를 각각 제어 가능하도록 구현하는거지?? 그리고 기존에 admin.html 에 구현되어 있는 기능도 효율적으로 통합되도록 ux 구현해줘.
+[추가2] 작성된 계획으로 작업 진행해줘.
+
+========================
+
+아래대로 진행하면 모든 서비스가 라즈베리파이에 다 등록되는거야?
+
+라즈베리파이 수동 검증 절차:
+git pull 후 sudo systemctl restart investment-advisor-api
+/etc/sudoers.d/investment-advisor-systemd 작성 + chmod 0440 + visudo -c 검증
+sudo usermod -aG adm,systemd-journal dzp 후 재로그인
+/admin → 운영 탭 → analyzer 카드 Start 클릭 → 상태 뱃지 active 전환 + 로그 버튼으로 journal 라이브 스트림 확인
+
+[[답변
+cd /home/dzp/dzp-main/program/investment-advisor
+git pull
+cd deploy/systemd
+
+INSTALL_DIR=/home/dzp/dzp-main/program/investment-advisor
+VENV_PYTHON=$INSTALL_DIR/venv/bin/python
+SYSTEM_USER=dzp
+
+for f in *.service *.timer; do
+  sed -e "s|__INSTALL_DIR__|$INSTALL_DIR|g" \
+      -e "s|__VENV_PYTHON__|$VENV_PYTHON|g" \
+      -e "s|__SYSTEM_USER__|$SYSTEM_USER|g" \
+      "$f" | sudo tee "/etc/systemd/system/$f" > /dev/null
+done
+
+sudo systemctl daemon-reload
+sudo systemctl enable --now investment-advisor-api.service \
+                              investment-advisor-analyzer.timer \
+                              universe-sync-price.timer \
+                              universe-sync-meta.timer \
+                              ohlcv-cleanup.timer \
+                              monthly-sector-refresh.timer \
+                              pre-market-briefing.timer
+
+# 그 다음 sudoers + journal 그룹 (Phase B)
+
+
+[추가1] # "그 다음 sudoers + journal 그룹 (Phase B)" 는 어떻게 설치하는거야?
+
+========================
+
+"프리마켓 브리핑" 메뉴 클릭하면 첨부이미지와 같이 오류창이 표시되고 있어
+
+[[라즈베리파이 배포:
+    cd /home/dzp/dzp-main/program/investment-advisor
+    source venv/bin/activate
+    git pull origin main
+    sudo systemctl restart investment-advisor-api
+    # 브라우저에서 /pages/briefing 새로고침 → 200
+
+========================
+
+"관리자 메뉴" 의 "운영" 탭의 각 항목의 "로그" 버튼을 확인 시, 최신 로그순서로 표시되도록 변경해줘.
+
+========================
+
+/init
+
+========================
+
+Screener 화면에서 좀더 세분화 조회가 가능하도록 개선해줘(티커 조회 항목 추가 포함). 그리고 결과도 좀더 정보를 자세하게 표시되도록 보완해줘. 비슷한 타 서비스를 참조해서 제안해줘.
+
+[추가1] "권장 B 안" 으로 작업 진행해줘.
+[추가2] "(B-3) 하이브리드 — B-1 먼저, 펀더멘털은 후속" 방법으로 작업 진행해줘.
+[추가3] "권장 L-1" 방법으로 진행해줘.
+[추가4] 이대로 진행해줘.
+
+========================
+
+"DashBoard" 상단에 표시되는 "시장 레짐"에 표시되는 항목의 의미와 계산로직을 정리해서 알려줘. 첨부이미지와 같이 표시되고 있는데, 맞는 데이터 인지도 확인해줘.
+
+[추가1] 현재의 표시방식은 처음보는 사용자가 봤을때는 어떤 데이터인지 확인이 불가하지 않아?
+[추가2] 추천해준 1+2 혼합 방법으로 작업 진행해줘.
+[추가3] 어 이어서 진행해줘.
+[추가4] 라즈베리파이 적용하는 부분 순서대로 정리해서 알려줘.
+
+========================
+
+"Stock Picks", "Screener" 의 차이점이 뭐인지?? 이렇게 별개로 생성하는게 일반적인 구성인지 검토해줘.
+
+[추가1] "C. 라벨 변경까지" 방향으로 작업 진행해줘.
+[추가2] 이대로 작업계속 진행해줘.
+[추가3] "1. Subagent-Driven (권장)" 쪽으로 진행해줘.
 
 ========================
 ========================

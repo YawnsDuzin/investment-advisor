@@ -49,6 +49,14 @@
     {% if p.has_stock_analysis %}
     <a href="/proposals/{{ p.id }}/stock-analysis" target="_blank" class="stock-analysis-link">종목 심층분석 보기</a>
     {% endif %}
+    {% if p.sector_norm or p.market_cap_bucket %}
+    <div style="margin-top:8px;">
+        <a href="/pages/screener?{% if p.sector_norm %}sectors={{ p.sector_norm }}{% endif %}{% if p.sector_norm and p.market_cap_bucket %}&{% endif %}{% if p.market_cap_bucket %}market_cap_buckets={{ p.market_cap_bucket }}{% endif %}"
+           class="btn" style="font-size:11px;padding:3px 10px;color:var(--text-muted);">
+            🔍 비슷한 종목 더 찾기
+        </a>
+    </div>
+    {% endif %}
 </div>
 {% endmacro %}
 
@@ -149,6 +157,14 @@
     {% endif %}
 
     {{ factor_snapshot_panel(p.factor_snapshot) }}
+    {% if p.sector_norm or p.market_cap_bucket %}
+    <div style="margin-top:10px;">
+        <a href="/pages/screener?{% if p.sector_norm %}sectors={{ p.sector_norm }}{% endif %}{% if p.sector_norm and p.market_cap_bucket %}&{% endif %}{% if p.market_cap_bucket %}market_cap_buckets={{ p.market_cap_bucket }}{% endif %}"
+           class="btn" style="font-size:11px;padding:3px 10px;color:var(--text-muted);">
+            🔍 비슷한 종목 더 찾기
+        </a>
+    </div>
+    {% endif %}
 </div>
 {% endmacro %}
 

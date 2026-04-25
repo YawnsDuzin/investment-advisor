@@ -48,6 +48,14 @@ MANAGED_UNITS: list[dict] = [
         "description": "stock_universe_ohlcv 일별 sync",
     },
     {
+        "key": "sync-indices", "category": "B", "label": "시장 지수 OHLCV sync",
+        "service": "universe-sync-indices.service",
+        "timer": "universe-sync-indices.timer",
+        "self_protected": False,
+        "schedule": "매일 06:30 KST",
+        "description": "KOSPI/KOSDAQ/SP500/NDX100 일별 sync — market_regime 입력",
+    },
+    {
         "key": "sync-meta", "category": "B", "label": "Universe 메타 sync",
         "service": "universe-sync-meta.service",
         "timer": "universe-sync-meta.timer",

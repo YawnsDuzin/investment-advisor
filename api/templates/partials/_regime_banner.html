@@ -5,6 +5,8 @@
         {"indices": {...}, "breadth_kr_pct": float, "computed_at": str}
   사용처: dashboard.html 상단, session_detail.html 등 원하는 곳에서 include
   주의: regime이 None/빈 dict면 아무것도 렌더하지 않음 (백필 이전 호환)
+  표시 원칙: 배지 텍스트는 단위·기준을 자기설명적으로 박고(예: "200MA +5.3%"),
+            상세 정의는 우측 ⓘ 지표 설명 펼침 패널에 둔다.
 #}
 {% if regime and regime.indices %}
 {% set kospi = regime.indices.get('KOSPI') %}
@@ -12,50 +14,93 @@
 {% set sp500 = regime.indices.get('SP500') %}
 {% set ndx = regime.indices.get('NDX100') %}
 {% set breadth = regime.breadth_kr_pct %}
-<div class="regime-banner" style="display:flex;flex-wrap:wrap;gap:10px;padding:10px 14px;margin-bottom:12px;background:rgba(79,140,255,0.06);border:1px solid rgba(79,140,255,0.2);border-radius:8px;font-size:12px;align-items:center;">
-    <span style="display:inline-flex;align-items:center;gap:6px;color:var(--accent);font-weight:600;">
-        <i data-lucide="activity" style="width:14px;height:14px;" aria-hidden="true"></i>
-        시장 레짐
-    </span>
-
-    {% for label, data in [('KOSPI', kospi), ('KOSDAQ', kosdaq), ('S&P500', sp500), ('NDX100', ndx)] %}
-    {% if data %}
-    {% set above = data.above_200ma %}
-    {% set vol_rg = data.vol_regime %}
-    {% set dd = data.drawdown_from_52w_high_pct %}
-    {% set r1 = data.return_1m_pct %}
-    {% set trend_color = 'var(--green)' if above else 'var(--red)' %}
-    {% set vol_color = {'low': 'var(--green)', 'mid': '#eab308', 'high': 'var(--red)'}.get(vol_rg, 'var(--text-muted)') %}
-    <span class="regime-index"
-          style="display:inline-flex;align-items:center;gap:4px;padding:4px 8px;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:6px;"
-          title="200MA {{ '위' if above else '아래' }} · 변동성 {{ vol_rg }} · 52w고점 대비 {{ '%+.2f'|format(dd) if dd is not none else '-' }}% · 1M {{ '%+.2f'|format(r1) if r1 is not none else '-' }}%">
-        <strong>{{ label }}</strong>
-        <span style="color:{{ trend_color }};font-weight:600;">
-            {% if above %}▲{% else %}▼{% endif %}
-            {% if data.pct_from_ma200 is not none %}{{ '%+.1f'|format(data.pct_from_ma200) }}%{% endif %}
+<style>
+  .regime-banner details > summary { list-style: none; cursor: pointer; }
+  .regime-banner details > summary::-webkit-details-marker { display: none; }
+  .regime-banner details > summary::marker { content: ""; }
+  .regime-banner .regime-legend-panel dt { font-weight:600; color:var(--text); margin-top:6px; }
+  .regime-banner .regime-legend-panel dt:first-child { margin-top:0; }
+  .regime-banner .regime-legend-panel dd { margin:2px 0 0 0; color:var(--text-muted); font-size:11px; line-height:1.5; }
+  .regime-banner .regime-legend-panel code { background:rgba(255,255,255,0.06); padding:1px 4px; border-radius:3px; font-size:11px; }
+</style>
+<div class="regime-banner" style="padding:10px 14px;margin-bottom:12px;background:rgba(79,140,255,0.06);border:1px solid rgba(79,140,255,0.2);border-radius:8px;font-size:12px;">
+    <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;">
+        <span style="display:inline-flex;align-items:center;gap:6px;color:var(--accent);font-weight:600;">
+            <i data-lucide="activity" style="width:14px;height:14px;" aria-hidden="true"></i>
+            시장 레짐
         </span>
-        <span style="color:{{ vol_color }};font-size:11px;">
-            {{ {'low': '저변동', 'mid': '중변동', 'high': '고변동'}.get(vol_rg, '') }}
+
+        {% for label, data in [('KOSPI', kospi), ('KOSDAQ', kosdaq), ('S&P500', sp500), ('NDX100', ndx)] %}
+        {% if data %}
+        {% set above = data.above_200ma %}
+        {% set vol_rg = data.vol_regime %}
+        {% set dd = data.drawdown_from_52w_high_pct %}
+        {% set r1 = data.return_1m_pct %}
+        {% set trend_color = 'var(--green)' if above else 'var(--red)' %}
+        {% set vol_color = {'low': 'var(--green)', 'mid': '#eab308', 'high': 'var(--red)'}.get(vol_rg, 'var(--text-muted)') %}
+        <span class="regime-index"
+              style="display:inline-flex;align-items:center;gap:4px;padding:4px 8px;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:6px;"
+              title="종가 {{ '200MA 위' if above else '200MA 아래' }} · 60일 변동성 {{ vol_rg }} · 52주 고점 대비 {{ '%+.2f'|format(dd) if dd is not none else '-' }}% · 1개월 수익률 {{ '%+.2f'|format(r1) if r1 is not none else '-' }}%">
+            <strong>{{ label }}</strong>
+            {% if data.pct_from_ma200 is not none %}
+            <span style="color:{{ trend_color }};font-weight:600;">
+                {% if above %}▲{% else %}▼{% endif %} 200MA {{ '%+.1f'|format(data.pct_from_ma200) }}%
+            </span>
+            {% else %}
+            <span style="color:{{ trend_color }};font-weight:600;">{% if above %}▲{% else %}▼{% endif %}</span>
+            {% endif %}
+            {% if vol_rg and vol_rg != 'unknown' %}
+            <span style="color:{{ vol_color }};font-size:11px;">
+                · σ60 {{ {'low': '저변동', 'mid': '중변동', 'high': '고변동'}.get(vol_rg, '') }}
+            </span>
+            {% endif %}
         </span>
-    </span>
-    {% endif %}
-    {% endfor %}
+        {% endif %}
+        {% endfor %}
 
-    {% if breadth is not none %}
-    {% set b_color = 'var(--green)' if breadth >= 60 else ('var(--red)' if breadth <= 40 else 'var(--text-muted)') %}
-    <span class="regime-breadth"
-          style="display:inline-flex;align-items:center;gap:4px;padding:4px 8px;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:6px;"
-          title="KRX universe 중 최근 20일 수익률 > 0 종목 비율">
-        <i data-lucide="bar-chart-3" style="width:12px;height:12px;" aria-hidden="true"></i>
-        KRX 시장폭
-        <strong style="color:{{ b_color }};">{{ '%.1f'|format(breadth) }}%</strong>
-    </span>
-    {% endif %}
+        {% if breadth is not none %}
+        {% set b_color = 'var(--green)' if breadth >= 60 else ('var(--red)' if breadth <= 40 else 'var(--text-muted)') %}
+        <span class="regime-breadth"
+              style="display:inline-flex;align-items:center;gap:4px;padding:4px 8px;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:6px;"
+              title="KOSPI+KOSDAQ universe 중 최근 20거래일 종가가 상승한 종목 비율">
+            <i data-lucide="bar-chart-3" style="width:12px;height:12px;" aria-hidden="true"></i>
+            KRX 시장폭 (20D 상승비)
+            <strong style="color:{{ b_color }};">{{ '%.1f'|format(breadth) }}%</strong>
+        </span>
+        {% endif %}
 
-    {% if regime.computed_at %}
-    <span style="margin-left:auto;font-size:10px;color:var(--text-muted);">
-        {{ regime.computed_at[:16] }}
-    </span>
-    {% endif %}
+        <div style="margin-left:auto;display:inline-flex;align-items:center;gap:10px;">
+            {% if regime.computed_at %}
+            <span style="font-size:10px;color:var(--text-muted);">
+                {{ regime.computed_at[:16] }}
+            </span>
+            {% endif %}
+        </div>
+    </div>
+
+    <details style="margin-top:8px;">
+        <summary style="display:inline-flex;align-items:center;gap:4px;color:var(--text-muted);font-size:11px;">
+            <i data-lucide="info" style="width:12px;height:12px;" aria-hidden="true"></i>
+            지표 설명
+        </summary>
+        <div class="regime-legend-panel" style="margin-top:8px;padding:10px 12px;background:rgba(0,0,0,0.18);border:1px solid var(--border);border-radius:6px;">
+            <dl style="margin:0;">
+                <dt>▲ / ▼</dt>
+                <dd>종가가 <code>200일 이동평균선(200MA)</code> 위/아래에 있는지. 추세의 방향을 의미한다 — 위면 강세, 아래면 약세.</dd>
+
+                <dt>200MA ±%</dt>
+                <dd><b>이격도</b>: <code>(현재가 − 200MA) ÷ 200MA × 100</code>. 시장의 단기 상승률이 아니라 <b>장기 추세선과 얼마나 떨어져 있는지</b>를 나타낸다. 양수가 클수록 과열, 음수가 클수록 침체 신호.</dd>
+
+                <dt>σ60 (저/중/고변동)</dt>
+                <dd><b>60일 변동성</b>: 최근 60거래일의 일별 등락률 표준편차(±10% clamp 후). <code>&lt;1%</code> 저변동, <code>1~2%</code> 중변동, <code>&gt;2%</code> 고변동. 고변동 국면에선 손절 폭과 포지션 크기를 보수적으로.</dd>
+
+                <dt>KRX 시장폭 (20D 상승비)</dt>
+                <dd>KOSPI+KOSDAQ 전 종목 중 <b>최근 20거래일 종가가 상승</b>한 종목의 비율. 60% 이상이면 시장 전반 강세, 40% 이하면 일부 대형주만 끌고 가는 약한 장세.</dd>
+
+                <dt style="margin-top:8px;border-top:1px solid var(--border);padding-top:6px;font-weight:500;color:var(--text-muted);">데이터 소스</dt>
+                <dd>KRX 인덱스(<code>1001/2001</code>)는 pykrx, 미국 인덱스(<code>^GSPC/^NDX</code>)는 yfinance. <code>market_indices_ohlcv</code> 테이블에 일별 저장되며, 분석 세션 진입 시점의 스냅샷이 <code>analysis_sessions.market_regime</code>에 영속화된다.</dd>
+            </dl>
+        </div>
+    </details>
 </div>
 {% endif %}

@@ -23,7 +23,7 @@
   }
 """
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, Body
+from fastapi import APIRouter, Depends, HTTPException, Body, Response
 from psycopg2.extras import RealDictCursor
 import json
 
@@ -40,6 +40,38 @@ from shared.tier_limits import (
 router = APIRouter(prefix="/api/screener", tags=["스크리너"])
 pages_router = APIRouter(prefix="/pages/screener", tags=["스크리너 페이지"])
 
+# sector_norm → 한국어 라벨 사전 (28개 버킷)
+SECTOR_LABELS: dict[str, str] = {
+    "semiconductors": "반도체",
+    "energy": "에너지",
+    "financials": "금융",
+    "healthcare": "헬스케어",
+    "biotech": "바이오",
+    "internet": "인터넷",
+    "software": "소프트웨어",
+    "hardware": "하드웨어",
+    "ai": "AI",
+    "cloud": "클라우드",
+    "ev": "전기차",
+    "battery": "배터리",
+    "auto": "자동차",
+    "consumer": "소비재",
+    "retail": "유통",
+    "media": "미디어",
+    "telecom": "통신",
+    "utilities": "유틸리티",
+    "real_estate": "부동산",
+    "materials": "소재",
+    "chemicals": "화학",
+    "steel": "철강",
+    "shipbuilding": "조선",
+    "aerospace": "항공우주",
+    "defense": "방산",
+    "construction": "건설",
+    "logistics": "물류",
+    "robotics": "로봇",
+}
+
 
 def _tier_of(user: Optional[UserInDB]) -> str:
     if not user:
@@ -48,6 +80,36 @@ def _tier_of(user: Optional[UserInDB]) -> str:
         return user.effective_tier() or TIER_FREE
     except Exception:
         return TIER_FREE
+
+
+# ──────────────────────────────────────────────
+# GET /api/screener/sectors — sector_norm 분포 (드롭다운 옵션)
+# ──────────────────────────────────────────────
+@router.get("/sectors")
+def list_sectors(response: Response, conn=Depends(get_db_conn)):
+    """sector_norm 분포 (드롭다운 옵션). 30분 캐시."""
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute(
+            """
+            SELECT sector_norm, COUNT(*) AS count
+            FROM stock_universe
+            WHERE listed = TRUE AND has_preferred = FALSE
+              AND sector_norm IS NOT NULL AND sector_norm <> ''
+            GROUP BY sector_norm
+            ORDER BY count DESC
+            """
+        )
+        rows = cur.fetchall()
+    sectors = [
+        {
+            "key": r["sector_norm"],
+            "label": SECTOR_LABELS.get(r["sector_norm"], r["sector_norm"]),
+            "count": int(r["count"]),
+        }
+        for r in rows
+    ]
+    response.headers["Cache-Control"] = "public, max-age=1800"
+    return {"count": len(sectors), "sectors": sectors}
 
 
 # ──────────────────────────────────────────────
@@ -74,6 +136,15 @@ def run_screener(
         where.append("UPPER(u.market) = ANY(%s)")
         params.append([str(m).upper() for m in markets])
 
+    # 검색어 q — 티커/이름/영문이름 LIKE (2자 이상만)
+    q = (spec.get("q") or "").strip()
+    if len(q) >= 2:
+        where.append(
+            "(u.ticker ILIKE %s OR u.asset_name ILIKE %s OR u.asset_name_en ILIKE %s)"
+        )
+        pat = f"%{q}%"
+        params.extend([pat, pat, pat])
+
     # sector_norm
     sectors = spec.get("sectors")
     if sectors:
@@ -88,6 +159,12 @@ def run_screener(
     if mcap.get("max") is not None:
         where.append("u.market_cap_krw <= %s")
         params.append(float(mcap["max"]))
+
+    # 시총 버킷 (large/mid/small/micro)
+    buckets = spec.get("market_cap_buckets")
+    if buckets:
+        where.append("u.market_cap_bucket = ANY(%s)")
+        params.append([str(b) for b in buckets])
 
     # OHLCV 기반 필터 (m.*)
     if spec.get("min_daily_value_krw") is not None:
@@ -136,12 +213,46 @@ def run_screener(
         )
         params.append(float(spec["high_52w_proximity_min"]))
 
+    # 기간별 수익률 범위 (return_ranges: {1m/3m/6m/1y/ytd: {min, max}})
+    return_ranges = spec.get("return_ranges") or {}
+    PERIOD_TO_COL = {"1m": "r1m", "3m": "r3m", "6m": "r6m", "1y": "r1y", "ytd": "ytd"}
+    for period, col in PERIOD_TO_COL.items():
+        rg = return_ranges.get(period) or {}
+        if rg.get("min") is not None:
+            join_ohlcv = True
+            where.append(f"m.{col} IS NOT NULL AND m.{col} >= %s")
+            params.append(float(rg["min"]))
+        if rg.get("max") is not None:
+            join_ohlcv = True
+            where.append(f"m.{col} IS NOT NULL AND m.{col} <= %s")
+            params.append(float(rg["max"]))
+
+    # 60일 최대 낙폭 상한 (사용자 입력은 양수 절대값, SQL에선 음수로 비교)
+    mdd = spec.get("max_drawdown_60d_pct")
+    if mdd is not None:
+        join_ohlcv = True
+        where.append("m.drawdown_60d_pct IS NOT NULL AND m.drawdown_60d_pct >= %s")
+        params.append(-float(mdd))
+
+    # 200일 이동평균 근접도 하한
+    ma200_prox = spec.get("ma200_proximity_min")
+    if ma200_prox is not None:
+        join_ohlcv = True
+        where.append("m.ma200_proximity IS NOT NULL AND m.ma200_proximity >= %s")
+        params.append(float(ma200_prox))
+
     sort_map = {
-        "market_cap_desc":    "u.market_cap_krw DESC NULLS LAST",
-        "market_cap_asc":     "u.market_cap_krw ASC NULLS LAST",
-        "r1y_desc":           "m.r1y DESC NULLS LAST" if join_ohlcv else "u.market_cap_krw DESC NULLS LAST",
-        "volume_surge_desc":  "m.volume_ratio DESC NULLS LAST" if join_ohlcv else "u.market_cap_krw DESC NULLS LAST",
-        "name_asc":           "u.asset_name ASC",
+        "market_cap_desc":   "u.market_cap_krw DESC NULLS LAST",
+        "market_cap_asc":    "u.market_cap_krw ASC NULLS LAST",
+        "r1m_desc":          "m.r1m DESC NULLS LAST" if join_ohlcv else "u.market_cap_krw DESC NULLS LAST",
+        "r3m_desc":          "m.r3m DESC NULLS LAST" if join_ohlcv else "u.market_cap_krw DESC NULLS LAST",
+        "r6m_desc":          "m.r6m DESC NULLS LAST" if join_ohlcv else "u.market_cap_krw DESC NULLS LAST",
+        "r1y_desc":          "m.r1y DESC NULLS LAST" if join_ohlcv else "u.market_cap_krw DESC NULLS LAST",
+        "ytd_desc":          "m.ytd DESC NULLS LAST" if join_ohlcv else "u.market_cap_krw DESC NULLS LAST",
+        "volume_surge_desc": "m.volume_ratio DESC NULLS LAST" if join_ohlcv else "u.market_cap_krw DESC NULLS LAST",
+        "liquidity_desc":    "m.avg_daily_value DESC NULLS LAST" if join_ohlcv else "u.market_cap_krw DESC NULLS LAST",
+        "drawdown_asc":      "m.drawdown_60d_pct ASC NULLS LAST" if join_ohlcv else "u.market_cap_krw DESC NULLS LAST",
+        "name_asc":          "u.asset_name ASC",
     }
     order_by = sort_map.get(spec.get("sort") or "", "u.market_cap_krw DESC NULLS LAST")
 
@@ -150,49 +261,114 @@ def run_screener(
     if join_ohlcv:
         cte = """
         WITH ranked AS (
-            SELECT ticker, UPPER(market) AS market, trade_date, close::float AS close, volume, change_pct::float AS change_pct,
-                   ROW_NUMBER() OVER (PARTITION BY ticker, UPPER(market) ORDER BY trade_date DESC) AS rn
+            SELECT ticker, UPPER(market) AS market, trade_date,
+                   close::float AS close, volume,
+                   change_pct::float AS change_pct,
+                   ROW_NUMBER() OVER (PARTITION BY ticker, UPPER(market)
+                                      ORDER BY trade_date DESC) AS rn
             FROM stock_universe_ohlcv
-            WHERE trade_date >= CURRENT_DATE - 300
+            WHERE trade_date >= CURRENT_DATE - 400
         ),
         metrics AS (
             SELECT ticker, market,
-                   MAX(CASE WHEN rn = 1   THEN close END)             AS close_latest,
-                   MAX(CASE WHEN rn = 252 THEN close END)             AS close_1y,
-                   MAX(close) FILTER (WHERE rn <= 252)                AS high_252d,
-                   AVG(close * volume) FILTER (WHERE rn <= 60)        AS avg_daily_value,
-                   STDDEV(LEAST(GREATEST(change_pct, -50), 50)) FILTER (WHERE rn <= 60) AS vol60_pct,
-                   AVG(volume) FILTER (WHERE rn <= 20)                AS v20,
-                   AVG(volume) FILTER (WHERE rn <= 60)                AS v60
-            FROM ranked
-            GROUP BY ticker, market
+                MAX(CASE WHEN rn=1   THEN close END) AS close_latest,
+                MAX(CASE WHEN rn=21  THEN close END) AS close_1m,
+                MAX(CASE WHEN rn=63  THEN close END) AS close_3m,
+                MAX(CASE WHEN rn=126 THEN close END) AS close_6m,
+                MAX(CASE WHEN rn=252 THEN close END) AS close_1y,
+                MAX(close) FILTER (WHERE rn<=252) AS high_252d,
+                MIN(close) FILTER (WHERE rn<=252) AS low_252d,
+                MAX(close) FILTER (WHERE rn<=60)  AS high_60d,
+                MIN(close) FILTER (WHERE rn<=60)  AS low_60d,
+                AVG(close)  FILTER (WHERE rn<=200) AS ma200,
+                AVG(close)  FILTER (WHERE rn<=60)  AS ma60,
+                AVG(close)  FILTER (WHERE rn<=20)  AS ma20,
+                AVG(close*volume) FILTER (WHERE rn<=60) AS avg_daily_value,
+                STDDEV(LEAST(GREATEST(change_pct,-50),50)) FILTER (WHERE rn<=60) AS vol60_pct,
+                AVG(volume) FILTER (WHERE rn<=20) AS v20,
+                AVG(volume) FILTER (WHERE rn<=60) AS v60,
+                ARRAY_AGG(close ORDER BY trade_date DESC) FILTER (WHERE rn<=60) AS sparkline_60d
+            FROM ranked GROUP BY ticker, market
+        ),
+        ytd_anchor AS (
+            SELECT DISTINCT ON (ticker, mkt)
+                   ticker, mkt AS market, close::float AS close_ytd
+            FROM (
+                SELECT ticker, UPPER(market) AS mkt, trade_date, close
+                FROM stock_universe_ohlcv
+                WHERE trade_date <  DATE_TRUNC('year', CURRENT_DATE)
+                  AND trade_date >= DATE_TRUNC('year', CURRENT_DATE) - INTERVAL '30 days'
+            ) t
+            ORDER BY ticker, mkt, trade_date DESC
         ),
         ohlcv_metrics AS (
-            SELECT ticker, market, close_latest, high_252d, avg_daily_value, vol60_pct,
-                   CASE WHEN v60 > 0 THEN v20 / v60 END AS volume_ratio,
-                   CASE WHEN close_1y IS NOT NULL AND close_1y > 0
-                        THEN (close_latest - close_1y) / close_1y * 100 END AS r1y
-            FROM metrics
+            SELECT m.ticker, m.market, m.close_latest, m.high_252d, m.low_252d,
+                   m.high_60d, m.low_60d, m.ma20, m.ma60, m.ma200,
+                   m.avg_daily_value, m.vol60_pct, m.sparkline_60d,
+                   y.close_ytd,
+                   (m.close_latest - m.close_1m) / NULLIF(m.close_1m,0) * 100 AS r1m,
+                   (m.close_latest - m.close_3m) / NULLIF(m.close_3m,0) * 100 AS r3m,
+                   (m.close_latest - m.close_6m) / NULLIF(m.close_6m,0) * 100 AS r6m,
+                   (m.close_latest - m.close_1y) / NULLIF(m.close_1y,0) * 100 AS r1y,
+                   (m.close_latest - y.close_ytd) / NULLIF(y.close_ytd,0) * 100 AS ytd,
+                   -- 60d 고점 대비 현재 낙폭 (peak-to-current). 음수가 정상.
+                   (m.close_latest - m.high_60d) / NULLIF(m.high_60d,0) * 100 AS drawdown_60d_pct,
+                   m.close_latest / NULLIF(m.ma200,0) AS ma200_proximity,
+                   m.close_latest / NULLIF(m.high_252d,0) AS high_52w_proximity,
+                   CASE WHEN m.v60>0 THEN m.v20/m.v60 END AS volume_ratio
+            FROM metrics m
+            LEFT JOIN ytd_anchor y ON y.ticker=m.ticker AND y.market=m.market
+        ),
+        top_picks_recent AS (
+            -- 가장 최근 analysis_date (최근 7일 이내) 의 Top Picks 종목 식별
+            SELECT DISTINCT UPPER(p.ticker) AS ticker, UPPER(p.market) AS market
+            FROM investment_proposals p
+            JOIN daily_top_picks d ON d.proposal_id = p.id
+            WHERE d.analysis_date = (
+                SELECT MAX(analysis_date)
+                FROM daily_top_picks
+                WHERE analysis_date >= CURRENT_DATE - INTERVAL '7 days'
+            )
         )
         """
         sql = f"""
         {cte}
         SELECT u.ticker, u.market, u.asset_name, u.asset_name_en, u.sector_norm,
                u.market_cap_krw, u.market_cap_bucket, u.last_price, u.last_price_ccy,
-               m.close_latest, m.high_252d, m.avg_daily_value, m.vol60_pct,
-               m.volume_ratio, m.r1y
+               m.close_latest, m.high_252d, m.low_252d,
+               m.high_60d, m.low_60d, m.ma20, m.ma60, m.ma200,
+               m.avg_daily_value, m.vol60_pct, m.volume_ratio,
+               m.high_52w_proximity, m.ma200_proximity, m.drawdown_60d_pct,
+               m.r1m, m.r3m, m.r6m, m.r1y, m.ytd,
+               m.sparkline_60d,
+               (tp.ticker IS NOT NULL) AS is_top_pick
         FROM stock_universe u
         LEFT JOIN ohlcv_metrics m
           ON UPPER(u.ticker) = UPPER(m.ticker) AND UPPER(u.market) = UPPER(m.market)
+        LEFT JOIN top_picks_recent tp
+          ON tp.ticker = UPPER(u.ticker) AND tp.market = UPPER(u.market)
         WHERE {where_sql}
         ORDER BY {order_by}
         LIMIT %s
         """
     else:
         sql = f"""
+        WITH top_picks_recent AS (
+            SELECT DISTINCT UPPER(p.ticker) AS ticker, UPPER(p.market) AS market
+            FROM investment_proposals p
+            JOIN daily_top_picks d ON d.proposal_id = p.id
+            WHERE d.analysis_date = (
+                SELECT MAX(analysis_date)
+                FROM daily_top_picks
+                WHERE analysis_date >= CURRENT_DATE - INTERVAL '7 days'
+            )
+        )
         SELECT u.ticker, u.market, u.asset_name, u.asset_name_en, u.sector_norm,
-               u.market_cap_krw, u.market_cap_bucket, u.last_price, u.last_price_ccy
+               u.market_cap_krw, u.market_cap_bucket, u.last_price, u.last_price_ccy,
+               (tp.ticker IS NOT NULL) AS is_top_pick
         FROM stock_universe u
+        LEFT JOIN top_picks_recent tp
+          ON tp.ticker = UPPER(u.ticker) AND tp.market = UPPER(u.market)
         WHERE {where_sql}
         ORDER BY {order_by}
         LIMIT %s
@@ -203,11 +379,17 @@ def run_screener(
         cur.execute(sql, params)
         rows = cur.fetchall()
 
+    include_sparkline = bool(spec.get("include_sparkline", False))
+    result_rows = [_serialize_row(r) for r in rows]
+    if not include_sparkline:
+        for row in result_rows:
+            row.pop("sparkline_60d", None)
+
     return {
-        "count": len(rows),
+        "count": len(result_rows),
         "tier": tier,
         "limit_applied": limit,
-        "rows": [_serialize_row(r) for r in rows],
+        "rows": result_rows,
     }
 
 

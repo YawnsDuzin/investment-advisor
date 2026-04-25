@@ -6,6 +6,7 @@ Wants=network-online.target
 # 가격/OHLCV sync → 프리마켓 브리핑 → 분석 순서. After= 만으로 의존 순서만 강제,
 # 선행 unit 실패해도 분석은 진행 (Wants/Requires 사용 안 함).
 After=universe-sync-price.service
+After=universe-sync-indices.service
 After=pre-market-briefing.service
 
 [Service]
