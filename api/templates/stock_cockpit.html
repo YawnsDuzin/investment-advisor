@@ -1,0 +1,689 @@
+{% extends "base.html" %}
+{% block title %}{{ ticker }} Cockpit — AlphaSignal{% endblock %}
+{% block page_title %}
+<span id="stock-name">{{ ticker }}</span>
+{% endblock %}
+
+{% block header_actions %}
+<a href="/pages/proposals/history/{{ ticker }}" class="btn"
+   style="font-size:13px;padding:5px 14px;background:var(--bg-card);
+          border:1px solid var(--border);border-radius:6px;
+          color:var(--text-muted);text-decoration:none;">추천 이력</a>
+{% endblock %}
+
+{% block content %}
+<div id="stock-cockpit" data-ticker="{{ ticker }}" data-market="{{ market }}">
+
+  {# ─────────────── § Hero ─────────────── #}
+  <section class="cockpit-hero" id="hero">
+    <div class="hero-loading" id="hero-loading">Loading...</div>
+    <div class="hero-body" id="hero-body" style="display:none;">
+      <div class="hero-price-row">
+        <div>
+          <span id="h-price" class="hero-price"></span>
+          <span id="h-change" class="hero-change"></span>
+        </div>
+        <div class="hero-meta">
+          <span>시총 <strong id="h-mcap">-</strong></span>
+          <span>거래량 <strong id="h-volume">-</strong></span>
+          <span id="h-sector-wrap">업종 <strong id="h-sector">-</strong></span>
+        </div>
+      </div>
+      <div class="hero-chips">
+        <div class="hero-chip" title="" id="chip-ai">
+          <div class="chip-label">AI 종합</div>
+          <div class="chip-value" id="h-ai-score">-</div>
+        </div>
+        <div class="hero-chip">
+          <div class="chip-label">우리 추천</div>
+          <div class="chip-value" id="h-prop-count">-</div>
+        </div>
+        <div class="hero-chip">
+          <div class="chip-label">평균 사후 3m</div>
+          <div class="chip-value" id="h-avg-3m">-</div>
+        </div>
+        <div class="hero-chip">
+          <div class="chip-label">벤치 알파</div>
+          <div class="chip-value" id="h-alpha">-</div>
+        </div>
+        <div class="hero-chip">
+          <div class="chip-label">팩터 분위</div>
+          <div class="chip-value" id="h-factor">-</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  {# ─────────────── § 1. 가격 차트 ─────────────── #}
+  <section class="cockpit-section" id="sec-chart">
+    <div class="cockpit-section-head">
+      <h3>가격 차트</h3>
+      <div class="chart-range-toggle" id="range-toggle">
+        <button data-range="60">1M</button>
+        <button data-range="180">3M</button>
+        <button data-range="360" class="active">6M</button>
+        <button data-range="720">1Y</button>
+        <button data-range="1080">3Y</button>
+      </div>
+    </div>
+    <div id="price-chart" style="height:380px;background:var(--bg-card);
+         border:1px solid var(--border);border-radius:10px;">
+      <div class="chart-placeholder">차트 로드 중...</div>
+    </div>
+  </section>
+
+  {# ─────────────── § 2-A. 벤치마크 비교 ─────────────── #}
+  <section class="cockpit-section" id="sec-benchmark">
+    <div class="cockpit-section-head">
+      <h3>벤치마크 상대성과 (=100 정규화)</h3>
+      <div class="benchmark-toggle" id="benchmark-toggle">
+        <button data-bench="" class="active">자동</button>
+      </div>
+    </div>
+    <div id="benchmark-chart" style="height:260px;background:var(--bg-card);
+         border:1px solid var(--border);border-radius:10px;">
+      <div class="chart-placeholder">벤치마크 로드 중...</div>
+    </div>
+  </section>
+
+  {# ─────────────── § 4. 펀더멘털 8카드 (기존 흡수) ─────────────── #}
+  <section class="cockpit-section" id="sec-fundamentals">
+    <div class="cockpit-section-head"><h3>펀더멘털</h3></div>
+    <div id="fundamentals-error" style="display:none;color:var(--text-muted);
+         padding:14px;background:var(--bg-card);border-radius:10px;
+         border:1px solid var(--border);">
+      외부 데이터 일시 조회 실패 — 다른 섹션은 정상 동작합니다.
+    </div>
+    <div class="fund-grid" id="fundamentals-grid">
+      <div class="fund-card"><h4 class="fund-card-title">밸류에이션</h4>
+        <div class="fund-metrics" id="valuation-metrics"></div></div>
+      <div class="fund-card"><h4 class="fund-card-title">수익성</h4>
+        <div class="fund-metrics" id="profitability-metrics"></div></div>
+      <div class="fund-card"><h4 class="fund-card-title">재무건전성</h4>
+        <div class="fund-metrics" id="health-metrics"></div></div>
+      <div class="fund-card"><h4 class="fund-card-title">성장성</h4>
+        <div class="fund-metrics" id="growth-metrics"></div></div>
+      <div class="fund-card"><h4 class="fund-card-title">배당</h4>
+        <div class="fund-metrics" id="dividend-metrics"></div></div>
+      <div class="fund-card"><h4 class="fund-card-title">현금흐름</h4>
+        <div class="fund-metrics" id="cashflow-metrics"></div></div>
+      <div class="fund-card"><h4 class="fund-card-title">기술 지표</h4>
+        <div class="fund-metrics" id="technical-metrics"></div></div>
+      <div class="fund-card"><h4 class="fund-card-title">애널리스트 컨센서스</h4>
+        <div class="fund-metrics" id="analyst-metrics"></div></div>
+    </div>
+    <div style="margin-top:8px;font-size:11px;color:var(--text-muted);text-align:center;">
+      * 펀더멘털 데이터: yfinance (1시간 캐싱). Hero 가격은 자체 OHLCV 우선.
+    </div>
+  </section>
+
+  {# ─────────────── § 6. 추천 이력 타임라인 ─────────────── #}
+  <section class="cockpit-section" id="sec-timeline">
+    <div class="cockpit-section-head"><h3>AI 추천 이력</h3></div>
+    <div id="timeline-empty" style="display:none;padding:30px;text-align:center;
+         color:var(--text-muted);background:var(--bg-card);border-radius:10px;
+         border:1px solid var(--border);">
+      이 종목은 아직 추천 이력이 없습니다.
+    </div>
+    <div id="timeline-list" class="timeline-list"></div>
+  </section>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+<style>
+.cockpit-hero {
+  background:var(--bg-card); border:1px solid var(--border); border-radius:10px;
+  padding:18px 22px; margin-bottom:18px;
+}
+.hero-price-row { display:flex; justify-content:space-between; align-items:flex-end;
+  flex-wrap:wrap; gap:12px; margin-bottom:14px; }
+.hero-price { font-size:30px; font-weight:700; }
+.hero-change { font-size:16px; margin-left:8px; }
+.hero-meta { display:flex; gap:18px; flex-wrap:wrap; color:var(--text-muted); font-size:13px; }
+.hero-meta strong { color:var(--text); }
+.hero-chips { display:grid; grid-template-columns:repeat(auto-fit, minmax(120px, 1fr));
+  gap:10px; }
+.hero-chip { background:var(--bg); border:1px solid var(--border); border-radius:8px;
+  padding:10px 12px; text-align:center; cursor:default; }
+.hero-chip[title]:hover { border-color:var(--accent); }
+.chip-label { font-size:11px; color:var(--text-muted); margin-bottom:4px; }
+.chip-value { font-size:18px; font-weight:700; font-variant-numeric:tabular-nums; }
+
+.cockpit-section { margin-bottom:22px; }
+.cockpit-section-head { display:flex; justify-content:space-between; align-items:center;
+  margin-bottom:10px; }
+.cockpit-section-head h3 { font-size:15px; color:var(--accent); margin:0; }
+.chart-placeholder { text-align:center; padding:60px 0; color:var(--text-muted); }
+.chart-range-toggle, .benchmark-toggle { display:flex; gap:4px; }
+.chart-range-toggle button, .benchmark-toggle button {
+  background:var(--bg-card); border:1px solid var(--border); color:var(--text-muted);
+  padding:4px 10px; font-size:12px; border-radius:5px; cursor:pointer;
+}
+.chart-range-toggle button.active, .benchmark-toggle button.active {
+  border-color:var(--accent); color:var(--accent);
+}
+
+.fund-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr));
+  gap:14px; }
+.fund-card { background:var(--bg-card); border:1px solid var(--border);
+  border-radius:10px; padding:16px 18px; }
+.fund-card-title { font-size:13px; font-weight:600; color:var(--accent);
+  margin:0 0 10px 0; padding-bottom:6px; border-bottom:1px solid var(--border); }
+.fund-metrics { display:flex; flex-direction:column; gap:6px; }
+.fund-metric-row { display:flex; justify-content:space-between; font-size:13px; }
+.fund-metric-label { color:var(--text-muted); }
+.fund-metric-value { font-weight:600; font-variant-numeric:tabular-nums; }
+.fund-metric-value.positive { color:var(--green); }
+.fund-metric-value.negative { color:var(--red); }
+
+.timeline-list { display:flex; flex-direction:column; gap:10px; }
+.timeline-card { background:var(--bg-card); border:1px solid var(--border);
+  border-radius:10px; padding:14px 16px; }
+.timeline-card-head { display:flex; justify-content:space-between;
+  align-items:center; margin-bottom:6px; font-size:13px; }
+.timeline-date { color:var(--text-muted); }
+.timeline-theme { color:var(--accent); font-weight:600; }
+.timeline-rationale { font-size:13px; color:var(--text); line-height:1.5;
+  margin:6px 0 8px 0; }
+.timeline-metrics { display:flex; gap:14px; flex-wrap:wrap; font-size:12px;
+  color:var(--text-muted); }
+.timeline-metrics strong { color:var(--text); font-variant-numeric:tabular-nums; }
+.tl-pos { color:var(--green); }
+.tl-neg { color:var(--red); }
+.tl-warn { color:var(--orange, #f5a623); font-size:11px; margin-left:6px; }
+
+@media (max-width: 768px) {
+  .fund-grid { grid-template-columns:1fr; }
+  .hero-price-row { flex-direction:column; align-items:flex-start; }
+}
+</style>
+
+<script>
+(function() {
+  var ticker = document.getElementById('stock-cockpit').dataset.ticker;
+  var market = document.getElementById('stock-cockpit').dataset.market;
+
+  var CURRENCY_SYMBOLS = {KRW:'₩', USD:'$', EUR:'€', JPY:'¥', GBP:'£', CNY:'¥', HKD:'HK$', TWD:'NT$'};
+  var INT_CURRENCIES = ['KRW', 'JPY'];
+
+  function fmtPrice(v, cur) {
+    if (v == null) return '-';
+    var sym = CURRENCY_SYMBOLS[cur] || '';
+    if (INT_CURRENCIES.indexOf(cur) >= 0) return sym + v.toLocaleString('ko-KR', {maximumFractionDigits:0});
+    return sym + v.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+  }
+  function fmtBigNum(v, cur) {
+    if (v == null) return '-';
+    var sym = CURRENCY_SYMBOLS[cur] || '';
+    if (Math.abs(v) >= 1e12) return sym + (v/1e12).toFixed(1) + '조';
+    if (Math.abs(v) >= 1e8) return sym + Math.round(v/1e8) + '억';
+    if (Math.abs(v) >= 1e6) return sym + (v/1e6).toFixed(1) + 'M';
+    return sym + v.toLocaleString();
+  }
+  function fmtNum(v) {
+    if (v == null) return '-';
+    return v.toLocaleString('en-US', {maximumFractionDigits:2});
+  }
+  function escHtml(s) {
+    if (s == null) return '';
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function fmtPct(v, withSign) {
+    if (v == null) return '-';
+    if (withSign === undefined) withSign = true;
+    var s = (withSign && v > 0 ? '+' : '') + v.toFixed(2) + '%';
+    return s;
+  }
+
+  // ── Hero (overview) ──
+  var qs = market ? ('?market=' + encodeURIComponent(market)) : '';
+  fetch('/api/stocks/' + encodeURIComponent(ticker) + '/overview' + qs)
+    .then(function(r) { return r.ok ? r.json() : Promise.reject(r.status); })
+    .then(function(d) {
+      document.getElementById('hero-loading').style.display = 'none';
+      document.getElementById('hero-body').style.display = 'block';
+      document.getElementById('stock-name').textContent = (d.name || ticker) + ' (' + ticker + ')';
+
+      var cur = d.currency || '';
+      if (d.latest) {
+        document.getElementById('h-price').textContent = fmtPrice(d.latest.close, cur);
+        var ch = document.getElementById('h-change');
+        if (d.latest.change_pct != null) {
+          ch.textContent = fmtPct(d.latest.change_pct, true);
+          ch.style.color = d.latest.change_pct >= 0 ? 'var(--green)' : 'var(--red)';
+        }
+        document.getElementById('h-volume').textContent =
+          d.latest.volume ? d.latest.volume.toLocaleString() + '주' : '-';
+      }
+      if (d.sector || d.industry) {
+        document.getElementById('h-sector').textContent =
+          (d.sector || '') + (d.industry ? ' / ' + d.industry : '');
+      } else {
+        document.getElementById('h-sector-wrap').style.display = 'none';
+      }
+
+      var s = d.stats || {};
+      document.getElementById('h-ai-score').textContent =
+        (s.ai_score != null ? s.ai_score : '-') + (s.ai_score != null ? '/100' : '');
+      document.getElementById('h-prop-count').textContent =
+        (s.proposal_count != null ? s.proposal_count + '회' : '-');
+      document.getElementById('h-avg-3m').textContent = fmtPct(s.avg_post_return_3m_pct, true);
+      document.getElementById('h-alpha').textContent = fmtPct(s.alpha_vs_benchmark_pct, true);
+      document.getElementById('h-factor').textContent =
+        s.factor_pctile_avg != null ? Math.round(s.factor_pctile_avg * 100) + '%ile' : '-';
+
+      // AI 종합 점수 tooltip 산식
+      var sb = d.score_breakdown || {};
+      if (sb.weights) {
+        document.getElementById('chip-ai').title =
+          'factor ' + sb.factor_score + ' × ' + sb.weights.factor +
+          ' + hist ' + sb.hist_score + ' × ' + sb.weights.hist +
+          ' + consensus ' + sb.consensus_score + ' × ' + sb.weights.consensus;
+      }
+    })
+    .catch(function() {
+      document.getElementById('hero-loading').textContent = 'Hero 데이터 조회 실패';
+    });
+
+  // ── 펀더멘털 8카드 (기존 fundamentals API 그대로 사용) ──
+  fetch('/api/stocks/' + encodeURIComponent(ticker) + '/fundamentals' + qs)
+    .then(function(r) { return r.ok ? r.json() : Promise.reject(r.status); })
+    .then(function(d) {
+      renderFundamentals(d);
+    })
+    .catch(function() {
+      document.getElementById('fundamentals-error').style.display = 'block';
+      document.getElementById('fundamentals-grid').style.display = 'none';
+    });
+
+  function pctClass(v) {
+    if (v == null) return '';
+    return v > 0 ? 'positive' : v < 0 ? 'negative' : '';
+  }
+  function addMetric(id, label, value, cls) {
+    if (value == null) value = '-';
+    var c = document.getElementById(id);
+    if (!c) return;
+    var row = document.createElement('div');
+    row.className = 'fund-metric-row';
+    row.innerHTML = '<span class="fund-metric-label">' + label + '</span>' +
+                    '<span class="fund-metric-value' + (cls ? ' ' + cls : '') + '">' + value + '</span>';
+    c.appendChild(row);
+  }
+
+  function renderFundamentals(d) {
+    var cur = d.currency || '';
+    var v = d.valuation || {};
+    addMetric('valuation-metrics', 'PER (Trailing)', fmtNum(v.trailing_pe));
+    addMetric('valuation-metrics', 'PER (Forward)', fmtNum(v.forward_pe));
+    addMetric('valuation-metrics', 'PBR', fmtNum(v.pb_ratio));
+    addMetric('valuation-metrics', 'PSR', fmtNum(v.ps_ratio));
+    addMetric('valuation-metrics', 'PEG', fmtNum(v.peg_ratio));
+    addMetric('valuation-metrics', 'EV/EBITDA', fmtNum(v.ev_ebitda));
+    addMetric('valuation-metrics', 'EPS (Trailing)', fmtPrice(v.eps_trailing, cur));
+    addMetric('valuation-metrics', 'EPS (Forward)', fmtPrice(v.eps_forward, cur));
+
+    var p = d.profitability || {};
+    addMetric('profitability-metrics', 'ROE', fmtPct(p.roe, true), pctClass(p.roe));
+    addMetric('profitability-metrics', 'ROA', fmtPct(p.roa, true), pctClass(p.roa));
+    addMetric('profitability-metrics', '매출총이익률', fmtPct(p.gross_margin, true), pctClass(p.gross_margin));
+    addMetric('profitability-metrics', '영업이익률', fmtPct(p.operating_margin, true), pctClass(p.operating_margin));
+    addMetric('profitability-metrics', '순이익률', fmtPct(p.net_margin, true), pctClass(p.net_margin));
+    addMetric('profitability-metrics', 'EBITDA', fmtBigNum(p.ebitda, cur));
+
+    var h = d.health || {};
+    addMetric('health-metrics', '부채비율 (D/E)', fmtNum(h.debt_to_equity));
+    addMetric('health-metrics', '유동비율', fmtNum(h.current_ratio));
+    addMetric('health-metrics', '당좌비율', fmtNum(h.quick_ratio));
+    addMetric('health-metrics', '총 부채', fmtBigNum(h.total_debt, cur));
+    addMetric('health-metrics', '보유 현금', fmtBigNum(h.total_cash, cur));
+
+    var g = d.growth || {};
+    addMetric('growth-metrics', '매출 성장률 (YoY)', fmtPct(g.revenue_growth, true), pctClass(g.revenue_growth));
+    addMetric('growth-metrics', '이익 성장률 (YoY)', fmtPct(g.earnings_growth, true), pctClass(g.earnings_growth));
+    addMetric('growth-metrics', '분기 이익 성장률', fmtPct(g.earnings_quarterly_growth, true), pctClass(g.earnings_quarterly_growth));
+
+    var dv = d.dividend || {};
+    addMetric('dividend-metrics', '배당수익률', fmtPct(dv.dividend_yield, true));
+    addMetric('dividend-metrics', '배당금', dv.dividend_rate != null ? fmtPrice(dv.dividend_rate, cur) : '-');
+    addMetric('dividend-metrics', '배당성향', fmtPct(dv.payout_ratio, true));
+
+    var cf = d.cashflow || {};
+    addMetric('cashflow-metrics', '영업현금흐름', fmtBigNum(cf.operating_cashflow, cur), pctClass(cf.operating_cashflow));
+    addMetric('cashflow-metrics', '잉여현금흐름 (FCF)', fmtBigNum(cf.free_cashflow, cur), pctClass(cf.free_cashflow));
+
+    var t = d.technical || {};
+    addMetric('technical-metrics', 'Beta', fmtNum(t.beta));
+    addMetric('technical-metrics', '50일 이동평균', fmtPrice(t.fifty_day_avg, cur));
+    addMetric('technical-metrics', '200일 이동평균', fmtPrice(t.two_hundred_day_avg, cur));
+    if (t.fifty_day_avg && d.price) {
+      var vs50 = ((d.price - t.fifty_day_avg) / t.fifty_day_avg * 100);
+      addMetric('technical-metrics', '50일선 대비', fmtPct(vs50, true), vs50 >= 0 ? 'positive' : 'negative');
+    }
+    if (t.two_hundred_day_avg && d.price) {
+      var vs200 = ((d.price - t.two_hundred_day_avg) / t.two_hundred_day_avg * 100);
+      addMetric('technical-metrics', '200일선 대비', fmtPct(vs200, true), vs200 >= 0 ? 'positive' : 'negative');
+    }
+
+    var a = d.analyst || {};
+    addMetric('analyst-metrics', '추천', a.recommendation ? escHtml(a.recommendation.toUpperCase()) : '-');
+    addMetric('analyst-metrics', '목표가 (평균)', fmtPrice(a.target_mean, cur));
+    addMetric('analyst-metrics', '목표가 (저)', fmtPrice(a.target_low, cur));
+    addMetric('analyst-metrics', '목표가 (고)', fmtPrice(a.target_high, cur));
+    if (a.target_mean && d.price) {
+      var upside = ((a.target_mean - d.price) / d.price * 100);
+      addMetric('analyst-metrics', '상승여력', fmtPct(upside, true), upside >= 0 ? 'positive' : 'negative');
+    }
+    addMetric('analyst-metrics', '분석 기관 수', a.num_analysts != null ? a.num_analysts + '개' : '-');
+
+    // Hero 시총이 비어있으면 펀더멘털 시총으로 폴백
+    var mcapEl = document.getElementById('h-mcap');
+    if (mcapEl.textContent === '-' && d.market_cap) {
+      mcapEl.textContent = fmtBigNum(d.market_cap, cur);
+    }
+  }
+
+  // 차트/타임라인 모듈은 다음 task 들에서 추가됨
+  // (window.__cockpit = {ticker, market, qs, fmtPrice, fmtPct, fmtBigNum, fmtNum, escHtml, getProposals} 로 공유)
+  var _proposalsPromise = null;
+  function getProposals() {
+    if (_proposalsPromise === null) {
+      _proposalsPromise = fetch('/api/stocks/' + encodeURIComponent(ticker) + '/proposals')
+        .then(function(r) { return r.ok ? r.json() : Promise.reject(); });
+    }
+    return _proposalsPromise;
+  }
+  window.__cockpit = {
+    ticker: ticker, market: market, qs: qs,
+    fmtPrice: fmtPrice, fmtPct: fmtPct,
+    fmtBigNum: fmtBigNum, fmtNum: fmtNum,
+    escHtml: escHtml,
+    getProposals: getProposals,
+  };
+})();
+
+// ── § 1 가격 차트 ──
+(function() {
+  var c = window.__cockpit;
+  if (!c || typeof LightweightCharts === 'undefined') return;
+
+  var container = document.getElementById('price-chart');
+  container.innerHTML = '';
+  var chart = LightweightCharts.createChart(container, {
+    height: 380,
+    layout: { background: { color: 'transparent' }, textColor: '#a0a0a0' },
+    grid: { vertLines: { color: '#2a2a2a' }, horzLines: { color: '#2a2a2a' } },
+    rightPriceScale: { borderColor: '#3a3a3a' },
+    timeScale: { borderColor: '#3a3a3a', timeVisible: false },
+    crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+  });
+
+  var lineSeries = chart.addLineSeries({ color: '#4ea3ff', lineWidth: 2 });
+  var ma50Series = chart.addLineSeries({
+    color: '#f5a623', lineWidth: 1, title: 'MA50', priceLineVisible: false, lastValueVisible: false,
+  });
+  var ma200Series = chart.addLineSeries({
+    color: '#9b59b6', lineWidth: 1, title: 'MA200', priceLineVisible: false, lastValueVisible: false,
+  });
+  var volSeries = chart.addHistogramSeries({
+    color: '#3a3a3a', priceFormat: { type: 'volume' },
+    priceScaleId: '', scaleMargins: { top: 0.85, bottom: 0 },
+  });
+
+  var currentRange = 360;
+
+  function movingAvg(series, n) {
+    var out = []; var sum = 0; var q = [];
+    for (var i = 0; i < series.length; i++) {
+      var c2 = series[i].close;
+      q.push(c2); sum += c2;
+      if (q.length > n) sum -= q.shift();
+      if (q.length === n) out.push({ time: series[i].date, value: +(sum / n).toFixed(4) });
+    }
+    return out;
+  }
+
+  function loadOhlcv(days) {
+    var url = '/api/stocks/' + encodeURIComponent(c.ticker) + '/ohlcv?days=' + days +
+              (c.market ? '&market=' + encodeURIComponent(c.market) : '');
+    return fetch(url).then(function(r) { return r.ok ? r.json() : Promise.reject(r.status); });
+  }
+
+  var proposalsCache = null;  // 추천 마커 원본 (한 번만 fetch)
+
+  function buildMarkers(items, firstDate, lastDate) {
+    var markers = items
+      .filter(function(it) {
+        var dt = (it.created_at || it.analysis_date || '').slice(0, 10);
+        return dt >= firstDate && dt <= lastDate;
+      })
+      .map(function(it) {
+        var positive = (it.post_return_3m_pct == null) || it.post_return_3m_pct >= 0;
+        return {
+          time: (it.created_at || it.analysis_date).slice(0, 10),
+          position: 'belowBar',
+          color: positive ? '#27ae60' : '#c0392b',
+          shape: 'arrowUp',
+          text: '추천' + (it.entry_price ? ' @' + c.fmtPrice(it.entry_price, '') : ''),
+        };
+      });
+    markers.sort(function(a, b) { return a.time < b.time ? -1 : a.time > b.time ? 1 : 0; });
+    return markers;
+  }
+
+  function refreshMarkers(seriesData) {
+    if (!proposalsCache || !proposalsCache.length || !seriesData.length) return;
+    var firstDate = seriesData[0].date;
+    var lastDate = seriesData[seriesData.length - 1].date;
+    var markers = buildMarkers(proposalsCache, firstDate, lastDate);
+    lineSeries.setMarkers(markers);  // 빈 배열 전달이 마커 클리어 역할
+  }
+
+  function applyData(d) {
+    if (!d.series || !d.series.length) {
+      container.innerHTML = '<div class="chart-placeholder">OHLCV 데이터 수집 대기 중</div>';
+      return;
+    }
+    var prices = d.series.map(function(p) { return { time: p.date, value: p.close }; });
+    var vols = d.series.map(function(p) {
+      return { time: p.date, value: p.volume || 0,
+               color: (p.change_pct != null && p.change_pct < 0) ? '#c0392b66' : '#27ae6066' };
+    });
+    lineSeries.setData(prices);
+    ma50Series.setData(movingAvg(d.series, 50));
+    ma200Series.setData(movingAvg(d.series, 200));
+    volSeries.setData(vols);
+
+    if (proposalsCache === null) {
+      c.getProposals()
+        .then(function(p) {
+          proposalsCache = (p && p.items) ? p.items : [];
+          refreshMarkers(d.series);
+        })
+        .catch(function() { proposalsCache = []; });
+    } else {
+      refreshMarkers(d.series);
+    }
+
+    chart.timeScale().fitContent();
+  }
+
+  loadOhlcv(currentRange).then(applyData)
+    .catch(function() {
+      container.innerHTML = '<div class="chart-placeholder">차트 데이터 조회 실패</div>';
+    });
+
+  // 기간 토글
+  document.querySelectorAll('#range-toggle button').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      document.querySelectorAll('#range-toggle button').forEach(function(b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      currentRange = parseInt(btn.dataset.range, 10);
+      loadOhlcv(currentRange).then(applyData)
+        .catch(function() { console.warn('차트 재로드 실패'); });
+    });
+  });
+})();
+
+// ── § 2-A 벤치마크 상대성과 ──
+(function() {
+  var c = window.__cockpit;
+  if (!c || typeof LightweightCharts === 'undefined') return;
+
+  // 시장 → 벤치마크 자동 선택
+  var BENCH_MAP = {
+    'KOSPI':  ['KOSPI', 'KOSDAQ'],
+    'KOSDAQ': ['KOSDAQ', 'KOSPI'],
+    'NASDAQ': ['NDX100', 'SP500'],
+    'NYSE':   ['SP500', 'NDX100'],
+  };
+  var benches = BENCH_MAP[c.market] || ['SP500'];
+  var defaultBench = benches[0];
+
+  // 벤치마크 토글 버튼 동적 생성
+  var toggleEl = document.getElementById('benchmark-toggle');
+  toggleEl.innerHTML = '';
+  benches.forEach(function(code, i) {
+    var btn = document.createElement('button');
+    btn.dataset.bench = code;
+    btn.textContent = code;
+    if (i === 0) btn.classList.add('active');
+    toggleEl.appendChild(btn);
+  });
+
+  var container = document.getElementById('benchmark-chart');
+  container.innerHTML = '';
+  var chart = LightweightCharts.createChart(container, {
+    height: 260,
+    layout: { background: { color: 'transparent' }, textColor: '#a0a0a0' },
+    grid: { vertLines: { color: '#2a2a2a' }, horzLines: { color: '#2a2a2a' } },
+    rightPriceScale: { borderColor: '#3a3a3a' },
+    timeScale: { borderColor: '#3a3a3a' },
+  });
+  var stockLine = chart.addLineSeries({ color: '#4ea3ff', lineWidth: 2, title: c.ticker });
+  var benchLine = chart.addLineSeries({ color: '#f1c40f', lineWidth: 2, title: defaultBench });
+
+  function normalize(series) {
+    if (!series.length) return [];
+    var base = series[0].close;
+    if (!base || base === 0) return [];
+    return series.map(function(p) { return { time: p.date, value: +(p.close / base * 100).toFixed(2) }; });
+  }
+
+  function loadAndRender(benchCode) {
+    var stockUrl = '/api/stocks/' + encodeURIComponent(c.ticker) + '/ohlcv?days=360' +
+                   (c.market ? '&market=' + encodeURIComponent(c.market) : '');
+    var benchUrl = '/api/indices/' + benchCode + '/ohlcv?days=360';
+    Promise.all([
+      fetch(stockUrl).then(function(r) { return r.ok ? r.json() : Promise.reject(); }),
+      fetch(benchUrl).then(function(r) { return r.ok ? r.json() : Promise.reject(); }),
+    ]).then(function(results) {
+      var stockData = results[0].series || [];
+      var benchData = results[1].series || [];
+      if (!stockData.length || !benchData.length) {
+        container.innerHTML = '<div class="chart-placeholder">데이터 부족</div>';
+        return;
+      }
+      // 두 시리즈의 공통 시작일 정렬
+      var commonStart = stockData[0].date > benchData[0].date ? stockData[0].date : benchData[0].date;
+      var s = stockData.filter(function(p) { return p.date >= commonStart; });
+      var b = benchData.filter(function(p) { return p.date >= commonStart; });
+      stockLine.setData(normalize(s));
+      benchLine.setData(normalize(b));
+      benchLine.applyOptions({ title: benchCode });
+      chart.timeScale().fitContent();
+    }).catch(function() {
+      container.innerHTML = '<div class="chart-placeholder">벤치마크 데이터 조회 실패</div>';
+    });
+  }
+
+  loadAndRender(defaultBench);
+
+  document.querySelectorAll('#benchmark-toggle button').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      document.querySelectorAll('#benchmark-toggle button').forEach(function(b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      loadAndRender(btn.dataset.bench);
+    });
+  });
+})();
+
+// ── § 6 추천 이력 타임라인 ──
+(function() {
+  var c = window.__cockpit;
+  if (!c) return;
+
+  function esc(s) {
+    if (s == null) return '';
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function pctSpan(v) {
+    if (v == null) return '<strong>-</strong>';
+    var cls = v > 0 ? 'tl-pos' : v < 0 ? 'tl-neg' : '';
+    return '<strong class="' + cls + '">' + (v > 0 ? '+' : '') + v.toFixed(2) + '%</strong>';
+  }
+
+  function renderTimeline(items) {
+    var listEl = document.getElementById('timeline-list');
+    var emptyEl = document.getElementById('timeline-empty');
+    if (!items || !items.length) {
+      emptyEl.style.display = 'block';
+      return;
+    }
+    items.forEach(function(it) {
+      var card = document.createElement('div');
+      card.className = 'timeline-card';
+      var dt = (it.created_at || it.analysis_date || '').slice(0, 10);
+      var entry = it.entry_price != null ? ' · 진입 ' + c.fmtPrice(it.entry_price, '') : '';
+      var validation = '';
+      if (it.validation_mismatches && it.validation_mismatches.length) {
+        validation = ' <span class="tl-warn" title="AI 제시값과 실측 mismatch">⚠ ' +
+                     it.validation_mismatches.length + '</span>';
+      }
+      var rationale = (it.rationale || '');
+      var rationaleHtml = esc(rationale.slice(0, 240)) + (rationale.length > 240 ? '...' : '');
+      card.innerHTML =
+        '<div class="timeline-card-head">' +
+          '<span class="timeline-date">' + dt + '</span>' +
+          '<a class="timeline-theme" href="/pages/themes#theme-' + it.theme_id + '">' +
+            esc(it.theme_name || '-') + '</a>' +
+        '</div>' +
+        '<div class="timeline-rationale">' + rationaleHtml + '</div>' +
+        '<div class="timeline-metrics">' +
+          '<span>' + esc((it.action || '-').toUpperCase()) + ' · ' + esc(it.conviction || '-') + entry + validation + '</span>' +
+          '<span>1m ' + pctSpan(it.post_return_1m_pct) + '</span>' +
+          '<span>3m ' + pctSpan(it.post_return_3m_pct) + '</span>' +
+          '<span>6m ' + pctSpan(it.post_return_6m_pct) + '</span>' +
+          '<span>1y ' + pctSpan(it.post_return_1y_pct) + '</span>' +
+          '<span>MDD ' + pctSpan(it.max_drawdown_pct) + '</span>' +
+          '<span>α ' + pctSpan(it.alpha_vs_benchmark_pct) + '</span>' +
+        '</div>';
+      listEl.appendChild(card);
+    });
+  }
+
+  c.getProposals()
+    .then(function(d) { renderTimeline(d.items || []); })
+    .catch(function() {
+      var emptyEl = document.getElementById('timeline-empty');
+      emptyEl.textContent = '추천 이력 조회 실패';
+      emptyEl.style.display = 'block';
+    });
+})();
+</script>
+{% endblock %}

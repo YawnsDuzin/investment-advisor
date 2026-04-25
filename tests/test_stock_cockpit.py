@@ -1,0 +1,311 @@
+"""Stock Cockpit API + 페이지 단위 테스트.
+
+psycopg2가 conftest에서 mock되므로 get_connection → cursor → fetch 체인을
+가짜 객체로 꾸민다.
+"""
+from contextlib import contextmanager
+from datetime import date, datetime
+from decimal import Decimal
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+
+def _fake_conn(fetch_sequence):
+    """fetchone/fetchall 호출 순서대로 값 반환하는 가짜 커넥션."""
+    cur = MagicMock()
+    idx = {"n": 0}
+
+    def _next():
+        v = fetch_sequence[idx["n"]]
+        idx["n"] += 1
+        return v
+
+    cur.fetchone.side_effect = _next
+    cur.fetchall.side_effect = _next
+
+    @contextmanager
+    def _cursor(**kwargs):
+        yield cur
+
+    conn = MagicMock()
+    conn.cursor = _cursor
+    return conn
+
+
+class TestStockOverviewAPI:
+    """GET /api/stocks/{ticker}/overview"""
+
+    def test_overview_returns_hero_payload(self):
+        from api.routes.stocks import get_stock_overview
+
+        # fetch 순서: meta(stock_universe), latest 2 rows(ohlcv), prop_stats, factor_snapshot
+        # meta_row keys reflect SQL aliases — actual columns: asset_name/sector_norm/last_price_ccy
+        meta_row = {
+            "name": "Texas Instruments",
+            "sector": "Technology",
+            "industry": "Semiconductors",
+            "currency": "USD",
+            "market": "NASDAQ",
+        }
+        latest_rows = [
+            {"trade_date": date(2026, 4, 24), "close": Decimal("277.14"), "volume": 9240450},
+            {"trade_date": date(2026, 4, 23), "close": Decimal("282.21"), "volume": 8800000},
+        ]
+        stats_row = {
+            "proposal_count": 4,
+            "avg_post_return_3m_pct": Decimal("12.4"),
+            "avg_alpha_vs_benchmark_pct": Decimal("5.1"),
+            "latest_consensus": "BUY",
+        }
+        factor_row = {
+            "factor_snapshot": {
+                "r1m_pctile": 0.7, "r3m_pctile": 0.8, "r6m_pctile": 0.85, "r12m_pctile": 0.78,
+            },
+        }
+
+        conn = _fake_conn([meta_row, latest_rows, stats_row, factor_row])
+
+        with patch("api.routes.stocks.get_connection", return_value=conn):
+            result = get_stock_overview(ticker="TXN", market="NASDAQ")
+
+        assert result["ticker"] == "TXN"
+        assert result["name"] == "Texas Instruments"
+        assert result["latest"]["close"] == 277.14
+        # 변동률 = (277.14 - 282.21) / 282.21 * 100 ≈ -1.80
+        assert round(result["latest"]["change_pct"], 2) == -1.80
+        assert result["stats"]["proposal_count"] == 4
+        assert result["stats"]["avg_post_return_3m_pct"] == 12.4
+        assert result["stats"]["alpha_vs_benchmark_pct"] == 5.1
+        # AI 점수 산식 검증
+        # factor_score = (0.7+0.8+0.85+0.78)/4 = 0.7825
+        # hist_score = clamp(12.4/30, 0, 1) ≈ 0.4133
+        # consensus_score = BUY → 0.75
+        # score = 100*(0.5*0.7825 + 0.3*0.4133 + 0.2*0.75) ≈ 66.5 → round → 67
+        assert result["stats"]["ai_score"] == 67
+        assert result["score_breakdown"]["weights"] == {"factor": 0.5, "hist": 0.3, "consensus": 0.2}
+
+    def test_overview_zero_proposals_uses_neutral_score(self):
+        from api.routes.stocks import get_stock_overview
+
+        # meta_row keys reflect SQL aliases — actual columns: asset_name/sector_norm/last_price_ccy
+        meta_row = {"name": "Foo", "sector": None, "industry": None,
+                    "currency": "USD", "market": "NASDAQ"}
+        latest_rows = []
+        stats_row = {
+            "proposal_count": 0, "avg_post_return_3m_pct": None,
+            "avg_alpha_vs_benchmark_pct": None, "latest_consensus": None,
+        }
+        factor_row = {}
+
+        conn = _fake_conn([meta_row, latest_rows, stats_row, factor_row])
+
+        with patch("api.routes.stocks.get_connection", return_value=conn):
+            result = get_stock_overview(ticker="FOO", market="NASDAQ")
+
+        # 모든 컴포넌트 중립 0.5 → ai_score = 50
+        assert result["stats"]["ai_score"] == 50
+        assert result["latest"] is None
+        assert result["stats"]["proposal_count"] == 0
+        assert result["stats"]["avg_post_return_3m_pct"] is None
+
+
+class TestComputeAiScore:
+    """_compute_ai_score 순수 함수 단위 테스트."""
+
+    def _fn(self, *args, **kwargs):
+        from api.routes.stocks import _compute_ai_score
+        return _compute_ai_score(*args, **kwargs)
+
+    def test_all_present_full_factor_snapshot(self):
+        """factor_snapshot 4개 키 모두 존재, avg 있음, BUY consensus."""
+        snapshot = {
+            "r1m_pctile": 0.7, "r3m_pctile": 0.8,
+            "r6m_pctile": 0.85, "r12m_pctile": 0.78,
+        }
+        result = self._fn(snapshot, 12.4, "BUY")
+        # factor_score = (0.7+0.8+0.85+0.78)/4 = 0.7825
+        # hist_score = clamp(12.4/30) ≈ 0.4133
+        # consensus_score = 0.75
+        # score = 0.5*0.7825 + 0.3*0.4133 + 0.2*0.75 ≈ 0.6655 → 67
+        assert result["ai_score"] == 67
+        assert result["factor_score"] == round(0.7825, 4)
+        assert result["hist_score"] == round(0.4133333333333333, 4)
+        assert result["consensus_score"] == 0.75
+
+    def test_partial_pctile_keys(self):
+        """pctile 키 일부만 있거나 None — 있는 것만 평균."""
+        snapshot = {
+            "r1m_pctile": 0.6,
+            "r3m_pctile": None,   # None → 제외
+            "r6m_pctile": 0.4,
+            # r12m_pctile 없음 → 제외
+        }
+        result = self._fn(snapshot, None, "HOLD")
+        # factor_score = (0.6+0.4)/2 = 0.5
+        # hist_score = 0.5 (avg None)
+        # consensus_score = 0.5 (HOLD)
+        # score = 0.5*0.5 + 0.3*0.5 + 0.2*0.5 = 0.5 → 50
+        assert result["factor_score"] == 0.5
+        assert result["hist_score"] == 0.5
+        assert result["consensus_score"] == 0.5
+        assert result["ai_score"] == 50
+
+    def test_all_none_inputs_returns_neutral(self):
+        """factor_snapshot=None, avg=None, consensus=None → 모두 중립 0.5 → ai_score 50."""
+        result = self._fn(None, None, None)
+        assert result["ai_score"] == 50
+        assert result["factor_score"] == 0.5
+        assert result["hist_score"] == 0.5
+        assert result["consensus_score"] == 0.5
+
+    def test_empty_factor_snapshot_returns_neutral(self):
+        """factor_snapshot={} (빈 dict) → factor_score 중립 0.5."""
+        result = self._fn({}, None, None)
+        assert result["factor_score"] == 0.5
+        assert result["ai_score"] == 50
+
+    def test_returns_four_keys(self):
+        """반환 dict에 반드시 4개 키가 존재한다."""
+        result = self._fn(None, None, None)
+        assert set(result.keys()) == {"ai_score", "factor_score", "hist_score", "consensus_score"}
+
+
+class TestStockProposalsAPI:
+    """GET /api/stocks/{ticker}/proposals"""
+
+    def test_proposals_returns_timeline(self):
+        from api.routes.stocks import get_stock_proposals
+
+        prop_rows = [
+            {
+                "id": 12345, "analysis_date": date(2026, 4, 15),
+                "created_at": datetime(2026, 4, 15, 8, 30), "theme_id": 99,
+                "theme_name": "AI 반도체 인프라", "theme_validity": "active",
+                "action": "buy", "conviction": "high",
+                "discovery_type": "early_signal",
+                "rationale": "엣지 AI 침투 가속", "entry_price": Decimal("245.30"),
+                "target_price_low": Decimal("290.00"),
+                "target_price_high": Decimal("310.00"),
+                "post_return_1m_pct": Decimal("8.4"),
+                "post_return_3m_pct": Decimal("12.4"),
+                "post_return_6m_pct": None, "post_return_1y_pct": None,
+                "max_drawdown_pct": Decimal("-6.2"),
+                "max_drawdown_date": date(2026, 4, 20),
+                "alpha_vs_benchmark_pct": Decimal("5.1"),
+            },
+        ]
+        validation_rows = [
+            {"proposal_id": 12345, "field_name": "current_price",
+             "mismatch_pct": Decimal("-2.1"), "mismatch": True},
+        ]
+
+        conn = _fake_conn([prop_rows, validation_rows])
+
+        with patch("api.routes.stocks.get_connection", return_value=conn):
+            result = get_stock_proposals(ticker="TXN")
+
+        assert result["ticker"] == "TXN"
+        assert result["count"] == 1
+        item = result["items"][0]
+        assert item["proposal_id"] == 12345
+        assert item["theme_name"] == "AI 반도체 인프라"
+        assert item["entry_price"] == 245.30
+        assert item["post_return_3m_pct"] == 12.4
+        assert item["max_drawdown_pct"] == -6.2
+        assert item["max_drawdown_date"] == "2026-04-20"
+        assert item["created_at"] == "2026-04-15T08:30:00"
+        assert len(item["validation_mismatches"]) == 1
+        assert item["validation_mismatches"][0]["field_name"] == "current_price"
+
+    def test_proposals_empty_for_unknown_ticker(self):
+        from api.routes.stocks import get_stock_proposals
+
+        conn = _fake_conn([[]])
+        with patch("api.routes.stocks.get_connection", return_value=conn):
+            result = get_stock_proposals(ticker="UNKNOWN")
+
+        assert result["count"] == 0
+        assert result["items"] == []
+
+
+def _patch_fake_conn_for_base_ctx():
+    cur = MagicMock()
+    cur.fetchone.return_value = [0]
+
+    @contextmanager
+    def _cursor(**kwargs):
+        yield cur
+
+    conn = MagicMock()
+    conn.cursor = _cursor
+    return conn
+
+
+@pytest.fixture
+def patched_base_ctx_conn(monkeypatch):
+    fake = _patch_fake_conn_for_base_ctx()
+    # api.deps.get_db_conn 이 shared.db.get_connection 을 호출 — 여기를 패치
+    monkeypatch.setattr("shared.db.connection.get_connection", lambda cfg: fake, raising=False)
+    monkeypatch.setattr("api.deps.get_connection", lambda cfg: fake, raising=False)
+    monkeypatch.setattr("shared.db.init_db", lambda cfg: None, raising=False)
+    return fake
+
+
+def _make_client():
+    from fastapi.testclient import TestClient
+    from api.main import app
+    return TestClient(app)
+
+
+class TestStockCockpitPage:
+    def test_cockpit_page_returns_200(self, patched_base_ctx_conn):
+        client = _make_client()
+        resp = client.get("/pages/stocks/TXN?market=NASDAQ")
+        assert resp.status_code == 200
+        body = resp.text
+        # 새 템플릿이 렌더됐다는 시그니처
+        assert "stock-cockpit" in body
+        # API 엔드포인트 경로 (JS 가 호출하는 것들)
+        assert "/api/stocks/" in body and "/overview" in body
+        assert "/api/stocks/" in body and "/proposals" in body
+        # 펀더멘털 8카드는 흡수됨 (기존 호환)
+        assert "valuation-metrics" in body
+
+    def test_cockpit_page_loads_chart_library(self, patched_base_ctx_conn):
+        client = _make_client()
+        resp = client.get("/pages/stocks/TXN?market=NASDAQ")
+        body = resp.text
+        # lightweight-charts CDN 로드 확인
+        assert "lightweight-charts" in body
+        # 차트 컨테이너
+        assert 'id="price-chart"' in body
+        # OHLCV API 경로
+        assert "/api/stocks/" in body and "/ohlcv" in body
+
+    def test_cockpit_page_includes_benchmark_section(self, patched_base_ctx_conn):
+        client = _make_client()
+        resp = client.get("/pages/stocks/TXN?market=NASDAQ")
+        body = resp.text
+        assert 'id="benchmark-chart"' in body
+        # 벤치마크 API 경로
+        assert "/api/indices/" in body
+
+    def test_cockpit_page_includes_timeline_section(self, patched_base_ctx_conn):
+        client = _make_client()
+        resp = client.get("/pages/stocks/TXN?market=NASDAQ")
+        body = resp.text
+        assert 'id="timeline-list"' in body
+        # 타임라인 JS IIFE 시그니처 — renderTimeline 함수가 반드시 존재해야 함
+        assert "renderTimeline" in body
+        # tl-warn 스타일 존재 확인
+        assert "tl-warn" in body
+
+    def test_cockpit_page_escapes_user_content(self, patched_base_ctx_conn):
+        client = _make_client()
+        resp = client.get("/pages/stocks/TXN?market=NASDAQ")
+        body = resp.text
+        # esc 헬퍼 함수 존재 — XSS 방어 시그니처
+        assert "function esc(" in body
+        # 핵심 escape 시퀀스
+        assert "&amp;" in body and "&lt;" in body and "&gt;" in body

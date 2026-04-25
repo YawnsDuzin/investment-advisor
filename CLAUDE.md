@@ -189,7 +189,7 @@ sudo systemctl enable --now pre-market-briefing.timer            # 매일 06:30 
 - `routes/inquiry.py` — 고객 문의 게시판. 문의 CRUD, 답변/댓글, 상태 관리(open→answered→closed). 카테고리: general/bug/feature. `is_private` 플래그로 비공개 문의 지원. Admin/Moderator만 답변·상태 변경 가능.
 - `chat_engine.py` — Claude Agent SDK 기반 테마 채팅 엔진. 테마 컨텍스트를 시스템 프롬프트에 주입하여 대화.
 - `education_engine.py` — Claude SDK 기반 투자 교육 AI 튜터. 토픽별 커리큘럼을 시스템 프롬프트에 주입하여 대화형 학습 제공.
-- `templates/` — 다크 테마 UI. base(우측 상단 유저 드롭다운 + 알림 배지 + 401 자동 갱신 인터셉터), landing, pricing, dashboard, sessions, session_detail, themes, proposals, theme_history, ticker_history, track_record, watchlist, notifications, profile, chat_list, chat_room, education(topic/chat_list/chat_room), inquiry(list/detail/new), admin, admin_audit_logs, login, register, user_admin.
+- `templates/` — 다크 테마 UI. base(우측 상단 유저 드롭다운 + 알림 배지 + 401 자동 갱신 인터셉터), landing, pricing, dashboard, sessions, session_detail, themes, proposals, theme_history, ticker_history, stock_cockpit(종목 페이지), track_record, watchlist, notifications, profile, chat_list, chat_room, education(topic/chat_list/chat_room), inquiry(list/detail/new), admin, admin_audit_logs, login, register, user_admin.
 
 ### shared/ — 공용 모듈
 - `config.py` — `.env` 파일 자동 로드, `DatabaseConfig`, `NewsConfig`, `AnalyzerConfig`, `RecommendationConfig`(Top Picks 가중치·다양성), `UniverseConfig`/`ScreenerConfig`/`ValidationConfig`(Phase 1~3), `OhlcvConfig`(Phase 7 — retention/auto_adjust/on_price_sync), `AuthConfig`, `AppConfig`
