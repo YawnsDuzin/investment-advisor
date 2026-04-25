@@ -132,6 +132,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
 <style>
 .cockpit-hero {
   background:var(--bg-card); border:1px solid var(--border); border-radius:10px;
@@ -387,6 +388,114 @@
     fmtPrice: fmtPrice, fmtPct: fmtPct,
     fmtBigNum: fmtBigNum, fmtNum: fmtNum,
   };
+})();
+
+// ── § 1 가격 차트 ──
+(function() {
+  var c = window.__cockpit;
+  if (!c || typeof LightweightCharts === 'undefined') return;
+
+  var container = document.getElementById('price-chart');
+  container.innerHTML = '';
+  var chart = LightweightCharts.createChart(container, {
+    height: 380,
+    layout: { background: { color: 'transparent' }, textColor: '#a0a0a0' },
+    grid: { vertLines: { color: '#2a2a2a' }, horzLines: { color: '#2a2a2a' } },
+    rightPriceScale: { borderColor: '#3a3a3a' },
+    timeScale: { borderColor: '#3a3a3a', timeVisible: false },
+    crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+  });
+
+  var lineSeries = chart.addLineSeries({ color: '#4ea3ff', lineWidth: 2 });
+  var ma50Series = chart.addLineSeries({
+    color: '#f5a623', lineWidth: 1, title: 'MA50', priceLineVisible: false, lastValueVisible: false,
+  });
+  var ma200Series = chart.addLineSeries({
+    color: '#9b59b6', lineWidth: 1, title: 'MA200', priceLineVisible: false, lastValueVisible: false,
+  });
+  var volSeries = chart.addHistogramSeries({
+    color: '#3a3a3a', priceFormat: { type: 'volume' },
+    priceScaleId: '', scaleMargins: { top: 0.85, bottom: 0 },
+  });
+
+  var currentRange = 360;
+
+  function movingAvg(series, n) {
+    var out = []; var sum = 0; var q = [];
+    for (var i = 0; i < series.length; i++) {
+      var c2 = series[i].close;
+      q.push(c2); sum += c2;
+      if (q.length > n) sum -= q.shift();
+      if (q.length === n) out.push({ time: series[i].date, value: +(sum / n).toFixed(4) });
+    }
+    return out;
+  }
+
+  function loadOhlcv(days) {
+    var url = '/api/stocks/' + encodeURIComponent(c.ticker) + '/ohlcv?days=' + days +
+              (c.market ? '&market=' + encodeURIComponent(c.market) : '');
+    return fetch(url).then(function(r) { return r.ok ? r.json() : Promise.reject(r.status); });
+  }
+
+  function applyData(d) {
+    if (!d.series || !d.series.length) {
+      container.innerHTML = '<div class="chart-placeholder">OHLCV 데이터 수집 대기 중</div>';
+      return;
+    }
+    var prices = d.series.map(function(p) { return { time: p.date, value: p.close }; });
+    var vols = d.series.map(function(p) {
+      return { time: p.date, value: p.volume || 0,
+               color: (p.change_pct != null && p.change_pct < 0) ? '#c0392b66' : '#27ae6066' };
+    });
+    lineSeries.setData(prices);
+    ma50Series.setData(movingAvg(d.series, 50));
+    ma200Series.setData(movingAvg(d.series, 200));
+    volSeries.setData(vols);
+
+    // 추천 마커 (별도 fetch)
+    fetch('/api/stocks/' + encodeURIComponent(c.ticker) + '/proposals')
+      .then(function(r) { return r.ok ? r.json() : null; })
+      .then(function(p) {
+        if (!p || !p.items || !p.items.length) return;
+        var firstDate = d.series[0].date;
+        var lastDate = d.series[d.series.length - 1].date;
+        var markers = p.items
+          .filter(function(it) {
+            var dt = (it.created_at || it.analysis_date || '').slice(0, 10);
+            return dt >= firstDate && dt <= lastDate;
+          })
+          .map(function(it) {
+            var positive = (it.post_return_3m_pct == null) || it.post_return_3m_pct >= 0;
+            return {
+              time: (it.created_at || it.analysis_date).slice(0, 10),
+              position: 'belowBar',
+              color: positive ? '#27ae60' : '#c0392b',
+              shape: 'arrowUp',
+              text: '추천' + (it.entry_price ? ' @' + it.entry_price : ''),
+            };
+          });
+        if (markers.length) lineSeries.setMarkers(markers);
+      })
+      .catch(function() { /* 마커는 옵션 */ });
+
+    chart.timeScale().fitContent();
+  }
+
+  loadOhlcv(currentRange).then(applyData)
+    .catch(function() {
+      container.innerHTML = '<div class="chart-placeholder">차트 데이터 조회 실패</div>';
+    });
+
+  // 기간 토글
+  document.querySelectorAll('#range-toggle button').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      document.querySelectorAll('#range-toggle button').forEach(function(b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      currentRange = parseInt(btn.dataset.range, 10);
+      loadOhlcv(currentRange).then(applyData)
+        .catch(function() { console.warn('차트 재로드 실패'); });
+    });
+  });
 })();
 </script>
 {% endblock %}

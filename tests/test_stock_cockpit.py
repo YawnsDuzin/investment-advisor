@@ -269,3 +269,14 @@ class TestStockCockpitPage:
         assert "/api/stocks/" in body and "/proposals" in body
         # 펀더멘털 8카드는 흡수됨 (기존 호환)
         assert "valuation-metrics" in body
+
+    def test_cockpit_page_loads_chart_library(self, patched_base_ctx_conn):
+        client = _make_client()
+        resp = client.get("/pages/stocks/TXN?market=NASDAQ")
+        body = resp.text
+        # lightweight-charts CDN 로드 확인
+        assert "lightweight-charts" in body
+        # 차트 컨테이너
+        assert 'id="price-chart"' in body
+        # OHLCV API 경로
+        assert "/api/stocks/" in body and "/ohlcv" in body
