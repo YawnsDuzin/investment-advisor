@@ -254,7 +254,7 @@ class TestStockProposalsAPI:
 
 def _patch_fake_conn_for_base_ctx():
     cur = MagicMock()
-    cur.fetchone.return_value = [0]
+    cur.fetchone.return_value = {"market_regime": None}  # market_regime 쿼리용 dict
 
     @contextmanager
     def _cursor(**kwargs):

@@ -1,5 +1,6 @@
 """종목 기초정보 조회 API + 종목 페이지"""
 from fastapi import APIRouter, Depends, HTTPException, Query
+from psycopg2 import ProgrammingError as _Psycopg2ProgrammingError
 from psycopg2.extras import RealDictCursor
 
 from analyzer.factor_engine import compute_sector_pctiles
@@ -522,8 +523,8 @@ def stock_fundamentals_page(
                 row = cur.fetchone()
                 if row:
                     regime = row.get("market_regime")
-        except Exception:
-            regime = None  # 마이그레이션 v31 이전이면 컬럼 없음 — silent fallback
+        except _Psycopg2ProgrammingError:
+            regime = None  # 마이그레이션 v31 이전 — market_regime 컬럼 없음
     return templates.TemplateResponse(request=ctx["request"], name="stock_cockpit.html", context={
         **ctx,
         "ticker": ticker.upper(),
