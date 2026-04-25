@@ -141,10 +141,13 @@ def dashboard(conn = Depends(get_db_conn), ctx: dict = Depends(make_page_ctx("da
                    p.rationale AS proposal_rationale, p.market,
                    p.foreign_net_buy_signal, p.squeeze_risk,
                    t.theme_name, t.theme_key, t.confidence_score AS theme_confidence,
-                   EXISTS(SELECT 1 FROM stock_analyses sa WHERE sa.proposal_id = p.id) AS has_stock_analysis
+                   EXISTS(SELECT 1 FROM stock_analyses sa WHERE sa.proposal_id = p.id) AS has_stock_analysis,
+                   u.sector_norm, u.market_cap_bucket
             FROM daily_top_picks dtp
             JOIN investment_proposals p ON p.id = dtp.proposal_id
             JOIN investment_themes t    ON t.id = p.theme_id
+            LEFT JOIN stock_universe u  ON UPPER(u.ticker) = UPPER(p.ticker)
+                                       AND UPPER(u.market)  = UPPER(p.market)
             WHERE dtp.analysis_date = %s
             ORDER BY dtp.rank
         """, (today_date,))

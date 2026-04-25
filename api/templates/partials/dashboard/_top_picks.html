@@ -180,6 +180,12 @@
                 <i data-lucide="trending-up" class="icon icon-sm" aria-hidden="true"></i>테마
             </a>
             {% endif %}
+            {% if pk.sector_norm or pk.market_cap_bucket %}
+            <a href="/pages/screener?{% if pk.sector_norm %}sectors={{ pk.sector_norm }}{% endif %}{% if pk.sector_norm and pk.market_cap_bucket %}&{% endif %}{% if pk.market_cap_bucket %}market_cap_buckets={{ pk.market_cap_bucket }}{% endif %}"
+               class="action-btn action-btn-icon" title="비슷한 종목 스크리너">
+                <i data-lucide="search" class="icon icon-sm" aria-hidden="true"></i>비슷한 종목
+            </a>
+            {% endif %}
         </div>
     </div>
     {% endfor %}

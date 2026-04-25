@@ -36,10 +36,13 @@ def list_proposals(
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         query = """
             SELECT p.*, t.theme_name, t.time_horizon, t.theme_type,
-                   t.theme_validity, s.analysis_date
+                   t.theme_validity, s.analysis_date,
+                   u.sector_norm, u.market_cap_bucket
             FROM investment_proposals p
             JOIN investment_themes t ON p.theme_id = t.id
             JOIN analysis_sessions s ON t.session_id = s.id
+            LEFT JOIN stock_universe u ON UPPER(u.ticker) = UPPER(p.ticker)
+                                      AND UPPER(u.market)  = UPPER(p.market)
             WHERE 1=1
         """
         params: list = []
