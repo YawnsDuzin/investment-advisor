@@ -375,6 +375,14 @@
   var c = window.__cockpit;
   if (!c || typeof LightweightCharts === 'undefined') return;
 
+  // KR 종목 페이지일 때만 timezone 안내 표시 (KR 종목 vs US 인덱스 = 14h 시점 차이)
+  // US 종목은 4 인덱스 모두 timezone 일치 또는 무관하므로 안내 불필요
+  var KRX_MARKETS = ['KOSPI', 'KOSDAQ'];
+  if (KRX_MARKETS.indexOf((c.market || '').toUpperCase()) >= 0) {
+    var tzNote = document.getElementById('benchmark-tz-note');
+    if (tzNote) tzNote.style.display = 'block';
+  }
+
   // 4개 벤치마크 인덱스 + 색상 (어두운 배경에서 잘 보이는 톤)
   var BENCH_INDICES = [
     { code: 'KOSPI',  color: '#f1c40f' }, // 노랑
