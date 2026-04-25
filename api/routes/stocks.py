@@ -6,6 +6,7 @@ from psycopg2 import ProgrammingError as _Psycopg2ProgrammingError
 from psycopg2.extras import RealDictCursor
 
 from analyzer.factor_engine import compute_sector_pctiles
+from analyzer.krx_data import fetch_krx_extended, fetch_us_extended
 from analyzer.stock_data import fetch_fundamentals
 from api.auth.dependencies import get_current_user_required
 from api.auth.models import UserInDB
@@ -500,6 +501,58 @@ def get_stock_proposals(ticker: str):
         })
 
     return {"ticker": tk, "count": len(items), "items": items}
+
+
+# ──────────────────────────────────────────────
+# § 5 Cockpit — 시장 특화 수급/공매도/지수 (lazy fetch)
+# ──────────────────────────────────────────────
+_KRX_MARKETS = {"KOSPI", "KOSDAQ", "KRX", "KSE", "KQ"}
+
+
+@router.get("/{ticker}/extended-supply")
+def get_stock_extended_supply(
+    ticker: str,
+    market: str = Query(default="", description="시장 코드"),
+):
+    """§ 5 — 시장별 수급·공매도·지수 통합 조회 (1시간 캐시).
+
+    한국주(KOSPI/KOSDAQ): pykrx 외국인 보유 / 순매수 / 공매도 / 지수 편입
+    미국주(NASDAQ/NYSE 등): yfinance 기관 보유 / Insider / Short interest
+    그 외: 404
+    """
+    tk = ticker.strip().upper()
+    mk = (market or "").strip().upper()
+
+    # market 미지정 시 stock_universe 자동 폴백
+    if not mk:
+        cfg = AppConfig()
+        conn = get_connection(cfg.db)
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(
+                    "SELECT market FROM stock_universe "
+                    "WHERE UPPER(ticker) = %s "
+                    "ORDER BY (CASE WHEN listed THEN 0 ELSE 1 END) LIMIT 1",
+                    (tk,),
+                )
+                row = cur.fetchone()
+                if row and row.get("market"):
+                    mk = row["market"].upper()
+        finally:
+            conn.close()
+
+    if mk in _KRX_MARKETS:
+        data = fetch_krx_extended(tk)
+    else:
+        data = fetch_us_extended(tk, mk)
+
+    if data is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"종목 '{ticker}' 의 시장 수급 데이터 조회 실패",
+        )
+
+    return {"ticker": tk, "market": mk or None, **data}
 
 
 # ──────────────────────────────────────────────

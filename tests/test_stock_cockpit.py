@@ -430,10 +430,65 @@ class TestStockCockpitPage:
         client = _make_client()
         resp = client.get("/static/js/stock_cockpit.js")
         body = resp.text
-        assert "// ── § 5 KRX 확장 ──" in body
+        # § 5 마커는 prefix 매칭 (헤더 뒤 부가 설명 변경 가능)
+        assert "// ── § 5" in body
         assert "krx-foreign-donut" in body
-        # 외국주 hide 로직
-        assert "KOSPI" in body and "KOSDAQ" in body
+        # 신규 lazy fetch endpoint 사용 + 시장 분기 라벨
+        assert "/extended-supply" in body
+        assert "market_type" in body  # KRX/US 분기 시그니처
+
+
+class TestExtendedSupplyAPI:
+    """GET /api/stocks/{ticker}/extended-supply — 시장별 수급/공매도/지수."""
+
+    def test_extended_supply_krx_returns_payload(self):
+        from api.routes.stocks import get_stock_extended_supply
+
+        sample = {
+            "market_type": "KRX",
+            "ownership_pct": 51.2,
+            "flow_signal": "positive",
+            "flow_summary": "외국인 5일 연속 순매수 (+1,200억원)",
+            "short_pct": 1.5,
+            "squeeze_risk": "low",
+            "index_membership": ["KOSPI200", "KRX300"],
+            "fetched_at": "2026-04-25T20:30:00",
+        }
+        with patch("api.routes.stocks.fetch_krx_extended", return_value=sample):
+            result = get_stock_extended_supply(ticker="005930", market="KOSPI")
+        assert result["ticker"] == "005930"
+        assert result["market_type"] == "KRX"
+        assert result["ownership_pct"] == 51.2
+        assert result["index_membership"] == ["KOSPI200", "KRX300"]
+
+    def test_extended_supply_us_returns_payload(self):
+        from api.routes.stocks import get_stock_extended_supply
+
+        sample = {
+            "market_type": "US",
+            "ownership_pct": 89.3,
+            "flow_signal": "positive",
+            "flow_summary": "Insider 매수 12건 vs 매도 3건",
+            "short_pct": 1.2,
+            "squeeze_risk": "low",
+            "index_membership": [],
+            "fetched_at": "2026-04-25T20:30:00",
+        }
+        with patch("api.routes.stocks.fetch_us_extended", return_value=sample):
+            result = get_stock_extended_supply(ticker="TXN", market="NASDAQ")
+        assert result["market_type"] == "US"
+        assert result["ownership_pct"] == 89.3
+
+    def test_extended_supply_404_when_no_data(self):
+        from fastapi import HTTPException
+        from api.routes.stocks import get_stock_extended_supply
+
+        with patch("api.routes.stocks.fetch_us_extended", return_value=None):
+            try:
+                get_stock_extended_supply(ticker="UNKNOWN", market="NASDAQ")
+                assert False, "expected HTTPException"
+            except HTTPException as e:
+                assert e.status_code == 404
 
 
 class TestComputeSectorPctiles:
