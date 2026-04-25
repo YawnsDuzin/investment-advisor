@@ -23,7 +23,7 @@
   }
 """
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, Body
+from fastapi import APIRouter, Depends, HTTPException, Body, Response
 from psycopg2.extras import RealDictCursor
 import json
 
@@ -40,6 +40,38 @@ from shared.tier_limits import (
 router = APIRouter(prefix="/api/screener", tags=["스크리너"])
 pages_router = APIRouter(prefix="/pages/screener", tags=["스크리너 페이지"])
 
+# sector_norm → 한국어 라벨 사전 (28개 버킷)
+SECTOR_LABELS: dict[str, str] = {
+    "semiconductors": "반도체",
+    "energy": "에너지",
+    "financials": "금융",
+    "healthcare": "헬스케어",
+    "biotech": "바이오",
+    "internet": "인터넷",
+    "software": "소프트웨어",
+    "hardware": "하드웨어",
+    "ai": "AI",
+    "cloud": "클라우드",
+    "ev": "전기차",
+    "battery": "배터리",
+    "auto": "자동차",
+    "consumer": "소비재",
+    "retail": "유통",
+    "media": "미디어",
+    "telecom": "통신",
+    "utilities": "유틸리티",
+    "real_estate": "부동산",
+    "materials": "소재",
+    "chemicals": "화학",
+    "steel": "철강",
+    "shipbuilding": "조선",
+    "aerospace": "항공우주",
+    "defense": "방산",
+    "construction": "건설",
+    "logistics": "물류",
+    "robotics": "로봇",
+}
+
 
 def _tier_of(user: Optional[UserInDB]) -> str:
     if not user:
@@ -48,6 +80,36 @@ def _tier_of(user: Optional[UserInDB]) -> str:
         return user.effective_tier() or TIER_FREE
     except Exception:
         return TIER_FREE
+
+
+# ──────────────────────────────────────────────
+# GET /api/screener/sectors — sector_norm 분포 (드롭다운 옵션)
+# ──────────────────────────────────────────────
+@router.get("/sectors")
+def list_sectors(response: Response, conn=Depends(get_db_conn)):
+    """sector_norm 분포 (드롭다운 옵션). 30분 캐시."""
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute(
+            """
+            SELECT sector_norm, COUNT(*) AS count
+            FROM stock_universe
+            WHERE listed = TRUE AND has_preferred = FALSE
+              AND sector_norm IS NOT NULL AND sector_norm <> ''
+            GROUP BY sector_norm
+            ORDER BY count DESC
+            """
+        )
+        rows = cur.fetchall()
+    sectors = [
+        {
+            "key": r["sector_norm"],
+            "label": SECTOR_LABELS.get(r["sector_norm"], r["sector_norm"]),
+            "count": int(r["count"]),
+        }
+        for r in rows
+    ]
+    response.headers["Cache-Control"] = "public, max-age=1800"
+    return {"count": len(sectors), "sectors": sectors}
 
 
 # ──────────────────────────────────────────────
