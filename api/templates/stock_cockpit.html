@@ -160,28 +160,33 @@
   {# ─────────────── § 5. 시장 특화 수급·공매도·지수 (한국·미국 모두) ─────────────── #}
   <section class="cockpit-section" id="sec-krx" style="display:none;">
     <div class="cockpit-section-head"><h3>수급·공매도·지수 (시장 특화)</h3></div>
-    <div id="krx-content" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;">
+    <div id="krx-content" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;">
       <div class="fund-card">
-        <h4 class="fund-card-title" id="krx-ownership-title">보유율</h4>
-        <div style="position:relative;height:160px;">
-          <canvas id="krx-foreign-donut"></canvas>
-          <div id="krx-foreign-pct" style="position:absolute;top:50%;left:50%;
-               transform:translate(-50%,-50%);font-size:18px;font-weight:700;"></div>
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
+          <h4 class="fund-card-title" id="krx-ownership-title" style="margin:0;border:none;padding:0;">보유율</h4>
+          <span id="krx-foreign-pct" style="font-size:16px;font-weight:700;"></span>
+        </div>
+        <div style="position:relative;height:140px;">
+          <canvas id="krx-ownership-canvas"></canvas>
         </div>
       </div>
       <div class="fund-card">
-        <h4 class="fund-card-title" id="krx-flow-title">순매수 신호</h4>
-        <div id="krx-foreign-signal" style="text-align:center;padding:24px 0 6px 0;font-size:18px;font-weight:700;"></div>
-        <div id="krx-flow-summary" style="text-align:center;font-size:11px;color:var(--text-muted);"></div>
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
+          <h4 class="fund-card-title" id="krx-flow-title" style="margin:0;border:none;padding:0;">순매수 신호</h4>
+          <span id="krx-foreign-signal" style="font-size:14px;font-weight:700;"></span>
+        </div>
+        <div style="position:relative;height:140px;">
+          <canvas id="krx-flow-canvas"></canvas>
+        </div>
+        <div id="krx-flow-summary" style="text-align:center;font-size:11px;color:var(--text-muted);margin-top:4px;"></div>
       </div>
       <div class="fund-card">
-        <h4 class="fund-card-title" id="krx-short-title">공매도 잔고</h4>
-        <div style="padding:14px 0;">
-          <div id="krx-squeeze-bar" style="height:14px;background:var(--bg);
-               border:1px solid var(--border);border-radius:7px;overflow:hidden;">
-            <div id="krx-squeeze-fill" style="height:100%;width:0%;background:var(--green);transition:width 0.3s;"></div>
-          </div>
-          <div id="krx-squeeze-label" style="text-align:center;margin-top:8px;font-size:13px;"></div>
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
+          <h4 class="fund-card-title" id="krx-short-title" style="margin:0;border:none;padding:0;">공매도 잔고</h4>
+          <span id="krx-squeeze-label" style="font-size:14px;font-weight:700;"></span>
+        </div>
+        <div style="position:relative;height:140px;">
+          <canvas id="krx-short-canvas"></canvas>
         </div>
       </div>
       <div class="fund-card">
