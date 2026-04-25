@@ -509,8 +509,24 @@ def stock_fundamentals_page(
     ctx: dict = Depends(make_page_ctx("proposals")),
 ):
     """Stock Cockpit — 종합 종목 페이지 (in-place 교체)."""
+    # § 3 시장 레짐 — 최신 분석 세션의 market_regime JSONB
+    regime = None
+    conn = ctx.get("_conn")
+    if conn is not None:
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(
+                    "SELECT market_regime FROM analysis_sessions "
+                    "ORDER BY analysis_date DESC LIMIT 1"
+                )
+                row = cur.fetchone()
+                if row:
+                    regime = row.get("market_regime")
+        except Exception:
+            regime = None  # 마이그레이션 v31 이전이면 컬럼 없음 — silent fallback
     return templates.TemplateResponse(request=ctx["request"], name="stock_cockpit.html", context={
         **ctx,
         "ticker": ticker.upper(),
         "market": market.upper(),
+        "regime": regime,
     })

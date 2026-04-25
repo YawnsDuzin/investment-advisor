@@ -543,3 +543,69 @@
       emptyEl.style.display = 'block';
     });
 })();
+
+// ── § 3 섹터 팩터 분위 ──
+(function() {
+  var c = window.__cockpit;
+  if (!c) return;
+
+  var FACTORS = [
+    { key: "r1m", label: "1개월 모멘텀", unit: "%" },
+    { key: "r3m", label: "3개월 모멘텀", unit: "%" },
+    { key: "r6m", label: "6개월 모멘텀", unit: "%" },
+    { key: "r12m", label: "12개월 모멘텀", unit: "%" },
+    { key: "low_vol", label: "저변동성 (60d σ)", unit: "%" },
+    { key: "volume", label: "거래량 비율 (20d/60d)", unit: "x" },
+  ];
+
+  var emptyEl = document.getElementById('sector-stats-empty');
+  var tableEl = document.getElementById('sector-stats-table');
+  var bodyEl = document.getElementById('sector-stats-body');
+  if (!emptyEl || !tableEl || !bodyEl) return;
+
+  emptyEl.style.display = 'block';
+
+  var qs = c.market ? ('?market=' + encodeURIComponent(c.market)) : '';
+  fetch('/api/stocks/' + encodeURIComponent(c.ticker) + '/sector-stats' + qs)
+    .then(function(r) {
+      if (r.status === 404) return null;
+      return r.ok ? r.json() : Promise.reject();
+    })
+    .then(function(d) {
+      if (!d) {
+        emptyEl.textContent = '섹터 정보 없음';
+        return;
+      }
+      if (!d.sector_size || d.sector_size < 5) {
+        emptyEl.textContent = '섹터 표본 부족 (' + (d.sector_size || 0) + '개) — 분위 계산 불가';
+        return;
+      }
+      emptyEl.style.display = 'none';
+      tableEl.style.display = 'table';
+
+      FACTORS.forEach(function(f) {
+        var rank = (d.ranks || {})[f.key] || {};
+        var valKey = f.key === "volume" ? "value_ratio" : "value_pct";
+        var rawVal = rank[valKey];
+        var pctile = rank.sector_pctile;
+        var topPct = rank.sector_top_pct;
+
+        var row = document.createElement('tr');
+        row.innerHTML =
+          '<td style="padding:8px 12px;border-top:1px solid var(--border);">' + c.escHtml(f.label) + '</td>' +
+          '<td style="padding:8px 12px;border-top:1px solid var(--border);text-align:right;font-variant-numeric:tabular-nums;">' +
+            (rawVal != null ? c.fmtNum(rawVal) + (f.unit === '%' ? '%' : 'x') : '-') +
+          '</td>' +
+          '<td style="padding:8px 12px;border-top:1px solid var(--border);text-align:right;font-variant-numeric:tabular-nums;">' +
+            (pctile != null ? c.fmtNum(pctile * 100) + '%ile' : '-') +
+          '</td>' +
+          '<td style="padding:8px 12px;border-top:1px solid var(--border);text-align:right;font-variant-numeric:tabular-nums;">' +
+            (topPct != null ? '상위 ' + topPct + '%' : '-') +
+          '</td>';
+        bodyEl.appendChild(row);
+      });
+    })
+    .catch(function() {
+      emptyEl.textContent = '섹터 분위 조회 실패';
+    });
+})();

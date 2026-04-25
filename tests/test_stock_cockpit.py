@@ -379,6 +379,23 @@ class TestStockCockpitPage:
         # 양쪽 모두 존재하는 첫 거래일 정렬 시그니처
         assert "commonAlignedStart" in body or "alignFirstCommonDate" in body
 
+    def test_cockpit_page_includes_regime_banner(self, patched_base_ctx_conn):
+        client = _make_client()
+        resp = client.get("/pages/stocks/TXN?market=NASDAQ")
+        body = resp.text
+        # § 3 시장 레짐 자리 마크업 (regime context 가 None 이라도 _regime_banner 가 자체 가드)
+        assert 'id="sec-regime"' in body
+        # 섹터 분위 표 자리
+        assert 'id="sector-stats-table"' in body
+
+    def test_external_js_has_sector_stats_iife(self):
+        client = _make_client()
+        resp = client.get("/static/js/stock_cockpit.js")
+        body = resp.text
+        assert "// ── § 3 섹터 팩터 분위 ──" in body
+        assert "/sector-stats" in body
+        assert "sector-stats-table" in body
+
 
 class TestComputeSectorPctiles:
     """analyzer.factor_engine.compute_sector_pctiles — 섹터 단위 cross-section pctile."""
