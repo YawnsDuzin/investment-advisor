@@ -278,6 +278,12 @@ function fetchStock() {
 
 **대상:** `api/static/js/stock_cockpit.js`
 
+### CKPT-P2-7 (✅ 해결): /overview 3중 fetch → getOverview() 공유 promise
+
+**해결됨 (커밋 d42b177):** Phase 2 final review 에서 발견. § Hero / § 2-B / § 5 IIFE 가 모두 `/overview` 를 독립적으로 fetch (DB 5쿼리 × 3회). `_overviewPromise` + `getOverview()` 패턴 (`getProposals` 와 동일) 으로 단일 fetch 화. 10줄 변경.
+
+**대상:** `api/static/js/stock_cockpit.js`
+
 ### CKPT-P2-6: § 6 timeline IIFE 의 `esc()` → `c.escHtml` 통일
 
 **현황:** Phase 1 Task 6 fix 시 `escHtml` 을 `window.__cockpit` export 에 추가했으나 § 6 timeline IIFE 는 여전히 local `esc()` 함수 정의 사용. 기능 동일, 중복.
