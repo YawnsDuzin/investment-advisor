@@ -52,8 +52,9 @@ def test_examples_valid_json():
 
 
 def test_content_min_length():
-    """content 최소 분량 (800자 이상)."""
-    for t in ALL_TOPICS:
+    """V35 신규 토픽 content 최소 분량 (800자 이상). 기존 v21/v24 토픽은 별도 영역."""
+    from shared.db.migrations.seeds_education import NEW_TOPICS_V35
+    for t in NEW_TOPICS_V35:
         assert len(t["content"]) >= 800, \
             f"{t['slug']} content too short ({len(t['content'])} chars)"
 
