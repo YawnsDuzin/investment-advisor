@@ -1346,6 +1346,34 @@ def _migrate_to_v34(cur) -> None:
     print("[DB] v34 마이그레이션 완료 — pre_market_briefings 테이블 (프리마켓 브리핑)")
 
 
+def _migrate_to_v35(cur) -> None:
+    """Education 신규 토픽 14개 추가 (Tier A·B + tools 카테고리 신설).
+
+    분포: basics +2, analysis +2, risk +3, macro +1, stories +3, tools(신규) +3
+    기존 26개 토픽은 ON CONFLICT (slug) DO NOTHING으로 보호.
+    신규 DB의 경우 v21에서 ALL_TOPICS 전체가 이미 시드되었으므로 v35는 사실상 no-op (멱등).
+
+    education_topics.category VARCHAR(50)에 CHECK 제약 없음 — 'tools' 추가에 ALTER 불필요.
+    UI 라벨은 api/routes/education.py:_EDU_CATEGORIES에서 분리 관리.
+    """
+    from shared.db.migrations.seeds_education import NEW_TOPICS_V35
+    for t in NEW_TOPICS_V35:
+        cur.execute(
+            """INSERT INTO education_topics (category, slug, title, summary, content,
+                       examples, difficulty, sort_order)
+               VALUES (%(category)s, %(slug)s, %(title)s, %(summary)s, %(content)s,
+                       %(examples)s::jsonb, %(difficulty)s, %(sort_order)s)
+               ON CONFLICT (slug) DO NOTHING""",
+            t,
+        )
+
+    cur.execute("""
+        INSERT INTO schema_version (version) VALUES (35)
+        ON CONFLICT (version) DO NOTHING;
+    """)
+    print(f"[DB] v35: 교육 토픽 {len(NEW_TOPICS_V35)}개 추가 (tools 카테고리 신설)")
+
+
 def _migrate_to_v33(cur) -> None:
     """v33: screener_presets — 사용자 커스텀 스크리너 프리셋 저장 (로드맵 UI-6).
 
