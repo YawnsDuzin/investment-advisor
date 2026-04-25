@@ -347,7 +347,8 @@ class TestStockCockpitPage:
         assert "window.__cockpit" in body
         assert "function _compute" not in body  # 백엔드 함수가 아닌지 확인
         assert "// ── § 1 가격 차트 ──" in body
-        assert "// ── § 2-A 벤치마크 상대성과 ──" in body
+        # § 2-A 마커는 prefix 매칭 (헤더 뒤 부가 설명 변경 가능)
+        assert "// ── § 2-A 벤치마크 상대성과" in body
         assert "// ── § 6 추천 이력 타임라인 ──" in body
 
         # Assertions migrated from Phase 1 tests that previously checked HTML body
@@ -370,14 +371,20 @@ class TestStockCockpitPage:
         # 새 overlay 시그니처 — class="chart-overlay"
         assert "chart-overlay" in body
 
-    def test_benchmark_iife_uses_cache_and_alignment(self):
+    def test_benchmark_iife_renders_all_four_indices(self):
+        """§ 2-A 가 4개 시장 인덱스 (KOSPI/KOSDAQ/SP500/NDX100) 동시 표시."""
         client = _make_client()
         resp = client.get("/static/js/stock_cockpit.js")
         body = resp.text
-        # § 2-A 의 stockCache 시그니처
-        assert "stockCache" in body
-        # 양쪽 모두 존재하는 첫 거래일 정렬 시그니처
-        assert "commonAlignedStart" in body or "alignFirstCommonDate" in body
+        # 4개 벤치마크 코드 모두 IIFE 안에 등장
+        assert "'KOSPI'" in body
+        assert "'KOSDAQ'" in body
+        assert "'SP500'" in body
+        assert "'NDX100'" in body
+        # BENCH_INDICES 시그니처 — 4 인덱스 정의 배열
+        assert "BENCH_INDICES" in body
+        # /api/indices/ fetch URL 패턴
+        assert "/api/indices/" in body
 
     def test_cockpit_page_includes_regime_banner(self, patched_base_ctx_conn):
         client = _make_client()

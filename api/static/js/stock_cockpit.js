@@ -370,44 +370,37 @@
   });
 })();
 
-// ── § 2-A 벤치마크 상대성과 ──
+// ── § 2-A 벤치마크 상대성과 — 종목 + 4개 시장 인덱스 동시 비교 ──
 (function() {
   var c = window.__cockpit;
   if (!c || typeof LightweightCharts === 'undefined') return;
 
-  // 시장 → 벤치마크 자동 선택
-  var BENCH_MAP = {
-    'KOSPI':  ['KOSPI', 'KOSDAQ'],
-    'KOSDAQ': ['KOSDAQ', 'KOSPI'],
-    'NASDAQ': ['NDX100', 'SP500'],
-    'NYSE':   ['SP500', 'NDX100'],
-  };
-  var benches = BENCH_MAP[c.market] || ['SP500'];
-  var defaultBench = benches[0];
+  // 4개 벤치마크 인덱스 + 색상 (어두운 배경에서 잘 보이는 톤)
+  var BENCH_INDICES = [
+    { code: 'KOSPI',  color: '#f1c40f' }, // 노랑
+    { code: 'KOSDAQ', color: '#e67e22' }, // 주황
+    { code: 'SP500',  color: '#9b59b6' }, // 보라
+    { code: 'NDX100', color: '#16a085' }, // 청록
+  ];
 
-  // 벤치마크 토글 버튼 동적 생성
+  // 토글 영역은 안내 문구로 대체 (단일 선택 → 전체 동시 비교로 정책 변경)
   var toggleEl = document.getElementById('benchmark-toggle');
-  toggleEl.innerHTML = '';
-  benches.forEach(function(code, i) {
-    var btn = document.createElement('button');
-    btn.dataset.bench = code;
-    btn.textContent = code;
-    if (i === 0) btn.classList.add('active');
-    toggleEl.appendChild(btn);
-  });
+  if (toggleEl) {
+    toggleEl.innerHTML = '<span style="font-size:11px;color:var(--text-muted);">전체 시장 동시 비교</span>';
+  }
 
   var container = document.getElementById('benchmark-chart');
   container.innerHTML = '';
   var chart = LightweightCharts.createChart(container, {
-    width: container.clientWidth,  // 초기 width 명시 — autoSize 가 후속 resize 추적
+    width: container.clientWidth,
     height: 260,
-    autoSize: true,                 // 컨테이너 width 변경 자동 추적
+    autoSize: true,
     layout: { background: { color: 'transparent' }, textColor: '#a0a0a0' },
     grid: { vertLines: { color: '#2a2a2a' }, horzLines: { color: '#2a2a2a' } },
     rightPriceScale: { borderColor: '#3a3a3a' },
     timeScale: { borderColor: '#3a3a3a' },
   });
-  // overlay 셋업 — 에러 시 차트 인스턴스 보존하며 메시지만 덮어씌움
+  // overlay 셋업
   container.style.position = 'relative';
   var overlay = document.createElement('div');
   overlay.className = 'chart-overlay';
@@ -417,81 +410,71 @@
     'background:var(--bg-card);border-radius:10px;z-index:10;';
   container.appendChild(overlay);
 
-  function showOverlay(msg) {
-    overlay.textContent = msg;
-    overlay.style.display = 'flex';
-  }
-  function hideOverlay() {
-    overlay.style.display = 'none';
-  }
+  function showOverlay(msg) { overlay.textContent = msg; overlay.style.display = 'flex'; }
+  function hideOverlay() { overlay.style.display = 'none'; }
 
+  // 종목 라인 (파랑) + 4개 벤치마크 라인
   var stockLine = chart.addLineSeries({ color: '#4ea3ff', lineWidth: 2, title: c.ticker });
-  var benchLine = chart.addLineSeries({ color: '#f1c40f', lineWidth: 2, title: defaultBench });
-
-  var stockCache = null;  // CKPT-3: stock OHLCV 응답 캐시 (토글 시 재조회 회피)
-
-  function fetchStock() {
-    if (stockCache) return Promise.resolve(stockCache);
-    var stockUrl = '/api/stocks/' + encodeURIComponent(c.ticker) + '/ohlcv?days=360' +
-                   (c.market ? '&market=' + encodeURIComponent(c.market) : '');
-    return fetch(stockUrl).then(function(r) { return r.ok ? r.json() : Promise.reject(); })
-      .then(function(d) { stockCache = d; return d; });
-  }
+  var benchSeries = BENCH_INDICES.map(function(b) {
+    return {
+      code: b.code,
+      line: chart.addLineSeries({ color: b.color, lineWidth: 1.5, title: b.code }),
+    };
+  });
 
   function normalize(series) {
     if (!series.length) return [];
     var base = series[0].close;
     if (!base || base === 0) return [];
-    return series.map(function(p) { return { time: p.date, value: +(p.close / base * 100).toFixed(2) }; });
+    return series.map(function(p) {
+      return { time: p.date, value: +(p.close / base * 100).toFixed(2) };
+    });
   }
 
-  function loadAndRender(benchCode) {
-    var benchUrl = '/api/indices/' + benchCode + '/ohlcv?days=360';
-    Promise.all([
-      fetchStock(),
-      fetch(benchUrl).then(function(r) { return r.ok ? r.json() : Promise.reject(); }),
-    ]).then(function(results) {
-      var stockData = results[0].series || [];
-      var benchData = results[1].series || [];
-      if (!stockData.length || !benchData.length) {
-        showOverlay('데이터 부족');
+  function fetchOhlcv(url) {
+    return fetch(url).then(function(r) { return r.ok ? r.json() : null; })
+      .catch(function() { return null; });
+  }
+
+  // 종목 + 4 인덱스 병렬 fetch
+  var stockUrl = '/api/stocks/' + encodeURIComponent(c.ticker) + '/ohlcv?days=360' +
+                 (c.market ? '&market=' + encodeURIComponent(c.market) : '');
+  var benchUrls = BENCH_INDICES.map(function(b) {
+    return '/api/indices/' + b.code + '/ohlcv?days=360';
+  });
+
+  Promise.all([fetchOhlcv(stockUrl)].concat(benchUrls.map(fetchOhlcv)))
+    .then(function(results) {
+      var stockResp = results[0];
+      var stockData = (stockResp && stockResp.series) || [];
+      if (!stockData.length) {
+        showOverlay('종목 OHLCV 데이터 없음');
         return;
       }
       hideOverlay();
 
-      // CKPT-2: 양쪽 모두 존재하는 첫 거래일을 기준일로 통일
-      var benchDates = new Set(benchData.map(function(p) { return p.date; }));
-      var commonAlignedStart = null;
-      for (var i = 0; i < stockData.length; i++) {
-        if (benchDates.has(stockData[i].date)) {
-          commonAlignedStart = stockData[i].date;
-          break;
+      // 종목 = 자기 첫 거래일 기준 100
+      stockLine.setData(normalize(stockData));
+
+      // 각 벤치마크도 자기 첫 거래일 기준 100 (트렌드 비교 우선, 통화·거래일 차이 무시)
+      var anyBenchOk = false;
+      benchSeries.forEach(function(bs, i) {
+        var resp = results[i + 1];
+        var data = (resp && resp.series) || [];
+        if (data.length) {
+          bs.line.setData(normalize(data));
+          anyBenchOk = true;
+        } else {
+          bs.line.setData([]);
         }
-      }
-      if (!commonAlignedStart) {
-        showOverlay('두 시리즈에 공통 거래일이 없음');
+      });
+
+      if (!anyBenchOk) {
+        showOverlay('벤치마크 인덱스 데이터 없음 — universe-sync --mode indices 필요');
         return;
       }
-      var s = stockData.filter(function(p) { return p.date >= commonAlignedStart; });
-      var b = benchData.filter(function(p) { return p.date >= commonAlignedStart; });
-      stockLine.setData(normalize(s));
-      benchLine.setData(normalize(b));
-      benchLine.applyOptions({ title: benchCode });
       chart.timeScale().fitContent();
-    }).catch(function() {
-      showOverlay('벤치마크 데이터 조회 실패');
     });
-  }
-
-  loadAndRender(defaultBench);
-
-  document.querySelectorAll('#benchmark-toggle button').forEach(function(btn) {
-    btn.addEventListener('click', function() {
-      document.querySelectorAll('#benchmark-toggle button').forEach(function(b) { b.classList.remove('active'); });
-      btn.classList.add('active');
-      loadAndRender(btn.dataset.bench);
-    });
-  });
 })();
 
 // ── § 6 추천 이력 타임라인 ──
