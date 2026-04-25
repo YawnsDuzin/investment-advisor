@@ -44,10 +44,9 @@
     return s;
   }
 
-  // ── Hero (overview) ──
+  // ── Hero (overview) — getOverview() 공유 promise 사용 (§ 2-B / § 5 도 같은 캐시) ──
   var qs = market ? ('?market=' + encodeURIComponent(market)) : '';
-  fetch('/api/stocks/' + encodeURIComponent(ticker) + '/overview' + qs)
-    .then(function(r) { return r.ok ? r.json() : Promise.reject(r.status); })
+  getOverview()
     .then(function(d) {
       document.getElementById('hero-loading').style.display = 'none';
       document.getElementById('hero-body').style.display = 'block';
@@ -193,7 +192,7 @@
   }
 
   // 차트/타임라인 모듈은 다음 task 들에서 추가됨
-  // (window.__cockpit = {ticker, market, qs, fmtPrice, fmtPct, fmtBigNum, fmtNum, escHtml, getProposals} 로 공유)
+  // (window.__cockpit = {ticker, market, qs, fmtPrice, fmtPct, fmtBigNum, fmtNum, escHtml, getProposals, getOverview} 로 공유)
   var _proposalsPromise = null;
   function getProposals() {
     if (_proposalsPromise === null) {
@@ -202,12 +201,21 @@
     }
     return _proposalsPromise;
   }
+  var _overviewPromise = null;
+  function getOverview() {
+    if (_overviewPromise === null) {
+      _overviewPromise = fetch('/api/stocks/' + encodeURIComponent(ticker) + '/overview' + qs)
+        .then(function(r) { return r.ok ? r.json() : Promise.reject(r.status); });
+    }
+    return _overviewPromise;
+  }
   window.__cockpit = {
     ticker: ticker, market: market, qs: qs,
     fmtPrice: fmtPrice, fmtPct: fmtPct,
     fmtBigNum: fmtBigNum, fmtNum: fmtNum,
     escHtml: escHtml,
     getProposals: getProposals,
+    getOverview: getOverview,
   };
 })();
 
@@ -619,9 +627,7 @@
   var emptyEl = document.getElementById('factor-radar-empty');
   if (!canvas) return;
 
-  var qs = c.market ? ('?market=' + encodeURIComponent(c.market)) : '';
-  fetch('/api/stocks/' + encodeURIComponent(c.ticker) + '/overview' + qs)
-    .then(function(r) { return r.ok ? r.json() : Promise.reject(); })
+  c.getOverview()
     .then(function(d) {
       var snap = d.factor_snapshot;
       if (!snap) {
@@ -713,9 +719,7 @@
   var contentEl = document.getElementById('krx-content');
   var emptyEl = document.getElementById('krx-empty');
 
-  var qs = c.market ? ('?market=' + encodeURIComponent(c.market)) : '';
-  fetch('/api/stocks/' + encodeURIComponent(c.ticker) + '/overview' + qs)
-    .then(function(r) { return r.ok ? r.json() : Promise.reject(); })
+  c.getOverview()
     .then(function(d) {
       var krx = d.krx_extended;
       if (!krx) {
