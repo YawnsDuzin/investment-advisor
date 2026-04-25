@@ -1,7 +1,7 @@
 # Stock Cockpit — 종목 페이지 정보 밀도 강화 설계
 
 - 작성: 2026-04-25 KST
-- 상태: Draft → 사용자 리뷰 대기
+- 상태: Phase 1 구현 완료 (커밋 c5a5a87 ~ 42c154f) — Phase 2 별도 spec으로 분리 예정. Backlog: CKPT-1/2/3 후속 patch 필요 (아래 § "Phase 1 후속 backlog" 참조)
 - 범위: `/pages/stocks/{ticker}` 페이지를 "투자 종목 선정에 필요한 모든 정보를 한 화면"으로 재구성
 - 결정: **기존 페이지 in-place 교체 (A 안)** — 동일 URL, 기존 8카드는 § 4로 흡수
 
@@ -215,3 +215,47 @@ Phase 1 완료 시점 검증:
 
 - Phase 2 implementation plan 신규 spec 으로 분리 (`_docs/<ts>_stock-cockpit-phase2.md`)
 - 사용 패턴 텔레메트리 (옵션) — 어느 섹션이 가장 많이 보이는지로 Phase 3 우선순위 재조정
+
+---
+
+## Phase 1 후속 Backlog (구현 후 발견)
+
+이번 Phase 1 구현 중 코드 리뷰에서 발견된 후속 patch 항목들. Phase 2 시작 전 또는 별도 cleanup 커밋으로 처리.
+
+### CKPT-1: 차트 에러 경로에서 차트 DOM 보존
+
+**문제:** Task 4 (§ 1 가격 차트) + Task 5 (§ 2-A 벤치마크) 둘 다 에러 경로에서 `container.innerHTML = '...'`로 placeholder 텍스트를 출력 — 이 과정에서 lightweight-charts 인스턴스의 DOM이 파괴됨. 이후 토글로 재시도하면 chart.setData() 호출이 예외를 던지고 console에 silent 에러 반복.
+
+**재현 시나리오:** 인덱스 OHLCV 미수집 상태에서 § 2-A "데이터 부족" placeholder 출현 → 사용자가 다른 벤치마크 토글 클릭 → 차트 호출 실패.
+
+**Patch 방안:** `container.style.position = 'relative'` + 차트 위에 `position:absolute` overlay div를 띄워서 에러 메시지 표시. 차트 인스턴스는 보존, 토글 재시도 가능.
+
+**대상 파일:** `api/templates/stock_cockpit.html` (§ 1 + § 2-A IIFE 둘 다)
+
+### CKPT-2: 벤치마크 정규화 기준일 갭 처리
+
+**문제:** § 2-A 에서 `commonStart = max(stockData[0].date, benchData[0].date)` 후 각 시리즈의 `[0]`을 100 기준으로 정규화. 한국 주식과 US 인덱스의 거래일 캘린더가 어긋나면 (공휴일 차이 등) 두 시리즈의 정규화 기준일이 하루~며칠 차이날 수 있음 — 미세한 의미상 오차.
+
+**Patch 방안:** `commonStart` 이후 두 시리즈에서 **동일한 날짜로 모두 존재하는 첫 거래일**을 찾아 그 날을 기준으로 통일. 또는 fallback으로 `console.warn` 출력 추가.
+
+**대상 파일:** `api/templates/stock_cockpit.html` (§ 2-A IIFE)
+
+### CKPT-3: § 2-A 벤치마크 토글 시 stock OHLCV 재조회 제거
+
+**문제:** 벤치마크 토글 클릭마다 `loadAndRender(benchCode)`가 stock OHLCV도 함께 재조회. 같은 종목 OHLCV는 캐싱하면 충분.
+
+**Patch 방안:** `var stockCache = null;` IIFE 스코프 변수 도입, 첫 호출 시만 fetch.
+
+**대상 파일:** `api/templates/stock_cockpit.html` (§ 2-A IIFE)
+
+### CKPT-4: `test_pages_new.py` pre-existing 깨짐
+
+**문제:** Phase 1과 무관하게 이미 깨진 상태. `api.routes.pages` 모듈이 더 이상 존재하지 않음(`api.routes.dashboard` 등으로 분리 추정). 테스트 import path 갱신 필요.
+
+**대상 파일:** `tests/test_pages_new.py`
+
+### CKPT-5: `test_track_record.py` pre-existing 깨짐
+
+**문제:** `7b5f203` 커밋(2026-04-20)에서 `track_record.py`가 `get_connection` → `Depends(get_db_conn)` 패턴으로 리팩터링됐으나 테스트가 구버전 patch 경로 사용.
+
+**대상 파일:** `tests/test_track_record.py`
