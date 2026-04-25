@@ -176,6 +176,7 @@ _CONSENSUS_MAP = {
 
 
 def _clamp(v, lo=0.0, hi=1.0):
+    """v를 [lo, hi] 범위로 제한."""
     return max(lo, min(hi, v))
 
 
@@ -337,7 +338,7 @@ def get_stock_overview(
             "factor_score": score["factor_score"],
             "hist_score": score["hist_score"],
             "consensus_score": score["consensus_score"],
-            "weights": _AI_SCORE_WEIGHTS,
+            "weights": dict(_AI_SCORE_WEIGHTS),
         },
     }
 
