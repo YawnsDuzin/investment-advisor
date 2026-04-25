@@ -221,8 +221,13 @@
     if (Math.abs(v) >= 1e6) return sym + (v/1e6).toFixed(1) + 'M';
     return sym + v.toLocaleString();
   }
+  function fmtNum(v) {
+    if (v == null) return '-';
+    return v.toLocaleString('en-US', {maximumFractionDigits:2});
+  }
   function fmtPct(v, withSign) {
     if (v == null) return '-';
+    if (withSign === undefined) withSign = true;
     var s = (withSign && v > 0 ? '+' : '') + v.toFixed(2) + '%';
     return s;
   }
@@ -247,8 +252,12 @@
         document.getElementById('h-volume').textContent =
           d.latest.volume ? d.latest.volume.toLocaleString() + '주' : '-';
       }
-      document.getElementById('h-sector').textContent =
-        (d.sector || '-') + (d.industry ? ' / ' + d.industry : '');
+      if (d.sector || d.industry) {
+        document.getElementById('h-sector').textContent =
+          (d.sector || '') + (d.industry ? ' / ' + d.industry : '');
+      } else {
+        document.getElementById('h-sector-wrap').style.display = 'none';
+      }
 
       var s = d.stats || {};
       document.getElementById('h-ai-score').textContent =
@@ -302,12 +311,12 @@
   function renderFundamentals(d) {
     var cur = d.currency || '';
     var v = d.valuation || {};
-    addMetric('valuation-metrics', 'PER (Trailing)', v.trailing_pe);
-    addMetric('valuation-metrics', 'PER (Forward)', v.forward_pe);
-    addMetric('valuation-metrics', 'PBR', v.pb_ratio);
-    addMetric('valuation-metrics', 'PSR', v.ps_ratio);
-    addMetric('valuation-metrics', 'PEG', v.peg_ratio);
-    addMetric('valuation-metrics', 'EV/EBITDA', v.ev_ebitda);
+    addMetric('valuation-metrics', 'PER (Trailing)', fmtNum(v.trailing_pe));
+    addMetric('valuation-metrics', 'PER (Forward)', fmtNum(v.forward_pe));
+    addMetric('valuation-metrics', 'PBR', fmtNum(v.pb_ratio));
+    addMetric('valuation-metrics', 'PSR', fmtNum(v.ps_ratio));
+    addMetric('valuation-metrics', 'PEG', fmtNum(v.peg_ratio));
+    addMetric('valuation-metrics', 'EV/EBITDA', fmtNum(v.ev_ebitda));
     addMetric('valuation-metrics', 'EPS (Trailing)', fmtPrice(v.eps_trailing, cur));
     addMetric('valuation-metrics', 'EPS (Forward)', fmtPrice(v.eps_forward, cur));
 
@@ -320,9 +329,9 @@
     addMetric('profitability-metrics', 'EBITDA', fmtBigNum(p.ebitda, cur));
 
     var h = d.health || {};
-    addMetric('health-metrics', '부채비율 (D/E)', h.debt_to_equity);
-    addMetric('health-metrics', '유동비율', h.current_ratio);
-    addMetric('health-metrics', '당좌비율', h.quick_ratio);
+    addMetric('health-metrics', '부채비율 (D/E)', fmtNum(h.debt_to_equity));
+    addMetric('health-metrics', '유동비율', fmtNum(h.current_ratio));
+    addMetric('health-metrics', '당좌비율', fmtNum(h.quick_ratio));
     addMetric('health-metrics', '총 부채', fmtBigNum(h.total_debt, cur));
     addMetric('health-metrics', '보유 현금', fmtBigNum(h.total_cash, cur));
 
@@ -341,7 +350,7 @@
     addMetric('cashflow-metrics', '잉여현금흐름 (FCF)', fmtBigNum(cf.free_cashflow, cur), pctClass(cf.free_cashflow));
 
     var t = d.technical || {};
-    addMetric('technical-metrics', 'Beta', t.beta);
+    addMetric('technical-metrics', 'Beta', fmtNum(t.beta));
     addMetric('technical-metrics', '50일 이동평균', fmtPrice(t.fifty_day_avg, cur));
     addMetric('technical-metrics', '200일 이동평균', fmtPrice(t.two_hundred_day_avg, cur));
     if (t.fifty_day_avg && d.price) {
@@ -372,8 +381,12 @@
   }
 
   // 차트/타임라인 모듈은 다음 task 들에서 추가됨
-  // (window.__cockpit = {ticker, market, qs} 로 공유)
-  window.__cockpit = {ticker: ticker, market: market, qs: qs, fmtPrice: fmtPrice, fmtPct: fmtPct};
+  // (window.__cockpit = {ticker, market, qs, fmtPrice, fmtPct, fmtBigNum, fmtNum} 로 공유)
+  window.__cockpit = {
+    ticker: ticker, market: market, qs: qs,
+    fmtPrice: fmtPrice, fmtPct: fmtPct,
+    fmtBigNum: fmtBigNum, fmtNum: fmtNum,
+  };
 })();
 </script>
 {% endblock %}
