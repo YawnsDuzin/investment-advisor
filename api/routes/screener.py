@@ -212,37 +212,75 @@ def run_screener(
     if join_ohlcv:
         cte = """
         WITH ranked AS (
-            SELECT ticker, UPPER(market) AS market, trade_date, close::float AS close, volume, change_pct::float AS change_pct,
-                   ROW_NUMBER() OVER (PARTITION BY ticker, UPPER(market) ORDER BY trade_date DESC) AS rn
+            SELECT ticker, UPPER(market) AS market, trade_date,
+                   close::float AS close, volume,
+                   change_pct::float AS change_pct,
+                   ROW_NUMBER() OVER (PARTITION BY ticker, UPPER(market)
+                                      ORDER BY trade_date DESC) AS rn
             FROM stock_universe_ohlcv
-            WHERE trade_date >= CURRENT_DATE - 300
+            WHERE trade_date >= CURRENT_DATE - 400
         ),
         metrics AS (
             SELECT ticker, market,
-                   MAX(CASE WHEN rn = 1   THEN close END)             AS close_latest,
-                   MAX(CASE WHEN rn = 252 THEN close END)             AS close_1y,
-                   MAX(close) FILTER (WHERE rn <= 252)                AS high_252d,
-                   AVG(close * volume) FILTER (WHERE rn <= 60)        AS avg_daily_value,
-                   STDDEV(LEAST(GREATEST(change_pct, -50), 50)) FILTER (WHERE rn <= 60) AS vol60_pct,
-                   AVG(volume) FILTER (WHERE rn <= 20)                AS v20,
-                   AVG(volume) FILTER (WHERE rn <= 60)                AS v60
-            FROM ranked
-            GROUP BY ticker, market
+                MAX(CASE WHEN rn=1   THEN close END) AS close_latest,
+                MAX(CASE WHEN rn=21  THEN close END) AS close_1m,
+                MAX(CASE WHEN rn=63  THEN close END) AS close_3m,
+                MAX(CASE WHEN rn=126 THEN close END) AS close_6m,
+                MAX(CASE WHEN rn=252 THEN close END) AS close_1y,
+                MAX(close) FILTER (WHERE rn<=252) AS high_252d,
+                MIN(close) FILTER (WHERE rn<=252) AS low_252d,
+                MAX(close) FILTER (WHERE rn<=60)  AS high_60d,
+                MIN(close) FILTER (WHERE rn<=60)  AS low_60d,
+                AVG(close)  FILTER (WHERE rn<=200) AS ma200,
+                AVG(close)  FILTER (WHERE rn<=60)  AS ma60,
+                AVG(close)  FILTER (WHERE rn<=20)  AS ma20,
+                AVG(close*volume) FILTER (WHERE rn<=60) AS avg_daily_value,
+                STDDEV(LEAST(GREATEST(change_pct,-50),50)) FILTER (WHERE rn<=60) AS vol60_pct,
+                AVG(volume) FILTER (WHERE rn<=20) AS v20,
+                AVG(volume) FILTER (WHERE rn<=60) AS v60,
+                ARRAY_AGG(close ORDER BY trade_date DESC) FILTER (WHERE rn<=60) AS sparkline_60d
+            FROM ranked GROUP BY ticker, market
+        ),
+        ytd_anchor AS (
+            SELECT DISTINCT ON (ticker, mkt)
+                   ticker, mkt AS market, close::float AS close_ytd
+            FROM (
+                SELECT ticker, UPPER(market) AS mkt, trade_date, close
+                FROM stock_universe_ohlcv
+                WHERE trade_date <  DATE_TRUNC('year', CURRENT_DATE)
+                  AND trade_date >= DATE_TRUNC('year', CURRENT_DATE) - INTERVAL '30 days'
+            ) t
+            ORDER BY ticker, mkt, trade_date DESC
         ),
         ohlcv_metrics AS (
-            SELECT ticker, market, close_latest, high_252d, avg_daily_value, vol60_pct,
-                   CASE WHEN v60 > 0 THEN v20 / v60 END AS volume_ratio,
-                   CASE WHEN close_1y IS NOT NULL AND close_1y > 0
-                        THEN (close_latest - close_1y) / close_1y * 100 END AS r1y
-            FROM metrics
+            SELECT m.ticker, m.market, m.close_latest, m.high_252d, m.low_252d,
+                   m.high_60d, m.low_60d, m.ma20, m.ma60, m.ma200,
+                   m.avg_daily_value, m.vol60_pct, m.sparkline_60d,
+                   y.close_ytd,
+                   (m.close_latest - m.close_1m) / NULLIF(m.close_1m,0) * 100 AS r1m,
+                   (m.close_latest - m.close_3m) / NULLIF(m.close_3m,0) * 100 AS r3m,
+                   (m.close_latest - m.close_6m) / NULLIF(m.close_6m,0) * 100 AS r6m,
+                   (m.close_latest - m.close_1y) / NULLIF(m.close_1y,0) * 100 AS r1y,
+                   (m.close_latest - y.close_ytd) / NULLIF(y.close_ytd,0) * 100 AS ytd,
+                   -- 60d 고점 대비 현재 낙폭 (peak-to-current). 음수가 정상.
+                   (m.close_latest - m.high_60d) / NULLIF(m.high_60d,0) * 100 AS drawdown_60d_pct,
+                   m.close_latest / NULLIF(m.ma200,0) AS ma200_proximity,
+                   m.close_latest / NULLIF(m.high_252d,0) AS high_52w_proximity,
+                   CASE WHEN m.v60>0 THEN m.v20/m.v60 END AS volume_ratio
+            FROM metrics m
+            LEFT JOIN ytd_anchor y ON y.ticker=m.ticker AND y.market=m.market
         )
         """
         sql = f"""
         {cte}
         SELECT u.ticker, u.market, u.asset_name, u.asset_name_en, u.sector_norm,
                u.market_cap_krw, u.market_cap_bucket, u.last_price, u.last_price_ccy,
-               m.close_latest, m.high_252d, m.avg_daily_value, m.vol60_pct,
-               m.volume_ratio, m.r1y
+               m.close_latest, m.high_252d, m.low_252d,
+               m.high_60d, m.low_60d, m.ma20, m.ma60, m.ma200,
+               m.avg_daily_value, m.vol60_pct, m.volume_ratio,
+               m.high_52w_proximity, m.ma200_proximity, m.drawdown_60d_pct,
+               m.r1m, m.r3m, m.r6m, m.r1y, m.ytd,
+               m.sparkline_60d
         FROM stock_universe u
         LEFT JOIN ohlcv_metrics m
           ON UPPER(u.ticker) = UPPER(m.ticker) AND UPPER(u.market) = UPPER(m.market)
@@ -265,11 +303,17 @@ def run_screener(
         cur.execute(sql, params)
         rows = cur.fetchall()
 
+    include_sparkline = bool(spec.get("include_sparkline", False))
+    result_rows = [_serialize_row(r) for r in rows]
+    if not include_sparkline:
+        for row in result_rows:
+            row.pop("sparkline_60d", None)
+
     return {
-        "count": len(rows),
+        "count": len(result_rows),
         "tier": tier,
         "limit_applied": limit,
-        "rows": [_serialize_row(r) for r in rows],
+        "rows": result_rows,
     }
 
 
