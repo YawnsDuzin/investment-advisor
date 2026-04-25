@@ -3555,11 +3555,16 @@ tbody tr:hover { background: var(--bg-card-hover); }
     background: var(--bg-card);
     border: 1px solid var(--border);
     border-radius: 8px;
-    width: 80%;
-    max-width: 1000px;
-    max-height: 80vh;
+    width: min(1000px, 90vw);
+    height: 80vh;
+    min-width: 420px;
+    min-height: 260px;
+    max-width: 96vw;
+    max-height: 94vh;
     display: flex;
     flex-direction: column;
+    resize: both;
+    overflow: hidden;
 }
 .systemd-log-modal-header {
     padding: 12px 16px;
@@ -3567,9 +3572,11 @@ tbody tr:hover { background: var(--bg-card-hover); }
     justify-content: space-between;
     align-items: center;
     border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
 }
 .systemd-log-modal-body {
-    flex: 1;
+    flex: 1 1 auto;
+    min-height: 0;
     overflow: hidden;
     padding: 0;
 }
@@ -3577,6 +3584,7 @@ tbody tr:hover { background: var(--bg-card-hover); }
     margin: 0;
     height: 100%;
     overflow: auto;
+    overscroll-behavior: contain;
     background: #0a0c10;
     color: #c0c4d0;
     padding: 12px;
