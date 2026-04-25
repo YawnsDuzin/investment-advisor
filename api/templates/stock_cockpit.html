@@ -227,6 +227,16 @@
     if (v == null) return '-';
     return v.toLocaleString('en-US', {maximumFractionDigits:2});
   }
+  function escHtml(s) {
+    if (s == null) return '';
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
   function fmtPct(v, withSign) {
     if (v == null) return '-';
     if (withSign === undefined) withSign = true;
@@ -365,7 +375,7 @@
     }
 
     var a = d.analyst || {};
-    addMetric('analyst-metrics', '추천', a.recommendation ? a.recommendation.toUpperCase() : '-');
+    addMetric('analyst-metrics', '추천', a.recommendation ? escHtml(a.recommendation.toUpperCase()) : '-');
     addMetric('analyst-metrics', '목표가 (평균)', fmtPrice(a.target_mean, cur));
     addMetric('analyst-metrics', '목표가 (저)', fmtPrice(a.target_low, cur));
     addMetric('analyst-metrics', '목표가 (고)', fmtPrice(a.target_high, cur));
@@ -383,11 +393,21 @@
   }
 
   // 차트/타임라인 모듈은 다음 task 들에서 추가됨
-  // (window.__cockpit = {ticker, market, qs, fmtPrice, fmtPct, fmtBigNum, fmtNum} 로 공유)
+  // (window.__cockpit = {ticker, market, qs, fmtPrice, fmtPct, fmtBigNum, fmtNum, escHtml, getProposals} 로 공유)
+  var _proposalsPromise = null;
+  function getProposals() {
+    if (_proposalsPromise === null) {
+      _proposalsPromise = fetch('/api/stocks/' + encodeURIComponent(ticker) + '/proposals')
+        .then(function(r) { return r.ok ? r.json() : Promise.reject(); });
+    }
+    return _proposalsPromise;
+  }
   window.__cockpit = {
     ticker: ticker, market: market, qs: qs,
     fmtPrice: fmtPrice, fmtPct: fmtPct,
     fmtBigNum: fmtBigNum, fmtNum: fmtNum,
+    escHtml: escHtml,
+    getProposals: getProposals,
   };
 })();
 
@@ -484,9 +504,7 @@
     volSeries.setData(vols);
 
     if (proposalsCache === null) {
-      // 첫 로드 시에만 proposals fetch
-      fetch('/api/stocks/' + encodeURIComponent(c.ticker) + '/proposals')
-        .then(function(r) { return r.ok ? r.json() : null; })
+      c.getProposals()
         .then(function(p) {
           proposalsCache = (p && p.items) ? p.items : [];
           refreshMarkers(d.series);
@@ -659,8 +677,7 @@
     });
   }
 
-  fetch('/api/stocks/' + encodeURIComponent(c.ticker) + '/proposals')
-    .then(function(r) { return r.ok ? r.json() : Promise.reject(); })
+  c.getProposals()
     .then(function(d) { renderTimeline(d.items || []); })
     .catch(function() {
       var emptyEl = document.getElementById('timeline-empty');

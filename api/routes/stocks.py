@@ -230,17 +230,27 @@ def get_stock_overview(
             # 1) 종목 메타 — stock_universe 우선
             if mk:
                 cur.execute("""
-                    SELECT name, sector, industry, currency, market
+                    SELECT
+                        COALESCE(asset_name_en, asset_name) AS name,
+                        sector_norm AS sector,
+                        industry,
+                        last_price_ccy AS currency,
+                        market
                     FROM stock_universe
                     WHERE UPPER(ticker) = %s AND UPPER(market) = %s
                     LIMIT 1
                 """, (tk, mk))
             else:
                 cur.execute("""
-                    SELECT name, sector, industry, currency, market
+                    SELECT
+                        COALESCE(asset_name_en, asset_name) AS name,
+                        sector_norm AS sector,
+                        industry,
+                        last_price_ccy AS currency,
+                        market
                     FROM stock_universe
                     WHERE UPPER(ticker) = %s
-                    ORDER BY (CASE WHEN listing_status='active' THEN 0 ELSE 1 END)
+                    ORDER BY (CASE WHEN listed THEN 0 ELSE 1 END)
                     LIMIT 1
                 """, (tk,))
             meta = cur.fetchone() or {}

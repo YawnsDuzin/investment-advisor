@@ -40,6 +40,7 @@ class TestStockOverviewAPI:
         from api.routes.stocks import get_stock_overview
 
         # fetch 순서: meta(stock_universe), latest 2 rows(ohlcv), prop_stats, factor_snapshot
+        # meta_row keys reflect SQL aliases — actual columns: asset_name/sector_norm/last_price_ccy
         meta_row = {
             "name": "Texas Instruments",
             "sector": "Technology",
@@ -87,6 +88,7 @@ class TestStockOverviewAPI:
     def test_overview_zero_proposals_uses_neutral_score(self):
         from api.routes.stocks import get_stock_overview
 
+        # meta_row keys reflect SQL aliases — actual columns: asset_name/sector_norm/last_price_ccy
         meta_row = {"name": "Foo", "sector": None, "industry": None,
                     "currency": "USD", "market": "NASDAQ"}
         latest_rows = []
