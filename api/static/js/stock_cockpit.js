@@ -694,36 +694,212 @@
     });
 })();
 
-// ── § 5 시장 특화 수급·공매도·지수 (한국·미국 모두 표시) ──
+// ── § 5 시장 특화 수급·공매도·지수 — KRX 는 시계열 차트, US 는 단일 시점 ──
 (function() {
   var c = window.__cockpit;
   if (!c) return;
 
   var section = document.getElementById('sec-krx');
   if (!section) return;
-  section.style.display = 'block';  // 시장 무관 항상 표시 (404 시 안내)
+  section.style.display = 'block';
 
   var contentEl = document.getElementById('krx-content');
   var emptyEl = document.getElementById('krx-empty');
 
-  // 시장별 라벨 매핑
   function labelsFor(marketType) {
     if (marketType === 'KRX') {
       return {
-        ownership: '외국인 보유',
-        ownership_legend: ['외국인', '내국인'],
-        flow: '외국인 순매수 신호',
-        short: '공매도 잔고 (숏스퀴즈)',
+        ownership: '외국인 보유율 추세',
+        flow: '외국인·기관 순매수',
+        short: '공매도 잔고 추이',
         index: '지수 편입',
       };
     }
     return {
       ownership: '기관 보유',
-      ownership_legend: ['기관', '기타'],
       flow: 'Insider 순매수 신호',
       short: 'Short interest (Float %)',
       index: '지수 편입',
     };
+  }
+
+  // 차트 공통 옵션 (다크 테마)
+  function lineChartConfig(label, dataPoints, color) {
+    return {
+      type: 'line',
+      data: {
+        labels: dataPoints.map(function(p) { return p.date.slice(5); }),
+        datasets: [{
+          label: label,
+          data: dataPoints.map(function(p) { return p.value; }),
+          borderColor: color,
+          backgroundColor: color + '33',
+          borderWidth: 1.5,
+          fill: true,
+          tension: 0.2,
+          pointRadius: 0,
+          pointHoverRadius: 3,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false } },
+        scales: {
+          x: { ticks: { color: '#a0a0a0', font: { size: 9 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 6 },
+               grid: { color: 'rgba(255,255,255,0.04)' } },
+          y: { ticks: { color: '#a0a0a0', font: { size: 10 } },
+               grid: { color: 'rgba(255,255,255,0.04)' } },
+        },
+      },
+    };
+  }
+
+  // 외국인 + 기관 일별 순매수 막대
+  function flowBarConfig(flowPoints) {
+    return {
+      type: 'bar',
+      data: {
+        labels: flowPoints.map(function(p) { return p.date.slice(5); }),
+        datasets: [
+          {
+            label: '외국인',
+            data: flowPoints.map(function(p) { return p.foreign; }),
+            backgroundColor: flowPoints.map(function(p) {
+              return (p.foreign != null && p.foreign < 0) ? '#c0392b' : '#27ae60';
+            }),
+            borderWidth: 0,
+          },
+          {
+            label: '기관',
+            data: flowPoints.map(function(p) { return p.institution; }),
+            backgroundColor: flowPoints.map(function(p) {
+              return (p.institution != null && p.institution < 0) ? '#c0392b88' : '#27ae6088';
+            }),
+            borderWidth: 0,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { labels: { color: '#a0a0a0', font: { size: 10 }, boxWidth: 10 } },
+          tooltip: { mode: 'index', intersect: false,
+                     callbacks: { label: function(ctx) { return ctx.dataset.label + ': ' + ctx.raw + '억'; } } },
+        },
+        scales: {
+          x: { stacked: true, ticks: { color: '#a0a0a0', font: { size: 9 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 6 },
+               grid: { display: false } },
+          y: { ticks: { color: '#a0a0a0', font: { size: 10 } },
+               grid: { color: 'rgba(255,255,255,0.04)' } },
+        },
+      },
+    };
+  }
+
+  function renderKrx(d) {
+    var series = d.series || {};
+
+    // 카드 1: 외국인 보유율 시계열 (라인)
+    if (series.ownership && series.ownership.length && typeof Chart !== 'undefined') {
+      var canvas = document.getElementById('krx-ownership-canvas');
+      new Chart(canvas, lineChartConfig('외국인 보유율 (%)', series.ownership, '#4ea3ff'));
+    }
+    document.getElementById('krx-foreign-pct').textContent =
+      d.ownership_pct != null ? c.fmtNum(d.ownership_pct) + '%' : '-';
+
+    // 카드 2: 외국인+기관 순매수 일별 막대
+    if (series.flow && series.flow.length && typeof Chart !== 'undefined') {
+      var canvas2 = document.getElementById('krx-flow-canvas');
+      new Chart(canvas2, flowBarConfig(series.flow));
+    }
+    var sigMap = {
+      'positive': { text: '▲ 순매수', color: 'var(--green)' },
+      'neutral':  { text: '◆ 중립',   color: 'var(--text-muted)' },
+      'negative': { text: '▼ 순매도', color: 'var(--red)' },
+    };
+    var sigInfo = sigMap[d.flow_signal] || { text: '-', color: 'var(--text-muted)' };
+    var sigEl = document.getElementById('krx-foreign-signal');
+    sigEl.textContent = sigInfo.text; sigEl.style.color = sigInfo.color;
+    document.getElementById('krx-flow-summary').textContent = d.flow_summary || '';
+
+    // 카드 3: 공매도 잔고 시계열 (라인) + 현재 % 헤더
+    if (series.short && series.short.length && typeof Chart !== 'undefined') {
+      var canvas3 = document.getElementById('krx-short-canvas');
+      new Chart(canvas3, lineChartConfig('공매도 잔고 비중 (%)', series.short, '#e74c3c'));
+    }
+    var sqMap = {
+      'low':    { color: 'var(--green)', label: '낮음' },
+      'medium': { color: '#eab308',      label: '중간' },
+      'high':   { color: 'var(--red)',   label: '높음' },
+    };
+    var sqInfo = sqMap[d.squeeze_risk] || { color: 'var(--text-muted)', label: '-' };
+    var sqEl = document.getElementById('krx-squeeze-label');
+    sqEl.textContent = sqInfo.label + (d.short_pct != null ? ' ' + c.fmtNum(d.short_pct) + '%' : '');
+    sqEl.style.color = sqInfo.color;
+  }
+
+  function renderUs(d) {
+    // US 는 단일 시점 — 카드 1: 도넛, 카드 2: 신호 텍스트, 카드 3: 게이지 비슷
+    var canvas = document.getElementById('krx-ownership-canvas');
+    var fp = d.ownership_pct;
+    if (fp != null && typeof Chart !== 'undefined') {
+      new Chart(canvas, {
+        type: 'doughnut',
+        data: {
+          labels: ['기관', '기타'],
+          datasets: [{ data: [fp, Math.max(0, 100 - fp)],
+                       backgroundColor: ['#4ea3ff', 'rgba(255,255,255,0.08)'], borderWidth: 0 }],
+        },
+        options: { responsive: true, maintainAspectRatio: false, cutout: '70%',
+                   plugins: { legend: { display: false }, tooltip: { enabled: false } } },
+      });
+    }
+    document.getElementById('krx-foreign-pct').textContent =
+      fp != null ? c.fmtNum(fp) + '%' : '-';
+
+    // Insider 신호 — 카드 2 자리에 큰 텍스트
+    var flowCanvas = document.getElementById('krx-flow-canvas');
+    if (flowCanvas) flowCanvas.style.display = 'none';
+    var sigMap = {
+      'positive': { text: '▲ Net buy',  color: 'var(--green)' },
+      'neutral':  { text: '◆ Neutral',  color: 'var(--text-muted)' },
+      'negative': { text: '▼ Net sell', color: 'var(--red)' },
+    };
+    var sigInfo = sigMap[d.flow_signal] || { text: '-', color: 'var(--text-muted)' };
+    var sigEl = document.getElementById('krx-foreign-signal');
+    sigEl.textContent = sigInfo.text; sigEl.style.color = sigInfo.color;
+    document.getElementById('krx-flow-summary').textContent = d.flow_summary || 'yfinance .info — Insider activity';
+
+    // Short interest — 카드 3 자리에 단일 게이지 텍스트
+    var shortCanvas = document.getElementById('krx-short-canvas');
+    if (shortCanvas) shortCanvas.style.display = 'none';
+    var sqMap = {
+      'low':    { color: 'var(--green)', label: '낮음' },
+      'medium': { color: '#eab308',      label: '중간' },
+      'high':   { color: 'var(--red)',   label: '높음' },
+    };
+    var sqInfo = sqMap[d.squeeze_risk] || { color: 'var(--text-muted)', label: '-' };
+    var sqEl = document.getElementById('krx-squeeze-label');
+    sqEl.textContent = sqInfo.label + (d.short_pct != null ? ' ' + c.fmtNum(d.short_pct) + '%' : '');
+    sqEl.style.color = sqInfo.color;
+  }
+
+  function renderIndices(indices) {
+    var idxEl = document.getElementById('krx-index-membership');
+    idxEl.innerHTML = '';
+    if (!indices || indices.length === 0) {
+      idxEl.innerHTML = '<span style="color:var(--text-muted);font-size:13px;">미편입 / 데이터 없음</span>';
+      return;
+    }
+    indices.forEach(function(idx) {
+      var span = document.createElement('span');
+      span.textContent = idx;
+      span.style.cssText = 'display:inline-block;padding:3px 8px;background:rgba(78,163,255,0.15);' +
+                           'border:1px solid rgba(78,163,255,0.4);border-radius:4px;font-size:12px;color:var(--accent);';
+      idxEl.appendChild(span);
+    });
   }
 
   var qs = c.market ? ('?market=' + encodeURIComponent(c.market)) : '';
@@ -739,85 +915,15 @@
         emptyEl.style.display = 'block';
         return;
       }
-
       var labels = labelsFor(d.market_type);
+      var t1 = document.getElementById('krx-ownership-title'); if (t1) t1.textContent = labels.ownership;
+      var t2 = document.getElementById('krx-flow-title');      if (t2) t2.textContent = labels.flow;
+      var t3 = document.getElementById('krx-short-title');     if (t3) t3.textContent = labels.short;
+      var t4 = document.getElementById('krx-index-title');     if (t4) t4.textContent = labels.index;
 
-      // 카드 1: 보유율 도넛 (외국인 / 기관)
-      var ownershipTitle = document.getElementById('krx-ownership-title');
-      if (ownershipTitle) ownershipTitle.textContent = labels.ownership;
-      var fp = d.ownership_pct;
-      if (fp != null && typeof Chart !== 'undefined') {
-        var canvas = document.getElementById('krx-foreign-donut');
-        new Chart(canvas, {
-          type: 'doughnut',
-          data: {
-            labels: labels.ownership_legend,
-            datasets: [{
-              data: [fp, Math.max(0, 100 - fp)],
-              backgroundColor: ['#4ea3ff', 'rgba(255,255,255,0.08)'],
-              borderWidth: 0,
-            }],
-          },
-          options: {
-            responsive: true,
-            cutout: '70%',
-            plugins: { legend: { display: false }, tooltip: { enabled: false } },
-          },
-        });
-        document.getElementById('krx-foreign-pct').textContent = c.fmtNum(fp) + '%';
-      } else {
-        document.getElementById('krx-foreign-pct').textContent = '-';
-      }
-
-      // 카드 2: 순매수 신호 (외국인 / Insider)
-      var flowTitle = document.getElementById('krx-flow-title');
-      if (flowTitle) flowTitle.textContent = labels.flow;
-      var sigEl = document.getElementById('krx-foreign-signal');
-      var sigMap = {
-        'positive': { text: '▲ 순매수 우세', color: 'var(--green)' },
-        'neutral':  { text: '◆ 중립',        color: 'var(--text-muted)' },
-        'negative': { text: '▼ 순매도 우세', color: 'var(--red)' },
-      };
-      var sigInfo = sigMap[d.flow_signal] || { text: '-', color: 'var(--text-muted)' };
-      sigEl.textContent = sigInfo.text;
-      sigEl.style.color = sigInfo.color;
-      // 보조 요약 (있으면)
-      var flowSubEl = document.getElementById('krx-flow-summary');
-      if (flowSubEl) flowSubEl.textContent = d.flow_summary || '';
-
-      // 카드 3: 공매도 / Short interest 게이지
-      var shortTitle = document.getElementById('krx-short-title');
-      if (shortTitle) shortTitle.textContent = labels.short;
-      var sqMap = {
-        'low':    { width: 25, color: 'var(--green)',  label: '낮음' },
-        'medium': { width: 60, color: 'var(--orange, #eab308)', label: '중간' },
-        'high':   { width: 90, color: 'var(--red)',    label: '높음' },
-      };
-      var sqInfo = sqMap[d.squeeze_risk] || { width: 0, color: 'var(--text-muted)', label: '-' };
-      var fillEl = document.getElementById('krx-squeeze-fill');
-      fillEl.style.width = sqInfo.width + '%';
-      fillEl.style.background = sqInfo.color;
-      var sqLabel = sqInfo.label;
-      if (d.short_pct != null) sqLabel += ' (' + c.fmtNum(d.short_pct) + '%)';
-      document.getElementById('krx-squeeze-label').textContent = sqLabel;
-
-      // 카드 4: 지수 편입 배지
-      var idxTitle = document.getElementById('krx-index-title');
-      if (idxTitle) idxTitle.textContent = labels.index;
-      var idxEl = document.getElementById('krx-index-membership');
-      idxEl.innerHTML = '';
-      var indices = d.index_membership || [];
-      if (indices.length === 0) {
-        idxEl.innerHTML = '<span style="color:var(--text-muted);font-size:13px;">미편입 / 데이터 없음</span>';
-      } else {
-        indices.forEach(function(idx) {
-          var span = document.createElement('span');
-          span.textContent = idx;
-          span.style.cssText = 'display:inline-block;padding:3px 8px;background:rgba(78,163,255,0.15);' +
-                               'border:1px solid rgba(78,163,255,0.4);border-radius:4px;font-size:12px;color:var(--accent);';
-          idxEl.appendChild(span);
-        });
-      }
+      if (d.market_type === 'KRX') renderKrx(d);
+      else                          renderUs(d);
+      renderIndices(d.index_membership);
     })
     .catch(function() {
       contentEl.style.display = 'none';

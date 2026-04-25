@@ -715,21 +715,122 @@ _extended_cache: dict[str, tuple[float, dict]] = {}
 _EXTENDED_TTL = 3600  # 1시간
 
 
+def _fetch_krx_series(ticker: str, days: int = 60) -> dict:
+    """KRX 일별 시계열 — 외국인 보유율 / 외국인·기관 순매수 / 공매도 잔고.
+
+    Returns:
+        {
+            "ownership": [{"date": "YYYY-MM-DD", "value": 51.2}, ...],   # 외국인 한도 소진율 %
+            "flow":      [{"date": "YYYY-MM-DD", "foreign": -120,
+                           "institution": 30}, ...],                      # 단위: 억원
+            "short":     [{"date": "YYYY-MM-DD", "value": 1.5}, ...],    # 공매도 잔고 비중 %
+        }
+        각 시리즈 실패 시 빈 리스트.
+    """
+    out: dict[str, list] = {"ownership": [], "flow": [], "short": []}
+    if not _check_pykrx():
+        return out
+
+    raw_ticker = ticker.strip().upper()
+    if not raw_ticker.isdigit():
+        return out
+
+    today = datetime.now()
+    start = (today - timedelta(days=days + 30)).strftime("%Y%m%d")
+    end = today.strftime("%Y%m%d")
+
+    # 1) 외국인 보유율 시계열
+    try:
+        df = _safe_pykrx_call(
+            pykrx_stock.get_exhaustion_rates_of_foreign_investment,
+            start, end, raw_ticker,
+        )
+        if df is not None and not df.empty:
+            ratio_col = None
+            for col in df.columns:
+                if "지분율" in str(col) or "보유비중" in str(col):
+                    ratio_col = col
+                    break
+            if ratio_col:
+                for date_idx, val in df[ratio_col].tail(days).items():
+                    if val is None:
+                        continue
+                    out["ownership"].append({
+                        "date": str(date_idx)[:10],
+                        "value": round(float(val), 2),
+                    })
+    except Exception as e:
+        get_logger("KRX시계열").warning(f"{raw_ticker} 외국인 보유 시계열 실패: {e}")
+
+    # 2) 외국인/기관 순매수 시계열 (억원)
+    try:
+        df = _safe_pykrx_call(
+            pykrx_stock.get_market_trading_value_by_date,
+            start, end, raw_ticker,
+        )
+        if df is not None and not df.empty:
+            foreign_col = next((c for c in df.columns if "외국인" in str(c)), None)
+            inst_col = next((c for c in df.columns if "기관" in str(c)), None)
+            if foreign_col:
+                for date_idx, row in df.tail(days).iterrows():
+                    fv = row[foreign_col]
+                    iv = row[inst_col] if inst_col else None
+                    out["flow"].append({
+                        "date": str(date_idx)[:10],
+                        "foreign": int(fv) // 100_000_000 if fv is not None else None,
+                        "institution": int(iv) // 100_000_000 if iv is not None else None,
+                    })
+    except Exception as e:
+        get_logger("KRX시계열").warning(f"{raw_ticker} 순매수 시계열 실패: {e}")
+
+    # 3) 공매도 잔고 비율 시계열
+    try:
+        df = _safe_pykrx_call(
+            pykrx_stock.get_shorting_balance_by_date,
+            start, end, raw_ticker,
+        )
+        if df is not None and not df.empty:
+            ratio_col = None
+            for col in df.columns:
+                col_lower = str(col).lower()
+                if "비중" in col_lower or "비율" in col_lower:
+                    ratio_col = col
+                    break
+            if ratio_col:
+                for date_idx, val in df[ratio_col].tail(days).items():
+                    if val is None:
+                        continue
+                    out["short"].append({
+                        "date": str(date_idx)[:10],
+                        "value": round(float(val), 2),
+                    })
+    except Exception as e:
+        get_logger("KRX시계열").warning(f"{raw_ticker} 공매도 시계열 실패: {e}")
+
+    return out
+
+
 def fetch_krx_extended(ticker: str) -> dict | None:
     """한국주 § 5 KRX 확장 — 외국인 보유 / 순매수 / 공매도 / 지수 편입.
 
     기존 helper (fetch_market_cap_info / fetch_investor_trading /
-    fetch_short_selling / check_index_membership) 조합 + 1시간 캐시.
+    fetch_short_selling / check_index_membership) 조합 + 일별 시계열
+    (60일) + 1시간 캐시.
 
     Returns:
         {
             "market_type": "KRX",
-            "ownership_pct": 51.2,            # 외국인 보유율
+            "ownership_pct": 51.2,            # 외국인 보유율 (현재값)
             "flow_signal": "positive"|"neutral"|"negative"|None,
             "flow_summary": "외국인 5일 연속 순매수 (+1,200억원)",
             "short_pct": 1.5,                 # 공매도 잔고 비중
             "squeeze_risk": "low"|"medium"|"high"|None,
             "index_membership": ["KOSPI200"], # 빈 배열 가능
+            "series": {
+                "ownership": [{"date": ..., "value": ...}, ...],
+                "flow":      [{"date": ..., "foreign": ..., "institution": ...}, ...],
+                "short":     [{"date": ..., "value": ...}, ...],
+            },
             "fetched_at": ISO datetime,
         }
         실패/비KRX 종목 → None.
@@ -747,6 +848,7 @@ def fetch_krx_extended(ticker: str) -> dict | None:
     flow = fetch_investor_trading(raw_ticker, days=20) or {}
     short = fetch_short_selling(raw_ticker, days=20) or {}
     indices = check_index_membership(raw_ticker)
+    series = _fetch_krx_series(raw_ticker, days=60)
 
     # 외국인 순매수 신호 — 5일 누적 부호로 단순화
     flow_signal = None
@@ -762,6 +864,7 @@ def fetch_krx_extended(ticker: str) -> dict | None:
         "short_pct": short.get("short_balance_ratio_pct"),
         "squeeze_risk": short.get("squeeze_risk"),
         "index_membership": indices or [],
+        "series": series,
         "fetched_at": datetime.now().isoformat(timespec="seconds"),
     }
     _extended_cache[cache_key] = (_time.time(), result)

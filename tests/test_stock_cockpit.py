@@ -422,20 +422,29 @@ class TestStockCockpitPage:
         client = _make_client()
         resp = client.get("/pages/stocks/TXN?market=NASDAQ")
         body = resp.text
-        # § 5 자리 마크업 (외국주 페이지여도 마크업은 존재 — JS가 hide)
+        # § 5 자리 마크업 (외국주 페이지여도 마크업은 존재)
         assert 'id="sec-krx"' in body
-        assert 'id="krx-foreign-donut"' in body
+        # 시계열 차트 canvas 3개 (보유/순매수/공매도)
+        assert 'id="krx-ownership-canvas"' in body
+        assert 'id="krx-flow-canvas"' in body
+        assert 'id="krx-short-canvas"' in body
 
     def test_external_js_has_krx_iife(self):
         client = _make_client()
         resp = client.get("/static/js/stock_cockpit.js")
         body = resp.text
-        # § 5 마커는 prefix 매칭 (헤더 뒤 부가 설명 변경 가능)
+        # § 5 마커
         assert "// ── § 5" in body
-        assert "krx-foreign-donut" in body
-        # 신규 lazy fetch endpoint 사용 + 시장 분기 라벨
+        # 신규 시계열 차트 시그니처
+        assert "krx-ownership-canvas" in body
+        assert "krx-flow-canvas" in body
+        assert "krx-short-canvas" in body
+        # KRX 시계열 vs US 단일 시점 분기
+        assert "renderKrx" in body and "renderUs" in body
+        # lazy fetch endpoint
         assert "/extended-supply" in body
-        assert "market_type" in body  # KRX/US 분기 시그니처
+        # series 키 (ownership/flow/short 시계열)
+        assert "series.ownership" in body or "d.series" in body
 
 
 class TestExtendedSupplyAPI:
