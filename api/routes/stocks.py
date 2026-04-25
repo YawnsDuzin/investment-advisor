@@ -2,6 +2,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from psycopg2.extras import RealDictCursor
 
+from analyzer.factor_engine import compute_sector_pctiles
 from analyzer.stock_data import fetch_fundamentals
 from api.auth.dependencies import get_current_user_required
 from api.auth.models import UserInDB
@@ -293,6 +294,23 @@ def get_stock_overview(
                 ORDER BY created_at DESC LIMIT 1
             """, (tk,))
             factor_row = cur.fetchone() or {}
+
+            # 5) KRX 확장 (한국주만 채워짐, 외국주는 모든 컬럼 NULL → 응답 None)
+            cur.execute("""
+                SELECT
+                    foreign_ownership_pct, foreign_net_buy_signal,
+                    squeeze_risk, index_membership
+                FROM investment_proposals
+                WHERE UPPER(ticker) = %s
+                  AND (
+                      foreign_ownership_pct IS NOT NULL OR
+                      foreign_net_buy_signal IS NOT NULL OR
+                      squeeze_risk IS NOT NULL OR
+                      index_membership IS NOT NULL
+                  )
+                ORDER BY created_at DESC LIMIT 1
+            """, (tk,))
+            krx_row = cur.fetchone()
     finally:
         conn.close()
 
@@ -350,7 +368,44 @@ def get_stock_overview(
             "consensus_score": score["consensus_score"],
             "weights": dict(_AI_SCORE_WEIGHTS),
         },
+        # Phase 2 — factor_snapshot raw (§ 2-B 사용)
+        "factor_snapshot": factor_row.get("factor_snapshot") if factor_row else None,
+        # Phase 2 — krx_extended (§ 5 사용)
+        "krx_extended": (
+            {
+                "foreign_ownership_pct": (
+                    float(krx_row["foreign_ownership_pct"])
+                    if krx_row.get("foreign_ownership_pct") is not None else None
+                ),
+                "foreign_net_buy_signal": krx_row.get("foreign_net_buy_signal"),
+                "squeeze_risk": krx_row.get("squeeze_risk"),
+                "index_membership": (
+                    list(krx_row["index_membership"])
+                    if krx_row.get("index_membership") else None
+                ),
+            }
+            if krx_row else None
+        ),
     }
+
+
+# ──────────────────────────────────────────────
+# Stock Cockpit — 섹터 팩터 분위 API
+# ──────────────────────────────────────────────
+@router.get("/{ticker}/sector-stats")
+def get_stock_sector_stats(
+    ticker: str,
+    market: str = Query(default="", description="시장 코드"),
+):
+    """섹터 내 6축 팩터 분위 — § 3 섹터 컨텍스트."""
+    cfg = AppConfig()
+    result = compute_sector_pctiles(cfg.db, ticker, market)
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"종목 '{ticker}' 의 섹터 정보가 없습니다",
+        )
+    return result
 
 
 # ──────────────────────────────────────────────

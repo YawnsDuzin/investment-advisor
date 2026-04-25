@@ -11,6 +11,12 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 
+def _fake_db_cfg():
+    """factor_engine 등 외부 모듈에 넘길 가짜 DatabaseConfig — 어차피 get_connection 이 patch 됨."""
+    from shared.config import DatabaseConfig
+    return DatabaseConfig()
+
+
 def _fake_conn(fetch_sequence):
     """fetchone/fetchall 호출 순서대로 값 반환하는 가짜 커넥션."""
     cur = MagicMock()
@@ -63,8 +69,14 @@ class TestStockOverviewAPI:
                 "r1m_pctile": 0.7, "r3m_pctile": 0.8, "r6m_pctile": 0.85, "r12m_pctile": 0.78,
             },
         }
+        krx_row = {
+            "foreign_ownership_pct": 18.5,
+            "foreign_net_buy_signal": "positive",
+            "squeeze_risk": "low",
+            "index_membership": ["KOSPI200", "KRX300"],
+        }
 
-        conn = _fake_conn([meta_row, latest_rows, stats_row, factor_row])
+        conn = _fake_conn([meta_row, latest_rows, stats_row, factor_row, krx_row])
 
         with patch("api.routes.stocks.get_connection", return_value=conn):
             result = get_stock_overview(ticker="TXN", market="NASDAQ")
@@ -84,6 +96,13 @@ class TestStockOverviewAPI:
         # score = 100*(0.5*0.7825 + 0.3*0.4133 + 0.2*0.75) ≈ 66.5 → round → 67
         assert result["stats"]["ai_score"] == 67
         assert result["score_breakdown"]["weights"] == {"factor": 0.5, "hist": 0.3, "consensus": 0.2}
+        # Phase 2 — factor_snapshot raw exposure (§ 2-B 가 사용)
+        assert result["factor_snapshot"] == factor_row["factor_snapshot"]
+        # Phase 2 — krx_extended (§ 5 가 사용)
+        assert result["krx_extended"]["foreign_ownership_pct"] == 18.5
+        assert result["krx_extended"]["foreign_net_buy_signal"] == "positive"
+        assert result["krx_extended"]["squeeze_risk"] == "low"
+        assert result["krx_extended"]["index_membership"] == ["KOSPI200", "KRX300"]
 
     def test_overview_zero_proposals_uses_neutral_score(self):
         from api.routes.stocks import get_stock_overview
@@ -97,8 +116,9 @@ class TestStockOverviewAPI:
             "avg_alpha_vs_benchmark_pct": None, "latest_consensus": None,
         }
         factor_row = {}
+        krx_row = None
 
-        conn = _fake_conn([meta_row, latest_rows, stats_row, factor_row])
+        conn = _fake_conn([meta_row, latest_rows, stats_row, factor_row, krx_row])
 
         with patch("api.routes.stocks.get_connection", return_value=conn):
             result = get_stock_overview(ticker="FOO", market="NASDAQ")
@@ -108,6 +128,8 @@ class TestStockOverviewAPI:
         assert result["latest"] is None
         assert result["stats"]["proposal_count"] == 0
         assert result["stats"]["avg_post_return_3m_pct"] is None
+        assert result["factor_snapshot"] is None
+        assert result["krx_extended"] is None
 
 
 class TestComputeAiScore:
@@ -355,3 +377,102 @@ class TestStockCockpitPage:
         assert "stockCache" in body
         # 양쪽 모두 존재하는 첫 거래일 정렬 시그니처
         assert "commonAlignedStart" in body or "alignFirstCommonDate" in body
+
+
+class TestComputeSectorPctiles:
+    """analyzer.factor_engine.compute_sector_pctiles — 섹터 단위 cross-section pctile."""
+
+    def test_returns_six_axis_pctiles_for_normal_sector(self):
+        from analyzer.factor_engine import compute_sector_pctiles
+
+        # SQL 결과 행 — 시장 그룹 결정에 사용 (1개 row)
+        market_group_row = {"sector": "Technology"}
+        # 섹터 cross-section 결과 — TXN 한 행, sector_size=12
+        sector_row = {
+            "ticker": "TXN", "market": "NASDAQ",
+            "r1m": 8.4, "r3m": 12.4, "r6m": 25.1, "r12m": 48.0,
+            "vol60": 18.5, "volume_ratio": 1.42,
+            "r1m_pctile": 0.78, "r3m_pctile": 0.85, "r6m_pctile": 0.70, "r12m_pctile": 0.92,
+            "low_vol_pctile": 0.55, "volume_pctile": 0.88,
+            "sector_size": 12,
+        }
+
+        conn = _fake_conn([market_group_row, [sector_row]])
+
+        with patch("analyzer.factor_engine.get_connection", return_value=conn):
+            result = compute_sector_pctiles(_fake_db_cfg(), "TXN", "NASDAQ")
+
+        assert result["ticker"] == "TXN"
+        assert result["sector"] == "Technology"
+        assert result["sector_size"] == 12
+        assert result["ranks"]["r3m"]["sector_pctile"] == 0.85
+        assert result["ranks"]["r3m"]["sector_top_pct"] == 15  # round((1-0.85)*100)
+        assert result["ranks"]["r3m"]["value_pct"] == 12.4
+        assert result["ranks"]["volume"]["value_ratio"] == 1.42
+        assert result["ranks"]["low_vol"]["sector_pctile"] == 0.55
+
+    def test_small_sector_returns_null_pctiles(self):
+        from analyzer.factor_engine import compute_sector_pctiles
+
+        market_group_row = {"sector": "ObscureSector"}
+        # sector_size=3 (< 5 임계) — pctile 계산 skip
+        sector_row = {
+            "ticker": "TXN", "market": "NASDAQ",
+            "r1m": 5.0, "r3m": 10.0, "r6m": 20.0, "r12m": 30.0,
+            "vol60": 15.0, "volume_ratio": 1.0,
+            "r1m_pctile": None, "r3m_pctile": None, "r6m_pctile": None, "r12m_pctile": None,
+            "low_vol_pctile": None, "volume_pctile": None,
+            "sector_size": 3,
+        }
+        conn = _fake_conn([market_group_row, [sector_row]])
+        with patch("analyzer.factor_engine.get_connection", return_value=conn):
+            result = compute_sector_pctiles(_fake_db_cfg(), "TXN", "NASDAQ")
+
+        assert result["sector_size"] == 3
+        assert result["ranks"]["r3m"]["sector_pctile"] is None
+        assert result["ranks"]["r3m"]["sector_top_pct"] is None
+        # value 는 여전히 채워짐 (raw factor 는 sector size 무관)
+        assert result["ranks"]["r3m"]["value_pct"] == 10.0
+
+    def test_unknown_sector_returns_none(self):
+        from analyzer.factor_engine import compute_sector_pctiles
+
+        # 첫 쿼리 (sector + market_group 결정) 가 빈 결과
+        conn = _fake_conn([None])
+        with patch("analyzer.factor_engine.get_connection", return_value=conn):
+            result = compute_sector_pctiles(_fake_db_cfg(), "UNKNOWN", "NASDAQ")
+        assert result is None
+
+
+class TestStockSectorStatsAPI:
+    """GET /api/stocks/{ticker}/sector-stats"""
+
+    def test_sector_stats_returns_payload(self):
+        from api.routes.stocks import get_stock_sector_stats
+
+        sample = {
+            "ticker": "TXN", "sector": "Technology", "sector_size": 12,
+            "ranks": {
+                "r1m": {"value_pct": 8.4, "sector_pctile": 0.78, "sector_top_pct": 22},
+                "r3m": {"value_pct": 12.4, "sector_pctile": 0.85, "sector_top_pct": 15},
+                "r6m": {"value_pct": 25.1, "sector_pctile": 0.70, "sector_top_pct": 30},
+                "r12m": {"value_pct": 48.0, "sector_pctile": 0.92, "sector_top_pct": 8},
+                "low_vol": {"value_pct": 18.5, "sector_pctile": 0.55, "sector_top_pct": 45},
+                "volume": {"value_ratio": 1.42, "sector_pctile": 0.88, "sector_top_pct": 12},
+            },
+            "computed_at": "2026-04-25T19:00:00+09:00",
+        }
+        with patch("api.routes.stocks.compute_sector_pctiles", return_value=sample):
+            result = get_stock_sector_stats(ticker="TXN", market="NASDAQ")
+        assert result == sample
+
+    def test_sector_stats_404_for_unknown(self):
+        from fastapi import HTTPException
+        from api.routes.stocks import get_stock_sector_stats
+
+        with patch("api.routes.stocks.compute_sector_pctiles", return_value=None):
+            try:
+                get_stock_sector_stats(ticker="UNKNOWN", market="NASDAQ")
+                assert False, "expected HTTPException"
+            except HTTPException as e:
+                assert e.status_code == 404
