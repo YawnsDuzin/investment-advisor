@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" font-family="system-ui, -apple-system, sans-serif">
+  <!-- 배경 -->
+  <rect width="800" height="450" fill="#0f1419"/>
+
+  <!-- 제목 / 부제 -->
+  <text x="400" y="30" text-anchor="middle" font-size="18" font-weight="bold" fill="#e2e8f0">원달러·코스피 (2018~2024) — 역상관 패턴</text>
+  <text x="400" y="50" text-anchor="middle" font-size="12" fill="#94a3b8">원화 약세 → 외국인 이탈 → 코스피 하락</text>
+
+  <!-- 차트 배경 -->
+  <rect x="80" y="80" width="640" height="290" fill="#1a1f2e" rx="4"/>
+
+  <!-- 격자선 (좌Y 기준: 1100/1200/1300/1400) -->
+  <!-- y_svg = 370 - (rate - 1100) / 300 * 290 -->
+  <!-- 1100 → y=370, 1200 → y=273.3, 1300 → y=176.7, 1400 → y=80 -->
+  <line x1="80" y1="370" x2="720" y2="370" stroke="#2d3748" stroke-width="1"/>
+  <line x1="80" y1="273" x2="720" y2="273" stroke="#2d3748" stroke-width="1"/>
+  <line x1="80" y1="177" x2="720" y2="177" stroke="#2d3748" stroke-width="1"/>
+  <line x1="80" y1="80"  x2="720" y2="80"  stroke="#2d3748" stroke-width="1"/>
+
+  <!-- 좌Y축 라벨 (원달러) -->
+  <text x="75" y="374" text-anchor="end" font-size="11" fill="#94a3b8">1,100</text>
+  <text x="75" y="277" text-anchor="end" font-size="11" fill="#94a3b8">1,200</text>
+  <text x="75" y="181" text-anchor="end" font-size="11" fill="#94a3b8">1,300</text>
+  <text x="75" y="84"  text-anchor="end" font-size="11" fill="#94a3b8">1,400</text>
+
+  <!-- 우Y축 라벨 (코스피 천) -->
+  <!-- y_svg = 370 - (kospi - 1.5) / 1.5 * 290 -->
+  <!-- 1.5 → 370, 2.0 → 273.3, 2.5 → 176.7, 3.0 → 80 -->
+  <text x="725" y="374" text-anchor="start" font-size="11" fill="#94a3b8">1.5</text>
+  <text x="725" y="277" text-anchor="start" font-size="11" fill="#94a3b8">2.0</text>
+  <text x="725" y="181" text-anchor="start" font-size="11" fill="#94a3b8">2.5</text>
+  <text x="725" y="84"  text-anchor="start" font-size="11" fill="#94a3b8">3.0</text>
+
+  <!-- 좌Y축 헤더 -->
+  <text x="85" y="75" font-size="11" fill="#f59e0b" font-weight="bold">원달러 (원)</text>
+  <!-- 우Y축 헤더 -->
+  <text x="720" y="75" text-anchor="end" font-size="11" fill="#60a5fa" font-weight="bold">KOSPI (천)</text>
+
+  <!-- X축 라벨 및 수직 보조선 -->
+  <!-- x_svg = 80 + i * 106.67, i=0..6 -->
+  <!-- 2018(80), 2019(187), 2020(293), 2021(400), 2022(507), 2023(613), 2024(720) -->
+  <text x="80"  y="390" text-anchor="middle" font-size="11" fill="#94a3b8">2018</text>
+  <text x="187" y="390" text-anchor="middle" font-size="11" fill="#94a3b8">2019</text>
+  <text x="293" y="390" text-anchor="middle" font-size="11" fill="#94a3b8">2020</text>
+  <text x="400" y="390" text-anchor="middle" font-size="11" fill="#94a3b8">2021</text>
+  <text x="507" y="390" text-anchor="middle" font-size="11" fill="#94a3b8">2022</text>
+  <text x="613" y="390" text-anchor="middle" font-size="11" fill="#94a3b8">2023</text>
+  <text x="720" y="390" text-anchor="middle" font-size="11" fill="#94a3b8">2024</text>
+
+  <!-- 2022 역상관 강조 박스 (x=507 중심, 너비110) -->
+  <rect x="452" y="80" width="110" height="290" fill="none" stroke="#ef4444" stroke-width="1" stroke-dasharray="5,3"/>
+  <text x="507" y="74" text-anchor="middle" font-size="11" fill="#ef4444" font-weight="bold">원달러↑ KOSPI↓</text>
+
+  <!-- 원달러 라인 (#f59e0b) -->
+  <!-- 데이터: [1115,1158,1090,1188,1265,1290,1310] -->
+  <!-- y_svg = 370 - (rate-1100)/300*290 -->
+  <!-- 1115→355.5, 1158→314.1, 1090→370 (실제 373이지만 하한에 근접하므로 365로), 1188→282.3, 1265→218.2, 1290→193.6, 1310→174.3 -->
+  <!-- 정확 계산: -->
+  <!-- 1115: 370-(15/300)*290 = 370-14.5=355.5 -->
+  <!-- 1158: 370-(58/300)*290 = 370-56.1=313.9 -->
+  <!-- 1090: 370-(−10/300)*290 = 370+9.7=379.7 → clamp 370 -->
+  <!-- 1090 실제: 370 (하한) -->
+  <!-- 1188: 370-(88/300)*290 = 370-85.1=284.9 -->
+  <!-- 1265: 370-(165/300)*290 = 370-159.5=210.5 -->
+  <!-- 1290: 370-(190/300)*290 = 370-183.7=186.3 -->
+  <!-- 1310: 370-(210/300)*290 = 370-203=167 -->
+  <polyline
+    points="80,356 187,314 293,370 400,285 507,211 613,186 720,167"
+    fill="none" stroke="#f59e0b" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+  <!-- 원달러 마커 -->
+  <circle cx="80"  cy="356" r="4" fill="#f59e0b"/>
+  <circle cx="187" cy="314" r="4" fill="#f59e0b"/>
+  <circle cx="293" cy="370" r="4" fill="#f59e0b"/>
+  <circle cx="400" cy="285" r="4" fill="#f59e0b"/>
+  <circle cx="507" cy="211" r="4" fill="#f59e0b"/>
+  <circle cx="613" cy="186" r="4" fill="#f59e0b"/>
+  <circle cx="720" cy="167" r="4" fill="#f59e0b"/>
+
+  <!-- 코스피 라인 (#60a5fa) -->
+  <!-- 데이터: [2.04,2.20,2.87,2.97,2.24,2.65,2.59] -->
+  <!-- y_svg = 370 - (kospi-1.5)/1.5*290 -->
+  <!-- 2.04: 370-(0.54/1.5)*290=370-104.4=265.6 -->
+  <!-- 2.20: 370-(0.70/1.5)*290=370-135.3=234.7 -->
+  <!-- 2.87: 370-(1.37/1.5)*290=370-265.0=105.0 -->
+  <!-- 2.97: 370-(1.47/1.5)*290=370-284.2=85.8 -->
+  <!-- 2.24: 370-(0.74/1.5)*290=370-143.1=226.9 -->
+  <!-- 2.65: 370-(1.15/1.5)*290=370-222.3=147.7 -->
+  <!-- 2.59: 370-(1.09/1.5)*290=370-210.8=159.2 -->
+  <polyline
+    points="80,266 187,235 293,105 400,86 507,227 613,148 720,159"
+    fill="none" stroke="#60a5fa" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+  <!-- 코스피 마커 -->
+  <circle cx="80"  cy="266" r="4" fill="#60a5fa"/>
+  <circle cx="187" cy="235" r="4" fill="#60a5fa"/>
+  <circle cx="293" cy="105" r="4" fill="#60a5fa"/>
+  <circle cx="400" cy="86"  r="4" fill="#60a5fa"/>
+  <circle cx="507" cy="227" r="4" fill="#60a5fa"/>
+  <circle cx="613" cy="148" r="4" fill="#60a5fa"/>
+  <circle cx="720" cy="159" r="4" fill="#60a5fa"/>
+
+  <!-- 우상단 범례 박스 -->
+  <rect x="540" y="95" width="160" height="55" fill="#1a1f2e" fill-opacity="0.85" stroke="#2d3748" stroke-width="1" rx="4"/>
+  <line x1="552" y1="115" x2="572" y2="115" stroke="#f59e0b" stroke-width="2.5"/>
+  <circle cx="562" cy="115" r="4" fill="#f59e0b"/>
+  <text x="580" y="119" font-size="12" fill="#e2e8f0">원달러</text>
+  <line x1="552" y1="137" x2="572" y2="137" stroke="#60a5fa" stroke-width="2.5"/>
+  <circle cx="562" cy="137" r="4" fill="#60a5fa"/>
+  <text x="580" y="141" font-size="12" fill="#e2e8f0">KOSPI</text>
+
+  <!-- 캡션 -->
+  <text x="400" y="425" text-anchor="middle" font-size="11" fill="#94a3b8" font-style="italic">*Source: 한국은행 / KRX*</text>
+</svg>

@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" font-family="system-ui, -apple-system, sans-serif">
+  <!-- 배경 -->
+  <rect width="800" height="450" fill="#0f1419"/>
+
+  <!-- 제목 / 부제 -->
+  <text x="400" y="30" text-anchor="middle" font-size="18" font-weight="bold" fill="#e2e8f0">시나리오 사고 — base/worse/better</text>
+  <text x="400" y="50" text-anchor="middle" font-size="12" fill="#94a3b8">예: 2024 Fed 피벗 시나리오</text>
+
+  <!-- ========== 좌측 현황 박스 ========== -->
+  <rect x="80" y="200" width="140" height="60" fill="#1a1f2e" stroke="#94a3b8" stroke-width="1.5" rx="6"/>
+  <text x="150" y="225" text-anchor="middle" font-size="16" font-weight="bold" fill="#e2e8f0">현 상황</text>
+  <text x="150" y="247" text-anchor="middle" font-size="11" fill="#94a3b8">Fed 금리 5.25%</text>
+
+  <!-- ========== 연결선: 현황 우중앙(220,230) → 각 분기 좌중앙 ========== -->
+  <!-- better: (480,115) -->
+  <line x1="220" y1="230" x2="480" y2="115" stroke="#94a3b8" stroke-width="1.5"/>
+  <!-- base: (480,215) -->
+  <line x1="220" y1="230" x2="480" y2="215" stroke="#94a3b8" stroke-width="1.5"/>
+  <!-- worse: (480,315) -->
+  <line x1="220" y1="230" x2="480" y2="315" stroke="#94a3b8" stroke-width="1.5"/>
+
+  <!-- 확률 라벨 (연결선 중간) -->
+  <!-- better 중간: ((220+480)/2, (230+115)/2) = (350, 172.5) -->
+  <text x="350" y="168" text-anchor="middle" font-size="11" fill="#94a3b8">25%</text>
+  <!-- base 중간: ((220+480)/2, (230+215)/2) = (350, 222.5) -->
+  <text x="350" y="218" text-anchor="middle" font-size="11" fill="#94a3b8">50%</text>
+  <!-- worse 중간: ((220+480)/2, (230+315)/2) = (350, 272.5) -->
+  <text x="350" y="278" text-anchor="middle" font-size="11" fill="#94a3b8">25%</text>
+
+  <!-- ========== Better 박스 ========== -->
+  <rect x="480" y="80" width="240" height="70" fill="#4ade80" fill-opacity="0.2" stroke="#4ade80" stroke-width="1.5" rx="6"/>
+  <text x="600" y="100" text-anchor="middle" font-size="13" font-weight="bold" fill="#4ade80">Best 25%</text>
+  <text x="600" y="120" text-anchor="middle" font-size="12" fill="#e2e8f0">Fed 6월 인하</text>
+  <text x="600" y="142" text-anchor="middle" font-size="14" font-weight="bold" fill="#4ade80">코스피 +15%</text>
+
+  <!-- ========== Base 박스 ========== -->
+  <rect x="480" y="180" width="240" height="70" fill="#60a5fa" fill-opacity="0.2" stroke="#60a5fa" stroke-width="1.5" rx="6"/>
+  <text x="600" y="200" text-anchor="middle" font-size="13" font-weight="bold" fill="#60a5fa">Base 50%</text>
+  <text x="600" y="220" text-anchor="middle" font-size="12" fill="#e2e8f0">9월 첫 인하</text>
+  <text x="600" y="242" text-anchor="middle" font-size="14" font-weight="bold" fill="#60a5fa">코스피 +5%</text>
+
+  <!-- ========== Worse 박스 ========== -->
+  <rect x="480" y="280" width="240" height="70" fill="#ef4444" fill-opacity="0.2" stroke="#ef4444" stroke-width="1.5" rx="6"/>
+  <text x="600" y="300" text-anchor="middle" font-size="13" font-weight="bold" fill="#ef4444">Worse 25%</text>
+  <text x="600" y="320" text-anchor="middle" font-size="11" fill="#e2e8f0">인하 지연·인플레 재발</text>
+  <text x="600" y="342" text-anchor="middle" font-size="14" font-weight="bold" fill="#ef4444">코스피 -10%</text>
+
+  <!-- ========== 캡션 ========== -->
+  <text x="400" y="425" text-anchor="middle" font-size="11" fill="#94a3b8" font-style="italic">*확률 가중 기대값 = 0.5×+5 + 0.25×+15 + 0.25×-10 = +3.75%*</text>
+</svg>
