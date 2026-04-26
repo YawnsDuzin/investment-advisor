@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" font-family="system-ui, -apple-system, sans-serif">
+  <rect width="800" height="450" fill="#0f1419"/>
+
+  <!-- 제목 -->
+  <text x="400" y="30" text-anchor="middle" font-size="18" font-weight="bold" fill="#e2e8f0">손실 비대칭성 — 손실이 클수록 회복은 기하급수적</text>
+  <text x="400" y="50" text-anchor="middle" font-size="12" fill="#94a3b8">원금 회복에 필요한 수익률</text>
+
+  <!-- 차트 배경 -->
+  <rect x="80" y="80" width="640" height="290" fill="#1a1f2e" rx="4"/>
+
+  <!-- Y축 격자선 및 라벨 (0/200/400/600/800/1000) -->
+  <!-- y_svg = 370 - (recovery / 1000) * 290 -->
+  <!-- 0   → y=370 -->
+  <!-- 200 → y=370-58=312 -->
+  <!-- 400 → y=370-116=254 -->
+  <!-- 600 → y=370-174=196 -->
+  <!-- 800 → y=370-232=138 -->
+  <!-- 1000→ y=370-290=80  -->
+  <line x1="80" y1="370" x2="720" y2="370" stroke="#2d3748" stroke-width="1"/>
+  <text x="72" y="374" text-anchor="end" font-size="10" fill="#94a3b8">0</text>
+
+  <line x1="80" y1="312" x2="720" y2="312" stroke="#2d3748" stroke-width="1"/>
+  <text x="72" y="316" text-anchor="end" font-size="10" fill="#94a3b8">200</text>
+
+  <line x1="80" y1="254" x2="720" y2="254" stroke="#2d3748" stroke-width="1"/>
+  <text x="72" y="258" text-anchor="end" font-size="10" fill="#94a3b8">400</text>
+
+  <line x1="80" y1="196" x2="720" y2="196" stroke="#2d3748" stroke-width="1"/>
+  <text x="72" y="200" text-anchor="end" font-size="10" fill="#94a3b8">600</text>
+
+  <line x1="80" y1="138" x2="720" y2="138" stroke="#2d3748" stroke-width="1"/>
+  <text x="72" y="142" text-anchor="end" font-size="10" fill="#94a3b8">800</text>
+
+  <line x1="80" y1="80" x2="720" y2="80" stroke="#2d3748" stroke-width="1"/>
+  <text x="72" y="84" text-anchor="end" font-size="10" fill="#94a3b8">1000</text>
+
+  <!-- Y축 레이블 -->
+  <text x="30" y="230" text-anchor="middle" font-size="11" fill="#94a3b8" transform="rotate(-90,30,230)">회복 필요 수익률 (%)</text>
+
+  <!-- -50% 강조 세로 점선 (x=400) -->
+  <line x1="400" y1="80" x2="400" y2="370" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="4,4"/>
+  <text x="405" y="200" font-size="12" fill="#f59e0b">흔한 임계점</text>
+
+  <!-- 손실 비대칭 곡선 -->
+  <!-- 데이터 포인트:
+       (-10, 11)  → x=80,  y=370-11/1000*290  = 370-3.19  ≈ 367
+       (-20, 25)  → x=160, y=370-25/1000*290  = 370-7.25  ≈ 363
+       (-30, 43)  → x=240, y=370-43/1000*290  = 370-12.47 ≈ 358
+       (-50, 100) → x=400, y=370-100/1000*290 = 370-29    = 341
+       (-70, 233) → x=560, y=370-233/1000*290 = 370-67.57 ≈ 302
+       (-90, 900) → x=720, y=370-900/1000*290 = 370-261   = 109
+  -->
+  <polyline
+    points="80,367 160,363 240,358 400,341 560,302 720,109"
+    stroke="#ef4444" stroke-width="2.5" fill="none" stroke-linejoin="round"/>
+
+  <!-- 데이터 포인트 마커 -->
+  <circle cx="80"  cy="367" r="5" fill="#ef4444"/>
+  <circle cx="160" cy="363" r="5" fill="#ef4444"/>
+  <circle cx="240" cy="358" r="5" fill="#ef4444"/>
+  <circle cx="400" cy="341" r="5" fill="#ef4444"/>
+  <circle cx="560" cy="302" r="5" fill="#ef4444"/>
+  <circle cx="720" cy="109" r="5" fill="#ef4444"/>
+
+  <!-- 수치 라벨 -->
+  <text x="85"  y="355" font-size="12" fill="#e2e8f0">+11%</text>
+  <text x="165" y="350" font-size="12" fill="#e2e8f0">+25%</text>
+  <text x="245" y="345" font-size="12" fill="#e2e8f0">+43%</text>
+  <text x="405" y="328" font-size="12" fill="#e2e8f0">+100%</text>
+  <text x="565" y="288" font-size="12" fill="#e2e8f0">+233%</text>
+  <text x="655" y="100" font-size="12" fill="#e2e8f0">+900%</text>
+
+  <!-- X축 라인 -->
+  <line x1="80" y1="370" x2="720" y2="370" stroke="#94a3b8" stroke-width="1.5"/>
+
+  <!-- X축 라벨 -->
+  <text x="80"  y="388" text-anchor="middle" font-size="11" fill="#94a3b8">-10%</text>
+  <text x="160" y="388" text-anchor="middle" font-size="11" fill="#94a3b8">-20%</text>
+  <text x="240" y="388" text-anchor="middle" font-size="11" fill="#94a3b8">-30%</text>
+  <text x="400" y="388" text-anchor="middle" font-size="11" fill="#94a3b8">-50%</text>
+  <text x="560" y="388" text-anchor="middle" font-size="11" fill="#94a3b8">-70%</text>
+  <text x="720" y="388" text-anchor="middle" font-size="11" fill="#94a3b8">-90%</text>
+
+  <!-- X축 레이블 -->
+  <text x="400" y="410" text-anchor="middle" font-size="11" fill="#94a3b8">손실률 (%)</text>
+
+  <!-- Y축 라인 -->
+  <line x1="80" y1="80" x2="80" y2="370" stroke="#94a3b8" stroke-width="1.5"/>
+
+  <!-- 캡션 -->
+  <text x="400" y="435" text-anchor="middle" font-size="11" fill="#94a3b8" font-style="italic">*손실은 비대칭이다 — -50% 회복엔 +100%가 필요*</text>
+</svg>
