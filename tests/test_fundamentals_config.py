@@ -12,6 +12,7 @@ def test_defaults():
     assert cfg.pykrx_batch_size == 200
     assert cfg.yfinance_batch_size == 50
     assert cfg.validation_tolerance_pct == 5.0
+    assert cfg.us_max_consecutive_failures == 50
 
 
 def test_env_override(monkeypatch):

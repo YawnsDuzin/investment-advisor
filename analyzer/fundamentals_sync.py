@@ -8,6 +8,7 @@ Spec: docs/superpowers/specs/2026-04-26-screener-investor-strategies-design.md �
 from __future__ import annotations
 
 import math
+import time
 from datetime import date
 from typing import Optional
 
@@ -136,47 +137,6 @@ ON CONFLICT (ticker, market, snapshot_date) DO UPDATE SET
 """
 
 
-_KR_MARKETS = {"KOSPI", "KOSDAQ", "KONEX"}
-_US_MARKETS = {"NASDAQ", "NYSE", "AMEX"}
-
-
-def sync_market_fundamentals(
-    cur,
-    market: str,
-    tickers: list[str],
-    snapshot_date: date,
-) -> int:
-    """단일 시장 일괄 sync. market에 따라 fetcher 자동 분기.
-
-    Returns:
-        UPSERT된 row 수 (결측 제외).
-    """
-    market_up = market.upper()
-    if market_up in _KR_MARKETS:
-        fetcher = lambda t: fetch_kr_fundamental(t, snapshot_date)
-    elif market_up in _US_MARKETS:
-        fetcher = fetch_us_fundamental
-    else:
-        _log.warning(f"[{market}] 지원하지 않는 시장 — skip")
-        return 0
-
-    rows: list[dict] = []
-    for ticker in tickers:
-        data = fetcher(ticker)
-        if data is None:
-            continue
-        rows.append({
-            **data,
-            "ticker": ticker,
-            "market": market_up,
-            "snapshot_date": snapshot_date,
-        })
-
-    upsert_fundamentals(cur, rows)
-    _log.info(f"[{market_up}] {snapshot_date} 펀더 sync — {len(rows)}/{len(tickers)} 종목")
-    return len(rows)
-
-
 def upsert_fundamentals(cur, rows: list[dict]) -> None:
     """일괄 UPSERT. 빈 리스트는 no-op.
 
@@ -199,3 +159,69 @@ def upsert_fundamentals(cur, rows: list[dict]) -> None:
         for r in rows
     ]
     execute_values(cur, _UPSERT_SQL, values, page_size=500)
+
+
+_KR_MARKETS = {"KOSPI", "KOSDAQ", "KONEX"}
+_US_MARKETS = {"NASDAQ", "NYSE", "AMEX"}
+
+
+def sync_market_fundamentals(
+    cur,
+    market: str,
+    tickers: list[str],
+    snapshot_date: date,
+    *,
+    max_consecutive_failures: int = 0,
+) -> int:
+    """단일 시장 일괄 sync. market에 따라 fetcher 자동 분기.
+
+    Args:
+        max_consecutive_failures: > 0 이면 연속 N건 실패 시 조기 종료 (yfinance 장애 회피용).
+            기본 0 = 비활성. 운영기에서는 FundamentalsConfig.us_max_consecutive_failures 권장.
+
+    Returns:
+        UPSERT된 row 수 (결측 제외).
+    """
+    started = time.time()
+
+    market_up = market.upper()
+    if market_up in _KR_MARKETS:
+        fetcher = lambda t: fetch_kr_fundamental(t, snapshot_date)
+    elif market_up in _US_MARKETS:
+        fetcher = fetch_us_fundamental
+    else:
+        _log.warning(f"[{market}] 지원하지 않는 시장 — skip")
+        return 0
+
+    rows: list[dict] = []
+    consecutive_failures = 0
+    aborted_early = False
+
+    for ticker in tickers:
+        data = fetcher(ticker)
+        if data is None:
+            consecutive_failures += 1
+            if max_consecutive_failures > 0 and consecutive_failures >= max_consecutive_failures:
+                _log.warning(
+                    f"[{market_up}] 연속 {max_consecutive_failures}건 fetch 실패 — "
+                    f"조기 종료 (yfinance throttling/장애 의심)"
+                )
+                aborted_early = True
+                break
+            continue
+        consecutive_failures = 0
+        rows.append({
+            **data,
+            "ticker": ticker,
+            "market": market_up,
+            "snapshot_date": snapshot_date,
+        })
+
+    upsert_fundamentals(cur, rows)
+    duration = time.time() - started
+    abort_marker = " (early-abort)" if aborted_early else ""
+    _log.info(
+        f"[{market_up}] {snapshot_date} 펀더 sync — "
+        f"{len(rows)}/{len(tickers)} 종목{abort_marker} / {duration:.1f}s"
+    )
+    return len(rows)

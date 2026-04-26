@@ -273,3 +273,53 @@ def test_sync_us_market_uses_yfinance(monkeypatch):
     n = sync_market_fundamentals(MagicMock(), "NASDAQ", ["AAPL", "MSFT"], _date(2026, 4, 25))
     assert n == 2
     assert all(r["data_source"] == "yfinance_info" for r in captured)
+
+
+def test_sync_aborts_on_consecutive_failures(monkeypatch):
+    """max_consecutive_failures 이상 연속 실패 시 조기 종료."""
+    call_log = []
+
+    def fake_fetch(ticker):
+        call_log.append(ticker)
+        return None  # 모든 종목 실패
+
+    monkeypatch.setattr("analyzer.fundamentals_sync.fetch_us_fundamental", fake_fetch)
+    monkeypatch.setattr("analyzer.fundamentals_sync.upsert_fundamentals", lambda cur, rows: None)
+
+    from analyzer.fundamentals_sync import sync_market_fundamentals
+    n = sync_market_fundamentals(
+        MagicMock(),
+        "NASDAQ",
+        [f"T{i}" for i in range(100)],
+        _date(2026, 4, 25),
+        max_consecutive_failures=10,
+    )
+    assert n == 0
+    # 정확히 10건만 호출되고 break (남은 90건은 시도 안 함)
+    assert len(call_log) == 10
+
+
+def test_sync_consecutive_counter_resets_on_success(monkeypatch):
+    """성공 사이에 끼인 실패는 누적되지 않음 (counter reset)."""
+    def fake_fetch(ticker):
+        # 짝수 번째만 성공
+        idx = int(ticker[1:])
+        if idx % 2 == 0:
+            return {
+                "per": 10, "pbr": 1, "eps": 100, "bps": 1000,
+                "dps": 50, "dividend_yield": 2.0, "data_source": "yfinance_info",
+            }
+        return None
+    monkeypatch.setattr("analyzer.fundamentals_sync.fetch_us_fundamental", fake_fetch)
+    monkeypatch.setattr("analyzer.fundamentals_sync.upsert_fundamentals", lambda cur, rows: None)
+
+    from analyzer.fundamentals_sync import sync_market_fundamentals
+    # 100 종목 중 절반 실패해도 5건 연속이 안 되므로 끝까지 진행
+    n = sync_market_fundamentals(
+        MagicMock(),
+        "NASDAQ",
+        [f"T{i}" for i in range(100)],
+        _date(2026, 4, 25),
+        max_consecutive_failures=5,
+    )
+    assert n == 50  # 짝수 50개 성공

@@ -228,6 +228,10 @@ class FundamentalsConfig:
     validation_tolerance_pct: float = field(
         default_factory=lambda: float(os.getenv("FUNDAMENTALS_VALIDATION_TOLERANCE_PCT", "5.0"))
     )
+    # US sync — 연속 N건 실패 시 조기 종료 (yfinance throttling 의심). 0이면 비활성.
+    us_max_consecutive_failures: int = field(
+        default_factory=lambda: int(os.getenv("FUNDAMENTALS_US_MAX_CONSECUTIVE_FAILURES", "50"))
+    )
 
 
 @dataclass
