@@ -99,7 +99,17 @@
 .us-group-title .icon, .kr-group-title .icon { font-size: 18px; }
 
 .movers-row { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; }
-.mover-pill { display: inline-flex; gap: 4px; align-items: center; padding: 2px 8px; background: var(--bg); border: 1px solid var(--border); border-radius: 14px; }
+.mover-pill {
+    display: inline-flex; gap: 4px; align-items: center;
+    padding: 2px 8px; background: var(--bg);
+    border: 1px solid var(--border); border-radius: 14px;
+    text-decoration: none; color: inherit;
+    transition: background .15s, border-color .15s;
+}
+.mover-pill:hover {
+    background: var(--bg-elevated);
+    border-color: var(--accent);
+}
 .mover-pos { color: #2ecc71; font-weight: 600; }
 .mover-neg { color: #e74c3c; font-weight: 600; }
 .brief-catalyst { color: var(--text-muted); font-size: 13px; margin-top: 6px; line-height: 1.55; }

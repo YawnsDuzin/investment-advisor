@@ -147,3 +147,34 @@ def test_us_only_sector_shows_no_kr_match_message(env):
     body = m.group("body")
     assert "CHTR" in body and "-25.50%" in body
     assert ("한국 매칭 없음" in body) or ("영향 제한적" in body)
+
+
+def test_mover_pill_is_anchor_with_cockpit_link(env):
+    html = render(env, briefing=make_briefing())
+    pill = re.search(
+        r'<a class="mover-pill"\s+href="([^"]+)"\s+title="([^"]+)"\s*>'
+        r'\s*<strong>INTC</strong>',
+        html,
+    )
+    assert pill, "INTC mover pill anchor not found"
+    href, title = pill.group(1), pill.group(2)
+    assert href == "/pages/stocks/INTC?market=NASDAQ"
+    assert "Intel Corporation" in title
+    assert "NASDAQ" in title
+
+
+def test_mover_pill_falls_back_to_ticker_when_no_name_map_hit(env):
+    """name_map 에 없는 티커는 풀네임 폴백 + market 쿼리 없이 링크."""
+    bd = make_briefing()
+    bd["briefing_data"]["us_summary"]["groups"][0]["top_movers"].append(
+        {"ticker": "ZZZZ", "change_pct": 1.0}
+    )
+    html = render(env, briefing=bd)
+    pill = re.search(
+        r'<a class="mover-pill"\s+href="([^"]+)"\s+title="([^"]+)"\s*>'
+        r'\s*<strong>ZZZZ</strong>',
+        html,
+    )
+    assert pill
+    assert pill.group(1) == "/pages/stocks/ZZZZ"
+    assert pill.group(2).startswith("ZZZZ")
