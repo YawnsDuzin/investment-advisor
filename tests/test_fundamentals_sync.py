@@ -141,30 +141,23 @@ def test_fetch_us_returns_none_when_yfinance_missing(monkeypatch):
 from datetime import date as _date
 
 
-def test_upsert_executes_correct_sql():
+def test_upsert_executes_correct_sql(monkeypatch):
     """단일 row UPSERT — execute_values 호출됨 (sanity check)."""
     captured = {}
     def fake_execute_values(cur, sql, rows, **kw):
         captured["called"] = True
         captured["row_count"] = len(list(rows))
-
-    # monkeypatch으로 execute_values 교체
-    import analyzer.fundamentals_sync as mod
-    original = mod.execute_values
-    try:
-        mod.execute_values = fake_execute_values
-        cur = MagicMock()
-        rows = [
-            {"ticker": "005930", "market": "KOSPI", "snapshot_date": _date(2026, 4, 25),
-             "per": 12.5, "pbr": 0.95, "eps": 4000, "bps": 50000,
-             "dps": 1600, "dividend_yield": 3.2, "data_source": "pykrx"},
-        ]
-        from analyzer.fundamentals_sync import upsert_fundamentals
-        upsert_fundamentals(cur, rows)
-        assert captured["called"]
-        assert captured["row_count"] == 1
-    finally:
-        mod.execute_values = original
+    monkeypatch.setattr("analyzer.fundamentals_sync.execute_values", fake_execute_values)
+    cur = MagicMock()
+    rows = [
+        {"ticker": "005930", "market": "KOSPI", "snapshot_date": _date(2026, 4, 25),
+         "per": 12.5, "pbr": 0.95, "eps": 4000, "bps": 50000,
+         "dps": 1600, "dividend_yield": 3.2, "data_source": "pykrx"},
+    ]
+    from analyzer.fundamentals_sync import upsert_fundamentals
+    upsert_fundamentals(cur, rows)
+    assert captured["called"]
+    assert captured["row_count"] == 1
 
 
 def test_upsert_skips_empty_rows():
@@ -200,3 +193,7 @@ def test_upsert_uses_on_conflict(monkeypatch):
     assert "INSERT INTO STOCK_UNIVERSE_FUNDAMENTALS" in sql_upper
     assert "ON CONFLICT (TICKER, MARKET, SNAPSHOT_DATE) DO UPDATE" in sql_upper
     assert len(captured["rows"]) == 1
+    assert captured["rows"][0] == (
+        "AAPL", "NASDAQ", _date(2026, 4, 25),
+        25.4, 8.1, 6.13, 19.2, 0.96, 0.58, "yfinance_info",
+    )

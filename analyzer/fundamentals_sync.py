@@ -140,6 +140,11 @@ def upsert_fundamentals(cur, rows: list[dict]) -> None:
     """일괄 UPSERT. 빈 리스트는 no-op.
 
     각 row는 fetch_*_fundamental 결과 + ticker/market/snapshot_date 합본 dict.
+    동일 (ticker, market, snapshot_date)가 이미 존재하면 data_source 포함 전 필드 덮어씀
+    (last-write-wins — 재실행 시 소스 변경 허용).
+
+    Note:
+        커밋은 호출자 책임. 이 함수는 commit/rollback을 호출하지 않는다.
     """
     if not rows:
         return
