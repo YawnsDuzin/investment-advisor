@@ -13,6 +13,7 @@
 .brief-section h3 { font-size: 17px; margin: 0 0 12px; display: flex; align-items: center; gap: 8px; }
 .brief-section h3 .num { color: var(--text-muted); font-size: 14px; }
 
+/* deprecated v2 — .brief-hero 가 대체. 다른 곳 참조 없으면 후속 PR 에서 제거. */
 .brief-headline {
     background: linear-gradient(135deg, rgba(99, 102, 241, 0.08), rgba(34, 211, 238, 0.04));
     border: 1px solid rgba(99, 102, 241, 0.18);
@@ -74,6 +75,7 @@
 .kr-block-empty { color: var(--text-muted); font-size: 13px; }
 .us-block-title, .kr-block-title { font-size: 12.5px; color: var(--text-muted);
                                     margin-bottom: 8px; font-weight: 600; letter-spacing: .03em; }
+/* deprecated v2 — .brief-hero-body 가 대체. */
 .brief-morning {
     background: var(--bg-elevated);
     border-left: 3px solid var(--accent);
@@ -84,6 +86,7 @@
     font-size: 14.5px;
 }
 
+/* deprecated v2 — .sector-card 가 대체. */
 .us-group, .kr-group {
     border: 1px solid var(--border);
     border-radius: 10px;
@@ -149,6 +152,11 @@
 @media (max-width: 768px) {
     .kr-pick { grid-template-columns: 1fr; gap: 4px; }
     .kr-pick-gap { justify-self: start; }
+
+    .sector-summary { gap: 6px; }
+    .sector-label { flex: 1 1 100%; order: -1; }
+    .sector-mean, .strength-badge, .strength-none { font-size: 11.5px; padding: 2px 6px; }
+    .sector-chevron { margin-left: auto; }
 }
 </style>
 {% endblock %}
