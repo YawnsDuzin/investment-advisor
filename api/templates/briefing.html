@@ -21,6 +21,26 @@
     margin-bottom: 18px;
     line-height: 1.55;
 }
+.brief-hero {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.08), rgba(34, 211, 238, 0.04));
+    border: 1px solid rgba(99, 102, 241, 0.18);
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin-bottom: 18px;
+}
+.brief-hero-headline {
+    font-size: 15.5px;
+    line-height: 1.5;
+    color: var(--text);
+}
+.brief-hero-body {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px dashed rgba(255, 255, 255, 0.08);
+    font-size: 14px;
+    line-height: 1.65;
+    color: var(--text);
+}
 .brief-morning {
     background: var(--bg-elevated);
     border-left: 3px solid var(--accent);
@@ -120,10 +140,15 @@
 {% set us = bd.get('us_summary', {}) or {} %}
 {% set kr = bd.get('kr_impact', []) or [] %}
 
-{% if us.get('headline') %}
-<div class="brief-headline">
-    <strong>📰 {{ us.headline }}</strong>
-</div>
+{% if us.get('headline') or bd.get('morning_brief') %}
+<section class="brief-hero">
+    {% if us.headline %}
+    <div class="brief-hero-headline">📰 <strong>{{ us.headline }}</strong></div>
+    {% endif %}
+    {% if bd.morning_brief %}
+    <div class="brief-hero-body">{{ bd.morning_brief }}</div>
+    {% endif %}
+</section>
 {% endif %}
 
 {# ── 1. 미국 시장 핵심 상승 섹터 ── #}
@@ -206,15 +231,7 @@
 </div>
 {% endif %}
 
-{# ── 3. 모닝 브리핑 코멘트 ── #}
-{% if bd.get('morning_brief') %}
-<div class="brief-section">
-    <h3><span class="num">③</span> 모닝 코멘트</h3>
-    <div class="brief-morning">{{ bd.morning_brief }}</div>
-</div>
-{% endif %}
-
-{# ── 4. 시장 레짐 (옵션, 디버깅용) ── #}
+{# ── 3. 시장 레짐 (옵션, 디버깅용) ── #}
 {% if briefing.regime_snapshot and briefing.regime_snapshot.get('indices') %}
 <div class="brief-section">
     <h3 style="font-size:14px;color:var(--text-muted);">참고: 시장 레짐</h3>
