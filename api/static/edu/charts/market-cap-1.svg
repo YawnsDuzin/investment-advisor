@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" font-family="system-ui, -apple-system, sans-serif">
+  <rect width="800" height="450" fill="#0f1419"/>
+
+  <!-- Title -->
+  <text x="400" y="30" font-size="18" fill="#e2e8f0" text-anchor="middle" font-weight="bold">시총 구간별 대표 종목 (한국 시장)</text>
+  <text x="400" y="50" font-size="12" fill="#94a3b8" text-anchor="middle">메가캡부터 마이크로캡까지</text>
+
+  <!-- Row 1: 삼성전자 (메가캡) -->
+  <!-- Labels left -->
+  <text x="230" y="125" font-size="13" fill="#e2e8f0" text-anchor="end">삼성전자</text>
+  <text x="230" y="140" font-size="10" fill="#94a3b8" text-anchor="end">메가캡 380조</text>
+  <!-- Bar -->
+  <rect x="240" y="110" width="460" height="25" fill="#4ade80" opacity="1.0" rx="3"/>
+  <!-- Bar end label -->
+  <text x="710" y="127" font-size="11" fill="#e2e8f0">380조원</text>
+
+  <!-- Row 2: SK하이닉스 (라지캡) -->
+  <text x="230" y="175" font-size="13" fill="#e2e8f0" text-anchor="end">SK하이닉스</text>
+  <text x="230" y="190" font-size="10" fill="#94a3b8" text-anchor="end">라지캡 75조</text>
+  <rect x="240" y="160" width="350" height="25" fill="#4ade80" opacity="0.8" rx="3"/>
+  <text x="600" y="177" font-size="11" fill="#e2e8f0">75조원</text>
+
+  <!-- Row 3: 카카오게임즈 (미드캡) -->
+  <text x="230" y="225" font-size="13" fill="#e2e8f0" text-anchor="end">카카오게임즈</text>
+  <text x="230" y="240" font-size="10" fill="#94a3b8" text-anchor="end">미드캡 4조</text>
+  <rect x="240" y="210" width="200" height="25" fill="#4ade80" opacity="0.6" rx="3"/>
+  <text x="450" y="227" font-size="11" fill="#e2e8f0">4조원</text>
+
+  <!-- Row 4: 펄어비스 (스몰캡) -->
+  <text x="230" y="275" font-size="13" fill="#e2e8f0" text-anchor="end">펄어비스</text>
+  <text x="230" y="290" font-size="10" fill="#94a3b8" text-anchor="end">스몰캡 0.5조</text>
+  <rect x="240" y="260" width="110" height="25" fill="#4ade80" opacity="0.45" rx="3"/>
+  <text x="360" y="277" font-size="11" fill="#e2e8f0">0.5조원</text>
+
+  <!-- Row 5: 마이크로캡 예시 -->
+  <text x="230" y="325" font-size="13" fill="#e2e8f0" text-anchor="end">예시 종목</text>
+  <text x="230" y="340" font-size="10" fill="#94a3b8" text-anchor="end">마이크로캡 500억</text>
+  <rect x="240" y="310" width="50" height="25" fill="#4ade80" opacity="0.3" rx="3"/>
+  <text x="300" y="327" font-size="11" fill="#e2e8f0">500억</text>
+
+  <!-- X-axis label -->
+  <text x="480" y="395" font-size="10" fill="#94a3b8" text-anchor="middle">시총 (시각적 비례, 비선형 매핑)</text>
+
+  <!-- Divider line -->
+  <line x1="240" y1="100" x2="240" y2="355" stroke="#2d3748" stroke-width="1.5"/>
+
+  <!-- Caption -->
+  <text x="400" y="425" font-size="11" fill="#94a3b8" text-anchor="middle" font-style="italic">*시총은 회사 크기 — 같은 산업도 시총별 변동성 다르다*</text>
+</svg>
