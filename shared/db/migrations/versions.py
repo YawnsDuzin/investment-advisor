@@ -1526,6 +1526,57 @@ def _migrate_to_v39(cur) -> None:
     print("[DB] v39 마이그레이션 완료 — stock_universe_fundamentals (B-Lite 펀더 PIT)")
 
 
+def _migrate_to_v40(cur) -> None:
+    """v40: screener_presets 확장 — 거장 시드 프리셋 대비.
+
+    - user_id NULLABLE (시드 = NULL)
+    - is_seed / strategy_key / persona / persona_summary / markets_supported / risk_warning 추가
+    - strategy_key 부분 UNIQUE (is_seed=TRUE 한정) — UPSERT 멱등 보장
+
+    UNIQUE(user_id, name) 기존 제약은 유지 — PostgreSQL에서 NULL은 UNIQUE 무관하므로
+    여러 시드 row가 user_id NULL 이어도 충돌 없음.
+
+    Spec: docs/superpowers/specs/2026-04-26-screener-investor-strategies-design.md §4.2
+    """
+    cur.execute("""
+        ALTER TABLE screener_presets
+            ALTER COLUMN user_id DROP NOT NULL;
+    """)
+    cur.execute("""
+        ALTER TABLE screener_presets
+            ADD COLUMN IF NOT EXISTS is_seed BOOLEAN DEFAULT FALSE;
+    """)
+    cur.execute("""
+        ALTER TABLE screener_presets
+            ADD COLUMN IF NOT EXISTS strategy_key TEXT;
+    """)
+    cur.execute("""
+        ALTER TABLE screener_presets
+            ADD COLUMN IF NOT EXISTS persona TEXT;
+    """)
+    cur.execute("""
+        ALTER TABLE screener_presets
+            ADD COLUMN IF NOT EXISTS persona_summary TEXT;
+    """)
+    cur.execute("""
+        ALTER TABLE screener_presets
+            ADD COLUMN IF NOT EXISTS markets_supported TEXT[];
+    """)
+    cur.execute("""
+        ALTER TABLE screener_presets
+            ADD COLUMN IF NOT EXISTS risk_warning TEXT;
+    """)
+    cur.execute("""
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_screener_presets_strategy_key
+            ON screener_presets(strategy_key) WHERE is_seed = TRUE;
+    """)
+    cur.execute("""
+        INSERT INTO schema_version (version) VALUES (40)
+        ON CONFLICT (version) DO NOTHING;
+    """)
+    print("[DB] v40 마이그레이션 완료 — screener_presets 확장 (시드 프리셋 대비)")
+
+
 def _migrate_to_v33(cur) -> None:
     """v33: screener_presets — 사용자 커스텀 스크리너 프리셋 저장 (로드맵 UI-6).
 

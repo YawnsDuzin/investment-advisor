@@ -17,7 +17,7 @@ class TestSchemaMigrationV17:
         import importlib
         import shared.db as db
         importlib.reload(db)
-        assert db.SCHEMA_VERSION == 17
+        assert db.SCHEMA_VERSION >= 17  # v17 이상 구현됨
 
     def test_migrate_v17_function_exists(self):
         from shared.db.migrations.versions import _migrate_to_v17

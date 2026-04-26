@@ -31,3 +31,35 @@ def test_v39_idempotent_via_if_not_exists():
             assert "IF NOT EXISTS" in sql.upper(), f"비-멱등 SQL: {sql[:100]}"
         if "CREATE INDEX" in sql.upper():
             assert "IF NOT EXISTS" in sql.upper(), f"비-멱등 SQL: {sql[:100]}"
+
+
+from shared.db.migrations.versions import _migrate_to_v40
+
+
+def test_v40_alters_screener_presets():
+    cur = MagicMock()
+    _migrate_to_v40(cur)
+    sqls = " ".join(call.args[0] for call in cur.execute.call_args_list).upper()
+
+    assert "ALTER TABLE SCREENER_PRESETS" in sqls
+    assert "DROP NOT NULL" in sqls          # user_id NOT NULL 해제
+    assert "IS_SEED" in sqls
+    assert "STRATEGY_KEY" in sqls
+    assert "PERSONA" in sqls
+    assert "PERSONA_SUMMARY" in sqls
+    assert "MARKETS_SUPPORTED" in sqls
+    assert "RISK_WARNING" in sqls
+    assert "UQ_SCREENER_PRESETS_STRATEGY_KEY" in sqls
+    assert "INSERT INTO SCHEMA_VERSION (VERSION) VALUES (40)" in sqls
+
+
+def test_v40_alter_uses_if_not_exists():
+    """ADD COLUMN IF NOT EXISTS 로 멱등."""
+    cur = MagicMock()
+    _migrate_to_v40(cur)
+    sqls = [call.args[0] for call in cur.execute.call_args_list]
+    for sql in sqls:
+        if "ADD COLUMN" in sql.upper():
+            assert "IF NOT EXISTS" in sql.upper(), f"비-멱등: {sql[:100]}"
+        if "CREATE UNIQUE INDEX" in sql.upper():
+            assert "IF NOT EXISTS" in sql.upper(), f"비-멱등: {sql[:100]}"
