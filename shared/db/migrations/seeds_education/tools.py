@@ -26,6 +26,10 @@ TOPICS: list[dict] = [
 | **vol60_pct** | 60일 변동성 (연환산) | 표준편차 × √252 |
 | **volume_ratio** | 최근 5일 거래량 / 60일 평균 | 단기 매매 강도 |
 
+![차트: 정량 팩터 6축 레이더 — 예시 종목 percentile](/static/edu/charts/factor-six-axes-1.svg)
+
+*6축 percentile 한눈에 — 모든 추천 종목에 자동 계산되어 카드 우측에 노출*
+
 ## Percentile (분위) — 더 중요한 신호
 
 각 팩터에는 `*_pctile` (예: `r6m_pctile`) 컬럼이 함께 있다.
@@ -39,6 +43,10 @@ TOPICS: list[dict] = [
 → 절대 숫자보다 **시장 대비 위치**가 신호로 더 의미 있음. 시장 전체가 -20% 빠진 시점에 -10% 종목은 상대적으로 강한 종목이다.
 
 ## 6축 조합 패턴 5가지
+
+![차트: 5가지 팩터 패턴 비교 — 모멘텀·턴어라운드·저변동·과열·거래부재](/static/edu/charts/factor-six-axes-2.svg)
+
+*제안 카드 6축 모양 → 패턴 매칭 → 진입 의도 결정*
 
 ### 패턴 1: 모멘텀 종목
 - r1m·r3m·r6m_pctile 모두 0.8+
@@ -126,6 +134,10 @@ TOPICS: list[dict] = [
 - 50% 이상 = 건강한 상승, 30% 미만 = 약세 시그널
 
 ## 4가지 레짐 시나리오
+
+![차트: 시장 레짐 4 시나리오 매트릭스 — Risk-On/Late-Cycle/Bear/Recovery](/static/edu/charts/market-regime-1.svg)
+
+*above_200ma × vol_regime 두 축으로 분류 — 본 시스템이 매 분석마다 진단*
 
 ### 시나리오 A: Risk-On (강세 확장)
 - above_200ma = True
