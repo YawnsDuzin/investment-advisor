@@ -49,6 +49,23 @@ def render(env, **ctx) -> str:
     )
 
 
+def find_sector_card(html: str, label_substr: str):
+    """주어진 라벨을 summary에 포함하는 sector-card details 한 건을 반환.
+
+    반환: re.Match (group('attrs'), group('body')) 또는 None.
+    """
+    for m in re.finditer(
+        r'<details(?P<attrs>[^>]*sector-card[^>]*)>(?P<body>.*?)</details>',
+        html, re.DOTALL,
+    ):
+        # summary 영역만 추출해 라벨 검사 (body 전체가 아니라 summary 한정)
+        sm = re.search(r'<summary[^>]*>(?P<inner>.*?)</summary>',
+                       m.group('body'), re.DOTALL)
+        if sm and label_substr in sm.group('inner'):
+            return m
+    return None
+
+
 def test_renders_without_briefing_shows_empty_state(env):
     html = render(env, briefing=None, requested_date="2026-04-26")
     assert "브리핑이 없습니다" in html or "준비되지 않았습니다" in html
@@ -71,3 +88,37 @@ def test_no_separate_morning_section(env):
     assert "모닝 코멘트" not in html
     # 기존 .brief-morning 컨테이너도 더 이상 사용하지 않음
     assert 'class="brief-morning"' not in html
+
+
+def test_sector_card_uses_details_with_open_when_kr_picks_present(env):
+    html = render(env, briefing=make_briefing())
+    semi = find_sector_card(html, "반도체")
+    assert semi, "sector-card details not found for semiconductors"
+    assert "open" in semi.group("attrs"), "semiconductors card should be open by default"
+
+
+def test_sector_card_collapsed_when_no_kr_match(env):
+    html = render(env, briefing=make_briefing())
+    cable = find_sector_card(html, "통신·케이블")
+    assert cable, "sector-card details not found for communication_cable"
+    assert "open" not in cable.group("attrs"), \
+        "communication_cable card should be collapsed (no KR picks)"
+
+
+def test_sector_summary_shows_avg_change_and_strength(env):
+    html = render(env, briefing=make_briefing())
+    m = find_sector_card(html, "반도체")
+    assert m
+    summary = re.search(r'<summary[^>]*>(?P<inner>.*?)</summary>',
+                        m.group("body"), re.DOTALL).group("inner")
+    assert "+4.66%" in summary, "avg_change_pct missing/wrong format"
+    assert "갭 상승 강력" in summary, "strength label missing"
+
+
+def test_sector_summary_shows_kr_no_match_when_kr_absent(env):
+    html = render(env, briefing=make_briefing())
+    m = find_sector_card(html, "통신·케이블")
+    assert m
+    summary = re.search(r'<summary[^>]*>(?P<inner>.*?)</summary>',
+                        m.group("body"), re.DOTALL).group("inner")
+    assert "KR 매칭 없음" in summary
