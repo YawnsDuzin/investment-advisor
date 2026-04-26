@@ -129,3 +129,10 @@ def test_fetch_us_handles_empty_info(monkeypatch):
     monkeypatch.setattr("yfinance.Ticker", lambda t: fake_ticker)
     from analyzer.fundamentals_sync import fetch_us_fundamental
     assert fetch_us_fundamental("AAPL") is None
+
+
+def test_fetch_us_returns_none_when_yfinance_missing(monkeypatch):
+    """yfinance 미설치 → yf is None → None."""
+    import analyzer.fundamentals_sync as mod
+    monkeypatch.setattr(mod, "yf", None)
+    assert mod.fetch_us_fundamental("AAPL") is None
