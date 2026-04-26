@@ -136,7 +136,17 @@
     font-size: 13.5px;
 }
 .kr-pick:first-child { border-top: none; }
-.kr-pick-name { font-weight: 600; }
+.kr-pick-name {
+    font-weight: 600;
+    color: inherit;
+    text-decoration: none;
+    border-bottom: 1px dashed transparent;
+    transition: color .15s, border-color .15s;
+}
+.kr-pick-name:hover {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+}
 .kr-pick-ticker { color: var(--text-muted); font-size: 12px; }
 .kr-pick-rationale { color: var(--text-muted); font-size: 12.5px; }
 .kr-pick-gap { font-weight: 600; color: #2ecc71; white-space: nowrap; }
@@ -299,7 +309,9 @@
                     {% for p in kr_grp.korean_picks %}
                     <div class="kr-pick">
                         <div>
-                            <div class="kr-pick-name">{{ p.asset_name }}</div>
+                            <a class="kr-pick-name"
+                               href="/pages/stocks/{{ p.ticker }}{% if p.market %}?market={{ p.market }}{% endif %}"
+                               title="{{ p.asset_name }}{% if p.market %} · {{ p.market }}{% endif %}">{{ p.asset_name }}</a>
                             <div class="kr-pick-ticker">{{ p.ticker }} · {{ p.market }}</div>
                         </div>
                         <div class="kr-pick-rationale">{{ p.rationale }}</div>
@@ -350,7 +362,9 @@
                     {% for p in k.korean_picks %}
                     <div class="kr-pick">
                         <div>
-                            <div class="kr-pick-name">{{ p.asset_name }}</div>
+                            <a class="kr-pick-name"
+                               href="/pages/stocks/{{ p.ticker }}{% if p.market %}?market={{ p.market }}{% endif %}"
+                               title="{{ p.asset_name }}{% if p.market %} · {{ p.market }}{% endif %}">{{ p.asset_name }}</a>
                             <div class="kr-pick-ticker">{{ p.ticker }} · {{ p.market }}</div>
                         </div>
                         <div class="kr-pick-rationale">{{ p.rationale }}</div>
