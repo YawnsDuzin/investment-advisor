@@ -60,12 +60,15 @@ def _override_admin():
 
 # ─────────────────── 레지스트리 ───────────────────
 class TestUnitRegistry:
-    def test_managed_units_has_seven_entries(self):
+    def test_managed_units_has_expected_entries(self):
         from api.routes.admin_systemd import MANAGED_UNITS
-        assert len(MANAGED_UNITS) == 7
         keys = {u["key"] for u in MANAGED_UNITS}
-        assert keys == {"api", "analyzer", "sync-price", "sync-meta",
-                        "ohlcv-cleanup", "sector-refresh", "briefing"}
+        expected = {"api", "analyzer", "sync-price", "sync-indices",
+                    "sync-meta", "ohlcv-cleanup", "sector-refresh",
+                    "briefing", "fundamentals"}
+        assert keys == expected, f"MANAGED_UNITS 키 불일치: 예상 {expected} vs 실제 {keys}"
+        assert len(MANAGED_UNITS) == len(expected), \
+            f"MANAGED_UNITS 길이 {len(MANAGED_UNITS)} != 예상 {len(expected)}"
 
     def test_api_is_self_protected(self):
         from api.routes.admin_systemd import _find_unit
@@ -236,7 +239,7 @@ def _summary_stub(u):
 
 
 class TestUnitsListEndpoint:
-    def test_returns_seven_units_when_systemd_available(self):
+    def test_returns_nine_units_when_systemd_available(self):
         from fastapi.testclient import TestClient
         from api.main import app
         with patch("api.routes.admin_systemd._systemd_available",
@@ -249,7 +252,7 @@ class TestUnitsListEndpoint:
         assert resp.status_code == 200
         body = resp.json()
         assert body["systemd_available"] is True
-        assert len(body["units"]) == 7
+        assert len(body["units"]) == 9
 
     def test_returns_empty_when_unavailable(self):
         from fastapi.testclient import TestClient

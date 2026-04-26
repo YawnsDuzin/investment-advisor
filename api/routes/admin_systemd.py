@@ -1,6 +1,6 @@
 """관리자 — systemd unit 제어 라우터.
 
-deploy/systemd/README.md 의 7개 unit을 웹에서 제어한다:
+deploy/systemd/README.md 의 9개 unit을 웹에서 제어한다:
   start/stop/restart/enable/disable + journalctl SSE 스트리밍.
 API 자체 service는 self_protected (mutation 차단). sudo NOPASSWD 화이트리스트 가정.
 """
@@ -86,6 +86,14 @@ MANAGED_UNITS: list[dict] = [
         "self_protected": False,
         "schedule": "매일 06:30 KST",
         "description": "미국 오버나이트 → 한국 수혜 매핑",
+    },
+    {
+        "key": "fundamentals", "category": "B", "label": "펀더멘털 PIT sync",
+        "service": "investment-advisor-fundamentals.service",
+        "timer": "investment-advisor-fundamentals.timer",
+        "self_protected": False,
+        "schedule": "매일 06:35 KST",
+        "description": "stock_universe_fundamentals 일별 sync (pykrx KR + yfinance.info US, B-Lite)",
     },
 ]
 
