@@ -204,6 +204,33 @@ class OhlcvConfig:
 
 
 @dataclass
+class FundamentalsConfig:
+    """펀더멘털 PIT 시계열 수집 설정 (B-Lite — pykrx KR + yfinance.info US).
+
+    `stock_universe_fundamentals` 테이블의 수집·보존 정책.
+    Spec: docs/superpowers/specs/2026-04-26-screener-investor-strategies-design.md
+    """
+    retention_days: int = field(
+        default_factory=lambda: int(os.getenv("FUNDAMENTALS_RETENTION_DAYS", "800"))
+    )
+    delisted_retention_days: int = field(
+        default_factory=lambda: int(os.getenv("FUNDAMENTALS_DELISTED_RETENTION_DAYS", "400"))
+    )
+    sync_enabled: bool = field(
+        default_factory=lambda: _env_bool("FUNDAMENTALS_SYNC_ENABLED", True)
+    )
+    pykrx_batch_size: int = field(
+        default_factory=lambda: int(os.getenv("FUNDAMENTALS_PYKRX_BATCH_SIZE", "200"))
+    )
+    yfinance_batch_size: int = field(
+        default_factory=lambda: int(os.getenv("FUNDAMENTALS_YFINANCE_BATCH_SIZE", "50"))
+    )
+    validation_tolerance_pct: float = field(
+        default_factory=lambda: float(os.getenv("FUNDAMENTALS_VALIDATION_TOLERANCE_PCT", "5.0"))
+    )
+
+
+@dataclass
 class ScreenerConfig:
     """Universe-First Stage 1-B 분해 설정 (Phase 2 — recommendation-engine-redesign).
 
@@ -277,4 +304,5 @@ class AppConfig:
     screener: ScreenerConfig = field(default_factory=ScreenerConfig)
     validation: ValidationConfig = field(default_factory=ValidationConfig)
     ohlcv: OhlcvConfig = field(default_factory=OhlcvConfig)
+    fundamentals: FundamentalsConfig = field(default_factory=FundamentalsConfig)
     max_turns: int = field(default_factory=lambda: int(os.getenv("MAX_TURNS", "1")))  # 하위호환
