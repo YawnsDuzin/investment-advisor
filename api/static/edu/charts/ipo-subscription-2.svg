@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" font-family="system-ui, -apple-system, sans-serif">
+  <rect width="800" height="450" fill="#0f1419"/>
+
+  <!-- 제목 -->
+  <text x="400" y="30" font-size="18" font-weight="bold" fill="#e2e8f0" text-anchor="middle">균등배정 vs 비례배정 — 결과 비교</text>
+  <text x="400" y="50" font-size="12" fill="#94a3b8" text-anchor="middle">청약자 4명 (증거금 1천만/3천만/5천만/1억), 같은 IPO</text>
+
+  <!-- 패널 사이 분리선 -->
+  <line x1="400" y1="80" x2="400" y2="390" stroke="#2d3748" stroke-width="1"/>
+
+  <!-- 좌 패널: 균등배정 -->
+  <rect x="80" y="80" width="310" height="310" rx="6" fill="#1a1f2e" fill-opacity="0.3" stroke="#4ade80" stroke-width="1.5"/>
+  <text x="235" y="110" font-size="16" font-weight="bold" fill="#4ade80" text-anchor="middle">균등배정</text>
+  <text x="235" y="130" font-size="11" fill="#94a3b8" text-anchor="middle">참여자 1명당 동일 수량</text>
+
+  <!-- 균등배정: 4명 동그라미 (모두 동일 크기) -->
+  <circle cx="130" cy="200" r="22" fill="#4ade80" fill-opacity="0.5" stroke="#4ade80" stroke-width="1.5"/>
+  <text x="130" y="205" font-size="10" font-weight="bold" fill="#0f1419" text-anchor="middle">A</text>
+
+  <circle cx="200" cy="200" r="22" fill="#4ade80" fill-opacity="0.5" stroke="#4ade80" stroke-width="1.5"/>
+  <text x="200" y="205" font-size="10" font-weight="bold" fill="#0f1419" text-anchor="middle">B</text>
+
+  <circle cx="270" cy="200" r="22" fill="#4ade80" fill-opacity="0.5" stroke="#4ade80" stroke-width="1.5"/>
+  <text x="270" y="205" font-size="10" font-weight="bold" fill="#0f1419" text-anchor="middle">C</text>
+
+  <circle cx="340" cy="200" r="22" fill="#4ade80" fill-opacity="0.5" stroke="#4ade80" stroke-width="1.5"/>
+  <text x="340" y="205" font-size="10" font-weight="bold" fill="#0f1419" text-anchor="middle">D</text>
+
+  <!-- 균등배정: 각 동그라미 아래 라벨 -->
+  <text x="130" y="238" font-size="10" fill="#e2e8f0" text-anchor="middle">1명, 1주</text>
+  <text x="200" y="238" font-size="10" fill="#e2e8f0" text-anchor="middle">1명, 1주</text>
+  <text x="270" y="238" font-size="10" fill="#e2e8f0" text-anchor="middle">1명, 1주</text>
+  <text x="340" y="238" font-size="10" fill="#e2e8f0" text-anchor="middle">1명, 1주</text>
+
+  <!-- 균등배정: 결과 박스 -->
+  <rect x="130" y="260" width="210" height="60" rx="4" fill="#1a1f2e" stroke="#4ade80" stroke-width="1"/>
+  <text x="235" y="285" font-size="13" fill="#e2e8f0" text-anchor="middle">각자 1주씩</text>
+  <text x="235" y="308" font-size="14" font-weight="bold" fill="#4ade80" text-anchor="middle">= 4주 총 분배</text>
+
+  <!-- 균등배정: 하단 부가 -->
+  <text x="235" y="345" font-size="10" fill="#94a3b8" text-anchor="middle">(증거금 차이 무관)</text>
+
+  <!-- 증거금 라벨 (균등) -->
+  <text x="130" y="165" font-size="9" fill="#94a3b8" text-anchor="middle">1천만</text>
+  <text x="200" y="165" font-size="9" fill="#94a3b8" text-anchor="middle">3천만</text>
+  <text x="270" y="165" font-size="9" fill="#94a3b8" text-anchor="middle">5천만</text>
+  <text x="340" y="165" font-size="9" fill="#94a3b8" text-anchor="middle">1억</text>
+
+  <!-- 우 패널: 비례배정 -->
+  <rect x="410" y="80" width="310" height="310" rx="6" fill="#1a1f2e" fill-opacity="0.3" stroke="#f59e0b" stroke-width="1.5"/>
+  <text x="565" y="110" font-size="16" font-weight="bold" fill="#f59e0b" text-anchor="middle">비례배정</text>
+  <text x="565" y="130" font-size="11" fill="#94a3b8" text-anchor="middle">증거금 비례 — 큰 자금 유리</text>
+
+  <!-- 비례배정: 4명 동그라미 (다른 크기) -->
+  <!-- A: r=8 (1천만) -->
+  <circle cx="460" cy="200" r="8" fill="#f59e0b" fill-opacity="0.5" stroke="#f59e0b" stroke-width="1.5"/>
+  <!-- B: r=14 (3천만) -->
+  <circle cx="525" cy="200" r="14" fill="#f59e0b" fill-opacity="0.5" stroke="#f59e0b" stroke-width="1.5"/>
+  <!-- C: r=22 (5천만) -->
+  <circle cx="595" cy="200" r="22" fill="#f59e0b" fill-opacity="0.5" stroke="#f59e0b" stroke-width="1.5"/>
+  <!-- D: r=35 (1억) -->
+  <circle cx="685" cy="200" r="35" fill="#f59e0b" fill-opacity="0.5" stroke="#f59e0b" stroke-width="1.5"/>
+
+  <!-- 비례배정: 배정 수량 라벨 -->
+  <text x="460" y="223" font-size="10" fill="#e2e8f0" text-anchor="middle">1주</text>
+  <text x="525" y="229" font-size="10" fill="#e2e8f0" text-anchor="middle">2주</text>
+  <text x="595" y="237" font-size="10" fill="#e2e8f0" text-anchor="middle">4주</text>
+  <text x="685" y="250" font-size="10" fill="#e2e8f0" text-anchor="middle">8주</text>
+
+  <!-- 증거금 라벨 (비례) -->
+  <text x="460" y="183" font-size="9" fill="#94a3b8" text-anchor="middle">1천만</text>
+  <text x="525" y="177" font-size="9" fill="#94a3b8" text-anchor="middle">3천만</text>
+  <text x="595" y="169" font-size="9" fill="#94a3b8" text-anchor="middle">5천만</text>
+  <text x="685" y="156" font-size="9" fill="#94a3b8" text-anchor="middle">1억</text>
+
+  <!-- 비례배정: 결과 박스 -->
+  <rect x="430" y="260" width="270" height="60" rx="4" fill="#1a1f2e" stroke="#f59e0b" stroke-width="1"/>
+  <text x="565" y="285" font-size="13" fill="#e2e8f0" text-anchor="middle">큰 자금에 집중</text>
+  <text x="565" y="308" font-size="14" font-weight="bold" fill="#f59e0b" text-anchor="middle">8주 vs 1주</text>
+
+  <!-- 비례배정: 하단 부가 -->
+  <text x="565" y="345" font-size="10" fill="#94a3b8" text-anchor="middle">(증거금 1억 vs 1천만 = 8배 차이)</text>
+
+  <!-- 캡션 -->
+  <text x="400" y="425" font-size="10" fill="#64748b" text-anchor="middle" font-style="italic">*소액 청약자는 균등에 의존, 다증권사 분산이 답*</text>
+</svg>
