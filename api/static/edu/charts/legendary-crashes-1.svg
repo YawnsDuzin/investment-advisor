@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" font-family="system-ui, -apple-system, sans-serif">
+  <rect width="800" height="450" fill="#0f1419"/>
+
+  <!-- 제목 -->
+  <text x="400" y="30" font-size="18" font-weight="bold" fill="#e2e8f0" text-anchor="middle">전설의 폭락 5대 — 최대 낙폭 비교</text>
+  <text x="400" y="50" font-size="12" fill="#94a3b8" text-anchor="middle">1998~2023 글로벌·한국 5대 폭락 사건</text>
+
+  <!-- 배경 패널 -->
+  <rect x="60" y="70" width="700" height="310" fill="#1a1f2e" opacity="0.4" rx="4"/>
+
+  <!-- X축 격자선 및 라벨 (0/-25/-50/-75/-100) -->
+  <!-- x = 240 + |val|/100 * 480 -->
+  <!-- 0%: x=240, -25%: x=360, -50%: x=480, -75%: x=600, -100%: x=720 -->
+  <line x1="240" y1="80" x2="240" y2="370" stroke="#2d3748" stroke-width="1"/>
+  <text x="240" y="385" font-size="10" fill="#94a3b8" text-anchor="middle">0%</text>
+
+  <line x1="360" y1="80" x2="360" y2="370" stroke="#2d3748" stroke-width="1" stroke-dasharray="3,3"/>
+  <text x="360" y="385" font-size="10" fill="#94a3b8" text-anchor="middle">-25%</text>
+
+  <line x1="480" y1="80" x2="480" y2="370" stroke="#2d3748" stroke-width="1" stroke-dasharray="3,3"/>
+  <text x="480" y="385" font-size="10" fill="#94a3b8" text-anchor="middle">-50%</text>
+
+  <line x1="600" y1="80" x2="600" y2="370" stroke="#2d3748" stroke-width="1" stroke-dasharray="3,3"/>
+  <text x="600" y="385" font-size="10" fill="#94a3b8" text-anchor="middle">-75%</text>
+
+  <line x1="720" y1="80" x2="720" y2="370" stroke="#2d3748" stroke-width="1" stroke-dasharray="3,3"/>
+  <text x="720" y="385" font-size="10" fill="#94a3b8" text-anchor="middle">-100%</text>
+
+  <!-- X축 라벨 "낙폭" -->
+  <text x="480" y="405" font-size="11" fill="#94a3b8" text-anchor="middle">최대 낙폭</text>
+
+  <!-- ── LTCM 1998: -90%, y_top=110, width=432 → x_end=672 ── -->
+  <rect x="240" y="110" width="432" height="25" fill="#ef4444" opacity="1.0" rx="2"/>
+  <text x="230" y="126" font-size="13" fill="#e2e8f0" text-anchor="end" font-weight="bold">LTCM 1998</text>
+  <text x="230" y="141" font-size="10" fill="#94a3b8" text-anchor="end">헤지펀드 청산</text>
+  <text x="684" y="126" font-size="13" fill="#ef4444" font-weight="bold">-90%</text>
+
+  <!-- ── 리먼 2008: -55%, width=264 → x_end=504 ── -->
+  <rect x="240" y="160" width="264" height="25" fill="#ef4444" opacity="0.85" rx="2"/>
+  <text x="230" y="176" font-size="13" fill="#e2e8f0" text-anchor="end" font-weight="bold">리먼 2008</text>
+  <text x="230" y="191" font-size="10" fill="#94a3b8" text-anchor="end">글로벌 금융위기</text>
+  <text x="516" y="176" font-size="13" fill="#ef4444" font-weight="bold">-55%</text>
+
+  <!-- ── 차화정 2011: -50%, width=240 → x_end=480 ── -->
+  <rect x="240" y="210" width="240" height="25" fill="#ef4444" opacity="0.75" rx="2"/>
+  <text x="230" y="226" font-size="13" fill="#e2e8f0" text-anchor="end" font-weight="bold">차화정 2011</text>
+  <text x="230" y="241" font-size="10" fill="#94a3b8" text-anchor="end">한국 차·화학·정유</text>
+  <text x="492" y="226" font-size="13" fill="#ef4444" font-weight="bold">-50%</text>
+
+  <!-- ── 코로나 2020: -34%, width=163 → x_end=403 ── -->
+  <rect x="240" y="260" width="163" height="25" fill="#ef4444" opacity="0.65" rx="2"/>
+  <text x="230" y="276" font-size="13" fill="#e2e8f0" text-anchor="end" font-weight="bold">코로나 2020</text>
+  <text x="230" y="291" font-size="10" fill="#94a3b8" text-anchor="end">팬데믹 충격</text>
+  <text x="415" y="276" font-size="13" fill="#ef4444" font-weight="bold">-34%</text>
+
+  <!-- ── 2차전지 2023: -40%, width=192 → x_end=432 ── -->
+  <rect x="240" y="310" width="192" height="25" fill="#ef4444" opacity="0.7" rx="2"/>
+  <text x="230" y="326" font-size="13" fill="#e2e8f0" text-anchor="end" font-weight="bold">2차전지 2023</text>
+  <text x="230" y="341" font-size="10" fill="#94a3b8" text-anchor="end">성장주 디레이팅</text>
+  <text x="444" y="326" font-size="13" fill="#ef4444" font-weight="bold">-40%</text>
+
+  <!-- X축 베이스 라인 -->
+  <line x1="240" y1="370" x2="720" y2="370" stroke="#2d3748" stroke-width="1"/>
+
+  <!-- 캡션 -->
+  <text x="400" y="428" font-size="11" fill="#94a3b8" text-anchor="middle" font-style="italic">*직접 원인은 다르지만 '레버리지·과열·자신감' 공통*</text>
+</svg>

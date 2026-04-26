@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" font-family="system-ui, -apple-system, sans-serif">
+  <rect width="800" height="450" fill="#0f1419"/>
+
+  <!-- 제목 -->
+  <text x="400" y="30" font-size="18" font-weight="bold" fill="#e2e8f0" text-anchor="middle">투자자가 빠지는 7가지 심리 함정</text>
+  <text x="400" y="50" font-size="12" fill="#94a3b8" text-anchor="middle">행동경제학이 알려주는 비합리적 패턴</text>
+
+  <!-- ════ 위 행 4셀: x=80, 255, 430, 605 / y=70 ════ -->
+
+  <!-- 셀 1: FOMO (x=80, y=70) -->
+  <rect x="80" y="70" width="165" height="130" fill="#1a1f2e" opacity="0.5" stroke="#2d3748" stroke-width="1" rx="4"/>
+  <text x="162" y="100" font-size="14" font-weight="bold" fill="#f59e0b" text-anchor="middle">FOMO</text>
+  <text x="162" y="125" font-size="11" fill="#e2e8f0" text-anchor="middle">남들 다 사니까</text>
+  <text x="162" y="140" font-size="11" fill="#e2e8f0" text-anchor="middle">나도...</text>
+  <text x="162" y="170" font-size="10" fill="#94a3b8" text-anchor="middle">추격 매수의 심리</text>
+
+  <!-- 셀 2: 손실회피 (x=255, y=70) -->
+  <rect x="255" y="70" width="165" height="130" fill="#1a1f2e" opacity="0.5" stroke="#2d3748" stroke-width="1" rx="4"/>
+  <text x="337" y="100" font-size="14" font-weight="bold" fill="#f59e0b" text-anchor="middle">손실회피</text>
+  <text x="337" y="125" font-size="11" fill="#e2e8f0" text-anchor="middle">이익 +10%엔 빨리 매도</text>
+  <text x="337" y="140" font-size="11" fill="#e2e8f0" text-anchor="middle">손실 -50%는 끝까지</text>
+  <text x="337" y="170" font-size="10" fill="#94a3b8" text-anchor="middle">보유</text>
+
+  <!-- 셀 3: 확증편향 (x=430, y=70) -->
+  <rect x="430" y="70" width="165" height="130" fill="#1a1f2e" opacity="0.5" stroke="#2d3748" stroke-width="1" rx="4"/>
+  <text x="512" y="100" font-size="14" font-weight="bold" fill="#f59e0b" text-anchor="middle">확증편향</text>
+  <text x="512" y="125" font-size="11" fill="#e2e8f0" text-anchor="middle">내 판단을 지지하는</text>
+  <text x="512" y="155" font-size="10" fill="#94a3b8" text-anchor="middle">정보만 본다</text>
+
+  <!-- 셀 4: 처분효과 (x=605, y=70) -->
+  <rect x="605" y="70" width="165" height="130" fill="#1a1f2e" opacity="0.5" stroke="#2d3748" stroke-width="1" rx="4"/>
+  <text x="687" y="100" font-size="14" font-weight="bold" fill="#f59e0b" text-anchor="middle">처분효과</text>
+  <text x="687" y="125" font-size="11" fill="#e2e8f0" text-anchor="middle">수익 23일 평균 보유</text>
+  <text x="687" y="140" font-size="11" fill="#e2e8f0" text-anchor="middle">손실 45일 평균 보유</text>
+  <text x="687" y="170" font-size="10" fill="#94a3b8" text-anchor="middle">비대칭 보유 패턴</text>
+
+  <!-- ════ 아래 행 3셀 가운데 정렬: x=167, 342, 517 / y=215 ════ -->
+
+  <!-- 셀 5: 닻 효과 (x=167, y=215) -->
+  <rect x="167" y="215" width="165" height="130" fill="#1a1f2e" opacity="0.5" stroke="#2d3748" stroke-width="1" rx="4"/>
+  <text x="249" y="245" font-size="14" font-weight="bold" fill="#f59e0b" text-anchor="middle">닻 효과</text>
+  <text x="249" y="270" font-size="11" fill="#e2e8f0" text-anchor="middle">매수가가 기준점</text>
+  <text x="249" y="300" font-size="10" fill="#94a3b8" text-anchor="middle">본전 회복까지 못 팔아</text>
+
+  <!-- 셀 6: 과신 (x=342, y=215) -->
+  <rect x="342" y="215" width="165" height="130" fill="#1a1f2e" opacity="0.5" stroke="#2d3748" stroke-width="1" rx="4"/>
+  <text x="424" y="245" font-size="14" font-weight="bold" fill="#f59e0b" text-anchor="middle">과신</text>
+  <text x="424" y="270" font-size="11" fill="#e2e8f0" text-anchor="middle">이번엔 다르다</text>
+  <text x="424" y="300" font-size="10" fill="#94a3b8" text-anchor="middle">내 분석은 맞다</text>
+
+  <!-- 셀 7: 후회회피 (x=517, y=215) -->
+  <rect x="517" y="215" width="165" height="130" fill="#1a1f2e" opacity="0.5" stroke="#2d3748" stroke-width="1" rx="4"/>
+  <text x="599" y="245" font-size="14" font-weight="bold" fill="#f59e0b" text-anchor="middle">후회회피</text>
+  <text x="599" y="270" font-size="11" fill="#e2e8f0" text-anchor="middle">결정 자체를 미룬다</text>
+  <text x="599" y="300" font-size="10" fill="#94a3b8" text-anchor="middle">현금 비중 과다</text>
+
+  <!-- 캡션 -->
+  <text x="400" y="428" font-size="11" fill="#94a3b8" text-anchor="middle" font-style="italic">*Source: Daniel Kahneman 'Thinking, Fast and Slow' + 한국 거래소 분석*</text>
+</svg>
