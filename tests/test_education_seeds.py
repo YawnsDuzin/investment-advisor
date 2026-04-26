@@ -130,6 +130,27 @@ def test_svg_files_exist():
         "what-if-2015-1.svg", "korea-market-timeline-1.svg",
         "tesla-eight-years-1.svg", "factor-six-axes-1.svg",
         "factor-six-axes-2.svg", "market-regime-1.svg",
+        # Phase 2
+        "stop-loss-1.svg", "position-sizing-1.svg",
+        "foreign-institutional-flow-1.svg", "short-selling-squeeze-1.svg",
+        "exchange-rates-1.svg", "scenario-thinking-1.svg",
+        "legendary-crashes-1.svg",
+        "behavioral-biases-1.svg", "behavioral-biases-2.svg",
     ]
     missing = [f for f in expected if not (base / f).exists()]
     assert not missing, f"missing SVG files: {missing}"
+
+
+def test_v37_phase2_visual_topics_have_image_refs():
+    """Phase 2 시각화 적용된 8개 슬러그의 content 에 SVG 이미지 참조가 1개 이상 존재."""
+    phase2_slugs = {
+        "stop-loss", "position-sizing",
+        "foreign-institutional-flow", "short-selling-squeeze",
+        "exchange-rates", "scenario-thinking",
+        "legendary-crashes", "behavioral-biases",
+    }
+    matched = [t for t in ALL_TOPICS if t["slug"] in phase2_slugs]
+    assert len(matched) == 8, f"expected 8 phase2 topics, found {len(matched)}"
+    for t in matched:
+        assert "/static/edu/charts/" in t["content"], \
+            f"{t['slug']} missing SVG image reference"
