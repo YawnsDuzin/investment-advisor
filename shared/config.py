@@ -219,12 +219,15 @@ class FundamentalsConfig:
     sync_enabled: bool = field(
         default_factory=lambda: _env_bool("FUNDAMENTALS_SYNC_ENABLED", True)
     )
+    # 배치 크기 — 현재 미사용. sync_market_fundamentals 가 per-ticker 호출 + max_consecutive_failures
+    # 가드로 충분하므로 보류. M3 (스크리너 백엔드) 또는 M6 (대규모 재처리) 에서 활용 예정.
     pykrx_batch_size: int = field(
         default_factory=lambda: int(os.getenv("FUNDAMENTALS_PYKRX_BATCH_SIZE", "200"))
     )
     yfinance_batch_size: int = field(
         default_factory=lambda: int(os.getenv("FUNDAMENTALS_YFINANCE_BATCH_SIZE", "50"))
     )
+    # AI 제시값 vs 실측 cross-check 허용 오차 — M6 (proposal_validation_log 펀더 룰) 에서 사용 예정.
     validation_tolerance_pct: float = field(
         default_factory=lambda: float(os.getenv("FUNDAMENTALS_VALIDATION_TOLERANCE_PCT", "5.0"))
     )
