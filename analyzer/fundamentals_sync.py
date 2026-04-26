@@ -136,6 +136,47 @@ ON CONFLICT (ticker, market, snapshot_date) DO UPDATE SET
 """
 
 
+_KR_MARKETS = {"KOSPI", "KOSDAQ", "KONEX"}
+_US_MARKETS = {"NASDAQ", "NYSE", "AMEX"}
+
+
+def sync_market_fundamentals(
+    cur,
+    market: str,
+    tickers: list[str],
+    snapshot_date: date,
+) -> int:
+    """단일 시장 일괄 sync. market에 따라 fetcher 자동 분기.
+
+    Returns:
+        UPSERT된 row 수 (결측 제외).
+    """
+    market_up = market.upper()
+    if market_up in _KR_MARKETS:
+        fetcher = lambda t: fetch_kr_fundamental(t, snapshot_date)
+    elif market_up in _US_MARKETS:
+        fetcher = fetch_us_fundamental
+    else:
+        _log.warning(f"[{market}] 지원하지 않는 시장 — skip")
+        return 0
+
+    rows: list[dict] = []
+    for ticker in tickers:
+        data = fetcher(ticker)
+        if data is None:
+            continue
+        rows.append({
+            **data,
+            "ticker": ticker,
+            "market": market_up,
+            "snapshot_date": snapshot_date,
+        })
+
+    upsert_fundamentals(cur, rows)
+    _log.info(f"[{market_up}] {snapshot_date} 펀더 sync — {len(rows)}/{len(tickers)} 종목")
+    return len(rows)
+
+
 def upsert_fundamentals(cur, rows: list[dict]) -> None:
     """일괄 UPSERT. 빈 리스트는 no-op.
 

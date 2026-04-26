@@ -197,3 +197,79 @@ def test_upsert_uses_on_conflict(monkeypatch):
         "AAPL", "NASDAQ", _date(2026, 4, 25),
         25.4, 8.1, 6.13, 19.2, 0.96, 0.58, "yfinance_info",
     )
+
+
+def test_sync_kr_market_iterates_tickers(monkeypatch):
+    """KR 종목 리스트 → 각 종목 fetch → upsert 호출."""
+    captured_rows = []
+
+    def fake_fetch(ticker, snap_date):
+        return {
+            "per": 10.0, "pbr": 1.0, "eps": 100, "bps": 1000,
+            "dps": 50, "dividend_yield": 2.0, "data_source": "pykrx",
+        }
+
+    def fake_upsert(cur, rows):
+        captured_rows.extend(rows)
+
+    monkeypatch.setattr("analyzer.fundamentals_sync.fetch_kr_fundamental", fake_fetch)
+    monkeypatch.setattr("analyzer.fundamentals_sync.upsert_fundamentals", fake_upsert)
+
+    cur = MagicMock()
+    from analyzer.fundamentals_sync import sync_market_fundamentals
+    n = sync_market_fundamentals(
+        cur, market="KOSPI",
+        tickers=["005930", "000660", "035420"],
+        snapshot_date=_date(2026, 4, 25),
+    )
+    assert n == 3
+    assert len(captured_rows) == 3
+    assert all(r["snapshot_date"] == _date(2026, 4, 25) for r in captured_rows)
+    assert all(r["market"] == "KOSPI" for r in captured_rows)
+    assert {r["ticker"] for r in captured_rows} == {"005930", "000660", "035420"}
+
+
+def test_sync_skips_missing_tickers(monkeypatch):
+    """fetch가 None 반환한 종목은 upsert에 포함되지 않음."""
+    captured_rows = []
+    monkeypatch.setattr(
+        "analyzer.fundamentals_sync.fetch_kr_fundamental",
+        lambda t, d: None if t == "BAD" else {
+            "per": 10, "pbr": 1, "eps": 100, "bps": 1000,
+            "dps": 50, "dividend_yield": 2.0, "data_source": "pykrx",
+        },
+    )
+    monkeypatch.setattr(
+        "analyzer.fundamentals_sync.upsert_fundamentals",
+        lambda cur, rows: captured_rows.extend(rows),
+    )
+    cur = MagicMock()
+    from analyzer.fundamentals_sync import sync_market_fundamentals
+    n = sync_market_fundamentals(cur, "KOSPI", ["005930", "BAD"], _date(2026, 4, 25))
+    assert n == 1
+    assert {r["ticker"] for r in captured_rows} == {"005930"}
+
+
+def test_sync_us_market_uses_yfinance(monkeypatch):
+    """market이 NASDAQ/NYSE면 fetch_us_fundamental 사용."""
+    captured = []
+    monkeypatch.setattr(
+        "analyzer.fundamentals_sync.fetch_us_fundamental",
+        lambda t: {
+            "per": 25, "pbr": 8, "eps": 6, "bps": 19,
+            "dps": 1, "dividend_yield": 0.58, "data_source": "yfinance_info",
+        },
+    )
+    monkeypatch.setattr(
+        "analyzer.fundamentals_sync.upsert_fundamentals",
+        lambda cur, rows: captured.extend(rows),
+    )
+    # KR fetcher가 호출되면 안 됨
+    monkeypatch.setattr(
+        "analyzer.fundamentals_sync.fetch_kr_fundamental",
+        lambda *a, **kw: pytest.fail("KR fetcher should NOT be called for US market"),
+    )
+    from analyzer.fundamentals_sync import sync_market_fundamentals
+    n = sync_market_fundamentals(MagicMock(), "NASDAQ", ["AAPL", "MSFT"], _date(2026, 4, 25))
+    assert n == 2
+    assert all(r["data_source"] == "yfinance_info" for r in captured)
