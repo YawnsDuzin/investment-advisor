@@ -69,6 +69,11 @@
 .sector-chevron { color: var(--text-muted); font-size: 14px; transition: transform .2s; }
 .sector-card[open] .sector-chevron { transform: rotate(180deg); }
 .sector-card-body { padding: 0 16px 14px; }
+.us-block { padding-top: 6px; }
+.kr-block { margin-top: 14px; padding-top: 12px; border-top: 1px dashed rgba(255,255,255,0.06); }
+.kr-block-empty { color: var(--text-muted); font-size: 13px; }
+.us-block-title, .kr-block-title { font-size: 12.5px; color: var(--text-muted);
+                                    margin-bottom: 8px; font-weight: 600; letter-spacing: .03em; }
 .brief-morning {
     background: var(--bg-elevated);
     border-left: 3px solid var(--accent);
@@ -246,7 +251,62 @@
             </summary>
 
             <div class="sector-card-body">
-                {# Task 4 에서 본문 채움 (US movers + KR picks) — 임시 자리표시 #}
+                {# US block — movers + catalyst #}
+                <div class="us-block">
+                    <div class="us-block-title">🇺🇸 US Movers</div>
+                    <div class="movers-row">
+                        {% for m in g.get('top_movers', []) %}
+                            {% set info = name_map.d.get(m.ticker, {}) %}
+                            {% set fullname = info.asset_name or m.ticker %}
+                            {% set mkt = info.market or '' %}
+                            <a class="mover-pill"
+                               href="/pages/stocks/{{ m.ticker }}{% if mkt %}?market={{ mkt }}{% endif %}"
+                               title="{{ fullname }}{% if mkt %} · {{ mkt }}{% endif %}">
+                                <strong>{{ m.ticker }}</strong>
+                                <span class="{{ 'mover-pos' if (m.change_pct or 0) >= 0 else 'mover-neg' }}">
+                                    {{ '%+.2f' % (m.change_pct or 0) }}%
+                                </span>
+                            </a>
+                        {% endfor %}
+                    </div>
+                    {% if g.catalyst %}
+                    <div class="brief-catalyst">📌 {{ g.catalyst }}</div>
+                    {% endif %}
+                </div>
+
+                {# KR block #}
+                {% if has_kr %}
+                <div class="kr-block">
+                    <div class="kr-block-title">🇰🇷 KR Picks ({{ kr_grp.korean_picks | length }}종목)</div>
+                    {% for p in kr_grp.korean_picks %}
+                    <div class="kr-pick">
+                        <div>
+                            <div class="kr-pick-name">{{ p.asset_name }}</div>
+                            <div class="kr-pick-ticker">{{ p.ticker }} · {{ p.market }}</div>
+                        </div>
+                        <div class="kr-pick-rationale">{{ p.rationale }}</div>
+                        {% if p.expected_open_change_pct %}
+                        <div class="kr-pick-gap {% if '-' in p.expected_open_change_pct %}kr-pick-gap-loss{% endif %}">
+                            {{ p.expected_open_change_pct }}
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                    {% if kr_grp.catalysts_kr %}
+                    <div class="brief-catalyst" style="margin-top:10px;">📌 {{ kr_grp.catalysts_kr }}</div>
+                    {% endif %}
+                    {% if kr_grp.related_etfs %}
+                    <div class="related-etfs">
+                        관련:
+                        {% for etf in kr_grp.related_etfs %}<span>{{ etf }}</span>{% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+                {% else %}
+                <div class="kr-block kr-block-empty">
+                    🇰🇷 한국 매칭 없음 · 영향 제한적
+                </div>
+                {% endif %}
             </div>
         </details>
     {% endfor %}

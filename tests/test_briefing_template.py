@@ -122,3 +122,28 @@ def test_sector_summary_shows_kr_no_match_when_kr_absent(env):
     summary = re.search(r'<summary[^>]*>(?P<inner>.*?)</summary>',
                         m.group("body"), re.DOTALL).group("inner")
     assert "KR 매칭 없음" in summary
+
+
+def test_sector_card_body_has_us_movers_and_kr_picks(env):
+    html = render(env, briefing=make_briefing())
+    m = find_sector_card(html, "반도체")
+    assert m
+    body = m.group("body")
+    # US movers
+    assert "INTC" in body and "+23.60%" in body
+    assert "ARM" in body and "+14.76%" in body
+    # catalyst
+    assert "INTC 단일 종목 +23.60% 급등" in body
+    # KR picks
+    assert "SK하이닉스" in body
+    assert "한미반도체" in body
+    assert "+2~4%" in body
+
+
+def test_us_only_sector_shows_no_kr_match_message(env):
+    html = render(env, briefing=make_briefing())
+    m = find_sector_card(html, "통신·케이블")
+    assert m
+    body = m.group("body")
+    assert "CHTR" in body and "-25.50%" in body
+    assert ("한국 매칭 없음" in body) or ("영향 제한적" in body)
