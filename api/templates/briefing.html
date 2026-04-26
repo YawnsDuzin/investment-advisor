@@ -13,6 +13,7 @@
 .brief-section h3 { font-size: 17px; margin: 0 0 12px; display: flex; align-items: center; gap: 8px; }
 .brief-section h3 .num { color: var(--text-muted); font-size: 14px; }
 
+/* deprecated v2 — .brief-hero 가 대체. 다른 곳 참조 없으면 후속 PR 에서 제거. */
 .brief-headline {
     background: linear-gradient(135deg, rgba(99, 102, 241, 0.08), rgba(34, 211, 238, 0.04));
     border: 1px solid rgba(99, 102, 241, 0.18);
@@ -21,6 +22,60 @@
     margin-bottom: 18px;
     line-height: 1.55;
 }
+.brief-hero {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.08), rgba(34, 211, 238, 0.04));
+    border: 1px solid rgba(99, 102, 241, 0.18);
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin-bottom: 18px;
+}
+.brief-hero-headline {
+    font-size: 15.5px;
+    line-height: 1.5;
+    color: var(--text);
+}
+.brief-hero-body {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px dashed rgba(255, 255, 255, 0.08);
+    font-size: 14px;
+    line-height: 1.65;
+    color: var(--text);
+}
+
+.sector-card {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 12px;
+    background: var(--bg-card, var(--bg-elevated));
+    overflow: hidden;
+}
+.sector-card > summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 12px 16px;
+}
+.sector-card > summary::-webkit-details-marker { display: none; }
+.sector-summary {
+    display: flex; align-items: center; flex-wrap: wrap; gap: 10px;
+}
+.sector-icon { font-size: 18px; }
+.sector-label { font-weight: 600; font-size: 15px; flex: 1 1 auto; }
+.sector-mean { font-size: 13px; padding: 2px 8px; border-radius: 6px;
+               background: var(--bg); border: 1px solid var(--border); }
+.sector-mean.up { color: #2ecc71; }
+.sector-mean.dn { color: #e74c3c; }
+.strength-none { background: rgba(255, 255, 255, 0.04); color: #6b7280;
+                 padding: 3px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; }
+.sector-chevron { color: var(--text-muted); font-size: 14px; transition: transform .2s; }
+.sector-card[open] .sector-chevron { transform: rotate(180deg); }
+.sector-card-body { padding: 0 16px 14px; }
+.us-block { padding-top: 6px; }
+.kr-block { margin-top: 14px; padding-top: 12px; border-top: 1px dashed rgba(255,255,255,0.06); }
+.kr-block-empty { color: var(--text-muted); font-size: 13px; }
+.us-block-title, .kr-block-title { font-size: 12.5px; color: var(--text-muted);
+                                    margin-bottom: 8px; font-weight: 600; letter-spacing: .03em; }
+/* deprecated v2 — .brief-hero-body 가 대체. */
 .brief-morning {
     background: var(--bg-elevated);
     border-left: 3px solid var(--accent);
@@ -31,6 +86,7 @@
     font-size: 14.5px;
 }
 
+/* deprecated v2 — .sector-card 가 대체. */
 .us-group, .kr-group {
     border: 1px solid var(--border);
     border-radius: 10px;
@@ -46,7 +102,17 @@
 .us-group-title .icon, .kr-group-title .icon { font-size: 18px; }
 
 .movers-row { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; }
-.mover-pill { display: inline-flex; gap: 4px; align-items: center; padding: 2px 8px; background: var(--bg); border: 1px solid var(--border); border-radius: 14px; }
+.mover-pill {
+    display: inline-flex; gap: 4px; align-items: center;
+    padding: 2px 8px; background: var(--bg);
+    border: 1px solid var(--border); border-radius: 14px;
+    text-decoration: none; color: inherit;
+    transition: background .15s, border-color .15s;
+}
+.mover-pill:hover {
+    background: var(--bg-elevated);
+    border-color: var(--accent);
+}
 .mover-pos { color: #2ecc71; font-weight: 600; }
 .mover-neg { color: #e74c3c; font-weight: 600; }
 .brief-catalyst { color: var(--text-muted); font-size: 13px; margin-top: 6px; line-height: 1.55; }
@@ -86,6 +152,11 @@
 @media (max-width: 768px) {
     .kr-pick { grid-template-columns: 1fr; gap: 4px; }
     .kr-pick-gap { justify-self: start; }
+
+    .sector-summary { gap: 6px; }
+    .sector-label { flex: 1 1 100%; order: -1; }
+    .sector-mean, .strength-badge, .strength-none { font-size: 11.5px; padding: 2px 6px; }
+    .sector-chevron { margin-left: auto; }
 }
 </style>
 {% endblock %}
@@ -120,101 +191,193 @@
 {% set us = bd.get('us_summary', {}) or {} %}
 {% set kr = bd.get('kr_impact', []) or [] %}
 
-{% if us.get('headline') %}
-<div class="brief-headline">
-    <strong>📰 {{ us.headline }}</strong>
-</div>
+{# ── 매핑: sector_norm → kr_impact / sector_aggregates / ticker→asset_name ── #}
+{% set STRENGTH_LABEL = {
+    'gap_up_strong':   '갭 상승 강력',
+    'gap_up_likely':   '갭 상승 유력',
+    'upside_expected': '상승 기대',
+    'partial_benefit': '보조적 수혜',
+    'limited':         '영향 제한적',
+} %}
+
+{% set kr_map = namespace(d={}) %}
+{% for k in kr %}{% set _ = kr_map.d.update({k.sector_norm: k}) %}{% endfor %}
+
+{% set agg_map = namespace(d={}) %}
+{% for s in (briefing.us_summary or {}).get('sector_aggregates', []) %}
+    {% set _ = agg_map.d.update({s.sector_norm: s}) %}
+{% endfor %}
+
+{% set name_map = namespace(d={}) %}
+{% for r in (briefing.us_summary or {}).get('top_movers', []) %}
+    {% set _ = name_map.d.update({r.ticker: {'asset_name': r.asset_name, 'market': r.market}}) %}
+{% endfor %}
+{% for r in (briefing.us_summary or {}).get('top_losers', []) %}
+    {% set _ = name_map.d.update({r.ticker: {'asset_name': r.asset_name, 'market': r.market}}) %}
+{% endfor %}
+{% for s in (briefing.us_summary or {}).get('sector_aggregates', []) %}
+    {% for r in s.get('top_stocks', []) %}
+        {% set _ = name_map.d.update({r.ticker: {'asset_name': r.asset_name, 'market': r.market}}) %}
+    {% endfor %}
+{% endfor %}
+
+{% if us.get('headline') or bd.get('morning_brief') %}
+<section class="brief-hero">
+    {% if us.headline %}
+    <div class="brief-hero-headline">📰 <strong>{{ us.headline }}</strong></div>
+    {% endif %}
+    {% if bd.morning_brief %}
+    <div class="brief-hero-body">{{ bd.morning_brief }}</div>
+    {% endif %}
+</section>
 {% endif %}
 
-{# ── 1. 미국 시장 핵심 상승 섹터 ── #}
-{% if us.get('groups') %}
+{# ── ① 섹터별 흐름 (US ↔ KR 통합) ── #}
+{% if us.get('groups') or kr %}
 <div class="brief-section">
-    <h3><span class="num">①</span> 오늘 S&P500 핵심 상승 섹터 & 종목</h3>
+    <h3><span class="num">①</span> 섹터별 흐름 (US ↔ KR 통합)</h3>
+
     {% for g in us.get('groups', []) %}
-    <div class="us-group">
-        <div class="us-group-header">
-            <div class="us-group-title">
-                <span class="icon">{% if loop.index == 1 %}🔵{% elif loop.index == 2 %}⚡{% elif loop.index == 3 %}🍎{% elif loop.index == 4 %}💊{% else %}📈{% endif %}</span>
-                {{ g.label or g.sector_norm }}
-            </div>
-            <div class="movers-row">
-                {% for m in g.get('top_movers', []) %}
-                <span class="mover-pill">
-                    <strong>{{ m.ticker }}</strong>
-                    <span class="{% if m.change_pct and m.change_pct >= 0 %}mover-pos{% else %}mover-neg{% endif %}">
-                        {{ '%+.2f' % (m.change_pct or 0) }}%
+        {% set kr_grp = kr_map.d.get(g.sector_norm) %}
+        {% set agg = agg_map.d.get(g.sector_norm) %}
+        {% set has_kr = kr_grp and (kr_grp.korean_picks | length) > 0 %}
+        {% set icon = '🔵' if loop.index == 1 else
+                      '⚡' if loop.index == 2 else
+                      '🍎' if loop.index == 3 else
+                      '💊' if loop.index == 4 else '📈' %}
+
+        <details class="sector-card"{% if has_kr %} open{% endif %}>
+            <summary class="sector-summary">
+                <span class="sector-icon">{{ icon }}</span>
+                <span class="sector-label">{{ g.label or g.sector_norm }}</span>
+
+                {% if agg and agg.avg_change_pct is not none %}
+                    <span class="sector-mean {{ 'up' if agg.avg_change_pct >= 0 else 'dn' }}">
+                        평균 {{ '%+.2f' % agg.avg_change_pct }}%
                     </span>
+                {% endif %}
+
+                {% if kr_grp and kr_grp.strength %}
+                    <span class="strength-badge strength-{{ kr_grp.strength }}">
+                        {{ STRENGTH_LABEL.get(kr_grp.strength, kr_grp.strength) }}
+                    </span>
+                {% else %}
+                    <span class="strength-badge strength-none">KR 매칭 없음</span>
+                {% endif %}
+
+                <span class="sector-chevron" aria-hidden="true">▾</span>
+            </summary>
+
+            <div class="sector-card-body">
+                {# US block — movers + catalyst #}
+                <div class="us-block">
+                    <div class="us-block-title">🇺🇸 US Movers</div>
+                    <div class="movers-row">
+                        {% for m in g.get('top_movers', []) %}
+                            {% set info = name_map.d.get(m.ticker, {}) %}
+                            {% set fullname = info.asset_name or m.ticker %}
+                            {% set mkt = info.market or '' %}
+                            <a class="mover-pill"
+                               href="/pages/stocks/{{ m.ticker }}{% if mkt %}?market={{ mkt }}{% endif %}"
+                               title="{{ fullname }}{% if mkt %} · {{ mkt }}{% endif %}">
+                                <strong>{{ m.ticker }}</strong>
+                                <span class="{{ 'mover-pos' if (m.change_pct or 0) >= 0 else 'mover-neg' }}">
+                                    {{ '%+.2f' % (m.change_pct or 0) }}%
+                                </span>
+                            </a>
+                        {% endfor %}
+                    </div>
+                    {% if g.catalyst %}
+                    <div class="brief-catalyst">📌 {{ g.catalyst }}</div>
+                    {% endif %}
+                </div>
+
+                {# KR block #}
+                {% if has_kr %}
+                <div class="kr-block">
+                    <div class="kr-block-title">🇰🇷 KR Picks ({{ kr_grp.korean_picks | length }}종목)</div>
+                    {% for p in kr_grp.korean_picks %}
+                    <div class="kr-pick">
+                        <div>
+                            <div class="kr-pick-name">{{ p.asset_name }}</div>
+                            <div class="kr-pick-ticker">{{ p.ticker }} · {{ p.market }}</div>
+                        </div>
+                        <div class="kr-pick-rationale">{{ p.rationale }}</div>
+                        {% if p.expected_open_change_pct %}
+                        <div class="kr-pick-gap {% if '-' in p.expected_open_change_pct %}kr-pick-gap-loss{% endif %}">
+                            {{ p.expected_open_change_pct }}
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                    {% if kr_grp.catalysts_kr %}
+                    <div class="brief-catalyst" style="margin-top:10px;">📌 {{ kr_grp.catalysts_kr }}</div>
+                    {% endif %}
+                    {% if kr_grp.related_etfs %}
+                    <div class="related-etfs">
+                        관련:
+                        {% for etf in kr_grp.related_etfs %}<span>{{ etf }}</span>{% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+                {% else %}
+                <div class="kr-block kr-block-empty">
+                    🇰🇷 한국 매칭 없음 · 영향 제한적
+                </div>
+                {% endif %}
+            </div>
+        </details>
+    {% endfor %}
+
+    {# KR-only — US groups 에 없는 sector_norm #}
+    {% set us_keys = us.get('groups', []) | map(attribute='sector_norm') | list %}
+    {% for k in kr if k.sector_norm not in us_keys %}
+        {% set has_kr = (k.korean_picks | length) > 0 %}
+        <details class="sector-card sector-card-kr-only"{% if has_kr %} open{% endif %}>
+            <summary class="sector-summary">
+                <span class="sector-icon">🇰🇷</span>
+                <span class="sector-label">{{ k.label or k.sector_norm }}</span>
+                {% if k.strength %}
+                <span class="strength-badge strength-{{ k.strength }}">
+                    {{ STRENGTH_LABEL.get(k.strength, k.strength) }}
                 </span>
-                {% endfor %}
+                {% endif %}
+                <span class="sector-chevron" aria-hidden="true">▾</span>
+            </summary>
+            <div class="sector-card-body">
+                <div class="kr-block">
+                    <div class="kr-block-title">🇰🇷 KR Picks ({{ k.korean_picks | length }}종목) · US 직접 매칭 없음</div>
+                    {% for p in k.korean_picks %}
+                    <div class="kr-pick">
+                        <div>
+                            <div class="kr-pick-name">{{ p.asset_name }}</div>
+                            <div class="kr-pick-ticker">{{ p.ticker }} · {{ p.market }}</div>
+                        </div>
+                        <div class="kr-pick-rationale">{{ p.rationale }}</div>
+                        {% if p.expected_open_change_pct %}
+                        <div class="kr-pick-gap {% if '-' in p.expected_open_change_pct %}kr-pick-gap-loss{% endif %}">
+                            {{ p.expected_open_change_pct }}
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                    {% if k.catalysts_kr %}
+                    <div class="brief-catalyst" style="margin-top:10px;">📌 {{ k.catalysts_kr }}</div>
+                    {% endif %}
+                    {% if k.related_etfs %}
+                    <div class="related-etfs">
+                        관련:
+                        {% for etf in k.related_etfs %}<span>{{ etf }}</span>{% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
             </div>
-        </div>
-        {% if g.catalyst %}
-        <div class="brief-catalyst">{{ g.catalyst }}</div>
-        {% endif %}
-    </div>
+        </details>
     {% endfor %}
 </div>
 {% endif %}
 
-{# ── 2. 한국 시장 수혜 시나리오 ── #}
-{% if kr %}
-<div class="brief-section">
-    <h3><span class="num">②</span> 코스피 / 코스닥 섹터별 수혜 시나리오</h3>
-    {% for grp in kr %}
-    <div class="kr-group">
-        <div class="kr-group-header">
-            <div class="kr-group-title">{{ grp.label or grp.sector_norm }}</div>
-            {% if grp.strength %}
-            <span class="strength-badge strength-{{ grp.strength }}">
-                {% if grp.strength == 'gap_up_strong' %}갭 상승 강력
-                {% elif grp.strength == 'gap_up_likely' %}갭 상승 유력
-                {% elif grp.strength == 'upside_expected' %}상승 기대
-                {% elif grp.strength == 'partial_benefit' %}보조적 수혜
-                {% elif grp.strength == 'limited' %}영향 제한적
-                {% else %}{{ grp.strength }}{% endif %}
-            </span>
-            {% endif %}
-        </div>
-
-        {% for p in grp.get('korean_picks', []) %}
-        <div class="kr-pick">
-            <div>
-                <div class="kr-pick-name">{{ p.asset_name }}</div>
-                <div class="kr-pick-ticker">{{ p.ticker }} · {{ p.market }}</div>
-            </div>
-            <div class="kr-pick-rationale">{{ p.rationale }}</div>
-            {% if p.expected_open_change_pct %}
-            <div class="kr-pick-gap {% if '-' in p.expected_open_change_pct %}kr-pick-gap-loss{% endif %}">
-                {{ p.expected_open_change_pct }}
-            </div>
-            {% endif %}
-        </div>
-        {% endfor %}
-
-        {% if grp.catalysts_kr %}
-        <div class="brief-catalyst" style="margin-top:10px;">📌 {{ grp.catalysts_kr }}</div>
-        {% endif %}
-
-        {% if grp.related_etfs %}
-        <div class="related-etfs">
-            관련:
-            {% for etf in grp.related_etfs %}<span>{{ etf }}</span>{% endfor %}
-        </div>
-        {% endif %}
-    </div>
-    {% endfor %}
-</div>
-{% endif %}
-
-{# ── 3. 모닝 브리핑 코멘트 ── #}
-{% if bd.get('morning_brief') %}
-<div class="brief-section">
-    <h3><span class="num">③</span> 모닝 코멘트</h3>
-    <div class="brief-morning">{{ bd.morning_brief }}</div>
-</div>
-{% endif %}
-
-{# ── 4. 시장 레짐 (옵션, 디버깅용) ── #}
+{# ── 3. 시장 레짐 (옵션, 디버깅용) ── #}
 {% if briefing.regime_snapshot and briefing.regime_snapshot.get('indices') %}
 <div class="brief-section">
     <h3 style="font-size:14px;color:var(--text-muted);">참고: 시장 레짐</h3>
