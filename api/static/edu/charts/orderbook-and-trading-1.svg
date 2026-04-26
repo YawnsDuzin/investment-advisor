@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" font-family="system-ui, -apple-system, sans-serif">
+  <rect width="800" height="450" fill="#0f1419"/>
+
+  <!-- 제목 -->
+  <text x="400" y="30" font-size="18" font-weight="bold" fill="#e2e8f0" text-anchor="middle">호가창 구조 — 매도호가 / 현재가 / 매수호가</text>
+  <!-- 부제 -->
+  <text x="400" y="50" font-size="12" fill="#94a3b8" text-anchor="middle">예시: 삼성전자 70,000원대</text>
+
+  <!-- 헤더 라벨 -->
+  <text x="290" y="70" font-size="12" font-weight="bold" fill="#ef4444" text-anchor="end">매도호가</text>
+  <text x="510" y="70" font-size="12" fill="#94a3b8" text-anchor="start">수량</text>
+
+  <!-- 매도호가 5개 (위→아래: 70500→70100, 더 높은 가격이 위) -->
+  <!-- 행1: 70,500 -->
+  <rect x="300" y="80" width="200" height="25" fill="#ef4444" opacity="0.9" rx="3"/>
+  <text x="290" y="98" font-size="13" fill="#e2e8f0" text-anchor="end">70,500</text>
+  <text x="510" y="98" font-size="13" fill="#94a3b8" text-anchor="start">5,000주</text>
+
+  <!-- 행2: 70,400 -->
+  <rect x="300" y="105" width="200" height="25" fill="#ef4444" opacity="0.8" rx="3"/>
+  <text x="290" y="123" font-size="13" fill="#e2e8f0" text-anchor="end">70,400</text>
+  <text x="510" y="123" font-size="13" fill="#94a3b8" text-anchor="start">12,000주</text>
+
+  <!-- 행3: 70,300 -->
+  <rect x="300" y="130" width="200" height="25" fill="#ef4444" opacity="0.7" rx="3"/>
+  <text x="290" y="148" font-size="13" fill="#e2e8f0" text-anchor="end">70,300</text>
+  <text x="510" y="148" font-size="13" fill="#94a3b8" text-anchor="start">8,500주</text>
+
+  <!-- 행4: 70,200 -->
+  <rect x="300" y="155" width="200" height="25" fill="#ef4444" opacity="0.6" rx="3"/>
+  <text x="290" y="173" font-size="13" fill="#e2e8f0" text-anchor="end">70,200</text>
+  <text x="510" y="173" font-size="13" fill="#94a3b8" text-anchor="start">22,000주</text>
+
+  <!-- 행5: 70,100 -->
+  <rect x="300" y="180" width="200" height="25" fill="#ef4444" opacity="0.5" rx="3"/>
+  <text x="290" y="198" font-size="13" fill="#e2e8f0" text-anchor="end">70,100</text>
+  <text x="510" y="198" font-size="13" fill="#94a3b8" text-anchor="start">6,000주</text>
+
+  <!-- 현재가 -->
+  <rect x="300" y="215" width="200" height="30" fill="#f59e0b" stroke="#e2e8f0" stroke-width="2" rx="3"/>
+  <text x="400" y="235" font-size="14" font-weight="bold" fill="#0f1419" text-anchor="middle">70,000원 (현재가)</text>
+
+  <!-- 매수호가 5개 -->
+  <!-- 행1: 69,900 -->
+  <rect x="300" y="255" width="200" height="25" fill="#4ade80" opacity="0.9" rx="3"/>
+  <text x="290" y="273" font-size="13" fill="#e2e8f0" text-anchor="end">69,900</text>
+  <text x="510" y="273" font-size="13" fill="#94a3b8" text-anchor="start">18,000주</text>
+
+  <!-- 행2: 69,800 -->
+  <rect x="300" y="280" width="200" height="25" fill="#4ade80" opacity="0.8" rx="3"/>
+  <text x="290" y="298" font-size="13" fill="#e2e8f0" text-anchor="end">69,800</text>
+  <text x="510" y="298" font-size="13" fill="#94a3b8" text-anchor="start">7,500주</text>
+
+  <!-- 행3: 69,700 -->
+  <rect x="300" y="305" width="200" height="25" fill="#4ade80" opacity="0.7" rx="3"/>
+  <text x="290" y="323" font-size="13" fill="#e2e8f0" text-anchor="end">69,700</text>
+  <text x="510" y="323" font-size="13" fill="#94a3b8" text-anchor="start">25,000주</text>
+
+  <!-- 행4: 69,600 -->
+  <rect x="300" y="330" width="200" height="25" fill="#4ade80" opacity="0.6" rx="3"/>
+  <text x="290" y="348" font-size="13" fill="#e2e8f0" text-anchor="end">69,600</text>
+  <text x="510" y="348" font-size="13" fill="#94a3b8" text-anchor="start">9,000주</text>
+
+  <!-- 행5: 69,500 -->
+  <rect x="300" y="355" width="200" height="25" fill="#4ade80" opacity="0.5" rx="3"/>
+  <text x="290" y="373" font-size="13" fill="#e2e8f0" text-anchor="end">69,500</text>
+  <text x="510" y="373" font-size="13" fill="#94a3b8" text-anchor="start">14,000주</text>
+
+  <!-- 매수호가 헤더 라벨 -->
+  <text x="290" y="395" font-size="12" font-weight="bold" fill="#4ade80" text-anchor="end">매수호가</text>
+
+  <!-- 캡션 -->
+  <text x="400" y="432" font-size="11" fill="#94a3b8" text-anchor="middle">*매도호가↓ vs 매수호가↑가 만나면 체결 — 시장 호가가 가장 적극적*</text>
+</svg>
