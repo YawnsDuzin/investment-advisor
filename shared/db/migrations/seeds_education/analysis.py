@@ -134,7 +134,11 @@ TOPICS: list[dict] = [
 
 이 신호는 오직 외국인 **연속 매수/매도 일수**만으로 판정됩니다. 거래량·금액 조건은 별도로 보지 않으므로, `strong_buy` 신호라도 거래량이 적으면 추가 검증이 필요합니다.
 
-`foreign_ownership_pct`(외국인 보유비율)와 `index_membership`(지수 편입 여부)을 함께 확인하면 외국인 수급의 지속성을 예측하는 데 도움이 됩니다. `foreign_net_buy_signal`이 `strong_buy`이면서 `index_membership`이 KOSPI200인 종목은 특히 주목할 가치가 있습니다.""",
+`foreign_ownership_pct`(외국인 보유비율)와 `index_membership`(지수 편입 여부)을 함께 확인하면 외국인 수급의 지속성을 예측하는 데 도움이 됩니다. `foreign_net_buy_signal`이 `strong_buy`이면서 `index_membership`이 KOSPI200인 종목은 특히 주목할 가치가 있습니다.
+
+![차트: 외국인 누적 순매수 + 코스피 (2023~2024)](/static/edu/charts/foreign-institutional-flow-1.svg)
+
+*외국인 순매수 누적은 코스피의 선행 지표*""",
         "examples": json.dumps([
             {
                 "title": "삼성전자 외국인 연속 순매수와 추세 전환 (2023 하반기)",
@@ -183,7 +187,11 @@ TOPICS: list[dict] = [
 
 ## 이 앱에서 활용
 
-이 앱의 제안 카드에는 `squeeze_risk` 필드가 표시됩니다. 값은 `high`, `medium`, `low` 세 단계입니다. `squeeze_risk`는 공매도 잔고 비율(`short_balance_ratio_pct`)과 5일간 잔고 변화(`short_balance_change_5d_pct`)만으로 산출됩니다. 외국인 보유비율(`foreign_ownership_pct`)은 별개의 보조 지표로 함께 참고하면 좋습니다. `squeeze_risk`가 `high`인 종목은 **양날의 검**입니다. 스퀴즈 발생 시 단기 급등이 가능하지만, 스퀴즈 불발 시 공매도 세력의 하방 압력이 지속될 수 있습니다. 숏스퀴즈를 노린 단기 투기보다는 **근본 펀더멘털이 좋은 종목에서 `squeeze_risk` 해소를 상승 촉매로 보는 시각**이 안전합니다.""",
+이 앱의 제안 카드에는 `squeeze_risk` 필드가 표시됩니다. 값은 `high`, `medium`, `low` 세 단계입니다. `squeeze_risk`는 공매도 잔고 비율(`short_balance_ratio_pct`)과 5일간 잔고 변화(`short_balance_change_5d_pct`)만으로 산출됩니다. 외국인 보유비율(`foreign_ownership_pct`)은 별개의 보조 지표로 함께 참고하면 좋습니다. `squeeze_risk`가 `high`인 종목은 **양날의 검**입니다. 스퀴즈 발생 시 단기 급등이 가능하지만, 스퀴즈 불발 시 공매도 세력의 하방 압력이 지속될 수 있습니다. 숏스퀴즈를 노린 단기 투기보다는 **근본 펀더멘털이 좋은 종목에서 `squeeze_risk` 해소를 상승 촉매로 보는 시각**이 안전합니다.
+
+![차트: GameStop 2021.01 — 가격 + 공매도 잔고 시계열](/static/edu/charts/short-selling-squeeze-1.svg)
+
+*공매도 잔고 100%+ 종목은 단기 폭등 후 폭락 — 양면의 칼*""",
         "examples": json.dumps([
             {
                 "title": "GameStop 숏스퀴즈 사태 (2021년 1월)",
