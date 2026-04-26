@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" font-family="system-ui, -apple-system, sans-serif">
+  <rect width="800" height="450" fill="#0f1419"/>
+
+  <!-- 제목 영역 -->
+  <text x="400" y="30" text-anchor="middle" font-size="18" fill="#e2e8f0" font-weight="bold">볼린저밴드 스퀴즈 후 변동성 폭발</text>
+  <text x="400" y="50" text-anchor="middle" font-size="12" fill="#94a3b8">20일 이동평균 ± 2σ 채널</text>
+
+  <!-- 차트 배경 -->
+  <rect x="60" y="70" width="680" height="320" fill="#1a1f2e" rx="4"/>
+
+  <!-- Y축 범위: 50~150, 차트 y=70~390(h=320) -->
+  <!-- y = 390 - (price - 50) * 320 / 100 -->
+  <!-- 50→390, 75→310, 100→230, 125→150, 150→70 -->
+
+  <!-- 그리드 라인 -->
+  <line x1="60" y1="150" x2="740" y2="150" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <line x1="60" y1="230" x2="740" y2="230" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <line x1="60" y1="310" x2="740" y2="310" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+
+  <!-- Y축 라벨 -->
+  <text x="52" y="153" text-anchor="end" font-size="10" fill="#94a3b8">125</text>
+  <text x="52" y="233" text-anchor="end" font-size="10" fill="#94a3b8">100</text>
+  <text x="52" y="313" text-anchor="end" font-size="10" fill="#94a3b8">75</text>
+  <text x="52" y="393" text-anchor="end" font-size="10" fill="#94a3b8">50</text>
+  <text x="20" y="240" text-anchor="middle" font-size="11" fill="#94a3b8" transform="rotate(-90, 20, 240)">가격</text>
+
+  <!-- X 데이터: 12포인트, x간격 62px: 60,122,184,246,308,370,432,494,556,618,680,742 -->
+  <!-- 가격: [80,82,81,83,80,82,81,83,90,105,120,130] -->
+  <!-- y = 390 - (price-50)*320/100 -->
+  <!-- 80→262, 82→256, 81→259, 83→253, 80→262, 82→256, 81→259, 83→253, 90→230, 105→182, 120→134, 130→102 -->
+
+  <!-- 볼린저밴드 upper: [85,86,85,86,85,86,87,92,102,118,135,150] -->
+  <!-- y: 85→230-nope... y=390-(u-50)*320/100 -->
+  <!-- 85→246, 86→243, 85→246, 86→243, 85→246, 86→243, 87→240, 92→224, 102→192, 118→141, 135→86, 150→70 -->
+
+  <!-- 볼린저밴드 lower: [75,78,77,80,75,78,75,74,78,92,105,110] -->
+  <!-- y: 75→310, 78→300, 77→303, 80→294, 75→310, 78→300, 75→310, 74→313, 78→300, 92→224, 105→182, 110→166 -->
+
+  <!-- 밴드 영역 fill (path, upper 순방향 + lower 역방향) -->
+  <path d="M60,246 L122,243 L184,246 L246,243 L308,246 L370,243 L432,240 L494,224 L556,192 L618,141 L680,86 L742,70
+           L742,166 L680,182 L618,224 L556,300 L494,313 L432,310 L370,300 L308,310 L246,294 L184,303 L122,300 L60,310 Z"
+        fill="#60a5fa" opacity="0.15"/>
+
+  <!-- 볼린저밴드 상단 라인 -->
+  <polyline points="60,246 122,243 184,246 246,243 308,246 370,243 432,240 494,224 556,192 618,141 680,86 742,70"
+            fill="none" stroke="#60a5fa" stroke-width="1.5" opacity="0.7" stroke-linejoin="round"/>
+
+  <!-- 볼린저밴드 하단 라인 -->
+  <polyline points="60,310 122,300 184,303 246,294 308,310 370,300 432,310 494,313 556,300 618,224 680,182 742,166"
+            fill="none" stroke="#60a5fa" stroke-width="1.5" opacity="0.7" stroke-linejoin="round"/>
+
+  <!-- 가격 라인 (흰색) -->
+  <polyline points="60,262 122,256 184,259 246,253 308,262 370,256 432,259 494,253 556,230 618,182 680,134 742,102"
+            fill="none" stroke="#e2e8f0" stroke-width="2" stroke-linejoin="round"/>
+
+  <!-- 가격 데이터 포인트 -->
+  <circle cx="60" cy="262" r="3" fill="#e2e8f0"/>
+  <circle cx="122" cy="256" r="3" fill="#e2e8f0"/>
+  <circle cx="184" cy="259" r="3" fill="#e2e8f0"/>
+  <circle cx="246" cy="253" r="3" fill="#e2e8f0"/>
+  <circle cx="308" cy="262" r="3" fill="#e2e8f0"/>
+  <circle cx="370" cy="256" r="3" fill="#e2e8f0"/>
+  <circle cx="432" cy="259" r="3" fill="#e2e8f0"/>
+  <circle cx="494" cy="253" r="3" fill="#e2e8f0"/>
+  <circle cx="556" cy="230" r="3" fill="#4ade80"/>
+  <circle cx="618" cy="182" r="3" fill="#4ade80"/>
+  <circle cx="680" cy="134" r="3" fill="#4ade80"/>
+  <circle cx="742" cy="102" r="3" fill="#4ade80"/>
+
+  <!-- 스퀴즈 구간 구분선 (x=494 근처) -->
+  <line x1="494" y1="70" x2="494" y2="390" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="6,3" opacity="0.8"/>
+
+  <!-- 스퀴즈 라벨 (좌측) -->
+  <text x="160" y="92" text-anchor="middle" font-size="13" fill="#94a3b8" font-weight="bold">스퀴즈</text>
+  <text x="160" y="108" text-anchor="middle" font-size="10" fill="#94a3b8">밴드폭 수축</text>
+
+  <!-- 폭발 라벨 (우측) -->
+  <text x="620" y="92" text-anchor="middle" font-size="13" fill="#4ade80" font-weight="bold">폭발</text>
+  <text x="620" y="108" text-anchor="middle" font-size="10" fill="#4ade80">변동성 확장</text>
+
+  <!-- 돌파 화살표 (x=494~556 구간) -->
+  <line x1="494" y1="210" x2="494" y2="175" stroke="#f59e0b" stroke-width="2" marker-end="url(#arrow)"/>
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#f59e0b"/>
+    </marker>
+  </defs>
+  <text x="499" y="170" font-size="11" fill="#f59e0b" font-weight="bold">돌파</text>
+
+  <!-- X축 -->
+  <line x1="60" y1="390" x2="740" y2="390" stroke="#2d3748" stroke-width="1"/>
+  <text x="60" y="408" text-anchor="middle" font-size="10" fill="#94a3b8">2023.01</text>
+  <text x="246" y="408" text-anchor="middle" font-size="10" fill="#94a3b8">02</text>
+  <text x="432" y="408" text-anchor="middle" font-size="10" fill="#94a3b8">03</text>
+  <text x="618" y="408" text-anchor="middle" font-size="10" fill="#94a3b8">04</text>
+  <text x="742" y="408" text-anchor="middle" font-size="10" fill="#94a3b8">05</text>
+
+  <!-- 범례 -->
+  <rect x="65" y="415" width="12" height="3" fill="#e2e8f0" rx="1"/>
+  <text x="82" y="422" font-size="10" fill="#e2e8f0">가격</text>
+  <rect x="115" y="415" width="12" height="3" fill="#60a5fa" rx="1"/>
+  <text x="132" y="422" font-size="10" fill="#60a5fa">볼린저밴드</text>
+
+  <!-- 캡션 -->
+  <text x="400" y="440" text-anchor="middle" font-size="11" fill="#94a3b8">예시 — 에코프로 2023.04 패턴 (실제 +280% 상승)</text>
+</svg>
