@@ -27,6 +27,7 @@ _EDU_CATEGORIES = {
     "macro": "매크로 경제",
     "practical": "실전 활용",
     "stories": "투자 이야기",
+    "tools": "도구·시스템 가이드",
 }
 
 

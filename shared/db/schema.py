@@ -9,7 +9,7 @@ from shared.db.migrations import run_migrations
 
 
 # ── 스키마 버전 관리 ──────────────────────────────
-SCHEMA_VERSION = 34  # v34: pre_market_briefings — 프리마켓 브리핑 결과 영속화
+SCHEMA_VERSION = 35  # v35: education Tier A·B 14 토픽 + tools 카테고리 신설
 
 
 def _create_base_schema(cur) -> None:
