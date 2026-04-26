@@ -178,3 +178,20 @@ def test_mover_pill_falls_back_to_ticker_when_no_name_map_hit(env):
     assert pill
     assert pill.group(1) == "/pages/stocks/ZZZZ"
     assert pill.group(2).startswith("ZZZZ")
+
+
+def test_kr_only_sector_renders_after_us_groups(env):
+    """US groups 에 없는 sector_norm 의 kr_impact 도 표시되어야 함."""
+    bd = make_briefing(with_kr_only_extra=True)
+    html = render(env, briefing=bd)
+    assert "HD한국조선해양" in html
+    assert "조선" in html
+
+
+def test_kr_only_sector_card_is_open_by_default(env):
+    """KR-only 카드는 KR picks 가 정의상 ≥1 이므로 기본 펼침."""
+    bd = make_briefing(with_kr_only_extra=True)
+    html = render(env, briefing=bd)
+    m = find_sector_card(html, "조선")
+    assert m, "KR-only sector card not found"
+    assert "open" in m.group("attrs")

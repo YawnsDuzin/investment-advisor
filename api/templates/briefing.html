@@ -320,6 +320,52 @@
             </div>
         </details>
     {% endfor %}
+
+    {# KR-only — US groups 에 없는 sector_norm #}
+    {% set us_keys = us.get('groups', []) | map(attribute='sector_norm') | list %}
+    {% for k in kr if k.sector_norm not in us_keys %}
+        {% set has_kr = (k.korean_picks | length) > 0 %}
+        <details class="sector-card sector-card-kr-only"{% if has_kr %} open{% endif %}>
+            <summary class="sector-summary">
+                <span class="sector-icon">🇰🇷</span>
+                <span class="sector-label">{{ k.label or k.sector_norm }}</span>
+                {% if k.strength %}
+                <span class="strength-badge strength-{{ k.strength }}">
+                    {{ STRENGTH_LABEL.get(k.strength, k.strength) }}
+                </span>
+                {% endif %}
+                <span class="sector-chevron" aria-hidden="true">▾</span>
+            </summary>
+            <div class="sector-card-body">
+                <div class="kr-block">
+                    <div class="kr-block-title">🇰🇷 KR Picks ({{ k.korean_picks | length }}종목) · US 직접 매칭 없음</div>
+                    {% for p in k.korean_picks %}
+                    <div class="kr-pick">
+                        <div>
+                            <div class="kr-pick-name">{{ p.asset_name }}</div>
+                            <div class="kr-pick-ticker">{{ p.ticker }} · {{ p.market }}</div>
+                        </div>
+                        <div class="kr-pick-rationale">{{ p.rationale }}</div>
+                        {% if p.expected_open_change_pct %}
+                        <div class="kr-pick-gap {% if '-' in p.expected_open_change_pct %}kr-pick-gap-loss{% endif %}">
+                            {{ p.expected_open_change_pct }}
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                    {% if k.catalysts_kr %}
+                    <div class="brief-catalyst" style="margin-top:10px;">📌 {{ k.catalysts_kr }}</div>
+                    {% endif %}
+                    {% if k.related_etfs %}
+                    <div class="related-etfs">
+                        관련:
+                        {% for etf in k.related_etfs %}<span>{{ etf }}</span>{% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </details>
+    {% endfor %}
 </div>
 {% endif %}
 
