@@ -1453,6 +1453,40 @@ def _migrate_to_v37(cur) -> None:
     print(f"[DB] v37: Phase 2 시각화 토픽 content 갱신 {affected}건 (대상 8건)")
 
 
+def _migrate_to_v38(cur) -> None:
+    """Education Phase 2C 시각화 — basics 7 토픽 markdown content 갱신.
+
+    v36 (Phase 1) / v37 (Phase 2) 와 동일한 UPDATE 패턴.
+    멱등성: WHERE content IS DISTINCT FROM 가드.
+    """
+    from shared.db.migrations.seeds_education import ALL_TOPICS
+
+    phase2c_slugs = {
+        "market-cap", "financial-statements", "eps-fcf-ebitda",
+        "orderbook-and-trading", "tax-and-accounts",
+        "ipo-subscription", "rights-bonus-split",
+    }
+
+    affected = 0
+    for t in ALL_TOPICS:
+        if t["slug"] not in phase2c_slugs:
+            continue
+        cur.execute(
+            """UPDATE education_topics
+               SET content = %s
+               WHERE slug = %s
+                 AND content IS DISTINCT FROM %s""",
+            (t["content"], t["slug"], t["content"]),
+        )
+        affected += cur.rowcount
+
+    cur.execute("""
+        INSERT INTO schema_version (version) VALUES (38)
+        ON CONFLICT (version) DO NOTHING;
+    """)
+    print(f"[DB] v38: Phase 2C basics 시각화 토픽 content 갱신 {affected}건 (대상 7건)")
+
+
 def _migrate_to_v33(cur) -> None:
     """v33: screener_presets — 사용자 커스텀 스크리너 프리셋 저장 (로드맵 UI-6).
 

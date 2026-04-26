@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" font-family="system-ui, -apple-system, sans-serif">
+  <rect width="800" height="450" fill="#0f1419"/>
+
+  <!-- 제목 -->
+  <text x="400" y="30" font-size="18" font-weight="bold" fill="#e2e8f0" text-anchor="middle">유상증자 / 무상증자 / 액면분할 — 3축 비교</text>
+  <!-- 부제 -->
+  <text x="400" y="50" font-size="12" fill="#94a3b8" text-anchor="middle">자금 유입 / 주주 부담 / 가치 변화</text>
+
+  <!-- 열 라벨 (상단) -->
+  <text x="285" y="92" font-size="14" font-weight="bold" fill="#e2e8f0" text-anchor="middle">유상증자</text>
+  <text x="455" y="92" font-size="14" font-weight="bold" fill="#e2e8f0" text-anchor="middle">무상증자</text>
+  <text x="625" y="92" font-size="14" font-weight="bold" fill="#e2e8f0" text-anchor="middle">액면분할</text>
+
+  <!-- 행 라벨 (좌측) -->
+  <text x="190" y="155" font-size="13" font-weight="bold" fill="#f59e0b" text-anchor="end">자금 유입</text>
+  <text x="190" y="235" font-size="13" font-weight="bold" fill="#ef4444" text-anchor="end">주주 부담</text>
+  <text x="190" y="315" font-size="13" font-weight="bold" fill="#60a5fa" text-anchor="end">가치 변화</text>
+
+  <!-- ===== 행1 y=110 (자금 유입) ===== -->
+  <!-- 셀 (1,1): 유상 × 자금 — 강조 (외부 자금 조달 O) -->
+  <rect x="200" y="110" width="170" height="80" fill="#f59e0b" opacity="0.25" stroke="#2d3748" stroke-width="1" rx="3"/>
+  <text x="285" y="145" font-size="11" fill="#e2e8f0" text-anchor="middle">✓ 외부 자금 조달</text>
+
+  <!-- 셀 (1,2): 무상 × 자금 -->
+  <rect x="370" y="110" width="170" height="80" fill="#1a1f2e" opacity="0.4" stroke="#2d3748" stroke-width="1" rx="3"/>
+  <text x="455" y="145" font-size="11" fill="#e2e8f0" text-anchor="middle">✗ 자본잉여금 이동만</text>
+
+  <!-- 셀 (1,3): 분할 × 자금 -->
+  <rect x="540" y="110" width="170" height="80" fill="#1a1f2e" opacity="0.4" stroke="#2d3748" stroke-width="1" rx="3"/>
+  <text x="625" y="145" font-size="11" fill="#e2e8f0" text-anchor="middle">✗ 회계 변화 없음</text>
+
+  <!-- ===== 행2 y=190 (주주 부담) ===== -->
+  <!-- 셀 (2,1): 유상 × 부담 — 강조 (신주 매입 부담 / 희석) -->
+  <rect x="200" y="190" width="170" height="80" fill="#ef4444" opacity="0.25" stroke="#2d3748" stroke-width="1" rx="3"/>
+  <text x="285" y="220" font-size="11" fill="#e2e8f0" text-anchor="middle">신주 매입 부담</text>
+  <text x="285" y="238" font-size="11" fill="#e2e8f0" text-anchor="middle">또는 희석</text>
+
+  <!-- 셀 (2,2): 무상 × 부담 -->
+  <rect x="370" y="190" width="170" height="80" fill="#1a1f2e" opacity="0.4" stroke="#2d3748" stroke-width="1" rx="3"/>
+  <text x="455" y="225" font-size="11" fill="#e2e8f0" text-anchor="middle">✗ 무료 분배</text>
+
+  <!-- 셀 (2,3): 분할 × 부담 -->
+  <rect x="540" y="190" width="170" height="80" fill="#1a1f2e" opacity="0.4" stroke="#2d3748" stroke-width="1" rx="3"/>
+  <text x="625" y="225" font-size="11" fill="#e2e8f0" text-anchor="middle">✗ 종이만 잘게</text>
+
+  <!-- ===== 행3 y=270 (가치 변화) ===== -->
+  <!-- 셀 (3,1): 유상 × 가치 — 강조 (희석 가능) -->
+  <rect x="200" y="270" width="170" height="80" fill="#ef4444" opacity="0.4" stroke="#2d3748" stroke-width="1" rx="3"/>
+  <text x="285" y="300" font-size="11" font-weight="bold" fill="#e2e8f0" text-anchor="middle">희석 가능</text>
+  <text x="285" y="318" font-size="11" fill="#e2e8f0" text-anchor="middle">(음의 영향)</text>
+
+  <!-- 셀 (3,2): 무상 × 가치 -->
+  <rect x="370" y="270" width="170" height="80" fill="#1a1f2e" opacity="0.4" stroke="#2d3748" stroke-width="1" rx="3"/>
+  <text x="455" y="300" font-size="11" fill="#e2e8f0" text-anchor="middle">불변</text>
+  <text x="455" y="318" font-size="11" fill="#94a3b8" text-anchor="middle">(권리락 후 정상)</text>
+
+  <!-- 셀 (3,3): 분할 × 가치 -->
+  <rect x="540" y="270" width="170" height="80" fill="#1a1f2e" opacity="0.4" stroke="#2d3748" stroke-width="1" rx="3"/>
+  <text x="625" y="300" font-size="11" fill="#e2e8f0" text-anchor="middle">불변</text>
+  <text x="625" y="318" font-size="11" fill="#94a3b8" text-anchor="middle">(시총 동일)</text>
+
+  <!-- 캡션 -->
+  <text x="400" y="432" font-size="11" fill="#94a3b8" text-anchor="middle">*셋 다 발행주식 수가 늘지만 의미는 전혀 다르다*</text>
+</svg>
