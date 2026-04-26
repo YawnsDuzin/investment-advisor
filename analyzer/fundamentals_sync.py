@@ -275,6 +275,9 @@ def run_fundamentals_sync(
                 n = sync_market_fundamentals(cur, market, tickers, snap, **kw)
                 conn.commit()
                 total += n
+    except Exception:
+        conn.rollback()
+        raise
     finally:
         conn.close()
 

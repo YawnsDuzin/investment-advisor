@@ -343,7 +343,7 @@ def test_run_fundamentals_sync_queries_universe(monkeypatch):
 
     captured_calls = []
     def fake_sync(cur, market, tickers, snap, **kw):
-        captured_calls.append((market, sorted(tickers)))
+        captured_calls.append((market, sorted(tickers), snap))
         return len(tickers)
     monkeypatch.setattr(
         "analyzer.fundamentals_sync.sync_market_fundamentals",
@@ -354,11 +354,17 @@ def test_run_fundamentals_sync_queries_universe(monkeypatch):
     from shared.config import DatabaseConfig, FundamentalsConfig
     total = run_fundamentals_sync(DatabaseConfig(), FundamentalsConfig())
     # 시장별로 한 번씩 호출
-    by_market = {m: tk for m, tk in captured_calls}
+    by_market = {m: tk for m, tk, _ in captured_calls}
     assert by_market["KOSPI"] == ["000660", "005930"]
     assert by_market["KOSDAQ"] == ["035420"]
     assert by_market["NASDAQ"] == ["AAPL", "MSFT"]
     assert total == 5
+
+    # snapshot_date 가 KST 오늘인지 검증
+    from datetime import datetime, timezone, timedelta
+    expected_snap = datetime.now(timezone(timedelta(hours=9))).date()
+    snaps = {snap for _, _, snap in captured_calls}
+    assert snaps == {expected_snap}, f"snapshot_date 가 KST 오늘이 아님: {snaps}"
 
 
 def test_run_fundamentals_sync_respects_disabled_flag(monkeypatch):
