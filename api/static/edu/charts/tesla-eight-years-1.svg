@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" font-family="system-ui, -apple-system, sans-serif">
+  <rect width="800" height="450" fill="#0f1419"/>
+
+  <!-- 제목 / 부제 -->
+  <text x="400" y="30" text-anchor="middle" font-size="18" font-weight="bold" fill="#e2e8f0">테슬라 2017~2024 — 분할 후 환산 가격</text>
+  <text x="400" y="50" text-anchor="middle" font-size="12" fill="#94a3b8">분할 5:1 (2020) + 3:1 (2022) 반영</text>
+
+  <!-- 차트 배경 -->
+  <rect x="80" y="80" width="640" height="290" fill="#1a1f2e" opacity="0.4"/>
+
+  <!--
+    Y축: y = 370 - (price - 30) * 290 / 1070
+    0    → 370 + 30*290/1070 = 370+8.13=378.1 (축 밖, 격자만 표시)
+    200  → 370-170*290/1070 = 370-46.07=323.9→324
+    400  → 370-370*290/1070 = 370-100.28=269.7→270
+    600  → 370-570*290/1070 = 370-154.49=215.5→216
+    800  → 370-770*290/1070 = 370-208.69=161.3→161
+    1000 → 370-970*290/1070 = 370-262.9=107.1→107
+    1100 → 370-1070*290/1070= 370-290=80
+  -->
+
+  <!-- Y축 격자 -->
+  <!-- $0 (참고용, 차트 영역 밖) -->
+  <line x1="80" y1="370" x2="720" y2="370" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <text x="72" y="374" text-anchor="end" font-size="10" fill="#94a3b8">$0</text>
+
+  <line x1="80" y1="324" x2="720" y2="324" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <text x="72" y="328" text-anchor="end" font-size="10" fill="#94a3b8">$200</text>
+
+  <line x1="80" y1="270" x2="720" y2="270" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <text x="72" y="274" text-anchor="end" font-size="10" fill="#94a3b8">$400</text>
+
+  <line x1="80" y1="216" x2="720" y2="216" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <text x="72" y="220" text-anchor="end" font-size="10" fill="#94a3b8">$600</text>
+
+  <line x1="80" y1="161" x2="720" y2="161" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <text x="72" y="165" text-anchor="end" font-size="10" fill="#94a3b8">$800</text>
+
+  <line x1="80" y1="107" x2="720" y2="107" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <text x="72" y="111" text-anchor="end" font-size="10" fill="#94a3b8">$1,000</text>
+
+  <!-- Y축 선 / X축 선 -->
+  <line x1="80" y1="80" x2="80" y2="370" stroke="#94a3b8" stroke-width="1" opacity="0.5"/>
+  <line x1="80" y1="370" x2="720" y2="370" stroke="#94a3b8" stroke-width="1" opacity="0.5"/>
+
+  <!--
+    X축: 8점(2017~2024), x = 80 + i*91.4
+    i=0: x=80   (2017)
+    i=1: x=171  (2018)
+    i=2: x=263  (2019)
+    i=3: x=354  (2020)
+    i=4: x=446  (2021)
+    i=5: x=537  (2022)
+    i=6: x=629  (2023)
+    i=7: x=720  (2024)
+
+    가격: [63, 66, 83, 705, 1057, 339, 664, 415]
+    y = 370 - (price - 30) * 290 / 1070
+    63   → 370-10.04=359.96→360
+    66   → 370-10.86=359.14→359
+    83   → 370-14.49=355.51→356
+    705  → 370-183.5=186.5→187
+    1057 → 370-279.0=91.0→91
+    339  → 370-83.74=286.26→286
+    664  → 370-172.4=197.6→198
+    415  → 370-104.4=265.6→266
+  -->
+
+  <!-- 폭락 영역 강조 -->
+  <!-- 2018: idx 1~2, x=171~263 -->
+  <rect x="171" y="80" width="92" height="290" fill="#ef4444" opacity="0.15"/>
+  <!-- 2022: idx 4~5, x=446~537 -->
+  <rect x="446" y="80" width="91" height="290" fill="#ef4444" opacity="0.15"/>
+  <!-- 2024: idx 7, x=629~720 (단일 포인트 폭락 강조) -->
+  <rect x="629" y="80" width="91" height="290" fill="#ef4444" opacity="0.15"/>
+
+  <!-- 폭락 라벨 (y 분산 배치) -->
+  <text x="175" y="97" font-size="10" fill="#ef4444">2018 -50%</text>
+  <text x="175" y="108" font-size="10" fill="#ef4444">(양산 위기)</text>
+
+  <text x="450" y="113" font-size="10" fill="#ef4444">2022 -75%</text>
+  <text x="450" y="124" font-size="10" fill="#ef4444">(이자율·X 인수)</text>
+
+  <text x="633" y="97" font-size="10" fill="#ef4444">2024 -38%</text>
+  <text x="633" y="108" font-size="10" fill="#ef4444">(EV 둔화)</text>
+
+  <!-- 가격 라인 (#e2e8f0) -->
+  <polyline points="80,360 171,359 263,356 354,187 446,91 537,286 629,198 720,266"
+            fill="none" stroke="#e2e8f0" stroke-width="2" stroke-linejoin="round"/>
+
+  <!-- 마커 -->
+  <circle cx="80"  cy="360" r="4" fill="#e2e8f0"/>
+  <circle cx="171" cy="359" r="4" fill="#e2e8f0"/>
+  <circle cx="263" cy="356" r="4" fill="#e2e8f0"/>
+  <circle cx="354" cy="187" r="4" fill="#e2e8f0"/>
+  <circle cx="446" cy="91"  r="4" fill="#e2e8f0"/>
+  <circle cx="537" cy="286" r="4" fill="#e2e8f0"/>
+  <circle cx="629" cy="198" r="4" fill="#e2e8f0"/>
+  <circle cx="720" cy="266" r="4" fill="#e2e8f0"/>
+
+  <!-- X축 레이블 -->
+  <text x="80"  y="390" text-anchor="middle" font-size="11" fill="#94a3b8">2017</text>
+  <text x="171" y="390" text-anchor="middle" font-size="11" fill="#94a3b8">2018</text>
+  <text x="263" y="390" text-anchor="middle" font-size="11" fill="#94a3b8">2019</text>
+  <text x="354" y="390" text-anchor="middle" font-size="11" fill="#94a3b8">2020</text>
+  <text x="446" y="390" text-anchor="middle" font-size="11" fill="#94a3b8">2021</text>
+  <text x="537" y="390" text-anchor="middle" font-size="11" fill="#94a3b8">2022</text>
+  <text x="629" y="390" text-anchor="middle" font-size="11" fill="#94a3b8">2023</text>
+  <text x="720" y="390" text-anchor="middle" font-size="11" fill="#94a3b8">2024</text>
+
+  <!-- 가격 레이블 (주요 포인트) -->
+  <text x="354" y="178" text-anchor="middle" font-size="10" fill="#94a3b8">$705</text>
+  <text x="446" y="82"  text-anchor="middle" font-size="10" fill="#94a3b8">$1,057</text>
+  <text x="537" y="277" text-anchor="middle" font-size="10" fill="#94a3b8">$339</text>
+
+  <!-- 누적 정보 박스 -->
+  <rect x="540" y="90" width="170" height="65" fill="#1a1f2e" opacity="0.6" rx="4" stroke="#4ade80" stroke-width="1"/>
+  <text x="625" y="112" text-anchor="middle" font-size="11" fill="#94a3b8">8년 누적</text>
+  <text x="625" y="140" text-anchor="middle" font-size="22" font-weight="bold" fill="#4ade80">+540%</text>
+
+  <!-- 캡션 -->
+  <text x="400" y="425" text-anchor="middle" font-size="11" fill="#64748b">단순 보유 시 +540%, 그러나 3번의 -50% 이상 폭락을 견뎌야 했다</text>
+</svg>

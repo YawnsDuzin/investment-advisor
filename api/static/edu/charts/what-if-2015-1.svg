@@ -1,0 +1,175 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" font-family="system-ui, -apple-system, sans-serif">
+  <rect width="800" height="450" fill="#0f1419"/>
+
+  <!-- 제목 / 부제 -->
+  <text x="400" y="30" text-anchor="middle" font-size="18" font-weight="bold" fill="#e2e8f0">10년 전 그 종목을 샀다면 (2015~2025)</text>
+  <text x="400" y="50" text-anchor="middle" font-size="12" fill="#94a3b8">삼성전자 / 네이버 / 카카오 누적 수익률 (배당 미포함)</text>
+
+  <!-- 차트 배경 -->
+  <rect x="80" y="80" width="640" height="290" fill="#1a1f2e" opacity="0.4"/>
+
+  <!-- Y축 격자 및 레이블 -->
+  <!-- y = 370 - (cum_pct + 50) * 290 / 300 -->
+  <!-- -50 → y=370, 0 → y=321.67, 50 → y=273.33, 100 → y=225, 150 → y=176.67, 200 → y=128.33, 250 → y=80 -->
+
+  <!-- -50% -->
+  <line x1="80" y1="370" x2="720" y2="370" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <text x="72" y="374" text-anchor="end" font-size="10" fill="#94a3b8">-50%</text>
+
+  <!-- 0% line 강조 -->
+  <line x1="80" y1="322" x2="720" y2="322" stroke="#94a3b8" stroke-width="1.5" opacity="0.8"/>
+  <text x="72" y="326" text-anchor="end" font-size="10" fill="#94a3b8">0%</text>
+
+  <!-- 50% -->
+  <line x1="80" y1="274" x2="720" y2="274" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <text x="72" y="278" text-anchor="end" font-size="10" fill="#94a3b8">50%</text>
+
+  <!-- 100% -->
+  <line x1="80" y1="225" x2="720" y2="225" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <text x="72" y="229" text-anchor="end" font-size="10" fill="#94a3b8">100%</text>
+
+  <!-- 150% -->
+  <line x1="80" y1="177" x2="720" y2="177" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <text x="72" y="181" text-anchor="end" font-size="10" fill="#94a3b8">150%</text>
+
+  <!-- 200% -->
+  <line x1="80" y1="128" x2="720" y2="128" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <text x="72" y="132" text-anchor="end" font-size="10" fill="#94a3b8">200%</text>
+
+  <!-- 250% -->
+  <line x1="80" y1="80" x2="720" y2="80" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <text x="72" y="84" text-anchor="end" font-size="10" fill="#94a3b8">250%</text>
+
+  <!-- X축 레이블 (5개만) -->
+  <!-- idx: 0=2015(x=80), 2=2017(x=208), 5=2020(x=400), 7=2022(x=528), 10=2025(x=720) -->
+  <text x="80" y="390" text-anchor="middle" font-size="11" fill="#94a3b8">2015</text>
+  <text x="272" y="390" text-anchor="middle" font-size="11" fill="#94a3b8">2018</text>
+  <text x="400" y="390" text-anchor="middle" font-size="11" fill="#94a3b8">2020</text>
+  <text x="528" y="390" text-anchor="middle" font-size="11" fill="#94a3b8">2022</text>
+  <text x="720" y="390" text-anchor="middle" font-size="11" fill="#94a3b8">2025</text>
+
+  <!-- X축 눈금선 -->
+  <line x1="80" y1="370" x2="80" y2="375" stroke="#94a3b8" stroke-width="1"/>
+  <line x1="272" y1="370" x2="272" y2="375" stroke="#94a3b8" stroke-width="1"/>
+  <line x1="400" y1="370" x2="400" y2="375" stroke="#94a3b8" stroke-width="1"/>
+  <line x1="528" y1="370" x2="528" y2="375" stroke="#94a3b8" stroke-width="1"/>
+  <line x1="720" y1="370" x2="720" y2="375" stroke="#94a3b8" stroke-width="1"/>
+
+  <!-- Y축 선 -->
+  <line x1="80" y1="80" x2="80" y2="370" stroke="#94a3b8" stroke-width="1" opacity="0.5"/>
+  <!-- X축 선 -->
+  <line x1="80" y1="370" x2="720" y2="370" stroke="#94a3b8" stroke-width="1" opacity="0.5"/>
+
+  <!--
+    좌표 계산: x = 80 + i*64, y = 370 - (pct + 50) * 290 / 300
+    삼성전자: [0,5,15,30,50,60,80,95,70,85,120]
+      i=0: x=80,  y=370-(0+50)*290/300   = 370-48.33 = 321.67 → 322
+      i=1: x=144, y=370-(5+50)*290/300   = 370-53.17 = 316.83 → 317
+      i=2: x=208, y=370-(15+50)*290/300  = 370-62.83 = 307.17 → 307
+      i=3: x=272, y=370-(30+50)*290/300  = 370-77.33 = 292.67 → 293
+      i=4: x=336, y=370-(50+50)*290/300  = 370-96.67 = 273.33 → 273
+      i=5: x=400, y=370-(60+50)*290/300  = 370-106.33= 263.67 → 264
+      i=6: x=464, y=370-(80+50)*290/300  = 370-125.67= 244.33 → 244
+      i=7: x=528, y=370-(95+50)*290/300  = 370-140.17= 229.83 → 230
+      i=8: x=592, y=370-(70+50)*290/300  = 370-116   = 254
+      i=9: x=656, y=370-(85+50)*290/300  = 370-130.5 = 239.5  → 240
+      i=10:x=720, y=370-(120+50)*290/300 = 370-164.33= 205.67 → 206
+
+    네이버: [0,10,25,40,60,80,150,200,100,70,80]
+      i=0: x=80,  y=322
+      i=1: x=144, y=370-(10+50)*290/300  = 370-58    = 312
+      i=2: x=208, y=370-(25+50)*290/300  = 370-72.5  = 297.5  → 298
+      i=3: x=272, y=370-(40+50)*290/300  = 370-87    = 283
+      i=4: x=336, y=370-(60+50)*290/300  = 370-106.33= 264
+      i=5: x=400, y=370-(80+50)*290/300  = 370-125.67= 244
+      i=6: x=464, y=370-(150+50)*290/300 = 370-193.33= 176.67 → 177
+      i=7: x=528, y=370-(200+50)*290/300 = 370-241.67= 128.33 → 128
+      i=8: x=592, y=370-(100+50)*290/300 = 370-145   = 225
+      i=9: x=656, y=370-(70+50)*290/300  = 370-116   = 254
+      i=10:x=720, y=370-(80+50)*290/300  = 370-125.67= 244
+
+    카카오: [0,20,50,70,90,100,180,100,0,-10,-10]
+      i=0: x=80,  y=322
+      i=1: x=144, y=370-(20+50)*290/300  = 370-67.67 = 302.33 → 302
+      i=2: x=208, y=370-(50+50)*290/300  = 370-96.67 = 273.33 → 273
+      i=3: x=272, y=370-(70+50)*290/300  = 370-116   = 254
+      i=4: x=336, y=370-(90+50)*290/300  = 370-135.33= 234.67 → 235
+      i=5: x=400, y=370-(100+50)*290/300 = 370-145   = 225
+      i=6: x=464, y=370-(180+50)*290/300 = 370-222.33= 147.67 → 148
+      i=7: x=528, y=370-(100+50)*290/300 = 370-145   = 225
+      i=8: x=592, y=370-(0+50)*290/300   = 370-48.33 = 321.67 → 322
+      i=9: x=656, y=370-(-10+50)*290/300 = 370-38.67 = 331.33 → 331
+      i=10:x=720, y=370-(-10+50)*290/300 = 370-38.67 = 331.33 → 331
+  -->
+
+  <!-- 삼성전자 라인 (#4ade80) -->
+  <polyline points="80,322 144,317 208,307 272,293 336,273 400,264 464,244 528,230 592,254 656,240 720,206"
+            fill="none" stroke="#4ade80" stroke-width="2.5" stroke-linejoin="round"/>
+  <!-- 삼성전자 마커 -->
+  <circle cx="80"  cy="322" r="4" fill="#4ade80"/>
+  <circle cx="144" cy="317" r="4" fill="#4ade80"/>
+  <circle cx="208" cy="307" r="4" fill="#4ade80"/>
+  <circle cx="272" cy="293" r="4" fill="#4ade80"/>
+  <circle cx="336" cy="273" r="4" fill="#4ade80"/>
+  <circle cx="400" cy="264" r="4" fill="#4ade80"/>
+  <circle cx="464" cy="244" r="4" fill="#4ade80"/>
+  <circle cx="528" cy="230" r="4" fill="#4ade80"/>
+  <circle cx="592" cy="254" r="4" fill="#4ade80"/>
+  <circle cx="656" cy="240" r="4" fill="#4ade80"/>
+  <circle cx="720" cy="206" r="4" fill="#4ade80"/>
+
+  <!-- 네이버 라인 (#60a5fa) -->
+  <polyline points="80,322 144,312 208,298 272,283 336,264 400,244 464,177 528,128 592,225 656,254 720,244"
+            fill="none" stroke="#60a5fa" stroke-width="2.5" stroke-linejoin="round"/>
+  <!-- 네이버 마커 -->
+  <circle cx="80"  cy="322" r="4" fill="#60a5fa"/>
+  <circle cx="144" cy="312" r="4" fill="#60a5fa"/>
+  <circle cx="208" cy="298" r="4" fill="#60a5fa"/>
+  <circle cx="272" cy="283" r="4" fill="#60a5fa"/>
+  <circle cx="336" cy="264" r="4" fill="#60a5fa"/>
+  <circle cx="400" cy="244" r="4" fill="#60a5fa"/>
+  <circle cx="464" cy="177" r="4" fill="#60a5fa"/>
+  <circle cx="528" cy="128" r="4" fill="#60a5fa"/>
+  <circle cx="592" cy="225" r="4" fill="#60a5fa"/>
+  <circle cx="656" cy="254" r="4" fill="#60a5fa"/>
+  <circle cx="720" cy="244" r="4" fill="#60a5fa"/>
+
+  <!-- 카카오 라인 (#ef4444) -->
+  <polyline points="80,322 144,302 208,273 272,254 336,235 400,225 464,148 528,225 592,322 656,331 720,331"
+            fill="none" stroke="#ef4444" stroke-width="2.5" stroke-linejoin="round"/>
+  <!-- 카카오 마커 -->
+  <circle cx="80"  cy="322" r="4" fill="#ef4444"/>
+  <circle cx="144" cy="302" r="4" fill="#ef4444"/>
+  <circle cx="208" cy="273" r="4" fill="#ef4444"/>
+  <circle cx="272" cy="254" r="4" fill="#ef4444"/>
+  <circle cx="336" cy="235" r="4" fill="#ef4444"/>
+  <circle cx="400" cy="225" r="4" fill="#ef4444"/>
+  <circle cx="464" cy="148" r="4" fill="#ef4444"/>
+  <circle cx="528" cy="225" r="4" fill="#ef4444"/>
+  <circle cx="592" cy="322" r="4" fill="#ef4444"/>
+  <circle cx="656" cy="331" r="4" fill="#ef4444"/>
+  <circle cx="720" cy="331" r="4" fill="#ef4444"/>
+
+  <!-- 2021 정점 황색 마커 (코로나 유동성 정점 — idx=6, x=464) -->
+  <!-- 네이버 idx=6 y=177, 카카오 idx=6 y=148 → 황색 마커는 가장 높은 점(카카오 y=148) 위에 -->
+  <circle cx="464" cy="128" r="6" fill="#f59e0b"/>
+  <text x="470" y="118" font-size="11" fill="#f59e0b">코로나 유동성 정점</text>
+
+  <!-- 끝점 라벨 -->
+  <text x="726" y="210" font-size="12" fill="#4ade80" font-weight="bold">삼성전자 +120%</text>
+  <text x="726" y="248" font-size="12" fill="#60a5fa" font-weight="bold">네이버 +80%</text>
+  <text x="726" y="335" font-size="12" fill="#ef4444" font-weight="bold">카카오 -10%</text>
+
+  <!-- 범례 박스 -->
+  <rect x="120" y="95" width="160" height="80" fill="#1a1f2e" opacity="0.5" rx="4"/>
+  <rect x="130" y="107" width="8" height="8" fill="#4ade80"/>
+  <text x="143" y="115" font-size="12" fill="#e2e8f0">삼성전자</text>
+  <rect x="130" y="122" width="8" height="8" fill="#60a5fa"/>
+  <text x="143" y="130" font-size="12" fill="#e2e8f0">네이버</text>
+  <rect x="130" y="137" width="8" height="8" fill="#ef4444"/>
+  <text x="143" y="145" font-size="12" fill="#e2e8f0">카카오</text>
+
+  <!-- 캡션 -->
+  <text x="400" y="425" text-anchor="middle" font-size="11" fill="#64748b">배당·수수료 미반영, 가상 시뮬레이션 / Source: KRX</text>
+</svg>
