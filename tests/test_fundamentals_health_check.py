@@ -32,3 +32,16 @@ def test_compute_missing_rate_zero_total_safe():
     from tools.fundamentals_health_check import compute_missing_rate
     out = compute_missing_rate(fake_conn)
     assert out[0]["missing_pct"] == 0.0
+
+
+def test_compute_missing_rate_uses_staleness_days():
+    """staleness_days 인자가 SQL 파라미터로 전달되는지 검증."""
+    fake_conn = MagicMock()
+    fake_cur = MagicMock()
+    fake_conn.cursor.return_value.__enter__.return_value = fake_cur
+    fake_cur.fetchall.return_value = [("KOSPI", 100, 100, datetime(2026, 4, 25, tzinfo=timezone.utc))]
+    from tools.fundamentals_health_check import compute_missing_rate
+    compute_missing_rate(fake_conn, staleness_days=1)
+    # cur.execute 호출의 args 두 번째 인자 (params) 확인
+    args, kwargs = fake_cur.execute.call_args
+    assert args[1] == (1,), f"params 가 (1,) 가 아님: {args[1]}"

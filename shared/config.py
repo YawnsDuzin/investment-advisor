@@ -232,6 +232,33 @@ class FundamentalsConfig:
     us_max_consecutive_failures: int = field(
         default_factory=lambda: int(os.getenv("FUNDAMENTALS_US_MAX_CONSECUTIVE_FAILURES", "50"))
     )
+    # health check — 최근 N일 내 펀더 row 보유 = "신선" 기준
+    staleness_days: int = field(
+        default_factory=lambda: int(os.getenv("FUNDAMENTALS_STALENESS_DAYS", "2"))
+    )
+    # 시장별 결측률 임계 (% 초과 시 경고). 미정의 시장은 fallback 10.0
+    missing_threshold_kospi: float = field(
+        default_factory=lambda: float(os.getenv("FUNDAMENTALS_MISSING_THRESHOLD_KOSPI", "5.0"))
+    )
+    missing_threshold_kosdaq: float = field(
+        default_factory=lambda: float(os.getenv("FUNDAMENTALS_MISSING_THRESHOLD_KOSDAQ", "5.0"))
+    )
+    missing_threshold_nasdaq: float = field(
+        default_factory=lambda: float(os.getenv("FUNDAMENTALS_MISSING_THRESHOLD_NASDAQ", "3.0"))
+    )
+    missing_threshold_nyse: float = field(
+        default_factory=lambda: float(os.getenv("FUNDAMENTALS_MISSING_THRESHOLD_NYSE", "3.0"))
+    )
+
+    def missing_pct_threshold(self, market: str) -> float:
+        """시장별 결측률 임계 조회. 미정의 시장은 10.0 fallback."""
+        table = {
+            "KOSPI": self.missing_threshold_kospi,
+            "KOSDAQ": self.missing_threshold_kosdaq,
+            "NASDAQ": self.missing_threshold_nasdaq,
+            "NYSE": self.missing_threshold_nyse,
+        }
+        return table.get(market.upper(), 10.0)
 
 
 @dataclass

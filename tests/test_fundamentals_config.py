@@ -13,6 +13,16 @@ def test_defaults():
     assert cfg.yfinance_batch_size == 50
     assert cfg.validation_tolerance_pct == 5.0
     assert cfg.us_max_consecutive_failures == 50
+    # health check thresholds
+    assert cfg.staleness_days == 2
+    assert cfg.missing_threshold_kospi == 5.0
+    assert cfg.missing_threshold_kosdaq == 5.0
+    assert cfg.missing_threshold_nasdaq == 3.0
+    assert cfg.missing_threshold_nyse == 3.0
+    # threshold lookup
+    assert cfg.missing_pct_threshold("KOSPI") == 5.0
+    assert cfg.missing_pct_threshold("nyse") == 3.0  # case-insensitive
+    assert cfg.missing_pct_threshold("UNKNOWN") == 10.0  # fallback
 
 
 def test_env_override(monkeypatch):
