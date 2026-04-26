@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" font-family="system-ui, -apple-system, sans-serif">
+  <rect width="800" height="450" fill="#0f1419"/>
+
+  <!-- 제목 영역 -->
+  <text x="400" y="30" text-anchor="middle" font-size="18" fill="#e2e8f0" font-weight="bold">12-1 모멘텀 — 상위 10% vs 하위 10%</text>
+  <text x="400" y="50" text-anchor="middle" font-size="12" fill="#94a3b8">12개월 수익률 상위·하위 종목군의 6개월 후 누적 수익률</text>
+
+  <!-- 차트 배경 -->
+  <rect x="60" y="70" width="680" height="320" fill="#1a1f2e" rx="4"/>
+
+  <!-- Y축 범위: -10% ~ +15%, 차트 y=70~390(h=320) -->
+  <!-- 전체 범위 25%, 1%당 320/25=12.8px -->
+  <!-- y = 390 - (pct - (-10)) / 25 * 320 = 390 - (pct+10) * 12.8 -->
+  <!-- -10%: y=390, -5%: y=326, 0%: y=262, 5%: y=198, 10%: y=134, 15%: y=70 -->
+
+  <!-- 그리드 라인 -->
+  <line x1="60" y1="70" x2="740" y2="70" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <line x1="60" y1="134" x2="740" y2="134" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <line x1="60" y1="198" x2="740" y2="198" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <line x1="60" y1="326" x2="740" y2="326" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <line x1="60" y1="390" x2="740" y2="390" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+
+  <!-- Y축 라벨 -->
+  <text x="52" y="73" text-anchor="end" font-size="10" fill="#94a3b8">+15%</text>
+  <text x="52" y="137" text-anchor="end" font-size="10" fill="#94a3b8">+10%</text>
+  <text x="52" y="201" text-anchor="end" font-size="10" fill="#94a3b8">+5%</text>
+  <text x="52" y="265" text-anchor="end" font-size="10" fill="#94a3b8">0%</text>
+  <text x="52" y="329" text-anchor="end" font-size="10" fill="#94a3b8">-5%</text>
+  <text x="52" y="393" text-anchor="end" font-size="10" fill="#94a3b8">-10%</text>
+  <text x="18" y="240" text-anchor="middle" font-size="11" fill="#94a3b8" transform="rotate(-90, 18, 240)">누적 수익률 (%)</text>
+
+  <!-- 0% zero line 강조 -->
+  <line x1="60" y1="262" x2="740" y2="262" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="5,3" opacity="0.7"/>
+
+  <!-- X축 좌표: 7점 (0~6개월), 간격 113.33px -->
+  <!-- x: 60, 173, 286, 400, 513, 626, 740 -->
+
+  <!-- 상위 모멘텀 라인 (녹색 #4ade80) -->
+  <!-- 누적 %: [0, 2.5, 5, 7, 8.5, 10.5, 12] -->
+  <!-- y = 390 - (pct+10) * 12.8 -->
+  <!-- 0→262, 2.5→230, 5→198, 7→172.4≈172, 8.5→153.2≈153, 10.5→127, 12→108 -->
+  <polyline points="60,262 173,230 286,198 400,172 513,153 626,127 740,108"
+            fill="none" stroke="#4ade80" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+
+  <!-- 상위 모멘텀 데이터 포인트 -->
+  <circle cx="60" cy="262" r="4" fill="#4ade80"/>
+  <circle cx="173" cy="230" r="4" fill="#4ade80"/>
+  <circle cx="286" cy="198" r="4" fill="#4ade80"/>
+  <circle cx="400" cy="172" r="4" fill="#4ade80"/>
+  <circle cx="513" cy="153" r="4" fill="#4ade80"/>
+  <circle cx="626" cy="127" r="4" fill="#4ade80"/>
+  <circle cx="740" cy="108" r="4" fill="#4ade80"/>
+
+  <!-- 상위 라인 끝점 라벨 -->
+  <text x="746" y="104" font-size="11" fill="#4ade80" font-weight="bold">+12%</text>
+  <text x="746" y="117" font-size="10" fill="#4ade80">(상위 10%)</text>
+
+  <!-- 하위 모멘텀 라인 (적색 #ef4444) -->
+  <!-- 누적 %: [0, -1.5, -2.8, -3.5, -3.8, -3.5, -3] -->
+  <!-- y = 390 - (pct+10) * 12.8 -->
+  <!-- 0→262, -1.5→281, -2.8→297, -3.5→306, -3.8→309, -3.5→306, -3→300 -->
+  <polyline points="60,262 173,281 286,297 400,306 513,309 626,306 740,300"
+            fill="none" stroke="#ef4444" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+
+  <!-- 하위 모멘텀 데이터 포인트 -->
+  <circle cx="60" cy="262" r="4" fill="#ef4444"/>
+  <circle cx="173" cy="281" r="4" fill="#ef4444"/>
+  <circle cx="286" cy="297" r="4" fill="#ef4444"/>
+  <circle cx="400" cy="306" r="4" fill="#ef4444"/>
+  <circle cx="513" cy="309" r="4" fill="#ef4444"/>
+  <circle cx="626" cy="306" r="4" fill="#ef4444"/>
+  <circle cx="740" cy="300" r="4" fill="#ef4444"/>
+
+  <!-- 하위 라인 끝점 라벨 -->
+  <text x="746" y="296" font-size="11" fill="#ef4444" font-weight="bold">-3%</text>
+  <text x="746" y="309" font-size="10" fill="#ef4444">(하위 10%)</text>
+
+  <!-- 스프레드 표시 (양쪽 화살표) -->
+  <line x1="756" y1="112" x2="756" y2="296" stroke="#f59e0b" stroke-width="1" stroke-dasharray="3,2" opacity="0.7"/>
+  <text x="770" y="210" font-size="10" fill="#f59e0b" transform="rotate(90, 770, 210)">스프레드 +15%p</text>
+
+  <!-- X축 -->
+  <line x1="60" y1="390" x2="740" y2="390" stroke="#2d3748" stroke-width="1"/>
+  <text x="60" y="408" text-anchor="middle" font-size="10" fill="#94a3b8">0</text>
+  <text x="173" y="408" text-anchor="middle" font-size="10" fill="#94a3b8">1</text>
+  <text x="286" y="408" text-anchor="middle" font-size="10" fill="#94a3b8">2</text>
+  <text x="400" y="408" text-anchor="middle" font-size="10" fill="#94a3b8">3</text>
+  <text x="513" y="408" text-anchor="middle" font-size="10" fill="#94a3b8">4</text>
+  <text x="626" y="408" text-anchor="middle" font-size="10" fill="#94a3b8">5</text>
+  <text x="740" y="408" text-anchor="middle" font-size="10" fill="#94a3b8">6</text>
+  <text x="400" y="422" text-anchor="middle" font-size="11" fill="#94a3b8">보유 개월</text>
+
+  <!-- 범례 (차트 내부 우상단) -->
+  <line x1="550" y1="88" x2="575" y2="88" stroke="#4ade80" stroke-width="2.5"/>
+  <circle cx="562" cy="88" r="4" fill="#4ade80"/>
+  <text x="580" y="92" font-size="10" fill="#4ade80">상위 모멘텀</text>
+
+  <line x1="550" y1="105" x2="575" y2="105" stroke="#ef4444" stroke-width="2.5"/>
+  <circle cx="562" cy="105" r="4" fill="#ef4444"/>
+  <text x="580" y="109" font-size="10" fill="#ef4444">하위 모멘텀</text>
+
+  <!-- 캡션 -->
+  <text x="400" y="440" text-anchor="middle" font-size="10" fill="#64748b">Source: Jegadeesh-Titman (1993) 한국 시장 적용 예시</text>
+</svg>

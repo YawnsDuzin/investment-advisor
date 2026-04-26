@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" font-family="system-ui, -apple-system, sans-serif">
+  <!-- 배경 -->
+  <rect width="800" height="450" fill="#0f1419"/>
+
+  <!-- 제목 -->
+  <text x="400" y="28" text-anchor="middle" font-size="18" font-weight="bold" fill="#e2e8f0">업종별 PER 평균 (한국 시장)</text>
+  <text x="400" y="50" text-anchor="middle" font-size="12" fill="#94a3b8">사이클 산업과 성장 산업의 차이</text>
+
+  <!-- 차트 배경 -->
+  <rect x="60" y="70" width="680" height="310" fill="#1a1f2e" rx="4"/>
+
+  <!-- 그리드 선 (PER 0/10/20/30/40/50) -->
+  <!-- PER 50 = y=70, PER 0 = y=380 / 높이 310px / 10PER = 62px -->
+  <!-- y = 380 - (PER/50)*310 -->
+
+  <!-- PER 0 → y=380 -->
+  <line x1="60" y1="380" x2="740" y2="380" stroke="#2d3748" stroke-opacity="0.5" stroke-width="1"/>
+  <!-- PER 10 → y=318 -->
+  <line x1="60" y1="318" x2="740" y2="318" stroke="#2d3748" stroke-opacity="0.5" stroke-width="1"/>
+  <!-- PER 20 → y=256 -->
+  <line x1="60" y1="256" x2="740" y2="256" stroke="#2d3748" stroke-opacity="0.5" stroke-width="1"/>
+  <!-- PER 30 → y=194 -->
+  <line x1="60" y1="194" x2="740" y2="194" stroke="#2d3748" stroke-opacity="0.5" stroke-width="1"/>
+  <!-- PER 40 → y=132 -->
+  <line x1="60" y1="132" x2="740" y2="132" stroke="#2d3748" stroke-opacity="0.5" stroke-width="1"/>
+  <!-- PER 50 → y=70 -->
+  <line x1="60" y1="70" x2="740" y2="70" stroke="#2d3748" stroke-opacity="0.5" stroke-width="1"/>
+
+  <!-- Y축 라벨 -->
+  <text x="52" y="384" text-anchor="end" font-size="11" fill="#94a3b8">0</text>
+  <text x="52" y="322" text-anchor="end" font-size="11" fill="#94a3b8">10</text>
+  <text x="52" y="260" text-anchor="end" font-size="11" fill="#94a3b8">20</text>
+  <text x="52" y="198" text-anchor="end" font-size="11" fill="#94a3b8">30</text>
+  <text x="52" y="136" text-anchor="end" font-size="11" fill="#94a3b8">40</text>
+  <text x="52" y="74" text-anchor="end" font-size="11" fill="#94a3b8">50</text>
+  <!-- Y축 단위 -->
+  <text x="52" y="60" text-anchor="end" font-size="10" fill="#94a3b8">(배)</text>
+
+  <!-- Y축 선 -->
+  <line x1="60" y1="70" x2="60" y2="380" stroke="#2d3748" stroke-opacity="0.7" stroke-width="1"/>
+
+  <!-- ──────────────────────────────────────────── -->
+  <!-- 막대 1: 은행 PER=6, x_center=140, 색=#60a5fa -->
+  <!-- bar_top_y = 380 - (6/50)*310 = 380 - 37.2 = 342.8 ≈ 343 -->
+  <!-- bar height = 37, bar x = center - 40 = 100 -->
+  <rect x="100" y="343" width="80" height="37" fill="#60a5fa" rx="3" opacity="0.9"/>
+  <!-- 수치 라벨 (막대 위) -->
+  <text x="140" y="336" text-anchor="middle" font-size="14" font-weight="bold" fill="#e2e8f0">6배</text>
+  <!-- X축 라벨 -->
+  <text x="140" y="398" text-anchor="middle" font-size="12" fill="#94a3b8">은행</text>
+  <text x="140" y="413" text-anchor="middle" font-size="10" fill="#94a3b8">(경기방어·저PER)</text>
+
+  <!-- ──────────────────────────────────────────── -->
+  <!-- 막대 2: 유틸리티 PER=12, x_center=300 -->
+  <!-- bar_top_y = 380 - (12/50)*310 = 380 - 74.4 = 305.6 ≈ 306 -->
+  <!-- bar height = 74 -->
+  <rect x="260" y="306" width="80" height="74" fill="#60a5fa" rx="3" opacity="0.9"/>
+  <text x="300" y="299" text-anchor="middle" font-size="14" font-weight="bold" fill="#e2e8f0">12배</text>
+  <text x="300" y="398" text-anchor="middle" font-size="12" fill="#94a3b8">유틸리티</text>
+  <text x="300" y="413" text-anchor="middle" font-size="10" fill="#94a3b8">(안정·중간PER)</text>
+
+  <!-- ──────────────────────────────────────────── -->
+  <!-- 막대 3: IT/플랫폼 PER=30, x_center=460 -->
+  <!-- bar_top_y = 380 - (30/50)*310 = 380 - 186 = 194 -->
+  <!-- bar height = 186 -->
+  <rect x="420" y="194" width="80" height="186" fill="#4ade80" rx="3" opacity="0.9"/>
+  <text x="460" y="187" text-anchor="middle" font-size="14" font-weight="bold" fill="#e2e8f0">30배</text>
+  <text x="460" y="398" text-anchor="middle" font-size="12" fill="#94a3b8">IT/플랫폼</text>
+  <text x="460" y="413" text-anchor="middle" font-size="10" fill="#94a3b8">(성장·고PER)</text>
+
+  <!-- ──────────────────────────────────────────── -->
+  <!-- 막대 4: 바이오 PER=45, x_center=620 -->
+  <!-- bar_top_y = 380 - (45/50)*310 = 380 - 279 = 101 -->
+  <!-- bar height = 279 -->
+  <rect x="580" y="101" width="80" height="279" fill="#f59e0b" rx="3" opacity="0.9"/>
+  <text x="620" y="94" text-anchor="middle" font-size="14" font-weight="bold" fill="#e2e8f0">45배</text>
+  <text x="620" y="398" text-anchor="middle" font-size="12" fill="#94a3b8">바이오</text>
+  <text x="620" y="413" text-anchor="middle" font-size="10" fill="#94a3b8">(기대성장·최고PER)</text>
+
+  <!-- X축 선 -->
+  <line x1="60" y1="380" x2="740" y2="380" stroke="#e2e8f0" stroke-opacity="0.3" stroke-width="1.5"/>
+
+  <!-- 범례 -->
+  <rect x="230" y="426" width="12" height="12" fill="#60a5fa" rx="2"/>
+  <text x="246" y="437" font-size="11" fill="#94a3b8">방어/가치주</text>
+  <rect x="355" y="426" width="12" height="12" fill="#4ade80" rx="2"/>
+  <text x="371" y="437" font-size="11" fill="#94a3b8">성장주</text>
+  <rect x="435" y="426" width="12" height="12" fill="#f59e0b" rx="2"/>
+  <text x="451" y="437" font-size="11" fill="#94a3b8">기대·적자 성장</text>
+
+  <!-- 캡션 -->
+  <text x="740" y="437" text-anchor="end" font-size="11" fill="#94a3b8">Source: KRX 2024년 평균 (예시)</text>
+</svg>

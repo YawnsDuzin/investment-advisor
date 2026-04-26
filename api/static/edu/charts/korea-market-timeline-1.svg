@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" font-family="system-ui, -apple-system, sans-serif">
+  <rect width="800" height="450" fill="#0f1419"/>
+
+  <!-- 제목 / 부제 -->
+  <text x="400" y="30" text-anchor="middle" font-size="18" font-weight="bold" fill="#e2e8f0">한국 증시 25년 (2000~2025)</text>
+  <text x="400" y="50" text-anchor="middle" font-size="12" fill="#94a3b8">KOSPI 지수 + 주요 이벤트</text>
+
+  <!-- 차트 배경 -->
+  <rect x="80" y="80" width="640" height="290" fill="#1a1f2e" opacity="0.4"/>
+
+  <!--
+    Y축: y = 370 - (kospi - 500) * 290 / 3000
+    500  → y=370
+    1000 → y=370-48.33=321.67→322
+    1500 → y=370-96.67=273.33→273
+    2000 → y=370-145=225
+    2500 → y=370-193.33=176.67→177
+    3000 → y=370-241.67=128.33→128
+    3500 → y=370-290=80
+  -->
+
+  <!-- Y축 격자 -->
+  <line x1="80" y1="370" x2="720" y2="370" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <text x="72" y="374" text-anchor="end" font-size="10" fill="#94a3b8">500</text>
+
+  <line x1="80" y1="322" x2="720" y2="322" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <text x="72" y="326" text-anchor="end" font-size="10" fill="#94a3b8">1,000</text>
+
+  <line x1="80" y1="273" x2="720" y2="273" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <text x="72" y="277" text-anchor="end" font-size="10" fill="#94a3b8">1,500</text>
+
+  <line x1="80" y1="225" x2="720" y2="225" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <text x="72" y="229" text-anchor="end" font-size="10" fill="#94a3b8">2,000</text>
+
+  <line x1="80" y1="177" x2="720" y2="177" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <text x="72" y="181" text-anchor="end" font-size="10" fill="#94a3b8">2,500</text>
+
+  <line x1="80" y1="128" x2="720" y2="128" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <text x="72" y="132" text-anchor="end" font-size="10" fill="#94a3b8">3,000</text>
+
+  <line x1="80" y1="80" x2="720" y2="80" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <text x="72" y="84" text-anchor="end" font-size="10" fill="#94a3b8">3,500</text>
+
+  <!-- Y축 선 / X축 선 -->
+  <line x1="80" y1="80" x2="80" y2="370" stroke="#94a3b8" stroke-width="1" opacity="0.5"/>
+  <line x1="80" y1="370" x2="720" y2="370" stroke="#94a3b8" stroke-width="1" opacity="0.5"/>
+
+  <!--
+    X축: 13점, x = 80 + i*53.3
+    idx: 0=2000(x=80), 1=2002(x=133.3), 2=2005(x=186.6), 3=2007(x=239.9),
+         4=2008(x=293.2), 5=2010(x=346.5), 6=2011(x=399.8),
+         7=2015(x=453.1), 8=2018(x=506.4), 9=2020(x=559.7),
+         10=2021(x=613.0), 11=2022(x=666.3), 12=2024(x=719.6)
+
+    KOSPI: [505,627,1379,1897,1124,2051,1825,1961,2041,2873,2977,2236,2400]
+    y = 370 - (v-500)*290/3000
+    505  → 370-0.48=369.5→370
+    627  → 370-12.28=357.7→358
+    1379 → 370-84.87=285.1→285
+    1897 → 370-135.1=234.9→235
+    1124 → 370-59.95=310.1→310
+    2051 → 370-150.1=219.9→220
+    1825 → 370-128.3=241.7→242
+    1961 → 370-140.4=229.6→230
+    2041 → 370-147.5=222.5→223
+    2873 → 370-228.0=142.0→142
+    2977 → 370-238.0=132.0→132
+    2236 → 370-166.9=203.1→203
+    2400 → 370-183.0=187.0→187
+  -->
+
+  <!-- 박스피 영역 강조 (2011~2016 → idx 6~7, x=400~453) -->
+  <rect x="400" y="80" width="54" height="290" fill="#94a3b8" opacity="0.1"/>
+  <text x="413" y="98" font-size="11" fill="#94a3b8">박스피 2011~2016</text>
+
+  <!-- KOSPI 라인 (#60a5fa) -->
+  <polyline points="80,370 133,358 187,285 240,235 293,310 347,220 400,242 453,230 507,223 560,142 613,132 666,203 720,187"
+            fill="none" stroke="#60a5fa" stroke-width="2.5" stroke-linejoin="round"/>
+
+  <!-- KOSPI 마커 (주요 포인트만) -->
+  <circle cx="80"  cy="370" r="3" fill="#60a5fa"/>
+  <circle cx="133" cy="358" r="3" fill="#60a5fa"/>
+  <circle cx="187" cy="285" r="3" fill="#60a5fa"/>
+  <circle cx="240" cy="235" r="3" fill="#60a5fa"/>
+  <circle cx="293" cy="310" r="3" fill="#60a5fa"/>
+  <circle cx="347" cy="220" r="3" fill="#60a5fa"/>
+  <circle cx="400" cy="242" r="3" fill="#60a5fa"/>
+  <circle cx="453" cy="230" r="3" fill="#60a5fa"/>
+  <circle cx="507" cy="223" r="3" fill="#60a5fa"/>
+  <circle cx="560" cy="142" r="3" fill="#60a5fa"/>
+  <circle cx="613" cy="132" r="3" fill="#60a5fa"/>
+  <circle cx="666" cy="203" r="3" fill="#60a5fa"/>
+  <circle cx="720" cy="187" r="3" fill="#60a5fa"/>
+
+  <!--
+    이벤트 마커 역삼각형 ▼
+    polygon points="x-6,y_marker-10 x+6,y_marker-10 x,y_marker"
+    마커는 라인 위 ~15px
+
+    idx=0(2000, x=80, KOSPI y=370): y_marker=370-15=355 → 하지만 라벨은 위쪽에
+      → 라인이 맨 아래(370)이므로 마커를 라인 위에: y_marker = 370-20 = 350
+      → 라벨 y=240 (사양대로)
+    idx=4(2008, x=293, KOSPI y=310): y_marker=310-15=295, 라벨 y=275
+    idx=9(2020, x=560, KOSPI y=142): y_marker=142-15=127, 라벨 y=145
+    idx=11(2022, x=666, KOSPI y=203): y_marker=203-15=188, 라벨 y=240
+  -->
+
+  <!-- IT버블 마커 (idx=0, x=80) -->
+  <polygon points="74,340 86,340 80,350" fill="#f59e0b"/>
+  <text x="82" y="237" font-size="10" fill="#f59e0b">IT버블</text>
+  <line x1="80" y1="340" x2="80" y2="250" stroke="#f59e0b" stroke-width="1" stroke-dasharray="3,3" opacity="0.6"/>
+
+  <!-- 글로벌 위기 마커 (idx=4, x=293) -->
+  <polygon points="287,295 299,295 293,305" fill="#f59e0b"/>
+  <text x="298" y="273" font-size="10" fill="#f59e0b">글로벌 위기</text>
+  <line x1="293" y1="295" x2="293" y2="278" stroke="#f59e0b" stroke-width="1" stroke-dasharray="3,3" opacity="0.6"/>
+
+  <!-- 코로나 마커 (idx=9, x=560) -->
+  <polygon points="554,127 566,127 560,137" fill="#f59e0b"/>
+  <text x="563" y="120" font-size="10" fill="#f59e0b">코로나</text>
+
+  <!-- 2차전지 부진 마커 (idx=11, x=666) -->
+  <polygon points="660,188 672,188 666,198" fill="#f59e0b"/>
+  <text x="620" y="237" font-size="10" fill="#f59e0b">2차전지 부진</text>
+  <line x1="666" y1="198" x2="650" y2="240" stroke="#f59e0b" stroke-width="1" stroke-dasharray="3,3" opacity="0.6"/>
+
+  <!-- X축 레이블 (5개) -->
+  <text x="80"  y="388" text-anchor="middle" font-size="11" fill="#94a3b8">2000</text>
+  <text x="293" y="388" text-anchor="middle" font-size="11" fill="#94a3b8">2008</text>
+  <text x="453" y="388" text-anchor="middle" font-size="11" fill="#94a3b8">2015</text>
+  <text x="560" y="388" text-anchor="middle" font-size="11" fill="#94a3b8">2020</text>
+  <text x="720" y="388" text-anchor="middle" font-size="11" fill="#94a3b8">2024</text>
+
+  <!-- 캡션 -->
+  <text x="400" y="425" text-anchor="middle" font-size="11" fill="#64748b">Source: KRX 연말 종가</text>
+</svg>

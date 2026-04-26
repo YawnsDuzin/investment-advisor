@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" font-family="system-ui, -apple-system, sans-serif">
+  <rect width="800" height="450" fill="#0f1419"/>
+
+  <!-- 제목 영역 -->
+  <text x="400" y="30" text-anchor="middle" font-size="18" fill="#e2e8f0" font-weight="bold">RSI 다이버전스 — 가격 신고가, RSI 하락</text>
+  <text x="400" y="50" text-anchor="middle" font-size="12" fill="#94a3b8">약세 다이버전스 — 추세 약화 신호</text>
+
+  <!-- ===== 상단 pane: 가격 차트 (y=70~250) ===== -->
+  <!-- 상단 pane 배경 -->
+  <rect x="60" y="70" width="680" height="180" fill="#1a1f2e" rx="4"/>
+
+  <!-- 상단 그리드 라인 -->
+  <line x1="60" y1="130" x2="740" y2="130" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <line x1="60" y1="160" x2="740" y2="160" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <line x1="60" y1="190" x2="740" y2="190" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <line x1="60" y1="220" x2="740" y2="220" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+
+  <!-- Y축 "가격" 라벨 (회전) -->
+  <text x="20" y="165" text-anchor="middle" font-size="11" fill="#94a3b8" transform="rotate(-90, 20, 165)">가격</text>
+
+  <!-- 가격 라인 (녹색 #4ade80) -->
+  <!-- prices: [60,65,72,78,85,88,92,90,95] → y: [210,190,162,138,110,98,82,90,70] -->
+  <!-- x positions: 60, 145, 230, 315, 400, 485, 570, 655, 740 -->
+  <polyline points="60,210 145,190 230,162 315,138 400,110 485,98 570,82 655,90 740,70"
+            fill="none" stroke="#4ade80" stroke-width="2" stroke-linejoin="round"/>
+
+  <!-- 가격 데이터 포인트 (작은 원) -->
+  <circle cx="60" cy="210" r="3" fill="#4ade80"/>
+  <circle cx="145" cy="190" r="3" fill="#4ade80"/>
+  <circle cx="230" cy="162" r="3" fill="#4ade80"/>
+  <circle cx="315" cy="138" r="3" fill="#4ade80"/>
+  <circle cx="400" cy="110" r="3" fill="#4ade80"/>
+  <circle cx="485" cy="98" r="3" fill="#4ade80"/>
+
+  <!-- 신고가 마커 (570,82): 별 모양 대신 다이아몬드 마커 -->
+  <polygon points="570,76 575,82 570,88 565,82" fill="#f59e0b" stroke="#f59e0b"/>
+  <text x="570" y="72" text-anchor="middle" font-size="9" fill="#f59e0b">신고가</text>
+
+  <!-- 이전 고가 마커 -->
+  <circle cx="655" cy="90" r="3" fill="#4ade80"/>
+  <circle cx="740" cy="70" r="4" fill="#f59e0b" stroke="#f59e0b"/>
+  <text x="752" y="73" font-size="9" fill="#f59e0b">+5%</text>
+
+  <!-- 상단 pane X축 -->
+  <line x1="60" y1="250" x2="740" y2="250" stroke="#2d3748" stroke-width="1"/>
+  <text x="60" y="265" text-anchor="middle" font-size="10" fill="#94a3b8">2024.05</text>
+  <text x="285" y="265" text-anchor="middle" font-size="10" fill="#94a3b8">06</text>
+  <text x="510" y="265" text-anchor="middle" font-size="10" fill="#94a3b8">07</text>
+  <text x="735" y="265" text-anchor="middle" font-size="10" fill="#94a3b8">08</text>
+
+  <!-- ===== 하단 pane: RSI (y=275~395) ===== -->
+  <rect x="60" y="275" width="680" height="120" fill="#1a1f2e" rx="4"/>
+
+  <!-- RSI 그리드 -->
+  <line x1="60" y1="311" x2="740" y2="311" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <line x1="60" y1="335" x2="740" y2="335" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <line x1="60" y1="359" x2="740" y2="359" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+
+  <!-- RSI 70 과매수 점선 -->
+  <!-- y = 390 - rsi/100 * 120 → 70: y=306, 50: y=330, 30: y=354 -->
+  <!-- 하단 pane 오프셋: y_base=275, pane_h=120 → y = 275 + (100-rsi)/100*120 -->
+  <!-- 70: y=275+30/100*120=311, 50: y=275+50/100*120=335, 30: y=275+70/100*120=359 -->
+  <line x1="60" y1="311" x2="740" y2="311" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4,4" opacity="0.6"/>
+  <line x1="60" y1="359" x2="740" y2="359" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4,4" opacity="0.6"/>
+  <text x="745" y="314" font-size="10" fill="#94a3b8">과매수(70)</text>
+  <text x="745" y="362" font-size="10" fill="#94a3b8">과매도(30)</text>
+
+  <!-- Y축 RSI 라벨 -->
+  <text x="20" y="340" text-anchor="middle" font-size="11" fill="#94a3b8" transform="rotate(-90, 20, 340)">RSI</text>
+  <text x="52" y="314" text-anchor="end" font-size="9" fill="#94a3b8">70</text>
+  <text x="52" y="338" text-anchor="end" font-size="9" fill="#94a3b8">50</text>
+  <text x="52" y="362" text-anchor="end" font-size="9" fill="#94a3b8">30</text>
+
+  <!-- RSI 라인 (청색 #60a5fa) -->
+  <!-- RSI: [50,55,65,72,75,70,65,62,60] -->
+  <!-- y = 275 + (100-rsi)/100 * 120 -->
+  <!-- 50→335, 55→329, 65→317, 72→310.4≈310, 75→308, 70→311, 65→317, 62→320, 60→323 -->
+  <polyline points="60,335 145,329 230,317 315,310 400,308 485,311 570,317 655,320 740,323"
+            fill="none" stroke="#60a5fa" stroke-width="2" stroke-linejoin="round"/>
+
+  <!-- RSI 데이터 포인트 -->
+  <circle cx="60" cy="335" r="3" fill="#60a5fa"/>
+  <circle cx="145" cy="329" r="3" fill="#60a5fa"/>
+  <circle cx="230" cy="317" r="3" fill="#60a5fa"/>
+  <circle cx="315" cy="310" r="3" fill="#60a5fa"/>
+  <circle cx="400" cy="308" r="3" fill="#60a5fa"/>
+  <circle cx="485" cy="311" r="3" fill="#60a5fa"/>
+  <circle cx="570" cy="317" r="3" fill="#60a5fa"/>
+  <circle cx="655" cy="320" r="3" fill="#60a5fa"/>
+  <circle cx="740" cy="323" r="3" fill="#60a5fa"/>
+
+  <!-- RSI X축 -->
+  <line x1="60" y1="395" x2="740" y2="395" stroke="#2d3748" stroke-width="1"/>
+
+  <!-- ===== 약세 다이버전스 강조 박스 (마지막 1/3, x=505~740) ===== -->
+  <!-- 상단 pane 박스: x=505, y=68, w=237, h=190 -->
+  <rect x="505" y="68" width="237" height="192" fill="none" stroke="#ef4444" stroke-width="1.5" stroke-dasharray="5,3" rx="3"/>
+  <!-- 하단 pane 박스: x=505, y=273, w=237, h=124 -->
+  <rect x="505" y="273" width="237" height="124" fill="none" stroke="#ef4444" stroke-width="1.5" stroke-dasharray="5,3" rx="3"/>
+
+  <!-- 연결선 (두 박스 사이) -->
+  <line x1="623" y1="260" x2="623" y2="273" stroke="#ef4444" stroke-width="1" stroke-dasharray="3,2" opacity="0.7"/>
+
+  <!-- 약세 다이버전스 라벨 -->
+  <text x="744" y="190" font-size="12" fill="#ef4444" font-weight="bold">약세</text>
+  <text x="744" y="205" font-size="12" fill="#ef4444" font-weight="bold">다이버전스</text>
+
+  <!-- 화살표 표시: 가격 ↑, RSI ↓ -->
+  <text x="515" y="88" font-size="11" fill="#4ade80">가격 ↑</text>
+  <text x="515" y="293" font-size="11" fill="#ef4444">RSI ↓</text>
+
+  <!-- 캡션 -->
+  <text x="400" y="425" text-anchor="middle" font-size="11" fill="#94a3b8">예시 — 삼성전자 2024.07 패턴</text>
+</svg>

@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" font-family="system-ui, -apple-system, sans-serif">
+  <rect width="800" height="450" fill="#0f1419"/>
+
+  <!-- 제목 / 부제 -->
+  <text x="400" y="30" text-anchor="middle" font-size="18" font-weight="bold" fill="#e2e8f0">역전 금리 곡선 (Inverted Yield Curve)</text>
+  <text x="400" y="50" text-anchor="middle" font-size="12" fill="#94a3b8">단기 &gt; 장기 — 침체 12~18개월 선행 신호</text>
+
+  <!-- 배경 패널 -->
+  <rect x="120" y="80" width="600" height="290" fill="#1a1f2e" rx="4"/>
+
+  <!-- Y축 격자 (0~6, step 1) -->
+  <!-- y = 370 - rate*290/6 -->
+  <!-- 0→370, 1→321.7, 2→273.3, 3→225, 4→176.7, 5→128.3, 6→80 -->
+  <line x1="120" y1="370" x2="720" y2="370" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <line x1="120" y1="322" x2="720" y2="322" stroke="#2d3748" stroke-width="1" opacity="0.3"/>
+  <line x1="120" y1="273" x2="720" y2="273" stroke="#2d3748" stroke-width="1" opacity="0.3"/>
+  <line x1="120" y1="225" x2="720" y2="225" stroke="#2d3748" stroke-width="1" opacity="0.3"/>
+  <line x1="120" y1="177" x2="720" y2="177" stroke="#2d3748" stroke-width="1" opacity="0.3"/>
+  <line x1="120" y1="128" x2="720" y2="128" stroke="#2d3748" stroke-width="1" opacity="0.3"/>
+  <line x1="120" y1="80"  x2="720" y2="80"  stroke="#2d3748" stroke-width="1" opacity="0.3"/>
+
+  <!-- Y축 라벨 -->
+  <text x="112" y="374" text-anchor="end" font-size="11" fill="#94a3b8">0%</text>
+  <text x="112" y="326" text-anchor="end" font-size="11" fill="#94a3b8">1%</text>
+  <text x="112" y="277" text-anchor="end" font-size="11" fill="#94a3b8">2%</text>
+  <text x="112" y="229" text-anchor="end" font-size="11" fill="#94a3b8">3%</text>
+  <text x="112" y="181" text-anchor="end" font-size="11" fill="#94a3b8">4%</text>
+  <text x="112" y="132" text-anchor="end" font-size="11" fill="#94a3b8">5%</text>
+  <text x="112" y="84"  text-anchor="end" font-size="11" fill="#94a3b8">6%</text>
+
+  <!-- X축 라벨 -->
+  <text x="180" y="390" text-anchor="middle" font-size="12" fill="#94a3b8">3M</text>
+  <text x="340" y="390" text-anchor="middle" font-size="12" fill="#94a3b8">2Y</text>
+  <text x="500" y="390" text-anchor="middle" font-size="12" fill="#94a3b8">10Y</text>
+  <text x="660" y="390" text-anchor="middle" font-size="12" fill="#94a3b8">30Y</text>
+
+  <!-- X축 수직선(틱) -->
+  <line x1="180" y1="370" x2="180" y2="375" stroke="#94a3b8" stroke-width="1"/>
+  <line x1="340" y1="370" x2="340" y2="375" stroke="#94a3b8" stroke-width="1"/>
+  <line x1="500" y1="370" x2="500" y2="375" stroke="#94a3b8" stroke-width="1"/>
+  <line x1="660" y1="370" x2="660" y2="375" stroke="#94a3b8" stroke-width="1"/>
+
+  <!-- 데이터 좌표 계산 (y = 370 - rate*290/6):
+       3M  5.4% → 370 - 5.4*48.333 = 370 - 261.0 = 109.0
+       2Y  4.8% → 370 - 4.8*48.333 = 370 - 232.0 = 138.0
+       10Y 4.2% → 370 - 4.2*48.333 = 370 - 203.0 = 167.0
+       30Y 4.4% → 370 - 4.4*48.333 = 370 - 212.7 = 157.3 -->
+
+  <!-- 곡선 위쪽 강조 영역 -->
+  <polygon
+    points="180,109 340,138 500,167 660,157 660,370 180,370"
+    fill="#ef4444" opacity="0.10"/>
+
+  <!-- 라인 -->
+  <polyline
+    points="180,109 340,138 500,167 660,157"
+    fill="none" stroke="#ef4444" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+
+  <!-- 마커 -->
+  <circle cx="180" cy="109" r="8" fill="#ef4444"/>
+  <circle cx="340" cy="138" r="8" fill="#ef4444"/>
+  <circle cx="500" cy="167" r="8" fill="#ef4444"/>
+  <circle cx="660" cy="157" r="8" fill="#ef4444"/>
+
+  <!-- 수치 라벨 -->
+  <text x="180" y="95"  text-anchor="middle" font-size="13" fill="#e2e8f0" font-weight="bold">5.4%</text>
+  <text x="340" y="124" text-anchor="middle" font-size="13" fill="#e2e8f0" font-weight="bold">4.8%</text>
+  <text x="500" y="153" text-anchor="middle" font-size="13" fill="#e2e8f0" font-weight="bold">4.2%</text>
+  <text x="660" y="143" text-anchor="middle" font-size="13" fill="#e2e8f0" font-weight="bold">4.4%</text>
+
+  <!-- 경고 박스 (우상단) -->
+  <rect x="520" y="90" width="190" height="70" fill="#1a1f2e" opacity="0.85" rx="4" stroke="#ef4444" stroke-width="1"/>
+  <text x="535" y="115" font-size="14" fill="#ef4444" font-weight="bold">&#x26A0; 역전 발생</text>
+  <text x="535" y="135" font-size="12" fill="#e2e8f0">&#x2192; 침체 시그널</text>
+  <text x="535" y="152" font-size="11" fill="#94a3b8">예상: 12~18개월 후</text>
+
+  <!-- 캡션 -->
+  <text x="400" y="425" text-anchor="middle" font-size="11" fill="#64748b">예: 2022.07 미국 10Y-3M 역전 → 2024 침체 우려 누적</text>
+</svg>

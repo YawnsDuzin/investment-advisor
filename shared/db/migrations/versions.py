@@ -1374,6 +1374,49 @@ def _migrate_to_v35(cur) -> None:
     print(f"[DB] v35: 교육 토픽 {len(NEW_TOPICS_V35)}개 추가 (tools 카테고리 신설)")
 
 
+def _migrate_to_v36(cur) -> None:
+    """Education 시각화 적용 — 14개 토픽 markdown content 갱신 (UPDATE 패턴 신설).
+
+    v35까지의 모든 마이그레이션은 신규 row INSERT (ON CONFLICT DO NOTHING).
+    본 v36은 본 시스템 첫 콘텐츠 갱신 마이그레이션 — 기존 row 의 content 를
+    SVG 이미지 참조 포함 버전으로 UPDATE 한다.
+
+    멱등성: WHERE content IS DISTINCT FROM 가드로 동일 content 재할당 시 no-op.
+    신규 DB 의 경우 v21에서 ALL_TOPICS 전체가 이미 시각화 포함 버전으로 시드되었으므로
+    v36 UPDATE 도 변화 없음 (멱등).
+
+    대상 슬러그: spec doc 2026-04-26-education-svg-visualizations-design.md 참조.
+    """
+    from shared.db.migrations.seeds_education import ALL_TOPICS
+
+    visual_slugs = {
+        "per-pbr-roe", "business-cycle", "chart-key-five",
+        "momentum-investing", "diversification", "risk-adjusted-return",
+        "correlation-trap", "interest-rates", "yield-curve-inversion",
+        "what-if-2015", "korea-market-timeline", "tesla-eight-years",
+        "factor-six-axes", "market-regime-reading",
+    }
+
+    affected = 0
+    for t in ALL_TOPICS:
+        if t["slug"] not in visual_slugs:
+            continue
+        cur.execute(
+            """UPDATE education_topics
+               SET content = %s
+               WHERE slug = %s
+                 AND content IS DISTINCT FROM %s""",
+            (t["content"], t["slug"], t["content"]),
+        )
+        affected += cur.rowcount
+
+    cur.execute("""
+        INSERT INTO schema_version (version) VALUES (36)
+        ON CONFLICT (version) DO NOTHING;
+    """)
+    print(f"[DB] v36: 시각화 토픽 content 갱신 {affected}건 (대상 14건, 동일 content 는 no-op)")
+
+
 def _migrate_to_v33(cur) -> None:
     """v33: screener_presets — 사용자 커스텀 스크리너 프리셋 저장 (로드맵 UI-6).
 

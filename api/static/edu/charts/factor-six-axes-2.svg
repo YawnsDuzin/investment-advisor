@@ -1,0 +1,178 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" font-family="system-ui, -apple-system, sans-serif">
+  <rect width="800" height="450" fill="#0f1419"/>
+
+  <!-- 제목 / 부제 -->
+  <text x="400" y="30" text-anchor="middle" font-size="18" font-weight="bold" fill="#e2e8f0">팩터 6축 — 5가지 패턴 비교</text>
+  <text x="400" y="50" text-anchor="middle" font-size="12" fill="#94a3b8">본 시스템 사용자가 자주 보는 패턴</text>
+
+  <!-- ──────────────────────────────────────────
+       미니 레이더 5개: cx=[120,260,400,540,680] cy=200 R=50
+       6축 단위벡터 (ux,uy):
+         i=0: (0,-1)
+         i=1: (0.866,-0.5)
+         i=2: (0.866,0.5)
+         i=3: (0,-1→+1 → 0,1)
+         i=4: (-0.866,0.5)
+         i=5: (-0.866,-0.5)
+       r=25 육각형: 각 i에서 점 (cx+25*ux, cy+25*uy)
+       r=50 육각형: 각 i에서 점 (cx+50*ux, cy+50*uy)
+  ──────────────────────────────────────────── -->
+
+  <!-- ====== 레이더 1: 모멘텀 (cx=120) ====== -->
+  <!-- r=25 grid -->
+  <polygon points="120,175 141.65,187.5 141.65,212.5 120,225 98.35,212.5 98.35,187.5"
+           fill="none" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <!-- r=50 grid -->
+  <polygon points="120,150 163.3,175 163.3,225 120,250 76.7,225 76.7,175"
+           fill="none" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <!-- 6축 선 -->
+  <line x1="120" y1="200" x2="120" y2="150" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <line x1="120" y1="200" x2="163.3" y2="175" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <line x1="120" y1="200" x2="163.3" y2="225" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <line x1="120" y1="200" x2="120" y2="250" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <line x1="120" y1="200" x2="76.7" y2="225" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <line x1="120" y1="200" x2="76.7" y2="175" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <!-- 데이터: r1m=0.85 r3m=0.85 r6m=0.85 r12m=0.6 vol60=0.7 volr=0.8
+       r1m:  (120, 200-50*0.85)=(120,157.5)
+       r3m:  (120+50*0.866*0.85, 200-50*0.5*0.85)=(156.8,178.7)
+       r6m:  (120+50*0.866*0.85, 200+50*0.5*0.85)=(156.8,221.3)
+       r12m: (120, 200+50*0.6)=(120,230)
+       vol60:(120-50*0.866*0.7, 200+50*0.5*0.7)=(89.7,217.5)
+       volr: (120-50*0.866*0.8, 200-50*0.5*0.8)=(85.4,180)
+  -->
+  <polygon points="120,157.5 156.8,178.7 156.8,221.3 120,230 89.7,217.5 85.4,180"
+           fill="#4ade80" fill-opacity="0.3" stroke="#4ade80" stroke-width="2"/>
+
+  <!-- ====== 레이더 2: 턴어라운드 (cx=260) ====== -->
+  <!-- r=25 grid -->
+  <polygon points="260,175 281.65,187.5 281.65,212.5 260,225 238.35,212.5 238.35,187.5"
+           fill="none" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <!-- r=50 grid -->
+  <polygon points="260,150 303.3,175 303.3,225 260,250 216.7,225 216.7,175"
+           fill="none" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <!-- 6축 선 -->
+  <line x1="260" y1="200" x2="260" y2="150" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <line x1="260" y1="200" x2="303.3" y2="175" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <line x1="260" y1="200" x2="303.3" y2="225" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <line x1="260" y1="200" x2="260" y2="250" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <line x1="260" y1="200" x2="216.7" y2="225" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <line x1="260" y1="200" x2="216.7" y2="175" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <!-- 데이터: r1m=0.75 r3m=0.5 r6m=0.3 r12m=0.15 vol60=0.6 volr=0.9
+       r1m:  (260,200-50*0.75)=(260,162.5)
+       r3m:  (260+50*0.866*0.5,200-50*0.5*0.5)=(281.65,187.5)
+       r6m:  (260+50*0.866*0.3,200+50*0.5*0.3)=(272.99,207.5)
+       r12m: (260,200+50*0.15)=(260,207.5)
+       vol60:(260-50*0.866*0.6,200+50*0.5*0.6)=(234.02,215)
+       volr: (260-50*0.866*0.9,200-50*0.5*0.9)=(221.03,177.5)
+  -->
+  <polygon points="260,162.5 281.65,187.5 272.99,207.5 260,207.5 234.02,215 221.03,177.5"
+           fill="#f59e0b" fill-opacity="0.3" stroke="#f59e0b" stroke-width="2"/>
+
+  <!-- ====== 레이더 3: 저변동 우량주 (cx=400) ====== -->
+  <!-- r=25 grid -->
+  <polygon points="400,175 421.65,187.5 421.65,212.5 400,225 378.35,212.5 378.35,187.5"
+           fill="none" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <!-- r=50 grid -->
+  <polygon points="400,150 443.3,175 443.3,225 400,250 356.7,225 356.7,175"
+           fill="none" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <!-- 6축 선 -->
+  <line x1="400" y1="200" x2="400" y2="150" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <line x1="400" y1="200" x2="443.3" y2="175" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <line x1="400" y1="200" x2="443.3" y2="225" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <line x1="400" y1="200" x2="400" y2="250" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <line x1="400" y1="200" x2="356.7" y2="225" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <line x1="400" y1="200" x2="356.7" y2="175" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <!-- 데이터: r1m=0.55 r3m=0.6 r6m=0.65 r12m=0.7 vol60=0.15 volr=0.4
+       r1m:  (400,200-50*0.55)=(400,172.5)
+       r3m:  (400+50*0.866*0.6,200-50*0.5*0.6)=(425.98,185)
+       r6m:  (400+50*0.866*0.65,200+50*0.5*0.65)=(428.15,216.25)
+       r12m: (400,200+50*0.7)=(400,235)
+       vol60:(400-50*0.866*0.15,200+50*0.5*0.15)=(393.505,203.75)
+       volr: (400-50*0.866*0.4,200-50*0.5*0.4)=(382.68,190)
+  -->
+  <polygon points="400,172.5 425.98,185 428.15,216.25 400,235 393.5,203.75 382.68,190"
+           fill="#60a5fa" fill-opacity="0.3" stroke="#60a5fa" stroke-width="2"/>
+
+  <!-- ====== 레이더 4: 과열 경고 (cx=540) ====== -->
+  <!-- r=25 grid -->
+  <polygon points="540,175 561.65,187.5 561.65,212.5 540,225 518.35,212.5 518.35,187.5"
+           fill="none" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <!-- r=50 grid -->
+  <polygon points="540,150 583.3,175 583.3,225 540,250 496.7,225 496.7,175"
+           fill="none" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <!-- 6축 선 -->
+  <line x1="540" y1="200" x2="540" y2="150" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <line x1="540" y1="200" x2="583.3" y2="175" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <line x1="540" y1="200" x2="583.3" y2="225" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <line x1="540" y1="200" x2="540" y2="250" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <line x1="540" y1="200" x2="496.7" y2="225" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <line x1="540" y1="200" x2="496.7" y2="175" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <!-- 데이터: r1m=0.97 r3m=0.96 r6m=0.85 r12m=0.7 vol60=0.95 volr=0.85
+       r1m:  (540,200-50*0.97)=(540,151.5)
+       r3m:  (540+50*0.866*0.96,200-50*0.5*0.96)=(581.57,176)
+       r6m:  (540+50*0.866*0.85,200+50*0.5*0.85)=(576.805,221.25)
+       r12m: (540,200+50*0.7)=(540,235)
+       vol60:(540-50*0.866*0.95,200+50*0.5*0.95)=(498.865,223.75)
+       volr: (540-50*0.866*0.85,200-50*0.5*0.85)=(503.195,178.75)
+  -->
+  <polygon points="540,151.5 581.57,176 576.8,221.25 540,235 498.87,223.75 503.2,178.75"
+           fill="#ef4444" fill-opacity="0.3" stroke="#ef4444" stroke-width="2"/>
+
+  <!-- ====== 레이더 5: 거래 부재 (cx=680) ====== -->
+  <!-- r=25 grid -->
+  <polygon points="680,175 701.65,187.5 701.65,212.5 680,225 658.35,212.5 658.35,187.5"
+           fill="none" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <!-- r=50 grid -->
+  <polygon points="680,150 723.3,175 723.3,225 680,250 636.7,225 636.7,175"
+           fill="none" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <!-- 6축 선 -->
+  <line x1="680" y1="200" x2="680" y2="150" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <line x1="680" y1="200" x2="723.3" y2="175" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <line x1="680" y1="200" x2="723.3" y2="225" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <line x1="680" y1="200" x2="680" y2="250" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <line x1="680" y1="200" x2="636.7" y2="225" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <line x1="680" y1="200" x2="636.7" y2="175" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <!-- 데이터: r1m=0.5 r3m=0.5 r6m=0.5 r12m=0.5 vol60=0.4 volr=0.08
+       r1m:  (680,200-50*0.5)=(680,175)
+       r3m:  (680+50*0.866*0.5,200-50*0.5*0.5)=(701.65,187.5)
+       r6m:  (680+50*0.866*0.5,200+50*0.5*0.5)=(701.65,212.5)
+       r12m: (680,200+50*0.5)=(680,225)
+       vol60:(680-50*0.866*0.4,200+50*0.5*0.4)=(662.68,210)
+       volr: (680-50*0.866*0.08,200-50*0.5*0.08)=(676.536,198)
+  -->
+  <polygon points="680,175 701.65,187.5 701.65,212.5 680,225 662.68,210 676.54,198"
+           fill="#c084fc" fill-opacity="0.3" stroke="#c084fc" stroke-width="2"/>
+
+  <!-- 패턴 라벨 (y=290) -->
+  <text x="120" y="290" text-anchor="middle" font-size="13" fill="#e2e8f0">모멘텀</text>
+  <text x="260" y="290" text-anchor="middle" font-size="13" fill="#e2e8f0">턴어라운드</text>
+  <text x="400" y="290" text-anchor="middle" font-size="13" fill="#e2e8f0">저변동</text>
+  <text x="540" y="290" text-anchor="middle" font-size="13" fill="#e2e8f0">과열</text>
+  <text x="680" y="290" text-anchor="middle" font-size="13" fill="#e2e8f0">거래부재</text>
+
+  <!-- 부가 설명 (y=308) -->
+  <text x="120" y="308" text-anchor="middle" font-size="10" fill="#94a3b8">추세 진행</text>
+  <text x="260" y="308" text-anchor="middle" font-size="10" fill="#94a3b8">바닥 반등</text>
+  <text x="400" y="308" text-anchor="middle" font-size="10" fill="#94a3b8">안정 우상향</text>
+  <text x="540" y="308" text-anchor="middle" font-size="10" fill="#94a3b8">단기 정점 부근</text>
+  <text x="680" y="308" text-anchor="middle" font-size="10" fill="#94a3b8">관심 부재</text>
+
+  <!-- 6축 정의 (하단) -->
+  <text x="400" y="355" text-anchor="middle" font-size="10" fill="#94a3b8">6축: r1m_pct(상) / r3m_pct(우상) / r6m_pct(우하) / r12m_pct(하) / vol60_pct(좌하) / volume_ratio(좌상)</text>
+
+  <!-- 컬러 범례 -->
+  <circle cx="90" cy="378" r="5" fill="#4ade80"/>
+  <text x="100" y="382" font-size="10" fill="#94a3b8">모멘텀</text>
+  <circle cx="155" cy="378" r="5" fill="#f59e0b"/>
+  <text x="165" y="382" font-size="10" fill="#94a3b8">턴어라운드</text>
+  <circle cx="240" cy="378" r="5" fill="#60a5fa"/>
+  <text x="250" y="382" font-size="10" fill="#94a3b8">저변동 우량주</text>
+  <circle cx="340" cy="378" r="5" fill="#ef4444"/>
+  <text x="350" y="382" font-size="10" fill="#94a3b8">과열 경고</text>
+  <circle cx="415" cy="378" r="5" fill="#c084fc"/>
+  <text x="425" y="382" font-size="10" fill="#94a3b8">거래 부재</text>
+
+  <!-- 캡션 -->
+  <text x="400" y="435" text-anchor="middle" font-size="11" fill="#94a3b8">패턴 매칭으로 신호 강도와 진입 타이밍 판단</text>
+</svg>

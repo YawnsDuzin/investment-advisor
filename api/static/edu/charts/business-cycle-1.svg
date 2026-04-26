@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" font-family="system-ui, -apple-system, sans-serif">
+  <!-- 배경 -->
+  <rect width="800" height="450" fill="#0f1419"/>
+
+  <!-- 제목 -->
+  <text x="400" y="28" text-anchor="middle" font-size="18" font-weight="bold" fill="#e2e8f0">경기 사이클 4단계와 섹터 로테이션</text>
+  <text x="400" y="50" text-anchor="middle" font-size="12" fill="#94a3b8">단계별 평균 12~18개월 지속, 시계방향 진행</text>
+
+  <!-- ════════════════════════════════════════════ -->
+  <!-- 원형 4분할 다이어그램                          -->
+  <!-- 중심 cx=400 cy=240 R=130                      -->
+  <!-- 4개 sector path: 각 90도씩 시계방향            -->
+  <!-- 12시 기준 각도: 상(0도=12시)→우(90도)→하(180)→좌(270) -->
+  <!-- SVG 각도: 0도=3시, -90도=12시 기준             -->
+  <!-- sector arc: cx=400,cy=240, R=130              -->
+  <!--   회복: -90° ~ 0°  → 상단우                    -->
+  <!--   확장:   0° ~ 90° → 하단우                    -->
+  <!--   둔화:  90° ~ 180° → 하단좌                   -->
+  <!--   침체: 180° ~ 270°(-90°) → 상단좌             -->
+  <!-- arc 좌표 계산 (도→라디안, cx=400,cy=240,r=130): -->
+  <!--   P(θ) = (400 + 130·cosθ, 240 + 130·sinθ)     -->
+  <!--   회복: θ=-90°→0°: (400,110)→(530,240)         -->
+  <!--   확장: θ=0°→90°: (530,240)→(400,370)          -->
+  <!--   둔화: θ=90°→180°: (400,370)→(270,240)        -->
+  <!--   침체: θ=180°→270°: (270,240)→(400,110)       -->
+  <!-- ════════════════════════════════════════════ -->
+
+  <!-- 회복 (상단우, 12시→3시): fill #4ade80 -->
+  <path d="M 400 240 L 400 110 A 130 130 0 0 1 530 240 Z"
+        fill="#4ade80" fill-opacity="0.35" stroke="#4ade80" stroke-opacity="0.6" stroke-width="1.5"/>
+
+  <!-- 확장 (하단우, 3시→6시): fill #60a5fa -->
+  <path d="M 400 240 L 530 240 A 130 130 0 0 1 400 370 Z"
+        fill="#60a5fa" fill-opacity="0.35" stroke="#60a5fa" stroke-opacity="0.6" stroke-width="1.5"/>
+
+  <!-- 둔화 (하단좌, 6시→9시): fill #f59e0b -->
+  <path d="M 400 240 L 400 370 A 130 130 0 0 1 270 240 Z"
+        fill="#f59e0b" fill-opacity="0.35" stroke="#f59e0b" stroke-opacity="0.6" stroke-width="1.5"/>
+
+  <!-- 침체 (상단좌, 9시→12시): fill #ef4444 -->
+  <path d="M 400 240 L 270 240 A 130 130 0 0 1 400 110 Z"
+        fill="#ef4444" fill-opacity="0.35" stroke="#ef4444" stroke-opacity="0.6" stroke-width="1.5"/>
+
+  <!-- 외곽 원 테두리 -->
+  <circle cx="400" cy="240" r="130" fill="none" stroke="#2d3748" stroke-width="2" stroke-opacity="0.8"/>
+
+  <!-- 십자 분할 라인 -->
+  <line x1="400" y1="110" x2="400" y2="370" stroke="#1a1f2e" stroke-width="2"/>
+  <line x1="270" y1="240" x2="530" y2="240" stroke="#1a1f2e" stroke-width="2"/>
+
+  <!-- 중앙 원 (중심 표시) -->
+  <circle cx="400" cy="240" r="32" fill="#1a1f2e" stroke="#2d3748" stroke-width="1.5"/>
+  <text x="400" y="236" text-anchor="middle" font-size="11" font-weight="bold" fill="#94a3b8">경기</text>
+  <text x="400" y="250" text-anchor="middle" font-size="11" font-weight="bold" fill="#94a3b8">사이클</text>
+
+  <!-- ── 시계방향 화살표 (원 외곽 r≈145) ── -->
+  <!-- 각 분할 경계 중간지점 45° 위치에 작은 삼각 화살표 -->
+  <!-- 12시→3시 경계: 1시30분 위치 (45°) P=(400+145·cos(-45°), 240+145·sin(-45°))=(502.5, 137.5) -->
+  <!-- 화살표: 작은 삼각형으로 표현, 각 90도 회전 -->
+
+  <!-- 화살표 1: 1시30분 방향 (12시→3시 전환, 회복→확장 방향) θ=315°(-45°) -->
+  <!-- P=(502.5, 137.5) 방향각=45° (시계방향 접선) -->
+  <g transform="translate(502,138) rotate(45)">
+    <polygon points="0,-8 6,4 -6,4" fill="#e2e8f0" fill-opacity="0.6"/>
+  </g>
+
+  <!-- 화살표 2: 4시30분 방향 (3시→6시, 확장→둔화) θ=45° -->
+  <!-- P=(400+145·cos(45°), 240+145·sin(45°))=(502.5, 342.5) 방향각=135° -->
+  <g transform="translate(502,342) rotate(135)">
+    <polygon points="0,-8 6,4 -6,4" fill="#e2e8f0" fill-opacity="0.6"/>
+  </g>
+
+  <!-- 화살표 3: 7시30분 방향 (6시→9시, 둔화→침체) θ=135° -->
+  <!-- P=(400+145·cos(135°), 240+145·sin(135°))=(297.5, 342.5) 방향각=225° -->
+  <g transform="translate(298,342) rotate(225)">
+    <polygon points="0,-8 6,4 -6,4" fill="#e2e8f0" fill-opacity="0.6"/>
+  </g>
+
+  <!-- 화살표 4: 10시30분 방향 (9시→12시, 침체→회복) θ=225° -->
+  <!-- P=(400+145·cos(225°), 240+145·sin(225°))=(297.5, 137.5) 방향각=315° -->
+  <g transform="translate(298,138) rotate(315)">
+    <polygon points="0,-8 6,4 -6,4" fill="#e2e8f0" fill-opacity="0.6"/>
+  </g>
+
+  <!-- ══════════════════════════════════════════ -->
+  <!-- 외곽 라벨 그룹                              -->
+  <!-- ══════════════════════════════════════════ -->
+
+  <!-- 회복 라벨 (12시 위, 상단 중앙) -->
+  <rect x="320" y="62" width="160" height="44" rx="4" fill="#1a1f2e" stroke="#4ade80" stroke-opacity="0.5" stroke-width="1"/>
+  <text x="400" y="80" text-anchor="middle" font-size="14" font-weight="bold" fill="#4ade80">회복 (Recovery)</text>
+  <text x="400" y="96" text-anchor="middle" font-size="11" fill="#94a3b8">→ 경기소비재, 산업재</text>
+
+  <!-- 확장 라벨 (3시 우, 오른쪽) -->
+  <rect x="558" y="200" width="170" height="44" rx="4" fill="#1a1f2e" stroke="#60a5fa" stroke-opacity="0.5" stroke-width="1"/>
+  <text x="643" y="218" text-anchor="middle" font-size="14" font-weight="bold" fill="#60a5fa">확장 (Expansion)</text>
+  <text x="643" y="234" text-anchor="middle" font-size="11" fill="#94a3b8">→ 기술, 금융</text>
+
+  <!-- 둔화 라벨 (6시 아래, 하단 중앙) -->
+  <rect x="300" y="386" width="200" height="44" rx="4" fill="#1a1f2e" stroke="#f59e0b" stroke-opacity="0.5" stroke-width="1"/>
+  <text x="400" y="404" text-anchor="middle" font-size="14" font-weight="bold" fill="#f59e0b">둔화 (Slowdown)</text>
+  <text x="400" y="420" text-anchor="middle" font-size="11" fill="#94a3b8">→ 에너지, 원자재</text>
+
+  <!-- 침체 라벨 (9시 좌, 왼쪽) -->
+  <rect x="52" y="200" width="188" height="44" rx="4" fill="#1a1f2e" stroke="#ef4444" stroke-opacity="0.5" stroke-width="1"/>
+  <text x="146" y="218" text-anchor="middle" font-size="14" font-weight="bold" fill="#ef4444">침체 (Recession)</text>
+  <text x="146" y="234" text-anchor="middle" font-size="11" fill="#94a3b8">→ 필수소비재, 헬스케어</text>
+
+  <!-- 라벨 → 원 연결선 (점선) -->
+  <!-- 회복: (400,106) → (400,110) -->
+  <line x1="400" y1="106" x2="400" y2="118" stroke="#4ade80" stroke-opacity="0.4" stroke-width="1" stroke-dasharray="3,2"/>
+  <!-- 확장: (558,222) → (530,240) -->
+  <line x1="558" y1="222" x2="538" y2="237" stroke="#60a5fa" stroke-opacity="0.4" stroke-width="1" stroke-dasharray="3,2"/>
+  <!-- 둔화: (400,386) → (400,370) -->
+  <line x1="400" y1="386" x2="400" y2="362" stroke="#f59e0b" stroke-opacity="0.4" stroke-width="1" stroke-dasharray="3,2"/>
+  <!-- 침체: (240,222) → (270,240) -->
+  <line x1="240" y1="222" x2="262" y2="237" stroke="#ef4444" stroke-opacity="0.4" stroke-width="1" stroke-dasharray="3,2"/>
+
+  <!-- 캡션 -->
+  <text x="400" y="442" text-anchor="middle" font-size="11" fill="#94a3b8">주식 사이클은 경기 사이클을 6~9개월 선행한다</text>
+</svg>

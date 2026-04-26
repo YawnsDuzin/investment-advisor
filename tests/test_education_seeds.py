@@ -98,3 +98,38 @@ def test_edu_categories_label_includes_tools():
     from api.routes.education import _EDU_CATEGORIES
     assert "tools" in _EDU_CATEGORIES
     assert _EDU_CATEGORIES["tools"] == "도구·시스템 가이드"
+
+
+def test_v36_visual_topics_have_image_refs():
+    """V36 시각화 적용된 14개 슬러그의 content 에 SVG 이미지 참조가 1개 이상 존재."""
+    visual_slugs = {
+        "per-pbr-roe", "business-cycle", "chart-key-five",
+        "momentum-investing", "diversification", "risk-adjusted-return",
+        "correlation-trap", "interest-rates", "yield-curve-inversion",
+        "what-if-2015", "korea-market-timeline", "tesla-eight-years",
+        "factor-six-axes", "market-regime-reading",
+    }
+    matched = [t for t in ALL_TOPICS if t["slug"] in visual_slugs]
+    assert len(matched) == 14, f"expected 14 visual topics, found {len(matched)}"
+    for t in matched:
+        assert "/static/edu/charts/" in t["content"], \
+            f"{t['slug']} missing SVG image reference"
+
+
+def test_svg_files_exist():
+    """모든 시각화 토픽의 차트 파일이 디스크에 존재."""
+    import pathlib
+    base = pathlib.Path(__file__).resolve().parent.parent / "api" / "static" / "edu" / "charts"
+    expected = [
+        "per-pbr-roe-1.svg", "business-cycle-1.svg",
+        "chart-key-five-1.svg", "chart-key-five-2.svg",
+        "momentum-investing-1.svg", "diversification-1.svg",
+        "risk-adjusted-return-1.svg", "risk-adjusted-return-2.svg",
+        "correlation-trap-1.svg", "interest-rates-1.svg",
+        "yield-curve-1.svg", "yield-curve-2.svg",
+        "what-if-2015-1.svg", "korea-market-timeline-1.svg",
+        "tesla-eight-years-1.svg", "factor-six-axes-1.svg",
+        "factor-six-axes-2.svg", "market-regime-1.svg",
+    ]
+    missing = [f for f in expected if not (base / f).exists()]
+    assert not missing, f"missing SVG files: {missing}"
