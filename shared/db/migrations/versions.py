@@ -1536,6 +1536,9 @@ def _migrate_to_v40(cur) -> None:
     UNIQUE(user_id, name) 기존 제약은 유지 — PostgreSQL에서 NULL은 UNIQUE 무관하므로
     여러 시드 row가 user_id NULL 이어도 충돌 없음.
 
+    멱등성: ALTER COLUMN DROP NOT NULL은 PostgreSQL에서 이미 nullable인 컬럼에 호출 시 no-op
+    (별도 IF NOT EXISTS 가드 불필요). ADD COLUMN/CREATE INDEX는 IF NOT EXISTS 명시.
+
     Spec: docs/superpowers/specs/2026-04-26-screener-investor-strategies-design.md §4.2
     """
     cur.execute("""
