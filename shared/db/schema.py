@@ -9,7 +9,7 @@ from shared.db.migrations import run_migrations
 
 
 # ── 스키마 버전 관리 ──────────────────────────────
-SCHEMA_VERSION = 35  # v35: education Tier A·B 14 토픽 + tools 카테고리 신설
+SCHEMA_VERSION = 36  # v36: education 14 토픽 시각화 SVG 참조 삽입 (UPDATE 패턴 신설)
 
 
 def _create_base_schema(cur) -> None:
