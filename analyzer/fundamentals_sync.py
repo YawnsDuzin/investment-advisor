@@ -11,6 +11,8 @@ import math
 from datetime import date
 from typing import Optional
 
+from psycopg2.extras import execute_values
+
 from shared.logger import get_logger
 
 try:
@@ -114,3 +116,40 @@ def fetch_us_fundamental(ticker: str) -> Optional[dict]:
     if all(out[k] is None for k in ("per", "pbr", "eps", "bps", "dps", "dividend_yield")):
         return None
     return out
+
+
+_UPSERT_SQL = """
+INSERT INTO stock_universe_fundamentals (
+    ticker, market, snapshot_date,
+    per, pbr, eps, bps, dps, dividend_yield,
+    data_source
+) VALUES %s
+ON CONFLICT (ticker, market, snapshot_date) DO UPDATE SET
+    per            = EXCLUDED.per,
+    pbr            = EXCLUDED.pbr,
+    eps            = EXCLUDED.eps,
+    bps            = EXCLUDED.bps,
+    dps            = EXCLUDED.dps,
+    dividend_yield = EXCLUDED.dividend_yield,
+    data_source    = EXCLUDED.data_source,
+    fetched_at     = NOW()
+"""
+
+
+def upsert_fundamentals(cur, rows: list[dict]) -> None:
+    """일괄 UPSERT. 빈 리스트는 no-op.
+
+    각 row는 fetch_*_fundamental 결과 + ticker/market/snapshot_date 합본 dict.
+    """
+    if not rows:
+        return
+    values = [
+        (
+            r["ticker"], r["market"], r["snapshot_date"],
+            r.get("per"), r.get("pbr"), r.get("eps"),
+            r.get("bps"), r.get("dps"), r.get("dividend_yield"),
+            r["data_source"],
+        )
+        for r in rows
+    ]
+    execute_values(cur, _UPSERT_SQL, values, page_size=500)

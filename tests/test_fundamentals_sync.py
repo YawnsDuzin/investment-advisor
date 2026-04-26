@@ -136,3 +136,67 @@ def test_fetch_us_returns_none_when_yfinance_missing(monkeypatch):
     import analyzer.fundamentals_sync as mod
     monkeypatch.setattr(mod, "yf", None)
     assert mod.fetch_us_fundamental("AAPL") is None
+
+
+from datetime import date as _date
+
+
+def test_upsert_executes_correct_sql():
+    """단일 row UPSERT — execute_values 호출됨 (sanity check)."""
+    captured = {}
+    def fake_execute_values(cur, sql, rows, **kw):
+        captured["called"] = True
+        captured["row_count"] = len(list(rows))
+
+    # monkeypatch으로 execute_values 교체
+    import analyzer.fundamentals_sync as mod
+    original = mod.execute_values
+    try:
+        mod.execute_values = fake_execute_values
+        cur = MagicMock()
+        rows = [
+            {"ticker": "005930", "market": "KOSPI", "snapshot_date": _date(2026, 4, 25),
+             "per": 12.5, "pbr": 0.95, "eps": 4000, "bps": 50000,
+             "dps": 1600, "dividend_yield": 3.2, "data_source": "pykrx"},
+        ]
+        from analyzer.fundamentals_sync import upsert_fundamentals
+        upsert_fundamentals(cur, rows)
+        assert captured["called"]
+        assert captured["row_count"] == 1
+    finally:
+        mod.execute_values = original
+
+
+def test_upsert_skips_empty_rows():
+    """빈 리스트 → execute 호출 없음."""
+    cur = MagicMock()
+    from analyzer.fundamentals_sync import upsert_fundamentals
+    upsert_fundamentals(cur, [])
+    assert not cur.execute.called
+    assert not cur.executemany.called
+
+
+def test_upsert_uses_on_conflict(monkeypatch):
+    """SQL에 ON CONFLICT (ticker, market, snapshot_date) DO UPDATE 포함 검증."""
+    captured = {}
+    def fake_execute_values(cur, sql, rows, **kw):
+        captured["sql"] = sql
+        captured["rows"] = list(rows)
+    monkeypatch.setattr(
+        "analyzer.fundamentals_sync.execute_values",
+        fake_execute_values,
+    )
+    cur = MagicMock()
+    rows = [{
+        "ticker": "AAPL", "market": "NASDAQ",
+        "snapshot_date": _date(2026, 4, 25),
+        "per": 25.4, "pbr": 8.1, "eps": 6.13,
+        "bps": 19.2, "dps": 0.96, "dividend_yield": 0.58,
+        "data_source": "yfinance_info",
+    }]
+    from analyzer.fundamentals_sync import upsert_fundamentals
+    upsert_fundamentals(cur, rows)
+    sql_upper = captured["sql"].upper()
+    assert "INSERT INTO STOCK_UNIVERSE_FUNDAMENTALS" in sql_upper
+    assert "ON CONFLICT (TICKER, MARKET, SNAPSHOT_DATE) DO UPDATE" in sql_upper
+    assert len(captured["rows"]) == 1
