@@ -49,6 +49,7 @@ _MIGRATIONS = {
     36: _v._migrate_to_v36,
     37: _v._migrate_to_v37,
     38: _v._migrate_to_v38,
+    39: _v._migrate_to_v39,
 }
 
 

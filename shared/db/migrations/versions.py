@@ -1487,6 +1487,45 @@ def _migrate_to_v38(cur) -> None:
     print(f"[DB] v38: Phase 2C basics 시각화 토픽 content 갱신 {affected}건 (대상 7건)")
 
 
+def _migrate_to_v39(cur) -> None:
+    """v39: stock_universe_fundamentals — 종목별 PIT 펀더멘털 시계열.
+
+    pykrx (KR PER/PBR/EPS/BPS/DPS/배당률) + yfinance.info (US trailingPE/priceToBook/...)
+    를 일별로 누적. `stock_universe_ohlcv` 와 동일한 PIT 정책 — FK 미설정으로 상폐 종목 이력 보존.
+
+    Spec: docs/superpowers/specs/2026-04-26-screener-investor-strategies-design.md §3.2
+    """
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS stock_universe_fundamentals (
+            ticker          TEXT NOT NULL,
+            market          TEXT NOT NULL,
+            snapshot_date   DATE NOT NULL,
+            per             NUMERIC(12,4),
+            pbr             NUMERIC(12,4),
+            eps             NUMERIC(18,4),
+            bps             NUMERIC(18,4),
+            dps             NUMERIC(18,4),
+            dividend_yield  NUMERIC(8,4),
+            data_source     TEXT NOT NULL,
+            fetched_at      TIMESTAMPTZ DEFAULT NOW(),
+            PRIMARY KEY (ticker, market, snapshot_date)
+        );
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_fund_latest
+            ON stock_universe_fundamentals(ticker, market, snapshot_date DESC);
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_fund_date
+            ON stock_universe_fundamentals(snapshot_date);
+    """)
+    cur.execute("""
+        INSERT INTO schema_version (version) VALUES (39)
+        ON CONFLICT (version) DO NOTHING;
+    """)
+    print("[DB] v39 마이그레이션 완료 — stock_universe_fundamentals (B-Lite 펀더 PIT)")
+
+
 def _migrate_to_v33(cur) -> None:
     """v33: screener_presets — 사용자 커스텀 스크리너 프리셋 저장 (로드맵 UI-6).
 
