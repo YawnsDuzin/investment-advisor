@@ -75,3 +75,42 @@ def fetch_kr_fundamental(ticker: str, snapshot_date: date) -> Optional[dict]:
         "dividend_yield": _to_float(row.get("DIV")),
         "data_source":    "pykrx",
     }
+
+
+def fetch_us_fundamental(ticker: str) -> Optional[dict]:
+    """US 종목 단일 펀더 조회 (yfinance.info — '현재 스냅샷').
+
+    매일 호출 시 그날 값을 누적하여 일별 PIT 구성. yfinance dividendYield는 ratio
+    (0.0058 = 0.58%)로 반환되므로 표시 단위(%)로 정규화하여 저장.
+
+    Returns:
+        {"per", "pbr", "eps", "bps", "dps", "dividend_yield", "data_source"}
+        또는 None (예외/빈 info).
+    """
+    if yf is None:
+        _log.warning("yfinance 미설치 — US 펀더 sync 불가")
+        return None
+    try:
+        info = yf.Ticker(ticker).info or {}
+    except Exception as e:
+        _log.debug(f"[{ticker}] yfinance 조회 실패: {e}")
+        return None
+    if not info:
+        return None
+
+    div_yield_ratio = _to_float(info.get("dividendYield"))
+    div_yield_pct = (div_yield_ratio * 100) if div_yield_ratio is not None else None
+
+    out = {
+        "per":            _to_float(info.get("trailingPE")),
+        "pbr":            _to_float(info.get("priceToBook")),
+        "eps":            _to_float(info.get("trailingEps")),
+        "bps":            _to_float(info.get("bookValue")),
+        "dps":            _to_float(info.get("dividendRate")),
+        "dividend_yield": div_yield_pct,
+        "data_source":    "yfinance_info",
+    }
+    # 모든 메트릭이 None이면 수집할 가치 없음 (사실상 빈 응답)
+    if all(out[k] is None for k in ("per", "pbr", "eps", "bps", "dps", "dividend_yield")):
+        return None
+    return out

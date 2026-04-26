@@ -72,3 +72,60 @@ def test_fetch_kr_disables_pykrx_on_login_failure(monkeypatch):
     assert fetch_kr_fundamental("005930", date(2026, 4, 25)) is None
     assert len(disable_calls) == 1
     assert "005930" in disable_calls[0]
+
+
+def test_fetch_us_returns_normalized_dict(monkeypatch):
+    """yfinance 응답 → 표준화된 dict (per/pbr/eps/bps/dps/dividend_yield) 변환."""
+    fake_info = {
+        "trailingPE": 25.4,
+        "priceToBook": 8.1,
+        "trailingEps": 6.13,
+        "bookValue": 19.2,
+        "dividendRate": 0.96,
+        "dividendYield": 0.0058,   # yfinance returns ratio (0.58%)
+    }
+    fake_ticker = MagicMock()
+    fake_ticker.info = fake_info
+    monkeypatch.setattr("yfinance.Ticker", lambda t: fake_ticker)
+    from analyzer.fundamentals_sync import fetch_us_fundamental
+    out = fetch_us_fundamental("AAPL")
+    assert out["per"] == 25.4
+    assert out["pbr"] == 8.1
+    assert out["eps"] == 6.13
+    assert out["bps"] == 19.2
+    assert out["dps"] == 0.96
+    # dividend_yield는 % 단위로 정규화 (0.0058 → 0.58)
+    assert abs(out["dividend_yield"] - 0.58) < 0.001
+    assert out["data_source"] == "yfinance_info"
+
+
+def test_fetch_us_handles_missing_keys(monkeypatch):
+    """yfinance.info에 키가 일부 누락 → 해당 필드만 None."""
+    fake_ticker = MagicMock()
+    fake_ticker.info = {"trailingPE": 10.0}  # 나머지 키 없음
+    monkeypatch.setattr("yfinance.Ticker", lambda t: fake_ticker)
+    from analyzer.fundamentals_sync import fetch_us_fundamental
+    out = fetch_us_fundamental("XXX")
+    assert out["per"] == 10.0
+    assert out["pbr"] is None
+    assert out["eps"] is None
+    assert out["dividend_yield"] is None
+    assert out["data_source"] == "yfinance_info"
+
+
+def test_fetch_us_handles_yfinance_exception(monkeypatch):
+    """yfinance 예외 → None (sync는 계속 진행)."""
+    def _raise(t):
+        raise RuntimeError("yfinance throttled")
+    monkeypatch.setattr("yfinance.Ticker", _raise)
+    from analyzer.fundamentals_sync import fetch_us_fundamental
+    assert fetch_us_fundamental("AAPL") is None
+
+
+def test_fetch_us_handles_empty_info(monkeypatch):
+    """info가 빈 dict → None (수집할 가치 없음)."""
+    fake_ticker = MagicMock()
+    fake_ticker.info = {}
+    monkeypatch.setattr("yfinance.Ticker", lambda t: fake_ticker)
+    from analyzer.fundamentals_sync import fetch_us_fundamental
+    assert fetch_us_fundamental("AAPL") is None
