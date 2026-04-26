@@ -9,11 +9,13 @@ from __future__ import annotations
 
 import math
 import time
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
 from psycopg2.extras import execute_values
 
+from shared.config import DatabaseConfig, FundamentalsConfig
+from shared.db import get_connection
 from shared.logger import get_logger
 
 try:
@@ -29,6 +31,12 @@ except ImportError:
 from analyzer.stock_data import _check_pykrx, _is_login_failure, _disable_pykrx
 
 _log = get_logger("fundamentals_sync")
+
+KST = timezone(timedelta(hours=9))
+
+
+def _today_kst() -> date:
+    return datetime.now(KST).date()
 
 
 def _to_float(v) -> Optional[float]:
@@ -225,3 +233,50 @@ def sync_market_fundamentals(
         f"{len(rows)}/{len(tickers)} 종목{abort_marker} / {duration:.1f}s"
     )
     return len(rows)
+
+
+def run_fundamentals_sync(
+    db_cfg: DatabaseConfig,
+    cfg: FundamentalsConfig,
+    snapshot_date: Optional[date] = None,
+) -> int:
+    """`stock_universe` 활성 종목을 시장별로 묶어 일괄 펀더 sync.
+
+    Args:
+        snapshot_date: 수집 기준일. None 이면 오늘 (KST).
+
+    Returns:
+        UPSERT 총 row 수. cfg.sync_enabled=False 이면 0.
+    """
+    if not cfg.sync_enabled:
+        _log.info("FUNDAMENTALS_SYNC_ENABLED=false — skip")
+        return 0
+
+    snap = snapshot_date or _today_kst()
+    conn = get_connection(db_cfg)
+    total = 0
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT ticker, market FROM stock_universe
+                WHERE listed = TRUE AND has_preferred = FALSE
+            """)
+            rows = cur.fetchall()
+        # 시장별 그룹핑
+        by_market: dict[str, list[str]] = {}
+        for ticker, market in rows:
+            by_market.setdefault(market.upper(), []).append(ticker)
+
+        for market, tickers in by_market.items():
+            kw = {}
+            if market in _US_MARKETS and cfg.us_max_consecutive_failures > 0:
+                kw["max_consecutive_failures"] = cfg.us_max_consecutive_failures
+            with conn.cursor() as cur:
+                n = sync_market_fundamentals(cur, market, tickers, snap, **kw)
+                conn.commit()
+                total += n
+    finally:
+        conn.close()
+
+    _log.info(f"펀더 sync 완료 — 총 {total} row UPSERT (snapshot={snap})")
+    return total

@@ -323,3 +323,52 @@ def test_sync_consecutive_counter_resets_on_success(monkeypatch):
         max_consecutive_failures=5,
     )
     assert n == 50  # 짝수 50개 성공
+
+
+def test_run_fundamentals_sync_queries_universe(monkeypatch):
+    """run_fundamentals_sync — stock_universe에서 활성 종목 시장별로 묶어 sync_market_fundamentals 호출."""
+    fake_conn = MagicMock()
+    fake_cur = MagicMock()
+    fake_conn.cursor.return_value.__enter__.return_value = fake_cur
+    fake_cur.fetchall.return_value = [
+        ("005930", "KOSPI"), ("000660", "KOSPI"),
+        ("035420", "KOSDAQ"),
+        ("AAPL", "NASDAQ"), ("MSFT", "NASDAQ"),
+    ]
+
+    monkeypatch.setattr(
+        "analyzer.fundamentals_sync.get_connection",
+        lambda cfg: fake_conn,
+    )
+
+    captured_calls = []
+    def fake_sync(cur, market, tickers, snap, **kw):
+        captured_calls.append((market, sorted(tickers)))
+        return len(tickers)
+    monkeypatch.setattr(
+        "analyzer.fundamentals_sync.sync_market_fundamentals",
+        fake_sync,
+    )
+
+    from analyzer.fundamentals_sync import run_fundamentals_sync
+    from shared.config import DatabaseConfig, FundamentalsConfig
+    total = run_fundamentals_sync(DatabaseConfig(), FundamentalsConfig())
+    # 시장별로 한 번씩 호출
+    by_market = {m: tk for m, tk in captured_calls}
+    assert by_market["KOSPI"] == ["000660", "005930"]
+    assert by_market["KOSDAQ"] == ["035420"]
+    assert by_market["NASDAQ"] == ["AAPL", "MSFT"]
+    assert total == 5
+
+
+def test_run_fundamentals_sync_respects_disabled_flag(monkeypatch):
+    """sync_enabled=False 면 즉시 0 반환 (DB 접속 안 함)."""
+    monkeypatch.setattr(
+        "analyzer.fundamentals_sync.get_connection",
+        lambda cfg: pytest.fail("DB 접속이 호출되면 안 됨"),
+    )
+    from analyzer.fundamentals_sync import run_fundamentals_sync
+    from shared.config import DatabaseConfig, FundamentalsConfig
+    cfg = FundamentalsConfig()
+    cfg.sync_enabled = False
+    assert run_fundamentals_sync(DatabaseConfig(), cfg) == 0

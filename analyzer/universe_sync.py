@@ -1679,7 +1679,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     p.add_argument("--mode",
                    choices=("meta", "price", "auto", "ohlcv", "backfill", "cleanup",
-                            "indices", "industry_kr"),
+                            "indices", "industry_kr", "fundamentals"),
                    default="auto",
                    help=("meta: 주간 메타/시총/업종 | "
                          "price: 일별 가격 (+ OHLCV if OHLCV_ON_PRICE_SYNC=true) | "
@@ -1688,7 +1688,8 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                          "backfill: 과거 N일 OHLCV 일괄 수집 (--days 또는 --ticker) | "
                          "cleanup: retention 초과 OHLCV row 삭제 | "
                          "indices: 벤치마크 지수(KOSPI/S&P500 등) OHLCV 수집 -로드맵 B2 | "
-                         "industry_kr: 한국 종목 industry/sector_gics yfinance 백필 -P0-B"))
+                         "industry_kr: 한국 종목 industry/sector_gics yfinance 백필 -P0-B | "
+                         "fundamentals: 펀더멘털 PIT 일별 sync — pykrx KR + yfinance.info US (B-Lite)"))
     p.add_argument("--all", action="store_true",
                    help="industry_kr 모드에서 industry NULL 필터 해제 (전체 재수집)")
     p.add_argument("--limit", type=int, default=None,
@@ -1870,6 +1871,11 @@ def main(argv: list[str] | None = None) -> int:
         elif args.market == "NDX":
             codes = ("NDX100",)
         _log.info(f"결과: {sync_indices_ohlcv(cfg.db, days=days, codes=codes)}")
+        return 0
+
+    if args.mode == "fundamentals":
+        from analyzer.fundamentals_sync import run_fundamentals_sync
+        run_fundamentals_sync(cfg.db, cfg.fundamentals)
         return 0
 
     if not krx_markets and not us_filter:
