@@ -1,0 +1,149 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" font-family="system-ui, -apple-system, sans-serif">
+  <rect width="800" height="450" fill="#0f1419"/>
+
+  <!-- 제목 / 부제 -->
+  <text x="400" y="30" text-anchor="middle" font-size="18" font-weight="bold" fill="#e2e8f0">GameStop 숏스퀴즈 (2021.01)</text>
+  <text x="400" y="50" text-anchor="middle" font-size="12" fill="#94a3b8">공매도 잔고 110% → 폭등·청산</text>
+
+  <!-- 차트 배경 -->
+  <rect x="80" y="80" width="640" height="290" fill="#1a1f2e" rx="4"/>
+
+  <!-- 좌Y축 헤더 -->
+  <text x="85" y="75" font-size="11" fill="#e2e8f0">가격 ($)</text>
+  <!-- 우Y축 헤더 -->
+  <text x="720" y="75" text-anchor="end" font-size="11" fill="#ef4444">공매도 잔고 %</text>
+
+  <!--
+    좌Y축: 0~500, 격자 0/100/200/300/400/500
+    y_svg = 370 - price/500*290
+
+    500: y = 370-290 = 80
+    400: y = 370-232 = 138
+    300: y = 370-174 = 196
+    200: y = 370-116 = 254
+    100: y = 370-58  = 312
+      0: y = 370
+  -->
+  <line x1="80" y1="80"  x2="720" y2="80"  stroke="#2d3748" stroke-width="1"/>
+  <text x="70" y="83"   text-anchor="end" font-size="10" fill="#94a3b8">500</text>
+
+  <line x1="80" y1="138" x2="720" y2="138" stroke="#2d3748" stroke-width="1"/>
+  <text x="70" y="141"  text-anchor="end" font-size="10" fill="#94a3b8">400</text>
+
+  <line x1="80" y1="196" x2="720" y2="196" stroke="#2d3748" stroke-width="1"/>
+  <text x="70" y="199"  text-anchor="end" font-size="10" fill="#94a3b8">300</text>
+
+  <line x1="80" y1="254" x2="720" y2="254" stroke="#2d3748" stroke-width="1"/>
+  <text x="70" y="257"  text-anchor="end" font-size="10" fill="#94a3b8">200</text>
+
+  <line x1="80" y1="312" x2="720" y2="312" stroke="#2d3748" stroke-width="1"/>
+  <text x="70" y="315"  text-anchor="end" font-size="10" fill="#94a3b8">100</text>
+
+  <line x1="80" y1="370" x2="720" y2="370" stroke="#2d3748" stroke-width="1.5"/>
+  <text x="70" y="373"  text-anchor="end" font-size="10" fill="#94a3b8">0</text>
+
+  <!--
+    우Y축: 0~120, 격자 0/30/60/90/120
+    y_svg = 370 - short/120*290
+
+    120: y = 370-290 = 80
+     90: y = 370-217.5 = 152.5
+     60: y = 370-145 = 225
+     30: y = 370-72.5 = 297.5
+      0: y = 370
+  -->
+  <text x="730" y="83"   font-size="10" fill="#94a3b8">120</text>
+  <text x="730" y="155"  font-size="10" fill="#94a3b8">90</text>
+  <text x="730" y="228"  font-size="10" fill="#94a3b8">60</text>
+  <text x="730" y="300"  font-size="10" fill="#94a3b8">30</text>
+  <text x="730" y="373"  font-size="10" fill="#94a3b8">0</text>
+
+  <!--
+    X축: i=0..6, x_svg = 80 + i*106.7
+    i=0: 80      2020.12.01
+    i=1: 186.7   12.15
+    i=2: 293.4   2021.01.01
+    i=3: 400.1   01.15
+    i=4: 506.8   01.27  ← 정점
+    i=5: 613.5   02.01
+    i=6: 720.2→720  02.15
+
+    가격: [20, 25, 35, 80, 483, 250, 50]
+    y_price = 370 - price/500*290
+    i=0: 370-11.6=358.4
+    i=1: 370-14.5=355.5
+    i=2: 370-20.3=349.7
+    i=3: 370-46.4=323.6
+    i=4: 370-280.7=89.3
+    i=5: 370-145=225
+    i=6: 370-29=341
+
+    공매도: [110, 95, 85, 70, 50, 30, 25]
+    y_short = 370 - short/120*290
+    i=0: 370-265.8=104.2
+    i=1: 370-229.6=140.4
+    i=2: 370-205.4=164.6
+    i=3: 370-169.2=200.8
+    i=4: 370-120.8=249.2
+    i=5: 370-72.5=297.5
+    i=6: 370-60.4=309.6
+  -->
+
+  <!-- 가격 라인 -->
+  <polyline
+    points="80,358.4 186.7,355.5 293.4,349.7 400.1,323.6 506.8,89.3 613.5,225 720,341"
+    fill="none" stroke="#e2e8f0" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+
+  <!-- 가격 마커 (일반) -->
+  <circle cx="80"   cy="358.4" r="4" fill="#e2e8f0"/>
+  <circle cx="186.7" cy="355.5" r="4" fill="#e2e8f0"/>
+  <circle cx="293.4" cy="349.7" r="4" fill="#e2e8f0"/>
+  <circle cx="400.1" cy="323.6" r="4" fill="#e2e8f0"/>
+  <!-- i=4 정점 — 아래에 큰 마커로 덮음 -->
+  <circle cx="613.5" cy="225"   r="4" fill="#e2e8f0"/>
+  <circle cx="720"   cy="341"   r="4" fill="#e2e8f0"/>
+
+  <!-- 정점 강조 마커 (i=4, 2021.01.27, $483) -->
+  <circle cx="506.8" cy="89.3" r="8" fill="#f59e0b" stroke="#e2e8f0" stroke-width="1.5"/>
+
+  <!-- 정점 라벨 -->
+  <text x="510" y="95" font-size="11" fill="#f59e0b" font-weight="bold">1.27 정점 $483 (+2300%)</text>
+
+  <!-- 공매도 잔고 라인 -->
+  <polyline
+    points="80,104.2 186.7,140.4 293.4,164.6 400.1,200.8 506.8,249.2 613.5,297.5 720,309.6"
+    fill="none" stroke="#ef4444" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+
+  <!-- 공매도 마커 -->
+  <circle cx="80"    cy="104.2" r="4" fill="#ef4444"/>
+  <circle cx="186.7" cy="140.4" r="4" fill="#ef4444"/>
+  <circle cx="293.4" cy="164.6" r="4" fill="#ef4444"/>
+  <circle cx="400.1" cy="200.8" r="4" fill="#ef4444"/>
+  <circle cx="506.8" cy="249.2" r="4" fill="#ef4444"/>
+  <circle cx="613.5" cy="297.5" r="4" fill="#ef4444"/>
+  <circle cx="720"   cy="309.6" r="4" fill="#ef4444"/>
+
+  <!-- X축 라인 -->
+  <line x1="80" y1="370" x2="720" y2="370" stroke="#2d3748" stroke-width="1.5"/>
+
+  <!-- X축 라벨 (4개: i=0,2,4,6) -->
+  <text x="80"   y="390" text-anchor="middle" font-size="10" fill="#94a3b8">2020.12.01</text>
+  <text x="293.4" y="390" text-anchor="middle" font-size="10" fill="#94a3b8">2021.01.01</text>
+  <text x="506.8" y="390" text-anchor="middle" font-size="10" fill="#94a3b8">2021.01.27</text>
+  <text x="720"  y="390" text-anchor="middle" font-size="10" fill="#94a3b8">2021.02.15</text>
+
+  <!-- 범례 박스 -->
+  <rect x="540" y="110" width="170" height="55" fill="#1a1f2e" opacity="0.85" rx="4"/>
+  <!-- 주가 -->
+  <line x1="552" y1="128" x2="566" y2="128" stroke="#e2e8f0" stroke-width="2.5"/>
+  <circle cx="559" cy="128" r="3" fill="#e2e8f0"/>
+  <text x="572" y="132" font-size="11" fill="#e2e8f0">주가</text>
+  <!-- 공매도 잔고 -->
+  <line x1="552" y1="150" x2="566" y2="150" stroke="#ef4444" stroke-width="2.5"/>
+  <circle cx="559" cy="150" r="3" fill="#ef4444"/>
+  <text x="572" y="154" font-size="11" fill="#e2e8f0">공매도 잔고</text>
+
+  <!-- 캡션 -->
+  <text x="400" y="425" text-anchor="middle" font-size="11" fill="#94a3b8" font-style="italic">*Reddit r/wallstreetbets — 개인 매수 vs 헤지펀드 청산 (Melvin Capital -53%)*</text>
+</svg>

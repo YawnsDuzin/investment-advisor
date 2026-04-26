@@ -1,0 +1,169 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" font-family="system-ui, -apple-system, sans-serif">
+  <rect width="800" height="450" fill="#0f1419"/>
+
+  <!-- 제목 / 부제 -->
+  <text x="400" y="30" text-anchor="middle" font-size="18" font-weight="bold" fill="#e2e8f0">외국인 누적 순매수 + 코스피 (2023~2024)</text>
+  <text x="400" y="50" text-anchor="middle" font-size="12" fill="#94a3b8">외국인 매수 → 코스피 동반 상승</text>
+
+  <!-- 차트 배경 -->
+  <rect x="80" y="80" width="640" height="290" fill="#1a1f2e" rx="4"/>
+
+  <!-- 좌Y축 헤더 -->
+  <text x="85" y="75" font-size="11" fill="#4ade80">누적 순매수 (조원)</text>
+  <!-- 우Y축 헤더 -->
+  <text x="720" y="75" text-anchor="end" font-size="11" fill="#60a5fa">KOSPI (천)</text>
+
+  <!-- 좌Y축 격자선 및 라벨: -10/0/10/20/30 -->
+  <!-- -10: y = 370 - (-10+10)/40*290 = 370 -->
+  <line x1="80" y1="370" x2="720" y2="370" stroke="#2d3748" stroke-width="1"/>
+  <text x="70" y="373" text-anchor="end" font-size="10" fill="#94a3b8">-10</text>
+  <!-- 우Y축 0 → y = 370 - (0-2.2)/0.8*290 = 370 + 2.2/0.8*290 = 370+797.5 → out of range, skip label 0 for right -->
+  <text x="730" y="373" font-size="10" fill="#94a3b8">2.2</text>
+
+  <!-- 0: y = 370 - (0+10)/40*290 = 370 - 72.5 = 297.5 -->
+  <line x1="80" y1="297.5" x2="720" y2="297.5" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4,4"/>
+  <text x="70" y="301" text-anchor="end" font-size="10" fill="#94a3b8">0</text>
+  <!-- 우Y축 2.4: y = 370 - (2.4-2.2)/0.8*290 = 370 - 72.5 = 297.5 -->
+  <text x="730" y="301" font-size="10" fill="#94a3b8">2.4</text>
+
+  <!-- 10: y = 370 - (10+10)/40*290 = 370 - 145 = 225 -->
+  <line x1="80" y1="225" x2="720" y2="225" stroke="#2d3748" stroke-width="1"/>
+  <text x="70" y="228" text-anchor="end" font-size="10" fill="#94a3b8">10</text>
+  <!-- 우Y축 2.6: y = 370 - (2.6-2.2)/0.8*290 = 370 - 145 = 225 -->
+  <text x="730" y="228" font-size="10" fill="#94a3b8">2.6</text>
+
+  <!-- 20: y = 370 - (20+10)/40*290 = 370 - 217.5 = 152.5 -->
+  <line x1="80" y1="152.5" x2="720" y2="152.5" stroke="#2d3748" stroke-width="1"/>
+  <text x="70" y="155" text-anchor="end" font-size="10" fill="#94a3b8">20</text>
+  <!-- 우Y축 2.8: y = 370 - (2.8-2.2)/0.8*290 = 370 - 217.5 = 152.5 -->
+  <text x="730" y="155" font-size="10" fill="#94a3b8">2.8</text>
+
+  <!-- 30: y = 370 - (30+10)/40*290 = 370 - 290 = 80 -->
+  <line x1="80" y1="80" x2="720" y2="80" stroke="#2d3748" stroke-width="1"/>
+  <text x="70" y="83" text-anchor="end" font-size="10" fill="#94a3b8">30</text>
+  <!-- 우Y축 3.0: y = 370 - (3.0-2.2)/0.8*290 = 370 - 290 = 80 -->
+  <text x="730" y="83" font-size="10" fill="#94a3b8">3.0</text>
+
+  <!--
+    분기 데이터 (i=0..7):
+    누적 순매수 (조원): [5, 12, 8, 18, 25, 20, 15, 20]
+    x_center = 80 + i*91.4 + 45
+    base y = 297.5 (0선)
+    막대 높이 = |val| / 40 * 290
+    막대 top y = 297.5 - val/40*290 (양수면 위로)
+    막대 x_left = x_center - 25
+  -->
+
+  <!-- i=0: x_center=125, val=5, h=36.25, top=261.25 -->
+  <rect x="100" y="261.25" width="50" height="36.25" fill="#4ade80" opacity="0.7" rx="2"/>
+
+  <!-- i=1: x_center=216.4, val=12, h=87, top=210.5 -->
+  <rect x="191.4" y="210.5" width="50" height="87" fill="#4ade80" opacity="0.7" rx="2"/>
+
+  <!-- i=2: x_center=307.8, val=8, h=58, top=239.5 -->
+  <rect x="282.8" y="239.5" width="50" height="58" fill="#4ade80" opacity="0.7" rx="2"/>
+
+  <!-- i=3: x_center=399.2, val=18, h=130.5, top=167 -->
+  <rect x="374.2" y="167" width="50" height="130.5" fill="#4ade80" opacity="0.7" rx="2"/>
+
+  <!-- i=4: x_center=490.6, val=25, h=181.25, top=116.25 -->
+  <rect x="465.6" y="116.25" width="50" height="181.25" fill="#4ade80" opacity="0.7" rx="2"/>
+
+  <!-- i=5: x_center=582, val=20, h=145, top=152.5 -->
+  <rect x="557" y="152.5" width="50" height="145" fill="#4ade80" opacity="0.7" rx="2"/>
+
+  <!-- i=6: x_center=673.4, val=15, h=108.75, top=188.75 -->
+  <rect x="648.4" y="188.75" width="50" height="108.75" fill="#4ade80" opacity="0.7" rx="2"/>
+
+  <!-- i=7: x_center=764.8 → 클리핑 방지, 막대 x_left=739.8 → 720+20=740 대신 일부 표시 -->
+  <!-- i=7 중심 = 80+7*91.4+45 = 80+639.8+45=764.8, 막대 x_left=739.8 → 720 clip. 표시 가능 폭=720-739.8 → 음수. 실제 i=7 중심 x를 약간 당긴다 -->
+  <!-- 재계산: x_center = 80 + i*80 + 40 (i=0..7), w=50 이면 x_left = x_center-25 = 80+i*80+15 -->
+  <!-- 위 rect들을 수정: 간격 80으로 재계산 -->
+
+  <!-- === 간격 재계산 (i=0..7, step=80) ===
+    x_center = 80 + i*80 + 40 = 120 + i*80
+    i=0: 120  i=1: 200  i=2: 280  i=3: 360  i=4: 440  i=5: 520  i=6: 600  i=7: 680
+    막대 x_left = x_center - 25
+  -->
+
+  <!-- 기존 rect 제거 위해 위쪽 rect들을 덮어쓰기 불가 → SVG는 마지막 draw 우선.
+       올바른 좌표로 새 rect group 작성. 배경 위에 그려진 기존 rect들이 먼저 → 이후 같은 위치에 덮어씌움 -->
+
+  <!-- 올바른 막대 (간격 step=80) -->
+  <!-- i=0: x_center=120, val=5, h=36.25, top=261.25, x_left=95 -->
+  <rect x="95" y="261.25" width="50" height="36.25" fill="#4ade80" opacity="0.85" rx="2"/>
+
+  <!-- i=1: x_center=200, val=12, h=87, top=210.5, x_left=175 -->
+  <rect x="175" y="210.5" width="50" height="87" fill="#4ade80" opacity="0.85" rx="2"/>
+
+  <!-- i=2: x_center=280, val=8, h=58, top=239.5, x_left=255 -->
+  <rect x="255" y="239.5" width="50" height="58" fill="#4ade80" opacity="0.85" rx="2"/>
+
+  <!-- i=3: x_center=360, val=18, h=130.5, top=167, x_left=335 -->
+  <rect x="335" y="167" width="50" height="130.5" fill="#4ade80" opacity="0.85" rx="2"/>
+
+  <!-- i=4: x_center=440, val=25, h=181.25, top=116.25, x_left=415 -->
+  <rect x="415" y="116.25" width="50" height="181.25" fill="#4ade80" opacity="0.85" rx="2"/>
+
+  <!-- i=5: x_center=520, val=20, h=145, top=152.5, x_left=495 -->
+  <rect x="495" y="152.5" width="50" height="145" fill="#4ade80" opacity="0.85" rx="2"/>
+
+  <!-- i=6: x_center=600, val=15, h=108.75, top=188.75, x_left=575 -->
+  <rect x="575" y="188.75" width="50" height="108.75" fill="#4ade80" opacity="0.85" rx="2"/>
+
+  <!-- i=7: x_center=680, val=20, h=145, top=152.5, x_left=655 -->
+  <rect x="655" y="152.5" width="50" height="145" fill="#4ade80" opacity="0.85" rx="2"/>
+
+  <!--
+    KOSPI 라인:
+    y_svg = 370 - (kospi - 2.2) / 0.8 * 290
+    데이터: [2.42, 2.55, 2.45, 2.65, 2.75, 2.80, 2.59, 2.65]
+    x: 120, 200, 280, 360, 440, 520, 600, 680
+
+    i=0: y = 370 - (2.42-2.2)/0.8*290 = 370 - 0.22/0.8*290 = 370 - 79.75 = 290.25
+    i=1: y = 370 - (2.55-2.2)/0.8*290 = 370 - 0.35/0.8*290 = 370 - 126.875 = 243.125
+    i=2: y = 370 - (2.45-2.2)/0.8*290 = 370 - 0.25/0.8*290 = 370 - 90.625 = 279.375
+    i=3: y = 370 - (2.65-2.2)/0.8*290 = 370 - 0.45/0.8*290 = 370 - 163.125 = 206.875
+    i=4: y = 370 - (2.75-2.2)/0.8*290 = 370 - 0.55/0.8*290 = 370 - 199.375 = 170.625
+    i=5: y = 370 - (2.80-2.2)/0.8*290 = 370 - 0.60/0.8*290 = 370 - 217.5 = 152.5
+    i=6: y = 370 - (2.59-2.2)/0.8*290 = 370 - 0.39/0.8*290 = 370 - 141.375 = 228.625
+    i=7: y = 370 - (2.65-2.2)/0.8*290 = 370 - 163.125 = 206.875
+  -->
+  <polyline
+    points="120,290.25 200,243.125 280,279.375 360,206.875 440,170.625 520,152.5 600,228.625 680,206.875"
+    fill="none" stroke="#60a5fa" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+
+  <!-- KOSPI 마커 -->
+  <circle cx="120" cy="290.25" r="4" fill="#60a5fa"/>
+  <circle cx="200" cy="243.125" r="4" fill="#60a5fa"/>
+  <circle cx="280" cy="279.375" r="4" fill="#60a5fa"/>
+  <circle cx="360" cy="206.875" r="4" fill="#60a5fa"/>
+  <circle cx="440" cy="170.625" r="4" fill="#60a5fa"/>
+  <circle cx="520" cy="152.5" r="4" fill="#60a5fa"/>
+  <circle cx="600" cy="228.625" r="4" fill="#60a5fa"/>
+  <circle cx="680" cy="206.875" r="4" fill="#60a5fa"/>
+
+  <!-- X축 라벨 (4개만) -->
+  <!-- i=0: x=120, i=2: x=280, i=4: x=440, i=6: x=600 -->
+  <text x="120" y="390" text-anchor="middle" font-size="10" fill="#94a3b8">2023Q1</text>
+  <text x="280" y="390" text-anchor="middle" font-size="10" fill="#94a3b8">2023Q3</text>
+  <text x="440" y="390" text-anchor="middle" font-size="10" fill="#94a3b8">2024Q1</text>
+  <text x="600" y="390" text-anchor="middle" font-size="10" fill="#94a3b8">2024Q3</text>
+
+  <!-- X축 라인 -->
+  <line x1="80" y1="370" x2="720" y2="370" stroke="#2d3748" stroke-width="1.5"/>
+
+  <!-- 범례 박스 -->
+  <rect x="540" y="95" width="160" height="50" fill="#1a1f2e" opacity="0.85" rx="4"/>
+  <!-- 외국인 누적 -->
+  <rect x="552" y="108" width="14" height="10" fill="#4ade80" rx="1"/>
+  <text x="572" y="117" font-size="11" fill="#e2e8f0">외국인 누적</text>
+  <!-- KOSPI -->
+  <line x1="552" y1="130" x2="566" y2="130" stroke="#60a5fa" stroke-width="2.5"/>
+  <circle cx="559" cy="130" r="3" fill="#60a5fa"/>
+  <text x="572" y="134" font-size="11" fill="#e2e8f0">KOSPI</text>
+
+  <!-- 캡션 -->
+  <text x="400" y="425" text-anchor="middle" font-size="11" fill="#94a3b8" font-style="italic">*외국인 순매수가 누적 +25조 도달한 2024Q1, 코스피도 동반 상승*</text>
+</svg>

@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" font-family="system-ui, -apple-system, sans-serif">
+  <rect width="800" height="450" fill="#0f1419"/>
+
+  <!-- 제목 -->
+  <text x="400" y="30" font-size="18" font-weight="bold" fill="#e2e8f0" text-anchor="middle">처분효과 — 한국 개인 투자자 보유기간</text>
+  <text x="400" y="50" font-size="12" fill="#94a3b8" text-anchor="middle">수익 종목 평균 23일 / 손실 종목 평균 45일</text>
+
+  <!-- 차트 배경 -->
+  <rect x="80" y="70" width="640" height="300" fill="#1a1f2e" opacity="0.3" rx="4"/>
+
+  <!-- Y축 격자선 및 라벨 (0/25/50/75/100) -->
+  <!-- y_svg = 370 - freq * 290 / 100 -->
+  <!-- 0: y=370, 25: y=297.5, 50: y=225, 75: y=152.5, 100: y=80 -->
+  <line x1="80" y1="370" x2="720" y2="370" stroke="#2d3748" stroke-width="1"/>
+  <text x="68" y="374" font-size="10" fill="#94a3b8" text-anchor="end">0</text>
+
+  <line x1="80" y1="298" x2="720" y2="298" stroke="#2d3748" stroke-width="1" stroke-dasharray="3,3"/>
+  <text x="68" y="301" font-size="10" fill="#94a3b8" text-anchor="end">25</text>
+
+  <line x1="80" y1="225" x2="720" y2="225" stroke="#2d3748" stroke-width="1" stroke-dasharray="3,3"/>
+  <text x="68" y="228" font-size="10" fill="#94a3b8" text-anchor="end">50</text>
+
+  <line x1="80" y1="153" x2="720" y2="153" stroke="#2d3748" stroke-width="1" stroke-dasharray="3,3"/>
+  <text x="68" y="156" font-size="10" fill="#94a3b8" text-anchor="end">75</text>
+
+  <line x1="80" y1="80" x2="720" y2="80" stroke="#2d3748" stroke-width="1" stroke-dasharray="3,3"/>
+  <text x="68" y="83" font-size="10" fill="#94a3b8" text-anchor="end">100</text>
+
+  <!-- X축 라벨 (0/20/40/60/80/100/120) -->
+  <!-- x_svg = 80 + days * 640 / 120 -->
+  <!-- 0: 80, 20: 186.7, 40: 293.3, 60: 400, 80: 506.7, 100: 613.3, 120: 720 -->
+  <text x="80" y="387" font-size="10" fill="#94a3b8" text-anchor="middle">0</text>
+  <text x="187" y="387" font-size="10" fill="#94a3b8" text-anchor="middle">20</text>
+  <text x="293" y="387" font-size="10" fill="#94a3b8" text-anchor="middle">40</text>
+  <text x="400" y="387" font-size="10" fill="#94a3b8" text-anchor="middle">60</text>
+  <text x="507" y="387" font-size="10" fill="#94a3b8" text-anchor="middle">80</text>
+  <text x="613" y="387" font-size="10" fill="#94a3b8" text-anchor="middle">100</text>
+  <text x="720" y="387" font-size="10" fill="#94a3b8" text-anchor="middle">120</text>
+
+  <!-- X축 단위 라벨 -->
+  <text x="400" y="404" font-size="12" fill="#94a3b8" text-anchor="middle">보유 일수</text>
+
+  <!-- 막대 centers: 5,15,25,35,45,55,65,75,85,95,105,115 -->
+  <!-- x_svg_center = 80 + center * 640/120 -->
+  <!-- 막대 폭 50, 좌상단 x = x_svg_center - 25 -->
+  <!-- y_svg_top = 370 - freq * 290/100 -->
+
+  <!-- 수익 분포: #4ade80 opacity 0.6 -->
+  <!-- freqs: [40, 75, 95, 70, 45, 25, 15, 8, 5, 3, 2, 1] -->
+  <!-- center=5: x_c=106.7, x=81.7, h=40*2.9=116, y=370-116=254 -->
+  <rect x="82" y="254" width="50" height="116" fill="#4ade80" opacity="0.6" rx="1"/>
+  <!-- center=15: x_c=160, x=135, h=75*2.9=217.5, y=370-217.5=152.5 -->
+  <rect x="135" y="153" width="50" height="217" fill="#4ade80" opacity="0.6" rx="1"/>
+  <!-- center=25: x_c=213.3, x=188.3, h=95*2.9=275.5, y=370-275.5=94.5 -->
+  <rect x="188" y="95" width="50" height="275" fill="#4ade80" opacity="0.6" rx="1"/>
+  <!-- center=35: x_c=266.7, x=241.7, h=70*2.9=203, y=370-203=167 -->
+  <rect x="242" y="167" width="50" height="203" fill="#4ade80" opacity="0.6" rx="1"/>
+  <!-- center=45: x_c=320, x=295, h=45*2.9=130.5, y=370-130.5=239.5 -->
+  <rect x="295" y="240" width="50" height="130" fill="#4ade80" opacity="0.6" rx="1"/>
+  <!-- center=55: x_c=373.3, x=348.3, h=25*2.9=72.5, y=370-72.5=297.5 -->
+  <rect x="348" y="298" width="50" height="72" fill="#4ade80" opacity="0.6" rx="1"/>
+  <!-- center=65: x_c=426.7, x=401.7, h=15*2.9=43.5, y=370-43.5=326.5 -->
+  <rect x="402" y="327" width="50" height="43" fill="#4ade80" opacity="0.6" rx="1"/>
+  <!-- center=75: x_c=480, x=455, h=8*2.9=23.2, y=346.8 -->
+  <rect x="455" y="347" width="50" height="23" fill="#4ade80" opacity="0.6" rx="1"/>
+  <!-- center=85: x_c=533.3, x=508.3, h=5*2.9=14.5, y=355.5 -->
+  <rect x="508" y="356" width="50" height="14" fill="#4ade80" opacity="0.6" rx="1"/>
+  <!-- center=95: x_c=586.7, x=561.7, h=3*2.9=8.7, y=361.3 -->
+  <rect x="562" y="361" width="50" height="9" fill="#4ade80" opacity="0.6" rx="1"/>
+  <!-- center=105: x_c=640, x=615, h=2*2.9=5.8, y=364.2 -->
+  <rect x="615" y="364" width="50" height="6" fill="#4ade80" opacity="0.6" rx="1"/>
+  <!-- center=115: x_c=693.3, x=668.3, h=1*2.9=2.9, y=367.1 -->
+  <rect x="668" y="367" width="50" height="3" fill="#4ade80" opacity="0.6" rx="1"/>
+
+  <!-- 손실 분포: #ef4444 opacity 0.6 -->
+  <!-- freqs: [10, 25, 40, 55, 70, 75, 65, 50, 35, 25, 15, 10] -->
+  <!-- center=5: h=10*2.9=29, y=341 -->
+  <rect x="82" y="341" width="50" height="29" fill="#ef4444" opacity="0.6" rx="1"/>
+  <!-- center=15: h=25*2.9=72.5, y=297.5 -->
+  <rect x="135" y="298" width="50" height="72" fill="#ef4444" opacity="0.6" rx="1"/>
+  <!-- center=25: h=40*2.9=116, y=254 -->
+  <rect x="188" y="254" width="50" height="116" fill="#ef4444" opacity="0.6" rx="1"/>
+  <!-- center=35: h=55*2.9=159.5, y=210.5 -->
+  <rect x="242" y="211" width="50" height="159" fill="#ef4444" opacity="0.6" rx="1"/>
+  <!-- center=45: h=70*2.9=203, y=167 -->
+  <rect x="295" y="167" width="50" height="203" fill="#ef4444" opacity="0.6" rx="1"/>
+  <!-- center=55: h=75*2.9=217.5, y=152.5 -->
+  <rect x="348" y="153" width="50" height="217" fill="#ef4444" opacity="0.6" rx="1"/>
+  <!-- center=65: h=65*2.9=188.5, y=181.5 -->
+  <rect x="402" y="182" width="50" height="188" fill="#ef4444" opacity="0.6" rx="1"/>
+  <!-- center=75: h=50*2.9=145, y=225 -->
+  <rect x="455" y="225" width="50" height="145" fill="#ef4444" opacity="0.6" rx="1"/>
+  <!-- center=85: h=35*2.9=101.5, y=268.5 -->
+  <rect x="508" y="269" width="50" height="101" fill="#ef4444" opacity="0.6" rx="1"/>
+  <!-- center=95: h=25*2.9=72.5, y=297.5 -->
+  <rect x="562" y="298" width="50" height="72" fill="#ef4444" opacity="0.6" rx="1"/>
+  <!-- center=105: h=15*2.9=43.5, y=326.5 -->
+  <rect x="615" y="327" width="50" height="43" fill="#ef4444" opacity="0.6" rx="1"/>
+  <!-- center=115: h=10*2.9=29, y=341 -->
+  <rect x="668" y="341" width="50" height="29" fill="#ef4444" opacity="0.6" rx="1"/>
+
+  <!-- 수익 평균선: 23일 → x = 80 + 23/120*640 = 202.7 -->
+  <line x1="203" y1="80" x2="203" y2="370" stroke="#4ade80" stroke-width="1.5" stroke-dasharray="5,3"/>
+  <text x="203" y="92" font-size="11" fill="#4ade80" text-anchor="middle">수익 평균 23일</text>
+
+  <!-- 손실 평균선: 45일 → x = 80 + 45/120*640 = 320 -->
+  <line x1="320" y1="80" x2="320" y2="370" stroke="#ef4444" stroke-width="1.5" stroke-dasharray="5,3"/>
+  <text x="320" y="92" font-size="11" fill="#ef4444" text-anchor="middle">손실 평균 45일</text>
+
+  <!-- Y축 선 -->
+  <line x1="80" y1="80" x2="80" y2="370" stroke="#2d3748" stroke-width="1"/>
+
+  <!-- 범례 박스 -->
+  <rect x="540" y="95" width="170" height="55" fill="#1a1f2e" opacity="0.5" rx="4"/>
+  <rect x="552" y="108" width="14" height="14" fill="#4ade80" opacity="0.8" rx="1"/>
+  <text x="572" y="120" font-size="11" fill="#e2e8f0">수익 종목</text>
+  <rect x="552" y="126" width="14" height="14" fill="#ef4444" opacity="0.8" rx="1"/>
+  <text x="572" y="138" font-size="11" fill="#e2e8f0">손실 종목</text>
+
+  <!-- 캡션 -->
+  <text x="400" y="428" font-size="11" fill="#94a3b8" text-anchor="middle" font-style="italic">*사람의 본능 — '본전 회복하면 팔자' (이미 손실은 더 커지고 있다)*</text>
+</svg>
