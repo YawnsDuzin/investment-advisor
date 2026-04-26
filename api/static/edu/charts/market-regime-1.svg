@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" font-family="system-ui, -apple-system, sans-serif">
+  <rect width="800" height="450" fill="#0f1419"/>
+
+  <!-- 제목 / 부제 -->
+  <text x="400" y="30" text-anchor="middle" font-size="18" font-weight="bold" fill="#e2e8f0">시장 레짐 — above_200ma × vol_regime</text>
+  <text x="400" y="50" text-anchor="middle" font-size="12" fill="#94a3b8">본 시스템 v31 B2 레짐 레이어 분류</text>
+
+  <!-- ──────────────────────────────────────────
+       매트릭스 영역: 전체 rect (x=160, y=75, w=560, h=280)
+       수직 분할선: x=440 (y=75~355)
+       수평 분할선: y=215 (x=160~720)
+
+       사분면 배치 (X축=좌→우: vol high→low / Y축=위→아래: MA True→False):
+         좌상 (x=160~440, y=75~215):  vol high + MA True  → Late-Cycle  #f59e0b
+         우상 (x=440~720, y=75~215):  vol low  + MA True  → Risk-On     #4ade80
+         좌하 (x=160~440, y=215~355): vol high + MA False → Bear        #ef4444
+         우하 (x=440~720, y=215~355): vol low  + MA False → Recovery    #60a5fa
+  ──────────────────────────────────────────── -->
+
+  <!-- 사분면 배경 fill -->
+  <!-- 좌상: Late-Cycle -->
+  <rect x="160" y="75" width="280" height="140" fill="#f59e0b" fill-opacity="0.2"/>
+  <!-- 우상: Risk-On -->
+  <rect x="440" y="75" width="280" height="140" fill="#4ade80" fill-opacity="0.2"/>
+  <!-- 좌하: Bear -->
+  <rect x="160" y="215" width="280" height="140" fill="#ef4444" fill-opacity="0.2"/>
+  <!-- 우하: Recovery -->
+  <rect x="440" y="215" width="280" height="140" fill="#60a5fa" fill-opacity="0.2"/>
+
+  <!-- 매트릭스 외곽 + 분할선 -->
+  <rect x="160" y="75" width="560" height="280" fill="none" stroke="#2d3748" stroke-width="1" opacity="0.7"/>
+  <line x1="440" y1="75" x2="440" y2="355" stroke="#2d3748" stroke-width="1" opacity="0.7"/>
+  <line x1="160" y1="215" x2="720" y2="215" stroke="#2d3748" stroke-width="1" opacity="0.7"/>
+
+  <!-- ====== 좌상: Late-Cycle (cx=300, cy=145) ====== -->
+  <text x="300" y="118" text-anchor="middle" font-size="16" font-weight="bold" fill="#f59e0b">Late-Cycle</text>
+  <text x="300" y="140" text-anchor="middle" font-size="12" fill="#e2e8f0">피크</text>
+  <text x="300" y="162" text-anchor="middle" font-size="11" fill="#94a3b8">→ 비중 축소 / 방어주 전환</text>
+  <text x="300" y="178" text-anchor="middle" font-size="10" fill="#94a3b8">변동성 급등 + 지수 200MA 위</text>
+
+  <!-- ====== 우상: Risk-On (cx=580, cy=145) ====== -->
+  <text x="580" y="118" text-anchor="middle" font-size="16" font-weight="bold" fill="#4ade80">Risk-On</text>
+  <text x="580" y="140" text-anchor="middle" font-size="12" fill="#e2e8f0">강세 확장</text>
+  <text x="580" y="162" text-anchor="middle" font-size="11" fill="#94a3b8">→ 공격적 비중 확대</text>
+  <text x="580" y="178" text-anchor="middle" font-size="10" fill="#94a3b8">저변동 + 지수 200MA 위</text>
+
+  <!-- ====== 좌하: Bear (cx=300, cy=285) ====== -->
+  <text x="300" y="258" text-anchor="middle" font-size="16" font-weight="bold" fill="#ef4444">Bear</text>
+  <text x="300" y="280" text-anchor="middle" font-size="12" fill="#e2e8f0">약세</text>
+  <text x="300" y="302" text-anchor="middle" font-size="11" fill="#94a3b8">→ 현금 비중 최대 / 숏 헤지</text>
+  <text x="300" y="318" text-anchor="middle" font-size="10" fill="#94a3b8">변동성 급등 + 지수 200MA 아래</text>
+
+  <!-- ====== 우하: Recovery (cx=580, cy=285) ====== -->
+  <text x="580" y="258" text-anchor="middle" font-size="16" font-weight="bold" fill="#60a5fa">Recovery</text>
+  <text x="580" y="280" text-anchor="middle" font-size="12" fill="#e2e8f0">반등 초기</text>
+  <text x="580" y="302" text-anchor="middle" font-size="11" fill="#94a3b8">→ 선별적 매수 / 낙폭과대</text>
+  <text x="580" y="318" text-anchor="middle" font-size="10" fill="#94a3b8">저변동 + 지수 200MA 아래</text>
+
+  <!-- ──────────────── 축 라벨 ──────────────── -->
+  <!-- X축 라벨 (y=375) -->
+  <text x="220" y="375" text-anchor="middle" font-size="11" fill="#94a3b8">← high vol_regime</text>
+  <text x="600" y="375" text-anchor="middle" font-size="11" fill="#94a3b8">low vol_regime →</text>
+  <!-- X축 중앙 라벨 -->
+  <text x="440" y="375" text-anchor="middle" font-size="10" fill="#2d3748">|</text>
+
+  <!-- Y축 라벨 (좌측, 회전) -->
+  <text x="140" y="155" text-anchor="middle" font-size="10" fill="#94a3b8" transform="rotate(-90, 140, 155)">above_200ma = True</text>
+  <text x="140" y="295" text-anchor="middle" font-size="10" fill="#94a3b8" transform="rotate(-90, 140, 295)">above_200ma = False</text>
+
+  <!-- 현재 레짐 표시 예시 (Risk-On 사분면에 강조 마커) -->
+  <circle cx="540" cy="148" r="6" fill="none" stroke="#4ade80" stroke-width="2" opacity="0.8"/>
+  <text x="554" y="152" font-size="9" fill="#4ade80" opacity="0.8">현재</text>
+
+  <!-- 캡션 -->
+  <text x="400" y="425" text-anchor="middle" font-size="11" fill="#94a3b8">본 시스템 analysis_sessions.market_regime JSONB 에 매 분석마다 기록</text>
+</svg>

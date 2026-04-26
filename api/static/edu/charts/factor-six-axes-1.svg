@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" font-family="system-ui, -apple-system, sans-serif">
+  <rect width="800" height="450" fill="#0f1419"/>
+
+  <!-- 제목 / 부제 -->
+  <text x="400" y="30" text-anchor="middle" font-size="18" font-weight="bold" fill="#e2e8f0">정량 팩터 6축 — 예시 종목 percentile</text>
+  <text x="400" y="50" text-anchor="middle" font-size="12" fill="#94a3b8">본 시스템 v30 B1 팩터 엔진 출력</text>
+
+  <!-- ──────────────────────────────────────────
+       레이더 그리드: 동심 육각형 4개
+       cx=400 cy=240 R_max=140
+       6축 각도 (θ = -90 + i*60 도):
+         i=0 (r1m):      θ=-90  → cos=-90°=0,    sin=-90°=-1    → (400, 100)
+         i=1 (r3m):      θ=-30  → cos=-30°=0.866,sin=-30°=-0.5  → (521.24, 170)
+         i=2 (r6m):      θ=30   → cos=30°=0.866, sin=30°=0.5    → (521.24, 310)
+         i=3 (r12m):     θ=90   → cos=90°=0,     sin=90°=1      → (400, 380)
+         i=4 (vol60):    θ=150  → cos=150°=-0.866,sin=150°=0.5  → (278.76, 310)
+         i=5 (volume_r): θ=210  → cos=210°=-0.866,sin=210°=-0.5 → (278.76, 170)
+       단위벡터 (ux,uy): (0,-1),(0.866,-0.5),(0.866,0.5),(0,-1→+1),(-0.866,0.5),(-0.866,-0.5)
+  ──────────────────────────────────────────── -->
+
+  <!-- r=35 (0.25) 동심 육각형 -->
+  <polygon points="
+    400,205
+    430.31,222.5
+    430.31,257.5
+    400,275
+    369.69,257.5
+    369.69,222.5
+  " fill="none" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+
+  <!-- r=70 (0.5) 동심 육각형 -->
+  <polygon points="
+    400,170
+    460.62,205
+    460.62,275
+    400,310
+    339.38,275
+    339.38,205
+  " fill="none" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+
+  <!-- r=105 (0.75) 동심 육각형 -->
+  <polygon points="
+    400,135
+    490.93,187.5
+    490.93,292.5
+    400,345
+    309.07,292.5
+    309.07,187.5
+  " fill="none" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+
+  <!-- r=140 (1.0) 동심 육각형 -->
+  <polygon points="
+    400,100
+    521.24,170
+    521.24,310
+    400,380
+    278.76,310
+    278.76,170
+  " fill="none" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+
+  <!-- 6축 선 (중심 → 최외곽 꼭짓점) -->
+  <line x1="400" y1="240" x2="400" y2="100" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <line x1="400" y1="240" x2="521.24" y2="170" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <line x1="400" y1="240" x2="521.24" y2="310" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <line x1="400" y1="240" x2="400" y2="380" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <line x1="400" y1="240" x2="278.76" y2="310" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <line x1="400" y1="240" x2="278.76" y2="170" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+
+  <!-- ──────────────────────────────────────────
+       데이터 polygon
+       r1m=0.45  → R=63  → (400, 240-63)=(400,177)
+       r3m=0.62  → R=86.8 → (400+86.8*0.866, 240-86.8*0.5)=(475.2,196.6)
+       r6m=0.91  → R=127.4 → (400+127.4*0.866, 240+127.4*0.5)=(510.3,303.7)
+       r12m=0.55 → R=77   → (400, 240+77)=(400,317)
+       vol60=0.65→ R=91   → (400-91*0.866, 240+91*0.5)=(321.2,285.5)
+       volr=0.85 → R=119  → (400-119*0.866, 240-119*0.5)=(296.9,180.5)
+  ──────────────────────────────────────────── -->
+  <polygon points="
+    400,177
+    475.2,196.6
+    510.3,303.7
+    400,317
+    321.2,285.5
+    296.9,180.5
+  " fill="#4ade80" fill-opacity="0.3" stroke="#4ade80" stroke-width="2"/>
+
+  <!-- 데이터 마커 (r=4, fill #4ade80) -->
+  <circle cx="400" cy="177" r="4" fill="#4ade80"/>
+  <circle cx="475.2" cy="196.6" r="4" fill="#4ade80"/>
+  <circle cx="510.3" cy="303.7" r="4" fill="#4ade80"/>
+  <circle cx="400" cy="317" r="4" fill="#4ade80"/>
+  <circle cx="321.2" cy="285.5" r="4" fill="#4ade80"/>
+  <circle cx="296.9" cy="180.5" r="4" fill="#4ade80"/>
+
+  <!-- percentile 수치 (마커 옆) -->
+  <text x="413" y="174" font-size="10" fill="#94a3b8">0.45</text>
+  <text x="479" y="193" font-size="10" fill="#94a3b8">0.62</text>
+  <text x="514" y="307" font-size="10" fill="#94a3b8">0.91</text>
+  <text x="405" y="333" font-size="10" fill="#94a3b8">0.55</text>
+  <text x="295" y="299" font-size="10" fill="#94a3b8">0.65</text>
+  <text x="262" y="178" font-size="10" fill="#94a3b8">0.85</text>
+
+  <!-- 축 라벨 (r = R_max+25=165 위치) -->
+  <!-- r1m_pct 상: y=240-165=75 -->
+  <text x="400" y="75" text-anchor="middle" font-size="12" fill="#e2e8f0">r1m_pct</text>
+  <!-- r3m_pct 우상: x=400+165*0.866≈543, y=240-165*0.5=157.5 -->
+  <text x="543" y="158" text-anchor="middle" font-size="12" fill="#e2e8f0">r3m_pct</text>
+  <!-- r6m_pct 우하: x≈543, y=240+165*0.5=322.5 -->
+  <text x="543" y="323" text-anchor="middle" font-size="12" fill="#e2e8f0">r6m_pct</text>
+  <!-- r12m_pct 하: y=240+165=405 -->
+  <text x="400" y="405" text-anchor="middle" font-size="12" fill="#e2e8f0">r12m_pct</text>
+  <!-- vol60_pct 좌하: x=400-165*0.866≈257, y≈322.5 -->
+  <text x="257" y="323" text-anchor="middle" font-size="12" fill="#e2e8f0">vol60_pct</text>
+  <!-- volume_ratio 좌상: x≈257, y≈157.5 -->
+  <text x="257" y="158" text-anchor="middle" font-size="12" fill="#e2e8f0">volume_ratio</text>
+
+  <!-- percentile 그리드 라벨 (12시 축 좌측) -->
+  <text x="388" y="208" font-size="9" fill="#94a3b8" text-anchor="end">0.25</text>
+  <text x="388" y="173" font-size="9" fill="#94a3b8" text-anchor="end">0.50</text>
+  <text x="388" y="138" font-size="9" fill="#94a3b8" text-anchor="end">0.75</text>
+  <text x="388" y="103" font-size="9" fill="#94a3b8" text-anchor="end">1.00</text>
+
+  <!-- 캡션 -->
+  <text x="400" y="425" text-anchor="middle" font-size="11" fill="#94a3b8">6개월 모멘텀 상위 9% / 거래량 폭증 — 모멘텀 진행 패턴</text>
+</svg>
