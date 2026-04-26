@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" font-family="system-ui, -apple-system, sans-serif">
+  <rect width="800" height="450" fill="#0f1419"/>
+
+  <!-- 제목 영역 -->
+  <text x="400" y="30" text-anchor="middle" font-size="18" font-weight="bold" fill="#e2e8f0">+15% 수익률, 다른 변동성</text>
+  <text x="400" y="52" text-anchor="middle" font-size="12" fill="#94a3b8">A 펀드 σ=30% / B 펀드 σ=12% — 같은 평균, 다른 위험</text>
+
+  <!-- 두 패널 사이 분리선 -->
+  <line x1="400" y1="70" x2="400" y2="395" stroke="#2d3748" stroke-width="1.5"/>
+
+  <!-- ===== 좌측 패널: A 펀드 ===== -->
+  <rect x="80" y="88" width="310" height="290" fill="#1a1f2e" opacity="0.3"/>
+
+  <!-- A 펀드 라벨 -->
+  <text x="95" y="108" font-size="14" font-weight="bold" fill="#ef4444">A 펀드 (σ=30%)</text>
+  <text x="95" y="124" font-size="11" fill="#94a3b8">폭넓은 수익률 분포</text>
+
+  <!-- A 펀드 X축 -->
+  <line x1="80" y1="370" x2="390" y2="370" stroke="#94a3b8" stroke-width="1"/>
+  <!-- A 펀드 X축 라벨: -10, -5, 0, +5, +10 -->
+  <!-- 막대 9개, x: 95,130,165,200,235,270,305,340,375 (막대폭30) -->
+  <!-- 0 위치 = x=235 -->
+  <text x="95" y="388" text-anchor="middle" font-size="10" fill="#94a3b8">-10%</text>
+  <text x="152" y="388" text-anchor="middle" font-size="10" fill="#94a3b8">-5%</text>
+  <text x="235" y="388" text-anchor="middle" font-size="10" fill="#94a3b8">0%</text>
+  <text x="317" y="388" text-anchor="middle" font-size="10" fill="#94a3b8">+5%</text>
+  <text x="375" y="388" text-anchor="middle" font-size="10" fill="#94a3b8">+10%</text>
+
+  <!-- 0 위치 강조 점선 세로선 -->
+  <line x1="235" y1="140" x2="235" y2="370" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4,3" opacity="0.6"/>
+
+  <!-- A 펀드 히스토그램 막대 (높이: 20,50,110,180,230,200,130,70,30) -->
+  <!-- y_top = 370 - height, 막대폭 28 -->
+  <rect x="81" y="350" width="28" height="20" fill="#ef4444" opacity="0.7"/>
+  <rect x="116" y="320" width="28" height="50" fill="#ef4444" opacity="0.7"/>
+  <rect x="151" y="260" width="28" height="110" fill="#ef4444" opacity="0.7"/>
+  <rect x="186" y="190" width="28" height="180" fill="#ef4444" opacity="0.7"/>
+  <rect x="221" y="140" width="28" height="230" fill="#ef4444" opacity="0.7"/>
+  <rect x="256" y="170" width="28" height="200" fill="#ef4444" opacity="0.7"/>
+  <rect x="291" y="240" width="28" height="130" fill="#ef4444" opacity="0.7"/>
+  <rect x="326" y="300" width="28" height="70" fill="#ef4444" opacity="0.7"/>
+  <rect x="361" y="340" width="28" height="30" fill="#ef4444" opacity="0.7"/>
+
+  <!-- ===== 우측 패널: B 펀드 ===== -->
+  <rect x="410" y="88" width="310" height="290" fill="#1a1f2e" opacity="0.3"/>
+
+  <!-- B 펀드 라벨 -->
+  <text x="425" y="108" font-size="14" font-weight="bold" fill="#4ade80">B 펀드 (σ=12%)</text>
+  <text x="425" y="124" font-size="11" fill="#94a3b8">좁은 수익률 분포</text>
+
+  <!-- B 펀드 X축 -->
+  <line x1="410" y1="370" x2="720" y2="370" stroke="#94a3b8" stroke-width="1"/>
+  <!-- 막대 9개, x: 425,460,495,530,565,600,635,670,705 (막대폭28) -->
+  <!-- 0 위치 = x=565 (5번째 막대 중앙) -->
+  <text x="432" y="388" text-anchor="middle" font-size="10" fill="#94a3b8">-4%</text>
+  <text x="497" y="388" text-anchor="middle" font-size="10" fill="#94a3b8">-2%</text>
+  <text x="566" y="388" text-anchor="middle" font-size="10" fill="#94a3b8">0%</text>
+  <text x="635" y="388" text-anchor="middle" font-size="10" fill="#94a3b8">+2%</text>
+  <text x="706" y="388" text-anchor="middle" font-size="10" fill="#94a3b8">+4%</text>
+
+  <!-- 0 위치 강조 점선 세로선 -->
+  <line x1="565" y1="140" x2="565" y2="370" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4,3" opacity="0.6"/>
+
+  <!-- B 펀드 히스토그램 막대 (높이: 10,50,130,240,280,230,130,50,10) -->
+  <!-- y_top = 370 - height, 막대폭 28 -->
+  <rect x="411" y="360" width="28" height="10" fill="#4ade80" opacity="0.7"/>
+  <rect x="446" y="320" width="28" height="50" fill="#4ade80" opacity="0.7"/>
+  <rect x="481" y="240" width="28" height="130" fill="#4ade80" opacity="0.7"/>
+  <rect x="516" y="130" width="28" height="240" fill="#4ade80" opacity="0.7"/>
+  <rect x="551" y="90" width="28" height="280" fill="#4ade80" opacity="0.7"/>
+  <rect x="586" y="140" width="28" height="230" fill="#4ade80" opacity="0.7"/>
+  <rect x="621" y="240" width="28" height="130" fill="#4ade80" opacity="0.7"/>
+  <rect x="656" y="320" width="28" height="50" fill="#4ade80" opacity="0.7"/>
+  <rect x="691" y="360" width="28" height="10" fill="#4ade80" opacity="0.7"/>
+
+  <!-- 비교 요약 텍스트 -->
+  <text x="400" y="410" text-anchor="middle" font-size="11" fill="#f59e0b">← 변동성 크다</text>
+  <text x="400" y="423" text-anchor="middle" font-size="11" fill="#f59e0b">변동성 작다 →</text>
+
+  <!-- 캡션 -->
+  <text x="400" y="443" text-anchor="middle" font-size="11" fill="#94a3b8">같은 평균이라도 변동성이 다르면 위험이 다르다</text>
+</svg>

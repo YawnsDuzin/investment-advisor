@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" font-family="system-ui, -apple-system, sans-serif">
+  <rect width="800" height="450" fill="#0f1419"/>
+
+  <!-- 제목 영역 -->
+  <text x="400" y="30" text-anchor="middle" font-size="18" font-weight="bold" fill="#e2e8f0">분산 효과 — 종목 수가 늘어날수록 리스크 감소</text>
+  <text x="400" y="52" text-anchor="middle" font-size="12" fill="#94a3b8">포트폴리오 표준편차 (% 연환산)</text>
+
+  <!-- 차트 배경 -->
+  <rect x="80" y="80" width="660" height="290" fill="#1a1f2e" opacity="0.3"/>
+
+  <!-- 최적 구간 강조 (10~15종목) -->
+  <rect x="240" y="80" width="125" height="290" fill="#4ade80" opacity="0.1"/>
+  <text x="305" y="100" text-anchor="middle" font-size="12" fill="#4ade80" font-weight="bold">최적 구간</text>
+
+  <!-- Y축 격자선 및 라벨 (0~50) -->
+  <!-- y=370 at 0%, y=312 at 10%, y=254 at 20%, y=196 at 30%, y=138 at 40%, y=80 at 50% -->
+  <line x1="80" y1="370" x2="740" y2="370" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <text x="72" y="374" text-anchor="end" font-size="11" fill="#94a3b8">0</text>
+
+  <line x1="80" y1="312" x2="740" y2="312" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <text x="72" y="316" text-anchor="end" font-size="11" fill="#94a3b8">10</text>
+
+  <line x1="80" y1="254" x2="740" y2="254" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <text x="72" y="258" text-anchor="end" font-size="11" fill="#94a3b8">20</text>
+
+  <line x1="80" y1="196" x2="740" y2="196" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <text x="72" y="200" text-anchor="end" font-size="11" fill="#94a3b8">30</text>
+
+  <line x1="80" y1="138" x2="740" y2="138" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <text x="72" y="142" text-anchor="end" font-size="11" fill="#94a3b8">40</text>
+
+  <line x1="80" y1="80" x2="740" y2="80" stroke="#2d3748" stroke-width="1" opacity="0.5"/>
+  <text x="72" y="84" text-anchor="end" font-size="11" fill="#94a3b8">50</text>
+
+  <!-- Y축 라벨 -->
+  <text x="20" y="230" text-anchor="middle" font-size="11" fill="#94a3b8" transform="rotate(-90,20,230)">표준편차 (%)</text>
+
+  <!-- X축 -->
+  <line x1="80" y1="370" x2="740" y2="370" stroke="#94a3b8" stroke-width="1"/>
+
+  <!-- X축 라벨 (종목수: 1,5,10,15,20,30,50,100) -->
+  <!-- x 좌표: 80, 174, 268, 363, 457, 551, 645, 740 -->
+  <text x="80" y="388" text-anchor="middle" font-size="11" fill="#94a3b8">1</text>
+  <text x="174" y="388" text-anchor="middle" font-size="11" fill="#94a3b8">5</text>
+  <text x="268" y="388" text-anchor="middle" font-size="11" fill="#94a3b8">10</text>
+  <text x="363" y="388" text-anchor="middle" font-size="11" fill="#94a3b8">15</text>
+  <text x="457" y="388" text-anchor="middle" font-size="11" fill="#94a3b8">20</text>
+  <text x="551" y="388" text-anchor="middle" font-size="11" fill="#94a3b8">30</text>
+  <text x="645" y="388" text-anchor="middle" font-size="11" fill="#94a3b8">50</text>
+  <text x="740" y="388" text-anchor="middle" font-size="11" fill="#94a3b8">100</text>
+  <text x="410" y="408" text-anchor="middle" font-size="11" fill="#94a3b8">종목 수</text>
+
+  <!-- 점근선 (체계적 리스크 σ=14.0 → y=288.8) -->
+  <line x1="80" y1="289" x2="740" y2="289" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="5,3" opacity="0.7"/>
+  <text x="748" y="293" font-size="11" fill="#94a3b8">체계적 리스크 (분산 불가)</text>
+
+  <!-- 라인 차트 폴리라인 -->
+  <!-- 포인트: (80,85), (174,234), (268,259), (363,271), (457,277), (551,282), (645,285), (740,286) -->
+  <!-- 계산: y = 370 - (σ/50)*290 -->
+  <!-- σ=49.2 → y=370-285.4=84.6≈85 -->
+  <!-- σ=23.5 → y=370-136.3=233.7≈234 -->
+  <!-- σ=19.2 → y=370-111.4=258.6≈259 -->
+  <!-- σ=17.0 → y=370-98.6=271.4≈271 -->
+  <!-- σ=16.0 → y=370-92.8=277.2≈277 -->
+  <!-- σ=15.2 → y=370-88.2=281.8≈282 -->
+  <!-- σ=14.7 → y=370-85.3=284.7≈285 -->
+  <!-- σ=14.5 → y=370-84.1=285.9≈286 -->
+  <polyline points="80,85 174,234 268,259 363,271 457,277 551,282 645,285 740,286"
+            fill="none" stroke="#4ade80" stroke-width="2.5" stroke-linejoin="round"/>
+
+  <!-- 데이터 마커 -->
+  <circle cx="80" cy="85" r="4" fill="#4ade80"/>
+  <circle cx="174" cy="234" r="4" fill="#4ade80"/>
+  <circle cx="268" cy="259" r="4" fill="#4ade80"/>
+  <circle cx="363" cy="271" r="4" fill="#4ade80"/>
+  <circle cx="457" cy="277" r="4" fill="#4ade80"/>
+  <circle cx="551" cy="282" r="4" fill="#4ade80"/>
+  <circle cx="645" cy="285" r="4" fill="#4ade80"/>
+  <circle cx="740" cy="286" r="4" fill="#4ade80"/>
+
+  <!-- 캡션 -->
+  <text x="400" y="435" text-anchor="middle" font-size="11" fill="#94a3b8">Statman (1987) 한국 시장 적용 예시</text>
+</svg>
