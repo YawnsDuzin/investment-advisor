@@ -7,6 +7,7 @@ Spec: docs/superpowers/specs/2026-04-26-screener-investor-strategies-design.md �
 """
 from __future__ import annotations
 
+import math
 from datetime import date
 from typing import Optional
 
@@ -22,6 +23,7 @@ try:
 except ImportError:
     yf = None
 
+from analyzer.stock_data import _check_pykrx, _is_login_failure, _disable_pykrx
 
 _log = get_logger("fundamentals_sync")
 
@@ -32,9 +34,7 @@ def _to_float(v) -> Optional[float]:
         return None
     try:
         f = float(v)
-        if f != f:  # NaN
-            return None
-        return f
+        return None if math.isnan(f) else f
     except (TypeError, ValueError):
         return None
 
@@ -42,19 +42,24 @@ def _to_float(v) -> Optional[float]:
 def fetch_kr_fundamental(ticker: str, snapshot_date: date) -> Optional[dict]:
     """KRX 종목 단일 펀더 조회 (pykrx).
 
+    배치 모드 안전성을 위해 analyzer.stock_data의 shared guard 사용 — 인증 실패 시
+    세션 단위로 short-circuit되어 매 호출 round-trip 방지.
+
     Returns:
         {"per", "pbr", "eps", "bps", "dps", "dividend_yield", "data_source"}
         또는 None (조회 실패 / 빈 DataFrame).
     """
-    if pykrx_stock is None:
-        _log.warning("pykrx 미설치 — KR 펀더 sync 불가")
+    if not _check_pykrx():
         return None
 
     yyyymmdd = snapshot_date.strftime("%Y%m%d")
     try:
         df = pykrx_stock.get_market_fundamental_by_date(yyyymmdd, yyyymmdd, ticker)
     except Exception as e:
-        _log.debug(f"[{ticker}] pykrx 조회 실패: {e}")
+        if _is_login_failure(e):
+            _disable_pykrx(f"[{ticker}] 펀더 조회 중 인증 오류: {str(e)[:100]}")
+        else:
+            _log.debug(f"[{ticker}] pykrx 조회 실패: {e}")
         return None
 
     if df is None or df.empty:
