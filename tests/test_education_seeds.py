@@ -118,8 +118,8 @@ def test_v36_visual_topics_have_image_refs():
 
 def test_svg_files_exist():
     """모든 시각화 토픽의 차트 파일이 디스크에 존재."""
-    import os
-    base = "api/static/edu/charts"
+    import pathlib
+    base = pathlib.Path(__file__).resolve().parent.parent / "api" / "static" / "edu" / "charts"
     expected = [
         "per-pbr-roe-1.svg", "business-cycle-1.svg",
         "chart-key-five-1.svg", "chart-key-five-2.svg",
@@ -131,5 +131,5 @@ def test_svg_files_exist():
         "tesla-eight-years-1.svg", "factor-six-axes-1.svg",
         "factor-six-axes-2.svg", "market-regime-1.svg",
     ]
-    missing = [f for f in expected if not os.path.exists(os.path.join(base, f))]
+    missing = [f for f in expected if not (base / f).exists()]
     assert not missing, f"missing SVG files: {missing}"
