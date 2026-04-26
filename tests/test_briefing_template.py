@@ -195,3 +195,29 @@ def test_kr_only_sector_card_is_open_by_default(env):
     m = find_sector_card(html, "조선")
     assert m, "KR-only sector card not found"
     assert "open" in m.group("attrs")
+
+
+def test_kr_pick_name_is_anchor_to_cockpit(env):
+    """KR 종목명도 US mover pill 처럼 stock cockpit 으로 링크."""
+    html = render(env, briefing=make_briefing())
+    # SK하이닉스 (000660 · KOSPI) — 이름이 anchor 안에 있어야
+    m = re.search(
+        r'<a[^>]+class="[^"]*kr-pick-name[^"]*"[^>]+href="([^"]+)"[^>]*>\s*'
+        r'SK하이닉스\s*</a>',
+        html, re.DOTALL,
+    )
+    assert m, "SK하이닉스 anchor not found"
+    assert m.group(1) == "/pages/stocks/000660?market=KOSPI"
+
+
+def test_kr_pick_name_anchor_in_kr_only_card(env):
+    """KR-only fallback 카드의 종목명도 동일하게 anchor."""
+    bd = make_briefing(with_kr_only_extra=True)
+    html = render(env, briefing=bd)
+    m = re.search(
+        r'<a[^>]+class="[^"]*kr-pick-name[^"]*"[^>]+href="([^"]+)"[^>]*>\s*'
+        r'HD한국조선해양\s*</a>',
+        html, re.DOTALL,
+    )
+    assert m, "HD한국조선해양 anchor not found"
+    assert m.group(1) == "/pages/stocks/009540?market=KOSPI"
