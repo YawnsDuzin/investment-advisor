@@ -123,3 +123,51 @@ def get_edu_chat_daily_limit(tier: str) -> Optional[int]:
 
 def is_unlimited(limit: Optional[int]) -> bool:
     return limit is None
+
+
+# ── Sprint 1 신규 한도 (NL→SQL / Vision / Red Team / 스크리너 커스텀) ──
+
+NL_SEARCH_DAILY: Dict[str, Optional[int]] = {
+    TIER_FREE: 5,
+    TIER_PRO: 50,
+    TIER_PREMIUM: 500,
+}
+
+CHART_VISION_DAILY: Dict[str, Optional[int]] = {
+    # 익명 1회 체험은 별도 처리 (CHART_VISION_ANON_LIMIT, shared/config.py)
+    TIER_FREE: 0,
+    TIER_PRO: 10,
+    TIER_PREMIUM: 100,
+}
+
+SCREENER_CUSTOM_PRESETS: Dict[str, Optional[int]] = {
+    TIER_FREE: 0,
+    TIER_PRO: 10,
+    TIER_PREMIUM: 50,
+}
+
+RED_TEAM_AVAILABLE: Dict[str, bool] = {
+    TIER_FREE: False,
+    TIER_PRO: False,
+    TIER_PREMIUM: True,
+}
+
+
+def get_nl_search_daily_limit(tier: Optional[str]) -> Optional[int]:
+    """자연어 → SQL 검색 일일 한도. None=무제한 (현재는 모든 티어 한도 있음)."""
+    return NL_SEARCH_DAILY.get(normalize_tier(tier), 5)
+
+
+def get_chart_vision_daily_limit(tier: Optional[str]) -> Optional[int]:
+    """차트 Vision 일일 한도. Free=0 (익명 1회만 별도 허용)."""
+    return CHART_VISION_DAILY.get(normalize_tier(tier), 0)
+
+
+def get_screener_custom_presets_limit(tier: Optional[str]) -> Optional[int]:
+    """스크리너 커스텀 프리셋 저장 한도. Free=0 (시드만 사용)."""
+    return SCREENER_CUSTOM_PRESETS.get(normalize_tier(tier), 0)
+
+
+def is_red_team_available(tier: Optional[str]) -> bool:
+    """Bull/Bear Red Team 분석 가용 여부. Premium 한정."""
+    return RED_TEAM_AVAILABLE.get(normalize_tier(tier), False)
