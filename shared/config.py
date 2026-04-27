@@ -61,7 +61,7 @@ class NewsConfig:
     backward-compat 으로 feeds dict property 유지.
     GLOBAL_NEWS_ENABLED 토글로 JP/CN/EU 활성화 제어.
     """
-    feed_sources: list = field(default_factory=lambda: [
+    feed_sources: list[FeedSpec] = field(default_factory=lambda: [
         # ── KR (한국, ko) ──────────────────────────────
         FeedSpec("https://www.hankyung.com/feed/economy",      "ko", "KR", "korea"),
         FeedSpec("https://www.hankyung.com/feed/stock",        "ko", "KR", "korea"),

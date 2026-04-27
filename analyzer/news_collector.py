@@ -86,61 +86,62 @@ def collect_news_structured(cfg: NewsConfig) -> tuple[str, list[dict]]:
     _orig_timeout = socket.getdefaulttimeout()
     socket.setdefaulttimeout(30)
 
-    # GLOBAL_NEWS_ENABLED 토글 적용
-    feed_specs: list[FeedSpec] = (
-        cfg.active_feed_sources() if hasattr(cfg, "active_feed_sources")
-        else list(cfg.feed_sources)
-    )
+    try:
+        # GLOBAL_NEWS_ENABLED 토글 적용
+        feed_specs: list[FeedSpec] = (
+            cfg.active_feed_sources() if hasattr(cfg, "active_feed_sources")
+            else list(cfg.feed_sources)
+        )
 
-    by_region: dict[str, list[dict]] = defaultdict(list)
+        by_region: dict[str, list[dict]] = defaultdict(list)
 
-    for spec in feed_specs:
-        try:
-            feed = feedparser.parse(spec.url)
-            source = feed.feed.get("title", spec.url)
+        for spec in feed_specs:
+            try:
+                feed = feedparser.parse(spec.url)
+                source = feed.feed.get("title", spec.url)
 
-            for entry in feed.entries[: cfg.max_articles_per_feed]:
-                title = entry.get("title", "")
-                published = entry.get("published", "")
+                for entry in feed.entries[: cfg.max_articles_per_feed]:
+                    title = entry.get("title", "")
+                    published = entry.get("published", "")
 
-                pub_dt = _parse_published(published)
-                if pub_dt and pub_dt < cutoff:
-                    skipped_old += 1
-                    continue
+                    pub_dt = _parse_published(published)
+                    if pub_dt and pub_dt < cutoff:
+                        skipped_old += 1
+                        continue
 
-                title_key = title[:30].strip().lower()
-                if title_key in seen_titles:
-                    skipped_dup += 1
-                    continue
-                seen_titles.add(title_key)
+                    title_key = title[:30].strip().lower()
+                    if title_key in seen_titles:
+                        skipped_dup += 1
+                        continue
+                    seen_titles.add(title_key)
 
-                summary = _clean_html(
-                    entry.get("summary", entry.get("description", ""))
-                )
-                link = entry.get("link", "")
+                    summary = _clean_html(
+                        entry.get("summary", entry.get("description", ""))
+                    )
+                    link = entry.get("link", "")
 
-                article = {
-                    "category": spec.category,
-                    "source": source,
-                    "title": title,
-                    "title_original": title,
-                    "summary": summary[:1000],
-                    "link": link,
-                    "published": published,
-                    "lang": spec.lang,
-                    "region": spec.region,
-                    "_pub_dt": pub_dt,
-                }
-                articles.append(article)
-                by_region[spec.region].append(article)
-                total += 1
+                    article = {
+                        "category": spec.category,
+                        "source": source,
+                        "title": title,
+                        "title_original": title,
+                        "summary": summary[:1000],
+                        "link": link,
+                        "published": published,
+                        "lang": spec.lang,
+                        "region": spec.region,
+                        "_pub_dt": pub_dt,
+                    }
+                    articles.append(article)
+                    by_region[spec.region].append(article)
+                    total += 1
 
-        except socket.timeout:
-            log.warning(f"{spec.url} 타임아웃 (30초 초과)")
-        except Exception as e:
-            log.warning(f"{spec.url} 수집 실패: {e}")
-
-    socket.setdefaulttimeout(_orig_timeout)
+            except socket.timeout:
+                log.warning(f"{spec.url} 타임아웃 (30초 초과)")
+            except Exception as e:
+                log.warning(f"{spec.url} 수집 실패: {e}")
+    finally:
+        socket.setdefaulttimeout(_orig_timeout)
 
     # ── region 별 섹션 빌드 ────────────────────────────
     sections: list[str] = []
