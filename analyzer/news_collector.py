@@ -1,22 +1,45 @@
-"""RSS 뉴스 수집 모듈 — 카테고리별 수집 및 구조화"""
+"""RSS 뉴스 수집 모듈 — region-tagged feed_sources 기반 (Sprint 1 PR-2).
+
+각 article 에 lang/region/title_original 태그 부착.
+news_text 는 region 별 섹션으로 그룹 — Stage 1 프롬프트가 region 단위로 인식.
+"""
 import time
 import socket
+from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 import feedparser
-from shared.config import NewsConfig
+from shared.config import NewsConfig, FeedSpec
 from shared.logger import get_logger
 
 
+# 카테고리 라벨 (article 메타데이터용 — text 그룹은 region 단위)
 CATEGORY_LABELS = {
     "global": "글로벌 종합",
     "finance": "경제·금융·시장",
     "technology": "기술·AI·반도체",
     "commodities": "에너지·원자재",
     "korea": "한국 경제",
-    "early_signals": "선행 지표·규제·공급망",
     "korea_early": "한국 산업·M&A·자본시장",
+    "early_signals": "선행 지표·규제·공급망",
+    "asia_business": "아시아 비즈니스",
+    "china_business": "중국 비즈니스",
+    "eu_companies": "유럽 기업",
+    "eu_business": "유럽 비즈니스",
 }
+
+# region 별 섹션 헤더 (news_text 그룹용)
+REGION_LABELS = {
+    "KR": "한국 뉴스",
+    "US": "미국 뉴스",
+    "JP": "일본 뉴스",
+    "CN": "중국 뉴스",
+    "EU": "유럽 뉴스",
+    "GLOBAL": "글로벌 뉴스",
+}
+
+# Stage 1 프롬프트 입력에서 region 그룹 출력 순서
+REGION_ORDER = ["KR", "US", "JP", "CN", "EU", "GLOBAL"]
 
 
 def _clean_html(text: str) -> str:
@@ -34,7 +57,6 @@ def _parse_published(published: str) -> datetime | None:
         return parsedate_to_datetime(published)
     except Exception:
         pass
-    # feedparser의 time_struct 포맷 시도
     try:
         return datetime(*time.strptime(published[:25], "%Y-%m-%dT%H:%M:%S")[:6],
                         tzinfo=timezone.utc)
@@ -43,51 +65,50 @@ def _parse_published(published: str) -> datetime | None:
 
 
 def collect_news_structured(cfg: NewsConfig) -> tuple[str, list[dict]]:
-    """RSS 피드에서 뉴스를 수집하여 (텍스트, 구조화 리스트)를 반환
+    """RSS 피드에서 뉴스를 수집하여 (region-grouped 텍스트, article 리스트) 반환.
 
-    최적화:
-    - 최근 24시간 이내 뉴스만 수집 (시간 필터링)
-    - 제목 앞 30자 기준 소스 간 교차 중복 제거
-    - 요약 300자로 축소 (토큰 절감)
+    각 article:
+      {
+        "category", "source", "title", "summary", "link", "published",
+        "lang", "region", "title_original"  # ← Sprint 1 PR-2 추가
+      }
 
-    Returns:
-        (news_text, articles)
-        - news_text: 분석 파이프라인용 마크다운 텍스트
-        - articles: [{"category", "source", "title", "summary", "link", "published"}]
+    news_text 는 region 별 섹션 (`### [한국 뉴스] (N건)`) 으로 그룹.
     """
-    sections: list[str] = []
     articles: list[dict] = []
-    seen_titles: set[str] = set()  # 제목 앞 30자 기준 중복 제거
+    seen_titles: set[str] = set()
     cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
     total = 0
     skipped_old = 0
     skipped_dup = 0
 
     log = get_logger("뉴스")
-    # feedparser용 소켓 타임아웃 (기본 무제한 → 30초 제한)
     _orig_timeout = socket.getdefaulttimeout()
     socket.setdefaulttimeout(30)
 
-    for category, feed_urls in cfg.feeds.items():
-        label = CATEGORY_LABELS.get(category, category)
-        lines: list[str] = []
+    try:
+        # GLOBAL_NEWS_ENABLED 토글 적용
+        feed_specs: list[FeedSpec] = (
+            cfg.active_feed_sources() if hasattr(cfg, "active_feed_sources")
+            else list(cfg.feed_sources)
+        )
 
-        for feed_url in feed_urls:
+        by_region: dict[str, list[dict]] = defaultdict(list)
+
+        for spec in feed_specs:
             try:
-                feed = feedparser.parse(feed_url)
-                source = feed.feed.get("title", feed_url)
+                feed = feedparser.parse(spec.url)
+                source = feed.feed.get("title", spec.url)
 
                 for entry in feed.entries[: cfg.max_articles_per_feed]:
                     title = entry.get("title", "")
                     published = entry.get("published", "")
 
-                    # B2: 시간 필터링 — 24시간 이내 뉴스만
                     pub_dt = _parse_published(published)
                     if pub_dt and pub_dt < cutoff:
                         skipped_old += 1
                         continue
 
-                    # B3: 교차 중복 제거 — 제목 앞 30자 기준
                     title_key = title[:30].strip().lower()
                     if title_key in seen_titles:
                         skipped_dup += 1
@@ -99,47 +120,62 @@ def collect_news_structured(cfg: NewsConfig) -> tuple[str, list[dict]]:
                     )
                     link = entry.get("link", "")
 
-                    # A2: 프롬프트 입력 텍스트 축약 (토큰 절감)
-                    # 날짜 문자열 축약: 불필요한 요일·시간대 정보 제거
-                    short_date = ""
-                    if pub_dt:
-                        short_date = f" ({pub_dt.strftime('%m/%d %H:%M')})"
-                    elif published:
-                        short_date = f" ({published[:16]})"
-                    lines.append(
-                        f"  • [{source}]{short_date} {title}\n    {summary[:300]}"
-                    )
-
-                    articles.append({
-                        "category": category,
+                    article = {
+                        "category": spec.category,
                         "source": source,
                         "title": title,
+                        "title_original": title,
                         "summary": summary[:1000],
                         "link": link,
                         "published": published,
-                    })
+                        "lang": spec.lang,
+                        "region": spec.region,
+                        "_pub_dt": pub_dt,
+                    }
+                    articles.append(article)
+                    by_region[spec.region].append(article)
                     total += 1
 
             except socket.timeout:
-                log.warning(f"{feed_url} 타임아웃 (30초 초과)")
+                log.warning(f"{spec.url} 타임아웃 (30초 초과)")
             except Exception as e:
-                log.warning(f"{feed_url} 수집 실패: {e}")
+                log.warning(f"{spec.url} 수집 실패: {e}")
+    finally:
+        socket.setdefaulttimeout(_orig_timeout)
 
-        if lines:
-            section = f"### [{label}] ({len(lines)}건)\n\n" + "\n\n".join(lines)
-            sections.append(section)
+    # ── region 별 섹션 빌드 ────────────────────────────
+    sections: list[str] = []
+    for region in REGION_ORDER:
+        region_articles = by_region.get(region, [])
+        if not region_articles:
+            continue
+        label = REGION_LABELS.get(region, region)
+        lines: list[str] = []
+        for a in region_articles:
+            short_date = ""
+            if a["_pub_dt"]:
+                short_date = f" ({a['_pub_dt'].strftime('%m/%d %H:%M')})"
+            elif a["published"]:
+                short_date = f" ({a['published'][:16]})"
+            cat_label = CATEGORY_LABELS.get(a["category"], a["category"])
+            lines.append(
+                f"  • [{a['source']}][{cat_label}]{short_date} {a['title']}\n"
+                f"    {a['summary'][:300]}"
+            )
+        sections.append(f"### [{label}] ({len(lines)}건)\n\n" + "\n\n".join(lines))
 
-    # 소켓 타임아웃 복원
-    socket.setdefaulttimeout(_orig_timeout)
+    for a in articles:
+        a.pop("_pub_dt", None)
 
-    log.info(f"총 {total}건 수집 완료 (카테고리 {len(sections)}개)")
+    log.info(f"총 {total}건 수집 완료 (region {len(by_region)}개)")
     if skipped_old or skipped_dup:
         log.info(f"필터링: 24시간 초과 {skipped_old}건, 중복 {skipped_dup}건 제외")
+
     news_text = "\n\n---\n\n".join(sections)
     return news_text, articles
 
 
 def collect_news(cfg: NewsConfig) -> str:
-    """RSS 피드에서 카테고리별 뉴스를 수집하여 구조화된 텍스트로 반환 (하위호환)"""
+    """RSS 피드에서 뉴스를 수집하여 region-grouped 텍스트로 반환 (하위호환)."""
     news_text, _ = collect_news_structured(cfg)
     return news_text

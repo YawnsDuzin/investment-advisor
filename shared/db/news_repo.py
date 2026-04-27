@@ -6,11 +6,13 @@ from shared.db.connection import get_connection
 
 
 def save_news_articles(cfg: DatabaseConfig, session_id: int, articles: list[dict]) -> int:
-    """수집된 뉴스 기사를 DB에 저장
+    """수집된 뉴스 기사를 DB에 저장 (Sprint 1 v41 컬럼 포함).
 
     Args:
         articles: [{"category", "source", "title", "title_ko",
-                     "summary", "summary_ko", "link", "published"}]
+                    "summary", "summary_ko", "link", "published",
+                    "lang", "region", "title_original"}]
+                  — lang/region/title_original 누락 시 NULL 저장 (legacy 호환).
     Returns:
         저장된 기사 수
     """
@@ -23,12 +25,15 @@ def save_news_articles(cfg: DatabaseConfig, session_id: int, articles: list[dict
             for a in articles:
                 cur.execute(
                     """INSERT INTO news_articles
-                       (session_id, category, source, title, title_ko, summary, summary_ko, link, published)
-                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                       (session_id, category, source, title, title_ko,
+                        summary, summary_ko, link, published,
+                        lang, region, title_original)
+                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
                     (session_id, a.get("category"), a.get("source"),
                      a.get("title"), a.get("title_ko"),
                      a.get("summary"), a.get("summary_ko"),
-                     a.get("link"), a.get("published"))
+                     a.get("link"), a.get("published"),
+                     a.get("lang"), a.get("region"), a.get("title_original"))
                 )
         conn.commit()
         return len(articles)
