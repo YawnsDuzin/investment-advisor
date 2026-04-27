@@ -129,3 +129,19 @@ def test_v41_seed_upsert_uses_on_conflict():
     assert "ON CONFLICT" in sql_arg
     assert "STRATEGY_KEY" in sql_arg
     assert "DO UPDATE" in sql_arg
+
+
+def test_v41_registered_in_migrations_dict():
+    """run_migrations() 가 v41 까지 적용 가능."""
+    from shared.db.migrations import _MIGRATIONS
+    from shared.db.migrations.versions import _migrate_to_v41
+
+    assert 41 in _MIGRATIONS
+    assert _MIGRATIONS[41] is _migrate_to_v41
+
+
+def test_schema_version_is_41():
+    import importlib
+    import shared.db.schema as s
+    importlib.reload(s)
+    assert s.SCHEMA_VERSION == 41
