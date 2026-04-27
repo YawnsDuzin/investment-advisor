@@ -1,0 +1,12 @@
+[Unit]
+Description=Investment Advisor — 펀더멘털 PIT 매일 06:35 KST (universe-sync-price 직후)
+Documentation=https://github.com/yawnsduzin/investment-advisor
+
+[Timer]
+# 매일 06:35 KST — universe-sync-price.timer(06:30) 이후 5분
+OnCalendar=*-*-* 06:35:00 Asia/Seoul
+Persistent=true
+Unit=investment-advisor-fundamentals.service
+
+[Install]
+WantedBy=timers.target

@@ -204,6 +204,67 @@ class OhlcvConfig:
 
 
 @dataclass
+class FundamentalsConfig:
+    """펀더멘털 PIT 시계열 수집 설정 (B-Lite — pykrx KR + yfinance.info US).
+
+    `stock_universe_fundamentals` 테이블의 수집·보존 정책.
+    Spec: docs/superpowers/specs/2026-04-26-screener-investor-strategies-design.md
+    """
+    retention_days: int = field(
+        default_factory=lambda: int(os.getenv("FUNDAMENTALS_RETENTION_DAYS", "800"))
+    )
+    delisted_retention_days: int = field(
+        default_factory=lambda: int(os.getenv("FUNDAMENTALS_DELISTED_RETENTION_DAYS", "400"))
+    )
+    sync_enabled: bool = field(
+        default_factory=lambda: _env_bool("FUNDAMENTALS_SYNC_ENABLED", True)
+    )
+    # 배치 크기 — 현재 미사용. sync_market_fundamentals 가 per-ticker 호출 + max_consecutive_failures
+    # 가드로 충분하므로 보류. M3 (스크리너 백엔드) 또는 M6 (대규모 재처리) 에서 활용 예정.
+    pykrx_batch_size: int = field(
+        default_factory=lambda: int(os.getenv("FUNDAMENTALS_PYKRX_BATCH_SIZE", "200"))
+    )
+    yfinance_batch_size: int = field(
+        default_factory=lambda: int(os.getenv("FUNDAMENTALS_YFINANCE_BATCH_SIZE", "50"))
+    )
+    # AI 제시값 vs 실측 cross-check 허용 오차 — M6 (proposal_validation_log 펀더 룰) 에서 사용 예정.
+    validation_tolerance_pct: float = field(
+        default_factory=lambda: float(os.getenv("FUNDAMENTALS_VALIDATION_TOLERANCE_PCT", "5.0"))
+    )
+    # US sync — 연속 N건 실패 시 조기 종료 (yfinance throttling 의심). 0이면 비활성.
+    us_max_consecutive_failures: int = field(
+        default_factory=lambda: int(os.getenv("FUNDAMENTALS_US_MAX_CONSECUTIVE_FAILURES", "50"))
+    )
+    # health check — 최근 N일 내 펀더 row 보유 = "신선" 기준
+    staleness_days: int = field(
+        default_factory=lambda: int(os.getenv("FUNDAMENTALS_STALENESS_DAYS", "2"))
+    )
+    # 시장별 결측률 임계 (% 초과 시 경고). 미정의 시장은 fallback 10.0
+    missing_threshold_kospi: float = field(
+        default_factory=lambda: float(os.getenv("FUNDAMENTALS_MISSING_THRESHOLD_KOSPI", "5.0"))
+    )
+    missing_threshold_kosdaq: float = field(
+        default_factory=lambda: float(os.getenv("FUNDAMENTALS_MISSING_THRESHOLD_KOSDAQ", "5.0"))
+    )
+    missing_threshold_nasdaq: float = field(
+        default_factory=lambda: float(os.getenv("FUNDAMENTALS_MISSING_THRESHOLD_NASDAQ", "3.0"))
+    )
+    missing_threshold_nyse: float = field(
+        default_factory=lambda: float(os.getenv("FUNDAMENTALS_MISSING_THRESHOLD_NYSE", "3.0"))
+    )
+
+    def missing_pct_threshold(self, market: str) -> float:
+        """시장별 결측률 임계 조회. 미정의 시장은 10.0 fallback."""
+        table = {
+            "KOSPI": self.missing_threshold_kospi,
+            "KOSDAQ": self.missing_threshold_kosdaq,
+            "NASDAQ": self.missing_threshold_nasdaq,
+            "NYSE": self.missing_threshold_nyse,
+        }
+        return table.get(market.upper(), 10.0)
+
+
+@dataclass
 class ScreenerConfig:
     """Universe-First Stage 1-B 분해 설정 (Phase 2 — recommendation-engine-redesign).
 
@@ -277,4 +338,5 @@ class AppConfig:
     screener: ScreenerConfig = field(default_factory=ScreenerConfig)
     validation: ValidationConfig = field(default_factory=ValidationConfig)
     ohlcv: OhlcvConfig = field(default_factory=OhlcvConfig)
+    fundamentals: FundamentalsConfig = field(default_factory=FundamentalsConfig)
     max_turns: int = field(default_factory=lambda: int(os.getenv("MAX_TURNS", "1")))  # 하위호환

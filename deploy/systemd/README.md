@@ -33,6 +33,8 @@
 | `universe-sync-meta.timer` | 매주 일요일 07:30 KST | 위 service 트리거 |
 | `ohlcv-cleanup.service` | OHLCV retention 초과 row 정리 (`--mode cleanup`) | `ohlcv-cleanup.timer` |
 | `ohlcv-cleanup.timer` | 매주 일요일 08:00 KST | 위 service 트리거 |
+| `investment-advisor-fundamentals.service` | 펀더멘털 PIT 일별 sync (`--mode fundamentals`) — pykrx KR PER/PBR/EPS/배당률 + yfinance.info US (B-Lite) | `investment-advisor-fundamentals.timer` |
+| `investment-advisor-fundamentals.timer` | 매일 06:35 KST (sync-price 5분 후) | 위 service 트리거 |
 
 ### C. 섹터 분류 유지보수 (P1-ext2 이후)
 
@@ -60,6 +62,7 @@
   → pre-market-briefing          ← After=sync-price + After=sync-indices
   → investment-advisor-analyzer  ← After=pre-market-briefing  (분석 배치)
 
+06:35  investment-advisor-fundamentals  ← 펀더멘털 PIT (stock_universe_fundamentals) — sync-price 직후
 07:30  universe-sync-meta        ← 주간 메타 (일요일만)
 07:45  monthly-sector-refresh    ← 월간 섹터 리프레시 (매월 1일)
 08:00  ohlcv-cleanup             ← retention 정리 (일요일만)
@@ -102,7 +105,8 @@ sudo systemctl enable --now investment-advisor-analyzer.timer
 sudo systemctl enable --now universe-sync-price.timer \
                               universe-sync-indices.timer \
                               universe-sync-meta.timer \
-                              ohlcv-cleanup.timer
+                              ohlcv-cleanup.timer \
+                              investment-advisor-fundamentals.timer
 
 # 5. 섹터 분류 월간 유지보수 활성화 (P1-ext2 이후)
 sudo systemctl enable --now monthly-sector-refresh.timer
@@ -141,7 +145,8 @@ sudo systemctl disable --now \
   universe-sync-indices.timer \
   universe-sync-meta.timer \
   ohlcv-cleanup.timer \
-  monthly-sector-refresh.timer
+  monthly-sector-refresh.timer \
+  investment-advisor-fundamentals.timer
 
 sudo rm /etc/systemd/system/investment-advisor-*.{service,timer}
 sudo rm /etc/systemd/system/universe-sync-*.{service,timer}
@@ -192,7 +197,10 @@ Cmnd_Alias INV_SVC_ACTIONS = \
   /bin/systemctl restart monthly-sector-refresh.service, \
   /bin/systemctl start   pre-market-briefing.service, \
   /bin/systemctl stop    pre-market-briefing.service, \
-  /bin/systemctl restart pre-market-briefing.service
+  /bin/systemctl restart pre-market-briefing.service, \
+  /bin/systemctl start   investment-advisor-fundamentals.service, \
+  /bin/systemctl stop    investment-advisor-fundamentals.service, \
+  /bin/systemctl restart investment-advisor-fundamentals.service
 
 Cmnd_Alias INV_TIMER_ACTIONS = \
   /bin/systemctl enable  --now investment-advisor-analyzer.timer, \
@@ -208,7 +216,9 @@ Cmnd_Alias INV_TIMER_ACTIONS = \
   /bin/systemctl enable  --now monthly-sector-refresh.timer, \
   /bin/systemctl disable --now monthly-sector-refresh.timer, \
   /bin/systemctl enable  --now pre-market-briefing.timer, \
-  /bin/systemctl disable --now pre-market-briefing.timer
+  /bin/systemctl disable --now pre-market-briefing.timer, \
+  /bin/systemctl enable  --now investment-advisor-fundamentals.timer, \
+  /bin/systemctl disable --now investment-advisor-fundamentals.timer
 
 dzp ALL=(root) NOPASSWD: INV_SVC_ACTIONS, INV_TIMER_ACTIONS
 ```

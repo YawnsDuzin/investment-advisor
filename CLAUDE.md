@@ -15,7 +15,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **AI**: Claude Code SDK (`claude-agent-sdk`) — 멀티스테이지 분석 파이프라인
 - **Backend**: FastAPI + Uvicorn (REST API + HTML 서빙)
 - **Template**: Jinja2 (다크 테마 UI)
-- **Database**: PostgreSQL + psycopg2 (스키마 자동 마이그레이션 v1~v34)
+- **Database**: PostgreSQL + psycopg2 (스키마 자동 마이그레이션 v1~v40)
 - **News**: feedparser + httpx (RSS 수집)
 - **Stock Data**: yfinance (해외 주가/재무 데이터) + pykrx (한국 주식 크로스체크/폴백)
 - **Async**: anyio (async/sync 브릿지)
@@ -28,7 +28,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```
 investment-advisor/
 ├── shared/              ← 공용: config(.env 로드), db(마이그레이션+저장), logger(DB 로그), pg_setup(자동 설치), tier_limits(구독 티어 제한)
-├── analyzer/            ← 배치: main(엔트리) → news_collector(RSS) → stock_data(주가조회) → analyzer(2단계) → recommender(Top Picks) → price_tracker(수익률추적) → checkpoint(중단점복구) → krx_data(KRX수급/공매도) → overnight_us(US 오버나이트 집계) → briefing_main(프리마켓 브리핑 엔트리)
+├── analyzer/            ← 배치: main(엔트리) → news_collector(RSS) → stock_data(주가조회) → analyzer(2단계) → recommender(Top Picks) → price_tracker(수익률추적) → checkpoint(중단점복구) → krx_data(KRX수급/공매도) → overnight_us(US 오버나이트 집계) → briefing_main(프리마켓 브리핑 엔트리) → fundamentals_sync(펀더 PIT)
 ├── api/                 ← 웹: main(FastAPI) → routes/(pages, sessions, themes, proposals, stocks, chat, education, inquiry, admin, admin_systemd, auth, user_admin, watchlist, track_record, briefing)
 │   ├── auth/            ← JWT 인증 모듈: dependencies, jwt_handler, password, models
 │   ├── chat_engine.py   ← Claude SDK 기반 테마 채팅 엔진
@@ -36,7 +36,7 @@ investment-advisor/
 │   ├── templates/       ← Jinja2 HTML (다크 테마 + 우측 상단 드롭다운 메뉴) + _macros/(공통 매크로 — common, theme, proposal, admin)
 │   └── static/css/ + static/js/(sse_log_viewer.js 공용 SSE 컨트롤러, stock_cockpit.js Cockpit 페이지 전용)
 ├── deploy/systemd/      ← systemd unit 템플릿 (API + 분석 배치 + universe sync + OHLCV cleanup — 플레이스홀더 치환 방식)
-├── tools/               ← 운영 도구: refresh_us_universe(S&P500/NDX100 시드 갱신), ohlcv_health_check(OHLCV 무결성 검사)
+├── tools/               ← 운영 도구: refresh_us_universe(S&P500/NDX100 시드 갱신), ohlcv_health_check(OHLCV 무결성 검사), fundamentals_health_check(결측률 진단)
 └── _docs/               ← 운영 문서 (분석 파이프라인, 라즈베리파이 매뉴얼)
     ├── _prompts/        ← 작업 요청 프롬프트 기록 (날짜별)
     └── _exception/      ← 분석/운영 예외·장애 관리 대장 (README.md가 이슈 인덱스)
@@ -133,6 +133,15 @@ sudo systemctl enable --now pre-market-briefing.timer            # 매일 06:30 
 | `ADMIN_EMAIL` | `admin@example.com` | 최초 Admin 이메일 |
 | `ADMIN_PASSWORD` | `changeme123` | 최초 Admin 비밀번호 (반드시 변경) |
 | `COOKIE_SECURE` | `false` | HTTPS 전용 쿠키 (프로덕션: true) |
+| `FUNDAMENTALS_RETENTION_DAYS` | `800` | 펀더 PIT 시계열 보존일 |
+| `FUNDAMENTALS_DELISTED_RETENTION_DAYS` | `400` | 상폐 종목 펀더 축소 retention |
+| `FUNDAMENTALS_SYNC_ENABLED` | `true` | 펀더 sync 활성화 스위치 (false=skip) |
+| `FUNDAMENTALS_US_MAX_CONSECUTIVE_FAILURES` | `50` | US sync 연속 실패 시 조기 종료 (yfinance throttling 회피) |
+| `FUNDAMENTALS_STALENESS_DAYS` | `2` | health check — 최근 N일 내 펀더 row 보유 = "신선" |
+| `FUNDAMENTALS_MISSING_THRESHOLD_KOSPI` | `5.0` | 결측률 경고 임계 (%) |
+| `FUNDAMENTALS_MISSING_THRESHOLD_KOSDAQ` | `5.0` | 결측률 경고 임계 (%) |
+| `FUNDAMENTALS_MISSING_THRESHOLD_NASDAQ` | `3.0` | 결측률 경고 임계 (%) |
+| `FUNDAMENTALS_MISSING_THRESHOLD_NYSE` | `3.0` | 결측률 경고 임계 (%) |
 
 - `.env`는 `.gitignore`에 포함 — Git에 커밋되지 않음
 - `.env.example`은 Git에 포함 — 플레이스홀더 값으로 구성
@@ -267,6 +276,8 @@ stock_universe_ohlcv (v27, 종목별 일별 OHLCV 이력, PK `(ticker, market, t
 - **시장 레짐 레이어(로드맵 B2)** — `analyzer/regime.py`가 `market_indices_ohlcv`(v31)에서 KOSPI/KOSDAQ/S&P500/NDX100 인덱스의 `above_200ma`, `pct_from_ma200`, `vol60_pct`(±10% clamp), `vol_regime`(low/mid/high), `drawdown_from_52w_high_pct`, `return_1m/3m_pct`를 산출. 추가로 `stock_universe_ohlcv`에서 KRX 시장폭(20일 상승 종목 비율) 집계. `run_pipeline` 초기에 `compute_regime(db_cfg)` 호출 → `format_regime_text()` + `infer_positioning_hint()`로 STAGE1A/1A1/1A2 프롬프트에 `{market_regime_section}` 주입. AI는 국면에 맞춰 테마 신뢰도·리스크 톤 조정.
 - `analysis_sessions.market_regime JSONB`(v31) — Stage 1 진입 시점의 레짐 스냅샷 영속화. `market_indices_ohlcv`(v31) 테이블은 `analyzer/universe_sync.py --mode indices`로 수집 (pykrx KRX·yfinance US).
 - `pre_market_briefings`(v34) — 프리마켓 브리핑 결과 영속화. PK `briefing_date`, 컬럼 `source_trade_date / status / us_summary JSONB / briefing_data JSONB / regime_snapshot JSONB`. `analyzer/briefing_main.py`가 매일 KST 06:30 미국 OHLCV 집계(`analyzer/overnight_us.py`) + Claude SDK 브리핑 생성 + sector_norm 공통키로 한국 수혜 매핑 + 화이트리스트 검증 + 워치리스트/구독 알림 자동 생성. `pre-market-briefing.timer` (06:30) systemd unit으로 트리거. UI는 `/pages/briefing` (`api/templates/briefing.html`). 운영 매뉴얼: `_docs/20260425101355_pre_market_briefing.md`.
+- `stock_universe_fundamentals`(v39) — 종목별 PIT 펀더멘털 시계열 (B-Lite). PK `(ticker, market, snapshot_date)`. pykrx KR (PER/PBR/EPS/BPS/DPS/배당률) + yfinance.info US (trailingPE/priceToBook 등). FK 미설정 (PIT 원칙 — 상폐 종목 이력 보존). `analyzer/fundamentals_sync.py`가 일별 sync, `tools/fundamentals_health_check.py`가 결측률 진단. 운영 매뉴얼: `_docs/20260426_fundamentals-operations.md` (M6 작성 예정).
+- `screener_presets` 확장(v40) — 거장 시드 프리셋 대비. user_id NULLABLE (시드=NULL), 신규 컬럼 6개 (is_seed/strategy_key/persona/persona_summary/markets_supported/risk_warning), `strategy_key` 부분 UNIQUE 인덱스 (is_seed=TRUE 한정 — UPSERT 멱등). 시드 프리셋 본격 INSERT 는 M4 (v41) 에서 진행.
 
 ## Key Conventions
 

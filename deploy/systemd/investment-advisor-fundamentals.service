@@ -1,0 +1,31 @@
+[Unit]
+Description=Investment Advisor — 펀더멘털 PIT 일별 sync (B-Lite)
+Documentation=https://github.com/yawnsduzin/investment-advisor
+After=network-online.target
+Wants=network-online.target
+# Note: universe-sync-price.timer 가 06:30 에 먼저 fire 되어 5분 시차로 price sync
+# 가 완료된 상태에서 본 service 가 실행되는 것이 정상 운영. 단 부트 후 Persistent
+# missed-run 연쇄 시에는 이 ordering 이 보장되지 않으므로 fundamentals 가 가격
+# 데이터 부재 상태로 실행될 수 있음 (해당 종목들은 결측으로 skip 처리되며
+# 다음날 정상 실행에서 누적 갱신).
+# postgresql.service 의존성은 의도적으로 미설정 — 외부 DB 호스트 호환.
+
+[Service]
+Type=oneshot
+User=__SYSTEM_USER__
+Group=__SYSTEM_USER__
+WorkingDirectory=__INSTALL_DIR__
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONIOENCODING=utf-8
+ExecStart=__VENV_PYTHON__ -m analyzer.universe_sync --mode fundamentals
+TimeoutStartSec=3600
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=5
+
+Restart=no
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

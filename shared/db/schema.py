@@ -9,7 +9,7 @@ from shared.db.migrations import run_migrations
 
 
 # ── 스키마 버전 관리 ──────────────────────────────
-SCHEMA_VERSION = 38  # v38: education Phase 2C — basics 7 토픽 시각화 SVG
+SCHEMA_VERSION = 40  # v40: screener_presets 확장 (시드 프리셋 대비)
 
 
 def _create_base_schema(cur) -> None:
