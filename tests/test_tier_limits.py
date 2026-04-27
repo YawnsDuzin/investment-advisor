@@ -207,3 +207,55 @@ class TestPricingPageContext:
             assert key in STAGE2_DAILY_LIMITS
             assert key in CHAT_DAILY_TURNS
             assert key in HISTORY_DAYS_LIMITS
+
+
+class TestSprint1TierLimits:
+    """Sprint 1 신규 한도: NL_SEARCH / CHART_VISION / SCREENER_CUSTOM / RED_TEAM."""
+
+    def test_nl_search_daily_limits(self):
+        from shared.tier_limits import get_nl_search_daily_limit
+        assert get_nl_search_daily_limit("free") == 5
+        assert get_nl_search_daily_limit("pro") == 50
+        assert get_nl_search_daily_limit("premium") == 500
+
+    def test_chart_vision_daily_limits(self):
+        from shared.tier_limits import get_chart_vision_daily_limit
+        assert get_chart_vision_daily_limit("free") == 0
+        assert get_chart_vision_daily_limit("pro") == 10
+        assert get_chart_vision_daily_limit("premium") == 100
+
+    def test_screener_custom_presets_limits(self):
+        from shared.tier_limits import get_screener_custom_presets_limit
+        assert get_screener_custom_presets_limit("free") == 0
+        assert get_screener_custom_presets_limit("pro") == 10
+        assert get_screener_custom_presets_limit("premium") == 50
+
+    def test_red_team_availability_by_tier(self):
+        from shared.tier_limits import is_red_team_available
+        assert is_red_team_available("free") is False
+        assert is_red_team_available("pro") is False
+        assert is_red_team_available("premium") is True
+
+    def test_invalid_tier_falls_back_to_free(self):
+        from shared.tier_limits import (
+            get_nl_search_daily_limit,
+            get_chart_vision_daily_limit,
+            get_screener_custom_presets_limit,
+            is_red_team_available,
+        )
+        assert get_nl_search_daily_limit("platinum") == 5
+        assert get_chart_vision_daily_limit(None) == 0
+        assert get_screener_custom_presets_limit("") == 0
+        assert is_red_team_available("unknown") is False
+
+    def test_constants_exposed(self):
+        from shared.tier_limits import (
+            NL_SEARCH_DAILY,
+            CHART_VISION_DAILY,
+            SCREENER_CUSTOM_PRESETS,
+            RED_TEAM_AVAILABLE,
+        )
+        assert set(NL_SEARCH_DAILY.keys()) == {"free", "pro", "premium"}
+        assert set(CHART_VISION_DAILY.keys()) == {"free", "pro", "premium"}
+        assert set(SCREENER_CUSTOM_PRESETS.keys()) == {"free", "pro", "premium"}
+        assert set(RED_TEAM_AVAILABLE.keys()) == {"free", "pro", "premium"}
