@@ -259,3 +259,10 @@ class TestSprint1TierLimits:
         assert set(CHART_VISION_DAILY.keys()) == {"free", "pro", "premium"}
         assert set(SCREENER_CUSTOM_PRESETS.keys()) == {"free", "pro", "premium"}
         assert set(RED_TEAM_AVAILABLE.keys()) == {"free", "pro", "premium"}
+
+    def test_screener_presets_max_is_alias(self):
+        """SCREENER_CUSTOM_PRESETS 는 기존 SCREENER_PRESETS_MAX 의 alias —
+        후속 PR 작성자가 어느 이름을 써도 같은 값을 본다."""
+        from shared.tier_limits import SCREENER_PRESETS_MAX, SCREENER_CUSTOM_PRESETS
+        assert SCREENER_CUSTOM_PRESETS is SCREENER_PRESETS_MAX
+        assert SCREENER_PRESETS_MAX["premium"] == 50  # Sprint 1 spec — 무제한 X

@@ -60,9 +60,11 @@ THEME_VIEW_LIMITS: Dict[str, Optional[int]] = {
 # ── 프리미엄 스크리너 (로드맵 UI-6) ────────────────────
 # 스크리너 실행은 모든 티어 허용. 프리셋 저장·공유는 Pro 이상.
 SCREENER_PRESETS_MAX: Dict[str, Optional[int]] = {
+    # Sprint 1 design.md §4.2 — Premium 도 50 cap (DB·UI 보호).
+    # 기존 None(무제한) 에서 50 으로 조정 — 운영 시점에 Premium 사용자 0 명이라 영향 없음.
     TIER_FREE: 0,     # Free: 저장 불가 (공개 프리셋 read-only 이용만)
     TIER_PRO: 10,
-    TIER_PREMIUM: None,
+    TIER_PREMIUM: 50,
 }
 
 SCREENER_RESULT_ROW_LIMIT: Dict[str, Optional[int]] = {
@@ -140,11 +142,9 @@ CHART_VISION_DAILY: Dict[str, Optional[int]] = {
     TIER_PREMIUM: 100,
 }
 
-SCREENER_CUSTOM_PRESETS: Dict[str, Optional[int]] = {
-    TIER_FREE: 0,
-    TIER_PRO: 10,
-    TIER_PREMIUM: 50,
-}
+# Sprint 1 design 의 SCREENER_CUSTOM_PRESETS 는 기존 SCREENER_PRESETS_MAX 와 동일 개념 —
+# alias 유지 (helper API 호환). Premium 값은 SCREENER_PRESETS_MAX 정의를 따른다 (50).
+SCREENER_CUSTOM_PRESETS: Dict[str, Optional[int]] = SCREENER_PRESETS_MAX
 
 RED_TEAM_AVAILABLE: Dict[str, bool] = {
     TIER_FREE: False,
