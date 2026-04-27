@@ -55,6 +55,7 @@ RSS 뉴스를 분석하여 투자 유효한 테마를 구조화합니다.
 6. 출력 도중 "여기까지 응답하고 이어서 계속"식의 self-interruption 금지. 한 번의 응답으로 끝까지 완결 출력할 것.
 7. 출력 길이가 길어질 것 같으면, 각 `impact_*` 필드를 1~2문장 이내로 줄이고 테마 `description`은 2~3문장 이내로 작성. 이슈/테마 수는 하한선(각각 8건/4개)으로 낮춰도 좋다. 중간에 포맷을 바꾸지 말 것."""
 
+# news_text 는 news_collector 가 region 별 섹션 ([한국 뉴스] / [미국 뉴스] / [일본 뉴스] ...) 으로 그룹하여 전달 (Sprint 1 PR-2).
 STAGE1_PROMPT = """## 분석 날짜: {date}
 
 ## 오늘 수집된 글로벌 뉴스 (카테고리별 정리)
@@ -240,6 +241,7 @@ STAGE1_PROMPT = """## 분석 날짜: {date}
 
 STAGE1A_SYSTEM = STAGE1_SYSTEM
 
+# news_text 는 news_collector 가 region 별 섹션 ([한국 뉴스] / [미국 뉴스] / [일본 뉴스] ...) 으로 그룹하여 전달 (Sprint 1 PR-2).
 STAGE1A_PROMPT = """## 분석 날짜: {date}
 
 ## 오늘 수집된 글로벌 뉴스 (카테고리별 정리)
@@ -365,6 +367,7 @@ STAGE1A_PROMPT = """## 분석 날짜: {date}
 
 STAGE1A1_SYSTEM = STAGE1_SYSTEM
 
+# news_text 는 news_collector 가 region 별 섹션 ([한국 뉴스] / [미국 뉴스] / [일본 뉴스] ...) 으로 그룹하여 전달 (Sprint 1 PR-2).
 STAGE1A1_PROMPT = """## 분석 날짜: {date}
 
 ## 오늘 수집된 글로벌 뉴스 (카테고리별 정리)
@@ -419,6 +422,7 @@ STAGE1A1_PROMPT = """## 분석 날짜: {date}
 
 STAGE1A2_SYSTEM = STAGE1_SYSTEM
 
+# news_text 는 news_collector 가 region 별 섹션 ([한국 뉴스] / [미국 뉴스] / [일본 뉴스] ...) 으로 그룹하여 전달 (Sprint 1 PR-2).
 STAGE1A2_PROMPT = """## 분석 날짜: {date}
 
 ## 이전 단계에서 분석된 이슈 목록 (Stage 1-A1 결과)
