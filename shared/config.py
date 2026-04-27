@@ -328,6 +328,31 @@ class AuthConfig:
 
 
 @dataclass
+class Sprint1Config:
+    """Sprint 1 통합 설정 — NL→SQL / Red Team / 글로벌뉴스 / Vision.
+
+    Spec: _docs/20260427055258_sprint1-design.md §4.1
+    """
+    # NL → SQL
+    nl_search_enabled: bool = field(default_factory=lambda: _env_bool("NL_SEARCH_ENABLED", True))
+    nl_search_timeout_sec: int = field(default_factory=lambda: int(os.getenv("NL_SEARCH_TIMEOUT_SEC", "10")))
+    nl_search_result_limit: int = field(default_factory=lambda: int(os.getenv("NL_SEARCH_RESULT_LIMIT", "100")))
+    nl_search_readonly_dsn: str = field(default_factory=lambda: os.getenv("NL_SEARCH_READONLY_DSN", ""))
+
+    # Red Team
+    enable_red_team: bool = field(default_factory=lambda: _env_bool("ENABLE_RED_TEAM", False))
+    red_team_for_tier: str = field(default_factory=lambda: os.getenv("RED_TEAM_FOR_TIER", "premium"))
+
+    # 글로벌 뉴스
+    global_news_enabled: bool = field(default_factory=lambda: _env_bool("GLOBAL_NEWS_ENABLED", True))
+
+    # 차트 Vision
+    chart_vision_enabled: bool = field(default_factory=lambda: _env_bool("CHART_VISION_ENABLED", True))
+    chart_vision_max_bytes: int = field(default_factory=lambda: int(os.getenv("CHART_VISION_MAX_BYTES", "5242880")))
+    chart_vision_anon_limit: int = field(default_factory=lambda: int(os.getenv("CHART_VISION_ANON_LIMIT", "1")))
+
+
+@dataclass
 class AppConfig:
     db: DatabaseConfig = field(default_factory=DatabaseConfig)
     news: NewsConfig = field(default_factory=NewsConfig)
@@ -339,4 +364,5 @@ class AppConfig:
     validation: ValidationConfig = field(default_factory=ValidationConfig)
     ohlcv: OhlcvConfig = field(default_factory=OhlcvConfig)
     fundamentals: FundamentalsConfig = field(default_factory=FundamentalsConfig)
+    sprint1: Sprint1Config = field(default_factory=Sprint1Config)
     max_turns: int = field(default_factory=lambda: int(os.getenv("MAX_TURNS", "1")))  # 하위호환

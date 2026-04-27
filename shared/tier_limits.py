@@ -60,9 +60,11 @@ THEME_VIEW_LIMITS: Dict[str, Optional[int]] = {
 # ── 프리미엄 스크리너 (로드맵 UI-6) ────────────────────
 # 스크리너 실행은 모든 티어 허용. 프리셋 저장·공유는 Pro 이상.
 SCREENER_PRESETS_MAX: Dict[str, Optional[int]] = {
+    # Sprint 1 design.md §4.2 — Premium 도 50 cap (DB·UI 보호).
+    # 기존 None(무제한) 에서 50 으로 조정 — 운영 시점에 Premium 사용자 0 명이라 영향 없음.
     TIER_FREE: 0,     # Free: 저장 불가 (공개 프리셋 read-only 이용만)
     TIER_PRO: 10,
-    TIER_PREMIUM: None,
+    TIER_PREMIUM: 50,
 }
 
 SCREENER_RESULT_ROW_LIMIT: Dict[str, Optional[int]] = {
@@ -123,3 +125,49 @@ def get_edu_chat_daily_limit(tier: str) -> Optional[int]:
 
 def is_unlimited(limit: Optional[int]) -> bool:
     return limit is None
+
+
+# ── Sprint 1 신규 한도 (NL→SQL / Vision / Red Team / 스크리너 커스텀) ──
+
+NL_SEARCH_DAILY: Dict[str, Optional[int]] = {
+    TIER_FREE: 5,
+    TIER_PRO: 50,
+    TIER_PREMIUM: 500,
+}
+
+CHART_VISION_DAILY: Dict[str, Optional[int]] = {
+    # 익명 1회 체험은 별도 처리 (CHART_VISION_ANON_LIMIT, shared/config.py)
+    TIER_FREE: 0,
+    TIER_PRO: 10,
+    TIER_PREMIUM: 100,
+}
+
+# Sprint 1 design 의 SCREENER_CUSTOM_PRESETS 는 기존 SCREENER_PRESETS_MAX 와 동일 개념 —
+# alias 유지 (helper API 호환). Premium 값은 SCREENER_PRESETS_MAX 정의를 따른다 (50).
+SCREENER_CUSTOM_PRESETS: Dict[str, Optional[int]] = SCREENER_PRESETS_MAX
+
+RED_TEAM_AVAILABLE: Dict[str, bool] = {
+    TIER_FREE: False,
+    TIER_PRO: False,
+    TIER_PREMIUM: True,
+}
+
+
+def get_nl_search_daily_limit(tier: Optional[str]) -> Optional[int]:
+    """자연어 → SQL 검색 일일 한도. None=무제한 (현재는 모든 티어 한도 있음)."""
+    return NL_SEARCH_DAILY.get(normalize_tier(tier), 5)
+
+
+def get_chart_vision_daily_limit(tier: Optional[str]) -> Optional[int]:
+    """차트 Vision 일일 한도. Free=0 (익명 1회만 별도 허용)."""
+    return CHART_VISION_DAILY.get(normalize_tier(tier), 0)
+
+
+def get_screener_custom_presets_limit(tier: Optional[str]) -> Optional[int]:
+    """스크리너 커스텀 프리셋 저장 한도. Free=0 (시드만 사용)."""
+    return SCREENER_CUSTOM_PRESETS.get(normalize_tier(tier), 0)
+
+
+def is_red_team_available(tier: Optional[str]) -> bool:
+    """Bull/Bear Red Team 분석 가용 여부. Premium 한정."""
+    return RED_TEAM_AVAILABLE.get(normalize_tier(tier), False)

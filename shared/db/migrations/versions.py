@@ -1613,3 +1613,164 @@ def _migrate_to_v33(cur) -> None:
         ON CONFLICT (version) DO NOTHING;
     """)
     print("[DB] v33 마이그레이션 완료 — screener_presets (로드맵 UI-6)")
+
+
+def _migrate_to_v41(cur) -> None:
+    """v41: Sprint 1 통합 — NL→SQL / Red Team / Vision / 글로벌 뉴스 / 스크리너 시드.
+
+    추가 테이블 4개:
+    - nl_search_history       — NL→SQL 검색 이력 + rate-limit 카운팅
+    - chart_vision_log        — 차트 Vision 응답 로그 (이미지 미저장)
+    - krx_investor_flow_daily — KRX 일별 외국인·기관 수급 사전 집계 (auto_foreign_streak 시드용)
+    - stock_universe_factor_snapshot — universe-wide factor percentile (auto_momentum/oneil 시드용)
+
+    ALTER 2개:
+    - stock_analyses + bull_view/bear_view/synthesis_summary/red_team_enabled (Red Team)
+    - news_articles  + lang/title_original/region (글로벌 뉴스)
+
+    시드 INSERT:
+    - screener_presets — 거장 5 + 운영 자동 5 (ON CONFLICT DO UPDATE 로 멱등)
+
+    Spec: _docs/20260427055258_sprint1-design.md §3
+    """
+    from psycopg2.extras import execute_values
+    from shared.db.migrations.seeds_screener import seed_to_sql_values
+
+    # ── (1) nl_search_history ──────────────────────────────
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS nl_search_history (
+            id BIGSERIAL PRIMARY KEY,
+            user_id INT REFERENCES users(id) ON DELETE CASCADE,
+            query_text TEXT NOT NULL,
+            generated_sql TEXT,
+            result_count INT,
+            status TEXT NOT NULL CHECK (status IN ('ok','rejected','timeout','error')),
+            reject_reason TEXT,
+            duration_ms INT,
+            created_at TIMESTAMPTZ DEFAULT NOW()
+        );
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS nl_search_history_user_date
+            ON nl_search_history(user_id, created_at DESC);
+    """)
+
+    # ── (2) chart_vision_log ───────────────────────────────
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS chart_vision_log (
+            id BIGSERIAL PRIMARY KEY,
+            user_id INT REFERENCES users(id) ON DELETE CASCADE,
+            anonymous_token CHAR(64),
+            image_hash CHAR(64) NOT NULL,
+            ticker VARCHAR(16),
+            response_text TEXT,
+            duration_ms INT,
+            created_at TIMESTAMPTZ DEFAULT NOW(),
+            CHECK (user_id IS NOT NULL OR anonymous_token IS NOT NULL)
+        );
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS chart_vision_log_user_date
+            ON chart_vision_log(user_id, created_at DESC) WHERE user_id IS NOT NULL;
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS chart_vision_log_anon_date
+            ON chart_vision_log(anonymous_token, created_at DESC) WHERE anonymous_token IS NOT NULL;
+    """)
+
+    # ── (3) krx_investor_flow_daily ────────────────────────
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS krx_investor_flow_daily (
+            ticker         VARCHAR(16) NOT NULL,
+            trade_date     DATE NOT NULL,
+            foreign_net    BIGINT,
+            inst_net       BIGINT,
+            foreign_streak INT,
+            PRIMARY KEY (ticker, trade_date)
+        );
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_kif_streak
+            ON krx_investor_flow_daily(trade_date, foreign_streak DESC);
+    """)
+
+    # ── (4) stock_universe_factor_snapshot ─────────────────
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS stock_universe_factor_snapshot (
+            ticker        VARCHAR(16) NOT NULL,
+            market        VARCHAR(8)  NOT NULL,
+            snapshot_date DATE NOT NULL,
+            r1m_pctile    NUMERIC(5,4),
+            r3m_pctile    NUMERIC(5,4),
+            r6m_pctile    NUMERIC(5,4),
+            r1y_pctile    NUMERIC(5,4),
+            vol60_pctile  NUMERIC(5,4),
+            PRIMARY KEY (ticker, market, snapshot_date)
+        );
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_factor_latest
+            ON stock_universe_factor_snapshot(ticker, market, snapshot_date DESC);
+    """)
+
+    # ── (5) ALTER stock_analyses (Red Team) ────────────────
+    cur.execute("""
+        ALTER TABLE stock_analyses
+            ADD COLUMN IF NOT EXISTS bull_view JSONB;
+    """)
+    cur.execute("""
+        ALTER TABLE stock_analyses
+            ADD COLUMN IF NOT EXISTS bear_view JSONB;
+    """)
+    cur.execute("""
+        ALTER TABLE stock_analyses
+            ADD COLUMN IF NOT EXISTS synthesis_summary TEXT;
+    """)
+    cur.execute("""
+        ALTER TABLE stock_analyses
+            ADD COLUMN IF NOT EXISTS red_team_enabled BOOLEAN DEFAULT FALSE;
+    """)
+
+    # ── (6) ALTER news_articles (다국어) ───────────────────
+    cur.execute("""
+        ALTER TABLE news_articles
+            ADD COLUMN IF NOT EXISTS lang VARCHAR(8) DEFAULT 'ko';
+    """)
+    cur.execute("""
+        ALTER TABLE news_articles
+            ADD COLUMN IF NOT EXISTS title_original TEXT;
+    """)
+    cur.execute("""
+        ALTER TABLE news_articles
+            ADD COLUMN IF NOT EXISTS region VARCHAR(16);
+    """)
+
+    # ── (7) 시드 프리셋 UPSERT ─────────────────────────────
+    seed_rows = seed_to_sql_values()
+    execute_values(
+        cur,
+        """
+        INSERT INTO screener_presets (
+            strategy_key, name, description, persona, persona_summary,
+            markets_supported, risk_warning, spec, is_seed, user_id
+        ) VALUES %s
+        ON CONFLICT (strategy_key) WHERE is_seed = TRUE DO UPDATE SET
+            name              = EXCLUDED.name,
+            description       = EXCLUDED.description,
+            persona           = EXCLUDED.persona,
+            persona_summary   = EXCLUDED.persona_summary,
+            markets_supported = EXCLUDED.markets_supported,
+            risk_warning      = EXCLUDED.risk_warning,
+            spec              = EXCLUDED.spec,
+            updated_at        = NOW();
+        """,
+        # is_seed=TRUE / user_id=NULL 을 8-tuple 끝에 붙여 10-tuple 완성
+        [(*r, True, None) for r in seed_rows],
+    )
+
+    # ── (8) schema_version 기록 ────────────────────────────
+    cur.execute("""
+        INSERT INTO schema_version (version) VALUES (41)
+        ON CONFLICT (version) DO NOTHING;
+    """)
+    print("[DB] v41 마이그레이션 완료 — Sprint 1 (NL→SQL / Red Team / Vision / 글로벌뉴스 / 시드)")

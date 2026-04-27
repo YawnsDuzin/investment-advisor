@@ -9,7 +9,7 @@ from shared.db.migrations import run_migrations
 
 
 # ── 스키마 버전 관리 ──────────────────────────────
-SCHEMA_VERSION = 40  # v40: screener_presets 확장 (시드 프리셋 대비)
+SCHEMA_VERSION = 41  # v41: Sprint 1 통합 (NL→SQL / Red Team / Vision / 글로벌뉴스 / 시드)
 
 
 def _create_base_schema(cur) -> None:
