@@ -151,10 +151,14 @@ SCREENER_SEED_PRESETS: list[dict[str, Any]] = [
 
 
 def seed_to_sql_values() -> list[tuple]:
-    """시드를 INSERT 용 tuple list 로 변환.
+    """시드를 INSERT 용 8-tuple list 로 변환.
 
     각 tuple: (strategy_key, name, description, persona, persona_summary,
-              markets_supported, risk_warning, spec_json, is_seed=TRUE, user_id=NULL)
+              markets_supported, risk_warning, spec_json)
+
+    `is_seed=TRUE` 와 `user_id=NULL` 은 caller(마이그레이션) 가 추가한다 — 이 함수는
+    시드 본 데이터만 직렬화하고, INSERT 메타필드는 caller 의 책임으로 분리해
+    Sprint 2+ 에서 동일 시드를 다른 컨텍스트(e.g. UI 미리보기) 에서 재사용 가능.
     """
     rows = []
     for s in SCREENER_SEED_PRESETS:

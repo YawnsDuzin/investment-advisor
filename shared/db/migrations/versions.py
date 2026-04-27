@@ -1764,8 +1764,8 @@ def _migrate_to_v41(cur) -> None:
             spec              = EXCLUDED.spec,
             updated_at        = NOW();
         """,
-        # is_seed=TRUE, user_id=NULL 추가
-        [(r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7], True, None) for r in seed_rows],
+        # is_seed=TRUE / user_id=NULL 을 8-tuple 끝에 붙여 10-tuple 완성
+        [(*r, True, None) for r in seed_rows],
     )
 
     # ── (8) schema_version 기록 ────────────────────────────
