@@ -40,47 +40,80 @@ class DatabaseConfig:
         return f"host={self.host} port={self.port} dbname={self.dbname} user={self.user} password={self.password}"
 
 
+@dataclass(frozen=True)
+class FeedSpec:
+    """RSS 피드 메타데이터.
+
+    각 피드는 region/lang/category 로 태깅되어 article persist 시 propagate.
+    Sprint 1 PR-2: 단일 source-of-truth 로 NewsConfig.feed_sources 에 flat list 보관.
+    """
+    url: str
+    lang: str        # 'ko' | 'en' | 'ja' | 'zh'
+    region: str      # 'KR' | 'US' | 'JP' | 'CN' | 'EU' | 'GLOBAL'
+    category: str    # 'finance' | 'technology' | ... (분류 태그, 자유)
+
+
 @dataclass
 class NewsConfig:
-    """RSS 피드 소스 설정"""
-    feeds: dict[str, list[str]] = field(default_factory=lambda: {
-        # 글로벌 종합 뉴스
-        "global": [
-            "https://feeds.bbci.co.uk/news/world/rss.xml",
-            "https://feeds.reuters.com/reuters/worldNews",
-        ],
-        # 경제·금융·시장
-        "finance": [
-            "https://feeds.reuters.com/reuters/businessNews",
-            "https://feeds.bloomberg.com/markets/news.rss",
-            "https://www.cnbc.com/id/10001147/device/rss/rss.html",
-        ],
-        # 기술·AI·반도체
-        "technology": [
-            "https://rss.nytimes.com/services/xml/rss/nyt/Technology.xml",
-            "https://feeds.arstechnica.com/arstechnica/technology-lab",
-        ],
-        # 에너지·원자재
-        "commodities": [
-            "https://oilprice.com/rss/main",
-        ],
-        # 한국 뉴스
-        "korea": [
-            "https://www.hankyung.com/feed/economy",
-            "https://www.hankyung.com/feed/stock",
-        ],
-        # 선행 지표 — 산업 전문·규제·공급망 얼리 시그널
-        "early_signals": [
-            "https://www.federalregister.gov/documents/search.atom?conditions%5Btype%5D=RULE",  # 미국 연방관보 (규제 선행)
-            "https://www.digitimes.com/rss/daily_news.xml",  # 아시아 IT 공급망 선행 지표
-        ],
-        # 한국 산업·M&A·자본시장 선행
-        "korea_early": [
-            "https://www.etnews.com/rss/Section901.xml",  # 전자신문 (산업 기술)
-            "https://www.thebell.co.kr/rss/rss_news_all.xml",  # 더벨 (M&A/자본시장)
-        ],
-    })
+    """RSS 피드 소스 설정 — region-tagged flat list.
+
+    Sprint 1 PR-2: feeds dict 를 feed_sources 로 리팩토.
+    backward-compat 으로 feeds dict property 유지.
+    GLOBAL_NEWS_ENABLED 토글로 JP/CN/EU 활성화 제어.
+    """
+    feed_sources: list = field(default_factory=lambda: [
+        # ── KR (한국, ko) ──────────────────────────────
+        FeedSpec("https://www.hankyung.com/feed/economy",      "ko", "KR", "korea"),
+        FeedSpec("https://www.hankyung.com/feed/stock",        "ko", "KR", "korea"),
+        FeedSpec("https://www.etnews.com/rss/Section901.xml",  "ko", "KR", "korea_early"),
+        FeedSpec("https://www.thebell.co.kr/rss/rss_news_all.xml", "ko", "KR", "korea_early"),
+
+        # ── US (미국, en) ──────────────────────────────
+        FeedSpec("https://feeds.bbci.co.uk/news/world/rss.xml",        "en", "US", "global"),
+        FeedSpec("https://feeds.reuters.com/reuters/worldNews",        "en", "US", "global"),
+        FeedSpec("https://feeds.reuters.com/reuters/businessNews",     "en", "US", "finance"),
+        FeedSpec("https://feeds.bloomberg.com/markets/news.rss",       "en", "US", "finance"),
+        FeedSpec("https://www.cnbc.com/id/10001147/device/rss/rss.html","en", "US", "finance"),
+        FeedSpec("https://rss.nytimes.com/services/xml/rss/nyt/Technology.xml", "en", "US", "technology"),
+        FeedSpec("https://feeds.arstechnica.com/arstechnica/technology-lab",     "en", "US", "technology"),
+        FeedSpec("https://oilprice.com/rss/main",                      "en", "US", "commodities"),
+        FeedSpec("https://www.federalregister.gov/documents/search.atom?conditions%5Btype%5D=RULE",
+                                                                       "en", "US", "early_signals"),
+        FeedSpec("https://www.digitimes.com/rss/daily_news.xml",       "en", "US", "early_signals"),
+
+        # ── JP (일본, en — Nikkei Asia 영문) ────────────
+        FeedSpec("https://asia.nikkei.com/rss/feed/nar",               "en", "JP", "asia_business"),
+
+        # ── CN (중국, en — Caixin/Yicai 영문) ───────────
+        FeedSpec("https://www.caixinglobal.com/rss/news.xml",          "en", "CN", "china_business"),
+        FeedSpec("https://www.yicaiglobal.com/rss/news.xml",           "en", "CN", "china_business"),
+
+        # ── EU (유럽, en — Reuters Europe / FT) ─────────
+        FeedSpec("https://www.ft.com/companies?format=rss",            "en", "EU", "eu_companies"),
+        FeedSpec("https://feeds.reuters.com/reuters/UKBusinessNews",   "en", "EU", "eu_business"),
+    ])
     max_articles_per_feed: int = field(default_factory=lambda: int(os.getenv("MAX_ARTICLES_PER_FEED", "5")))
+
+    @property
+    def feeds(self) -> dict:
+        """backward-compat — 카테고리 → URL 리스트.
+
+        기존 코드 (`cfg.feeds["finance"]`) 가 깨지지 않도록 feed_sources 에서 derive.
+        """
+        from collections import defaultdict
+        out: dict = defaultdict(list)
+        for spec in self.feed_sources:
+            out[spec.category].append(spec.url)
+        return dict(out)
+
+    def active_feed_sources(self) -> list:
+        """GLOBAL_NEWS_ENABLED 토글 적용된 활성 feeds.
+
+        false 시 KR/US 만 반환. 기본값 (true) 에서는 전체 반환.
+        """
+        if _env_bool("GLOBAL_NEWS_ENABLED", True):
+            return list(self.feed_sources)
+        return [f for f in self.feed_sources if f.region in ("KR", "US")]
 
 
 def _env_bool(key: str, default: bool) -> bool:
