@@ -136,6 +136,187 @@
 .row-menu-item:hover { background: rgba(99, 102, 241, 0.10); color: var(--accent); }
 .row-menu-item .icon { width: 16px; text-align: center; }
 .row-menu-divider { height: 1px; background: var(--border); margin: 4px 0; }
+
+/* ── A2: 사이드패널 + chips ─────────────────────── */
+.screener-layout {
+    display: grid;
+    grid-template-columns: 300px 1fr;
+    gap: 16px;
+    align-items: start;
+}
+.screener-side-panel {
+    position: sticky;
+    top: 16px;
+    max-height: calc(100vh - 32px);
+    overflow-y: auto;
+    background: var(--bg-card, var(--bg-elevated));
+    border: 1px solid var(--border);
+    border-radius: 10px;
+}
+.screener-side-header {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-weight: 600;
+    font-size: 13.5px;
+    background: var(--bg-elevated);
+    border-radius: 10px 10px 0 0;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+.screener-side-actions {
+    padding: 12px 14px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    background: var(--bg-card, var(--bg-elevated));
+    position: sticky;
+    bottom: 0;
+}
+.screener-side-actions .btn { flex: 1 1 auto; min-width: 80px; }
+
+.filter-group { border-bottom: 1px solid var(--border); }
+.filter-group:last-of-type { border-bottom: none; }
+.filter-group-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    cursor: pointer;
+    user-select: none;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+    transition: background .15s;
+}
+.filter-group-header:hover { background: rgba(99,102,241,0.06); }
+.filter-group-caret { color: var(--text-muted); font-size: 10px; transition: transform .15s; }
+.filter-group.open > .filter-group-header > .filter-group-caret { transform: rotate(90deg); }
+.filter-group-active-dot {
+    display: none;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    margin-left: auto;
+}
+.filter-group.has-active > .filter-group-header > .filter-group-active-dot { display: inline-block; }
+.filter-group-body {
+    display: none;
+    padding: 4px 14px 12px;
+}
+.filter-group.open > .filter-group-body { display: block; }
+.filter-group-body label {
+    display: block;
+    margin-bottom: 10px;
+    font-size: 13px;
+}
+.filter-group-body label:last-child { margin-bottom: 0; }
+
+/* chips bar */
+.chips-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 10px 14px;
+    background: var(--bg-card, var(--bg-elevated));
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 12px;
+    min-height: 42px;
+    align-items: center;
+}
+.chips-bar:empty,
+.chips-bar.empty {
+    color: var(--text-muted);
+    font-size: 12px;
+    font-style: italic;
+}
+.chips-bar.empty::before {
+    content: '활성 필터 없음 — 좌측에서 조건을 추가하거나 빠른 시작 카드를 누르세요.';
+}
+.chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px 3px 10px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    font-size: 12px;
+    color: var(--text);
+}
+.chip.chip-market { border-color: rgba(34, 211, 238, 0.5); }
+.chip.chip-sector { border-color: rgba(99, 102, 241, 0.5); }
+.chip.chip-fund   { border-color: rgba(46, 204, 113, 0.5); }
+.chip.chip-perf   { border-color: rgba(155, 89, 182, 0.5); }
+.chip.chip-tech   { border-color: rgba(241, 196, 15, 0.5); }
+.chip-x {
+    cursor: pointer;
+    color: var(--text-muted);
+    font-size: 14px;
+    line-height: 1;
+    background: transparent;
+    border: none;
+    padding: 0 2px;
+}
+.chip-x:hover { color: var(--danger, #e74c3c); }
+
+/* 자동 실행 토글 */
+.chips-autorun-toggle {
+    margin-left: auto;
+    color: var(--text-muted);
+    font-size: 11.5px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+}
+
+/* 모바일 — 좌 패널 슬라이드 in/out */
+@media (max-width: 900px) {
+    .screener-layout { grid-template-columns: 1fr; gap: 12px; }
+    .screener-side-panel {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 88%;
+        max-width: 360px;
+        height: 100vh;
+        max-height: 100vh;
+        z-index: 200;
+        border-radius: 0;
+        transform: translateX(-100%);
+        transition: transform .25s;
+        box-shadow: 4px 0 20px rgba(0,0,0,0.4);
+    }
+    body.screener-panel-open .screener-side-panel { transform: translateX(0); }
+    body.screener-panel-open::after {
+        content: '';
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.5);
+        z-index: 199;
+    }
+    .screener-side-header { border-radius: 0; }
+}
+.screener-panel-toggle {
+    display: none;
+    margin-bottom: 10px;
+    padding: 8px 16px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 8px;
+    font-size: 13px;
+    cursor: pointer;
+}
+@media (max-width: 900px) {
+    .screener-panel-toggle { display: inline-flex; align-items: center; gap: 6px; }
+}
 </style>
 {% endblock %}
 
@@ -151,196 +332,244 @@
     </div>
 </div>
 
-<div class="card" style="margin-bottom:16px;">
-    <div class="screener-tabs" role="tablist">
-        <button class="screener-tab active" role="tab" data-tab="search" aria-selected="true">🔍 Search</button>
-        <button class="screener-tab" role="tab" data-tab="descriptive" aria-selected="false">📊 Descriptive</button>
-        <button class="screener-tab" role="tab" data-tab="performance" aria-selected="false">🚀 Performance</button>
-        <button class="screener-tab" role="tab" data-tab="technical" aria-selected="false">📈 Technical</button>
-        <button class="screener-tab" role="tab" data-tab="fundamental" aria-selected="false">💰 Fundamental</button>
-    </div>
+<!-- 모바일 — 좌 패널 토글 버튼 -->
+<button type="button" class="screener-panel-toggle" onclick="Screener.toggleSidePanel()">≡ 필터 패널</button>
 
-    <!-- Search -->
-    <div class="screener-tab-body active" data-body="search">
-        <label style="display:block;font-size:13px;">
-            <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">티커 / 종목명 (한글·영문 모두) — 2자 이상</div>
-            <input id="f-q" type="text" placeholder="예: 삼성, AAPL, 반도체 ..." style="width:100%;padding:8px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:14px;">
-        </label>
-    </div>
-
-    <!-- Descriptive -->
-    <div class="screener-tab-body" data-body="descriptive">
-        <div class="screener-grid">
-            <label>
-                <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">시장</div>
-                <div id="f-markets-checks" style="display:flex;gap:10px;flex-wrap:wrap;">
-                    <label><input type="checkbox" value="KOSPI"> KOSPI</label>
-                    <label><input type="checkbox" value="KOSDAQ"> KOSDAQ</label>
-                    <label><input type="checkbox" value="NASDAQ"> NASDAQ</label>
-                    <label><input type="checkbox" value="NYSE"> NYSE</label>
-                </div>
-            </label>
-            <label>
-                <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">섹터</div>
-                <select id="f-sectors" multiple style="width:100%;min-height:80px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:6px;">
-                    <option value="">로딩 중…</option>
-                </select>
-            </label>
-            <label>
-                <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">시총 범위 (억원)</div>
-                <div style="display:flex;gap:6px;">
-                    <input id="f-mcap-min" type="number" placeholder="최소" style="flex:1;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);">
-                    <input id="f-mcap-max" type="number" placeholder="최대" style="flex:1;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);">
-                </div>
-            </label>
-            <label>
-                <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">시총 버킷</div>
-                <div style="display:flex;gap:10px;">
-                    <label><input type="checkbox" name="f-bucket" value="large"> Large</label>
-                    <label><input type="checkbox" name="f-bucket" value="mid"> Mid</label>
-                    <label><input type="checkbox" name="f-bucket" value="small"> Small</label>
-                </div>
-            </label>
+<div class="screener-layout">
+    <!-- ── 좌측 사이드패널 ────────────────────────── -->
+    <aside class="screener-side-panel" id="sidePanel">
+        <div class="screener-side-header">
+            <span>필터</span>
+            <button class="btn" style="font-size:11px;padding:2px 8px;" onclick="Screener.clearAll()">전체 초기화</button>
         </div>
-    </div>
 
-    <!-- Performance -->
-    <div class="screener-tab-body" data-body="performance">
-        <div class="screener-grid">
-            {% for p, lbl in [('1m','1개월'),('3m','3개월'),('6m','6개월'),('1y','1년'),('ytd','YTD')] %}
-            <label>
-                <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">{{ lbl }} 수익률 (%) <span class="f-tip" title="해당 기간 동안 종가 기준 수익률. 예: 10 = +10%, -5 = -5%. min·max 모두 비우면 미적용.">i</span></div>
-                <div style="display:flex;gap:6px;">
-                    <input id="f-r{{p}}-min" type="number" placeholder="min" style="flex:1;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);">
-                    <input id="f-r{{p}}-max" type="number" placeholder="max" style="flex:1;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);">
-                </div>
-            </label>
-            {% endfor %}
-            <label>
-                <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">정렬</div>
-                <select id="f-sort" style="width:100%;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);">
-                    <option value="market_cap_desc">시총 ↓</option>
-                    <option value="r1m_desc">1m 수익률 ↓</option>
-                    <option value="r3m_desc">3m 수익률 ↓</option>
-                    <option value="r6m_desc">6m 수익률 ↓</option>
-                    <option value="r1y_desc">1y 수익률 ↓</option>
-                    <option value="ytd_desc">YTD ↓</option>
-                    <option value="volume_surge_desc">거래량 비율 ↓</option>
-                    <option value="liquidity_desc">거래대금 ↓</option>
-                    <option value="drawdown_asc">낙폭 적은 순</option>
-                    <option value="per_asc">PER 낮은 순</option>
-                    <option value="pbr_asc">PBR 낮은 순</option>
-                    <option value="dividend_yield_desc">배당률 ↓</option>
-                    <option value="name_asc">이름 A→Z</option>
-                </select>
-            </label>
-        </div>
-    </div>
+        <!-- 그룹 1: 검색 -->
+        <details class="filter-group" data-group="search">
+            <summary class="filter-group-header">
+                <span class="filter-group-caret">▶</span>
+                <span>🔍 검색</span>
+                <span class="filter-group-active-dot"></span>
+            </summary>
+            <div class="filter-group-body">
+                <label>
+                    <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">티커 / 종목명 (2자 이상)</div>
+                    <input id="f-q" type="text" placeholder="삼성, AAPL, 반도체..." style="width:100%;padding:8px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;">
+                </label>
+            </div>
+        </details>
 
-    <!-- Technical -->
-    <div class="screener-tab-body" data-body="technical">
-        <div class="screener-grid">
-            <label>
-                <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">변동성 ≤ X% <span class="f-tip" title="60일 일별 종가 표준편차. 작을수록 안정. 보수적: 2.5, 균형: 3.0, 공격: 4.0+">i</span></div>
-                <input id="f-vol60" type="number" step="0.1" placeholder="예: 3.0" style="width:100%;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);">
-            </label>
-            <label>
-                <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">거래량 ≥ N배 <span class="f-tip" title="최근 20일 평균 / 60일 평균. 1.2 = 20% 증가 (수급 우위 신호). 3.0 = 거래량 급증.">i</span></div>
-                <input id="f-volr" type="number" step="0.1" placeholder="예: 1.2" style="width:100%;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);">
-            </label>
-            <label>
-                <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">52주 고점 ≥ N% <span class="f-tip" title="현재가 / 52주 최고가. 0.95 = 신고가 5% 이내, 1.00 = 신고가. 모멘텀 강세 종목 필터.">i</span></div>
-                <input id="f-prox" type="number" step="0.01" min="0" max="1" placeholder="예: 0.85" style="width:100%;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);">
-            </label>
-            <label>
-                <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">최대 낙폭 ≤ X% <span class="f-tip" title="60일 고점 대비 현재 낙폭(절대값). 15 = 고점 대비 -15% 이내. 작을수록 약세 위험 적음.">i</span></div>
-                <input id="f-mdd" type="number" step="0.1" min="0" placeholder="예: 15" style="width:100%;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);">
-            </label>
-            <label>
-                <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">200일 이평선 위 N배 <span class="f-tip" title="현재가 / 200일 이동평균. 1.0 = 정확히 MA200, 0.95 = MA200의 -5% 아래, 1.05 = MA200 위 +5%.">i</span></div>
-                <input id="f-ma200" type="number" step="0.01" min="0" placeholder="예: 0.95" style="width:100%;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);">
-            </label>
-            <label>
-                <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">일평균 거래대금 ≥ (KRX, 억원) <span class="f-tip" title="60일 평균 거래대금. 10억 미만은 유동성 위험 — 슬리피지 큼.">i</span></div>
-                <input id="f-liq-krw" type="number" placeholder="예: 10" style="width:100%;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);">
-            </label>
-            <label>
-                <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">일평균 거래대금 ≥ (US, 천달러) <span class="f-tip" title="60일 평균 거래대금. 500K 미만은 유동성 위험.">i</span></div>
-                <input id="f-liq-usd" type="number" placeholder="예: 500" style="width:100%;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);">
-            </label>
-        </div>
-    </div>
+        <!-- 그룹 2: 시장·섹터 -->
+        <details class="filter-group" data-group="market">
+            <summary class="filter-group-header">
+                <span class="filter-group-caret">▶</span>
+                <span>🌐 시장·섹터</span>
+                <span class="filter-group-active-dot"></span>
+            </summary>
+            <div class="filter-group-body">
+                <label>
+                    <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">시장</div>
+                    <div id="f-markets-checks" style="display:flex;gap:10px;flex-wrap:wrap;font-size:13px;">
+                        <label><input type="checkbox" value="KOSPI"> KOSPI</label>
+                        <label><input type="checkbox" value="KOSDAQ"> KOSDAQ</label>
+                        <label><input type="checkbox" value="NASDAQ"> NASDAQ</label>
+                        <label><input type="checkbox" value="NYSE"> NYSE</label>
+                    </div>
+                </label>
+                <label>
+                    <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">섹터 (다중 선택, Ctrl/Cmd 클릭)</div>
+                    <select id="f-sectors" multiple style="width:100%;min-height:120px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:6px;font-size:12.5px;">
+                        <option value="">로딩 중…</option>
+                    </select>
+                </label>
+            </div>
+        </details>
 
-    <!-- Fundamental (펀더멘털 v1 — PER/PBR/EPS/배당률) -->
-    <div class="screener-tab-body" data-body="fundamental">
-        <div class="screener-grid">
-            <label>
-                <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">PER 범위 <span class="f-tip" title="주가수익비율 (Price-to-Earnings). 낮을수록 저밸류. 가치주: ≤15, 성장주: ≤25. 음수 PER은 자동 제외.">i</span></div>
-                <div style="display:flex;gap:6px;">
-                    <input id="f-per-min" type="number" step="0.1" min="0" placeholder="min" style="flex:1;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);">
-                    <input id="f-per-max" type="number" step="0.1" min="0" placeholder="max" style="flex:1;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);">
-                </div>
-            </label>
-            <label>
-                <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">PBR 범위 <span class="f-tip" title="주가순자산비율 (Price-to-Book). 1.0 = 청산가치. 안전마진: ≤1.5, 딥밸류: ≤1.0.">i</span></div>
-                <div style="display:flex;gap:6px;">
-                    <input id="f-pbr-min" type="number" step="0.1" min="0" placeholder="min" style="flex:1;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);">
-                    <input id="f-pbr-max" type="number" step="0.1" min="0" placeholder="max" style="flex:1;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);">
-                </div>
-            </label>
-            <label>
-                <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">배당률 ≥ X% <span class="f-tip" title="시가배당률. 인컴 전략: ≥3%, 고배당: ≥4%. KR/US 평균 ~1.5%.">i</span></div>
-                <input id="f-divy" type="number" step="0.1" min="0" placeholder="예: 2.0" style="width:100%;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);">
-            </label>
-            <label>
-                <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">EPS 필터 <span class="f-tip" title="주당순이익. 적자 종목 (EPS≤0) 제외 시 가치투자 안전성 ↑.">i</span></div>
-                <label style="display:flex;align-items:center;gap:6px;font-size:13px;padding-top:4px;">
+        <!-- 그룹 3: 시총·유동 -->
+        <details class="filter-group" data-group="cap">
+            <summary class="filter-group-header">
+                <span class="filter-group-caret">▶</span>
+                <span>💰 시총·유동성</span>
+                <span class="filter-group-active-dot"></span>
+            </summary>
+            <div class="filter-group-body">
+                <label>
+                    <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">시총 범위 (억원)</div>
+                    <div style="display:flex;gap:6px;">
+                        <input id="f-mcap-min" type="number" placeholder="min" style="flex:1;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12.5px;">
+                        <input id="f-mcap-max" type="number" placeholder="max" style="flex:1;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12.5px;">
+                    </div>
+                </label>
+                <label>
+                    <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">시총 버킷</div>
+                    <div style="display:flex;gap:10px;font-size:13px;">
+                        <label><input type="checkbox" name="f-bucket" value="large"> Large</label>
+                        <label><input type="checkbox" name="f-bucket" value="mid"> Mid</label>
+                        <label><input type="checkbox" name="f-bucket" value="small"> Small</label>
+                    </div>
+                </label>
+                <label>
+                    <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">일평균 거래대금 ≥ (KRX, 억원) <span class="f-tip" title="60일 평균 거래대금. 10억 미만은 유동성 위험.">i</span></div>
+                    <input id="f-liq-krw" type="number" placeholder="예: 10" style="width:100%;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12.5px;">
+                </label>
+                <label>
+                    <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">일평균 거래대금 ≥ (US, 천달러) <span class="f-tip" title="60일 평균 거래대금. 500K 미만은 유동성 위험.">i</span></div>
+                    <input id="f-liq-usd" type="number" placeholder="예: 500" style="width:100%;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12.5px;">
+                </label>
+            </div>
+        </details>
+
+        <!-- 그룹 4: 수익률 -->
+        <details class="filter-group" data-group="perf">
+            <summary class="filter-group-header">
+                <span class="filter-group-caret">▶</span>
+                <span>🚀 수익률</span>
+                <span class="filter-group-active-dot"></span>
+            </summary>
+            <div class="filter-group-body">
+                {% for p, lbl in [('1m','1개월'),('3m','3개월'),('6m','6개월'),('1y','1년'),('ytd','YTD')] %}
+                <label>
+                    <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">{{ lbl }} 수익률 (%) <span class="f-tip" title="해당 기간 종가 기준 수익률. 10 = +10%, -5 = -5%.">i</span></div>
+                    <div style="display:flex;gap:6px;">
+                        <input id="f-r{{p}}-min" type="number" placeholder="min" style="flex:1;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12.5px;">
+                        <input id="f-r{{p}}-max" type="number" placeholder="max" style="flex:1;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12.5px;">
+                    </div>
+                </label>
+                {% endfor %}
+                <label>
+                    <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">정렬</div>
+                    <select id="f-sort" style="width:100%;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12.5px;">
+                        <option value="market_cap_desc">시총 ↓</option>
+                        <option value="r1m_desc">1m 수익률 ↓</option>
+                        <option value="r3m_desc">3m 수익률 ↓</option>
+                        <option value="r6m_desc">6m 수익률 ↓</option>
+                        <option value="r1y_desc">1y 수익률 ↓</option>
+                        <option value="ytd_desc">YTD ↓</option>
+                        <option value="volume_surge_desc">거래량 비율 ↓</option>
+                        <option value="liquidity_desc">거래대금 ↓</option>
+                        <option value="drawdown_asc">낙폭 적은 순</option>
+                        <option value="per_asc">PER 낮은 순</option>
+                        <option value="pbr_asc">PBR 낮은 순</option>
+                        <option value="dividend_yield_desc">배당률 ↓</option>
+                        <option value="name_asc">이름 A→Z</option>
+                    </select>
+                </label>
+            </div>
+        </details>
+
+        <!-- 그룹 5: 변동성·기술 -->
+        <details class="filter-group" data-group="tech">
+            <summary class="filter-group-header">
+                <span class="filter-group-caret">▶</span>
+                <span>📈 변동성·기술</span>
+                <span class="filter-group-active-dot"></span>
+            </summary>
+            <div class="filter-group-body">
+                <label>
+                    <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">변동성 ≤ X% <span class="f-tip" title="60일 일별 종가 표준편차. 보수적: 2.5, 균형: 3.0.">i</span></div>
+                    <input id="f-vol60" type="number" step="0.1" placeholder="예: 3.0" style="width:100%;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12.5px;">
+                </label>
+                <label>
+                    <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">거래량 ≥ N배 <span class="f-tip" title="20일 평균 / 60일 평균. 1.2 = 20% 증가.">i</span></div>
+                    <input id="f-volr" type="number" step="0.1" placeholder="예: 1.2" style="width:100%;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12.5px;">
+                </label>
+                <label>
+                    <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">52주 고점 ≥ N% <span class="f-tip" title="현재가 / 52주 최고가. 0.95 = 신고가 5% 이내.">i</span></div>
+                    <input id="f-prox" type="number" step="0.01" min="0" max="1" placeholder="예: 0.85" style="width:100%;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12.5px;">
+                </label>
+                <label>
+                    <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">최대 낙폭 ≤ X% <span class="f-tip" title="60일 고점 대비 낙폭(절대값). 15 = 고점 대비 -15% 이내.">i</span></div>
+                    <input id="f-mdd" type="number" step="0.1" min="0" placeholder="예: 15" style="width:100%;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12.5px;">
+                </label>
+                <label>
+                    <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">200일 이평선 위 N배 <span class="f-tip" title="현재가 / 200일 MA. 1.0 = 정확히 MA200.">i</span></div>
+                    <input id="f-ma200" type="number" step="0.01" min="0" placeholder="예: 0.95" style="width:100%;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12.5px;">
+                </label>
+            </div>
+        </details>
+
+        <!-- 그룹 6: 펀더 -->
+        <details class="filter-group" data-group="fund">
+            <summary class="filter-group-header">
+                <span class="filter-group-caret">▶</span>
+                <span>💎 펀더멘털</span>
+                <span class="filter-group-active-dot"></span>
+            </summary>
+            <div class="filter-group-body">
+                <label>
+                    <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">PER 범위 <span class="f-tip" title="가치주: ≤15, 성장주: ≤25. 음수는 자동 제외.">i</span></div>
+                    <div style="display:flex;gap:6px;">
+                        <input id="f-per-min" type="number" step="0.1" min="0" placeholder="min" style="flex:1;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12.5px;">
+                        <input id="f-per-max" type="number" step="0.1" min="0" placeholder="max" style="flex:1;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12.5px;">
+                    </div>
+                </label>
+                <label>
+                    <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">PBR 범위 <span class="f-tip" title="안전마진: ≤1.5, 딥밸류: ≤1.0.">i</span></div>
+                    <div style="display:flex;gap:6px;">
+                        <input id="f-pbr-min" type="number" step="0.1" min="0" placeholder="min" style="flex:1;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12.5px;">
+                        <input id="f-pbr-max" type="number" step="0.1" min="0" placeholder="max" style="flex:1;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12.5px;">
+                    </div>
+                </label>
+                <label>
+                    <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">배당률 ≥ X% <span class="f-tip" title="인컴 전략: ≥3%, 고배당: ≥4%.">i</span></div>
+                    <input id="f-divy" type="number" step="0.1" min="0" placeholder="예: 2.0" style="width:100%;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12.5px;">
+                </label>
+                <label style="display:flex;align-items:center;gap:6px;font-size:13px;">
                     <input id="f-eps-pos" type="checkbox">
                     <span>적자 기업 제외 (EPS &gt; 0)</span>
                 </label>
-            </label>
-            <div style="grid-column:1/-1;color:var(--text-muted);font-size:11px;line-height:1.5;padding-top:4px;border-top:1px dashed var(--border);">
-                ℹ 데이터 출처 — KRX(pykrx) + US(yfinance.info), 매일 KST 자동 sync.
-                ROE / 부채비율 / 매출성장률은 펀더 v2 (DART API 통합 후) 예정.
+                <div style="color:var(--text-muted);font-size:10.5px;line-height:1.5;padding-top:8px;border-top:1px dashed var(--border);margin-top:8px;">
+                    ℹ KRX(pykrx) + US(yfinance.info) 매일 KST sync. ROE / 부채비율은 v2 예정.
+                </div>
+            </div>
+        </details>
+
+        <!-- 하단 sticky 액션 영역 -->
+        <div class="screener-side-actions">
+            <button class="btn btn-primary" onclick="Screener.run()">실행</button>
+            <button class="btn" onclick="Screener.clearAll()">초기화</button>
+            <button class="btn" onclick="Screener.togglePresetPanel()">프리셋</button>
+        </div>
+    </aside>
+
+    <!-- ── 우측 메인 ────────────────────────────── -->
+    <main class="screener-main">
+        <!-- chips bar — 활성 필터 -->
+        <div id="chipsBar" class="chips-bar empty"></div>
+
+        <!-- 프리셋 패널 -->
+        <div class="card" id="loadPanel" style="margin-bottom:16px;display:none;">
+            <div class="card-header"><strong>내 프리셋 · 공개 프리셋</strong></div>
+            <div id="presetsBody" style="padding:10px 16px;">
+                <div class="tr-loading" style="color:var(--text-muted);font-size:13px;">불러오는 중…</div>
             </div>
         </div>
-    </div>
 
-    <div style="padding:10px 16px;border-top:1px solid var(--border);display:flex;gap:10px;align-items:center;">
-        <button class="btn btn-primary" onclick="Screener.run()" style="padding:6px 18px;">실행</button>
-        <span id="status" style="color:var(--text-muted);font-size:12px;"></span>
-    </div>
-</div>
-
-<!-- 프리셋 패널 -->
-<div class="card" id="loadPanel" style="margin-bottom:16px;display:none;">
-    <div class="card-header"><strong>내 프리셋 · 공개 프리셋</strong></div>
-    <div id="presetsBody" style="padding:10px 16px;">
-        <div class="tr-loading" style="color:var(--text-muted);font-size:13px;">불러오는 중…</div>
-    </div>
-</div>
-
-<!-- 결과 -->
-<div class="card">
-    <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
-        <strong>결과</strong>
-        <div style="display:flex;gap:10px;align-items:center;">
-            <span id="resultSummary" style="color:var(--text-muted);font-size:12px;"></span>
-            <label style="font-size:11px;color:var(--text-muted);">
-                <input type="checkbox" id="f-sparkline" checked> 스파크라인
-            </label>
-            <div class="view-toggle">
-                <button class="view-btn active" data-view="overview">Overview</button>
-                <button class="view-btn" data-view="performance">Performance</button>
-                <button class="view-btn" data-view="technical">Technical</button>
-                <button class="view-btn" data-view="fundamental">Fundamental</button>
+        <!-- 결과 -->
+        <div class="card">
+            <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+                <strong>결과 <span id="status" style="color:var(--text-muted);font-size:12px;font-weight:400;margin-left:8px;"></span></strong>
+                <div style="display:flex;gap:10px;align-items:center;">
+                    <span id="resultSummary" style="color:var(--text-muted);font-size:12px;"></span>
+                    <label style="font-size:11px;color:var(--text-muted);">
+                        <input type="checkbox" id="f-sparkline" checked> 스파크라인
+                    </label>
+                    <label class="chips-autorun-toggle" style="margin-left:0;">
+                        <input type="checkbox" id="autoRunToggle" checked> chip 변경 시 자동 실행
+                    </label>
+                    <div class="view-toggle">
+                        <button class="view-btn active" data-view="overview">Overview</button>
+                        <button class="view-btn" data-view="performance">Performance</button>
+                        <button class="view-btn" data-view="technical">Technical</button>
+                        <button class="view-btn" data-view="fundamental">Fundamental</button>
+                    </div>
+                </div>
+            </div>
+            <div id="limitBanner" style="display:none;"></div>
+            <div class="result-table-wrap" id="resultsBody" style="padding:10px 0;">
+                <div style="padding:20px;color:var(--text-muted);font-size:13px;">좌측 패널에서 조건을 설정하고 "실행"을 누르거나, 위 빠른 시작 카드를 선택하세요.</div>
             </div>
         </div>
-    </div>
-    <div id="limitBanner" style="display:none;"></div>
-    <div class="result-table-wrap" id="resultsBody" style="padding:10px 0;">
-        <div style="padding:20px;color:var(--text-muted);font-size:13px;">위에서 조건을 설정하고 "실행"을 누르세요.</div>
-    </div>
+    </main>
 </div>
 
 <script>
@@ -472,21 +701,54 @@
         }
     };
 
-    function activateTab(name) {
-        document.querySelectorAll('.screener-tab').forEach(function(t){
-            var on = t.dataset.tab === name;
-            t.classList.toggle('active', on);
-            t.setAttribute('aria-selected', on ? 'true' : 'false');
-        });
-        document.querySelectorAll('.screener-tab-body').forEach(function(b){
-            b.classList.toggle('active', b.dataset.body === name);
+    // ── 사이드패널 그룹 펼침 상태 (localStorage) ────
+    var GROUPS_KEY = 'screener_groups_open_v2';
+    var DEFAULT_OPEN = ['search', 'market'];   // 기본 펼침: 검색 + 시장·섹터
+
+    function restoreGroupState() {
+        var saved;
+        try { saved = JSON.parse(localStorage.getItem(GROUPS_KEY)); } catch (e) { saved = null; }
+        if (!Array.isArray(saved)) saved = DEFAULT_OPEN.slice();
+        document.querySelectorAll('.filter-group').forEach(function(g) {
+            var name = g.dataset.group;
+            if (saved.indexOf(name) >= 0) {
+                g.setAttribute('open', '');
+                g.classList.add('open');
+            } else {
+                g.removeAttribute('open');
+                g.classList.remove('open');
+            }
         });
     }
-    document.querySelectorAll('.screener-tab').forEach(function(t){
-        t.addEventListener('click', function(){
-            if (t.disabled) return;
-            activateTab(t.dataset.tab);
+
+    function saveGroupState() {
+        var open = [];
+        document.querySelectorAll('.filter-group').forEach(function(g) {
+            if (g.hasAttribute('open')) open.push(g.dataset.group);
         });
+        try { localStorage.setItem(GROUPS_KEY, JSON.stringify(open)); } catch (e) {}
+    }
+
+    // <details> 의 toggle 이벤트로 .open 클래스 + 저장 동기화
+    document.querySelectorAll('.filter-group').forEach(function(g) {
+        g.addEventListener('toggle', function() {
+            g.classList.toggle('open', g.hasAttribute('open'));
+            saveGroupState();
+        });
+    });
+
+    // 모바일 사이드패널 토글
+    function toggleSidePanel() {
+        document.body.classList.toggle('screener-panel-open');
+    }
+    // 모바일에서 backdrop 클릭으로 닫기
+    document.addEventListener('click', function(e) {
+        if (!document.body.classList.contains('screener-panel-open')) return;
+        var panel = document.getElementById('sidePanel');
+        var trigger = e.target.closest('.screener-panel-toggle');
+        if (panel && !panel.contains(e.target) && !trigger) {
+            document.body.classList.remove('screener-panel-open');
+        }
     });
 
     function activateView(name) {
@@ -701,7 +963,9 @@
                 opt.textContent = s.label + ' ('+s.count+')';
                 if (selectedKeys && selectedKeys.indexOf(s.key) >= 0) opt.selected = true;
                 sel.appendChild(opt);
+                SECTOR_LABELS_CACHE[s.key] = s.label;   // chip 라벨 한글화용
             });
+            updateChipsFromDOM();   // 섹터 라벨 캐시 채워진 후 chips 다시 렌더
         }).catch(function(){
             $('f-sectors').innerHTML = '<option value="">로드 실패</option>';
         });
@@ -852,10 +1116,9 @@
         // 기존 입력 초기화 후 spec 주입
         clearAllInputs();
         SpecBuilder.toDOM(seed.spec);
-        // 시장 필터가 spec에 있으면 활성화 (markets_supported 가 아니라 spec.markets)
+        if (typeof updateChipsFromDOM === 'function') updateChipsFromDOM();
         var statusEl = $('status');
         if (statusEl) statusEl.textContent = '"' + seed.name + '" 적용 — 실행 중...';
-        // 즉시 실행
         setTimeout(run, 100);
     }
 
@@ -1030,6 +1293,150 @@
         document.querySelectorAll('.row-menu-dropdown.open').forEach(function(d){ d.classList.remove('open'); });
     }
 
+    // ── 활성 chips 렌더 ─────────────────────────
+    var SECTOR_LABELS_CACHE = {};   // sector key → label (loadSectors에서 채움)
+
+    var CHIP_DEFS = [
+        // [spec key, category, label fn(value), removeKeys (DOM reset 대상)]
+        { key: 'q',           cat: 'sector', label: function(v){ return '검색: "' + v + '"'; }, reset: function(){ $('f-q').value = ''; } },
+        { key: 'markets',     cat: 'market', label: function(v){ return '시장: ' + v.join(', '); },
+          reset: function(){ $('f-markets-checks').querySelectorAll('input[type=checkbox]').forEach(function(el){ el.checked = false; }); } },
+        { key: 'sectors',     cat: 'sector', label: function(v){
+            return '섹터: ' + v.map(function(k){ return SECTOR_LABELS_CACHE[k] || k; }).join(', ');
+          },
+          reset: function(){ Array.from($('f-sectors').options).forEach(function(o){ o.selected = false; }); } },
+        { key: 'market_cap_buckets', cat: 'market', label: function(v){ return '버킷: ' + v.join(', '); },
+          reset: function(){ document.querySelectorAll('input[name="f-bucket"]').forEach(function(el){ el.checked = false; }); } },
+        { key: 'market_cap_krw', cat: 'market', label: function(v){
+            var parts = [];
+            if (v.min != null) parts.push('≥ ' + (v.min/1e8).toFixed(0) + '억');
+            if (v.max != null) parts.push('≤ ' + (v.max/1e8).toFixed(0) + '억');
+            return '시총 ' + parts.join(' ');
+          }, reset: function(){ $('f-mcap-min').value = ''; $('f-mcap-max').value = ''; } },
+        { key: 'min_daily_value_krw', cat: 'tech', label: function(v){ return '거래대금(KRX) ≥ ' + (v/1e8).toFixed(0) + '억'; }, reset: function(){ $('f-liq-krw').value = ''; } },
+        { key: 'min_daily_value_usd', cat: 'tech', label: function(v){ return '거래대금(US) ≥ ' + (v/1000).toFixed(0) + 'K$'; }, reset: function(){ $('f-liq-usd').value = ''; } },
+        { key: 'return_ranges', cat: 'perf', label: function(v){
+            return Object.keys(v).map(function(p){
+                var r = v[p];
+                var parts = [];
+                if (r.min != null) parts.push('≥' + r.min + '%');
+                if (r.max != null) parts.push('≤' + r.max + '%');
+                return p + ' ' + parts.join(' ');
+            }).join(' · ');
+          }, reset: function(){
+            ['1m','3m','6m','1y','ytd'].forEach(function(p) {
+                var mn = $('f-r'+p+'-min'); if (mn) mn.value = '';
+                var mx = $('f-r'+p+'-max'); if (mx) mx.value = '';
+            });
+          } },
+        { key: 'max_vol60_pct',     cat: 'tech', label: function(v){ return '변동성 ≤ ' + v + '%'; }, reset: function(){ $('f-vol60').value = ''; } },
+        { key: 'volume_ratio_min',  cat: 'tech', label: function(v){ return '거래량 ≥ ×' + v; }, reset: function(){ $('f-volr').value = ''; } },
+        { key: 'high_52w_proximity_min', cat: 'tech', label: function(v){ return '52w고점 ≥ ' + (v*100).toFixed(0) + '%'; }, reset: function(){ $('f-prox').value = ''; } },
+        { key: 'max_drawdown_60d_pct',   cat: 'tech', label: function(v){ return '낙폭 ≤ ' + v + '%'; }, reset: function(){ $('f-mdd').value = ''; } },
+        { key: 'ma200_proximity_min',    cat: 'tech', label: function(v){ return 'MA200 ≥ ×' + v; }, reset: function(){ $('f-ma200').value = ''; } },
+        { key: 'min_per',  cat: 'fund', label: function(v){ return 'PER ≥ ' + v; }, reset: function(){ $('f-per-min').value = ''; } },
+        { key: 'max_per',  cat: 'fund', label: function(v){ return 'PER ≤ ' + v; }, reset: function(){ $('f-per-max').value = ''; } },
+        { key: 'min_pbr',  cat: 'fund', label: function(v){ return 'PBR ≥ ' + v; }, reset: function(){ $('f-pbr-min').value = ''; } },
+        { key: 'max_pbr',  cat: 'fund', label: function(v){ return 'PBR ≤ ' + v; }, reset: function(){ $('f-pbr-max').value = ''; } },
+        { key: 'min_dividend_yield_pct', cat: 'fund', label: function(v){ return '배당 ≥ ' + v + '%'; }, reset: function(){ $('f-divy').value = ''; } },
+        { key: 'exclude_negative_eps', cat: 'fund', label: function(){ return '적자 제외'; }, reset: function(){ if ($('f-eps-pos')) $('f-eps-pos').checked = false; } },
+    ];
+
+    // 그룹 키 → chip cat 매핑 (has-active dot 표시용)
+    var GROUP_TO_CATS = {
+        'search': ['sector'],   // q
+        'market': ['market', 'sector'],
+        'cap':    ['market', 'tech'],
+        'perf':   ['perf'],
+        'tech':   ['tech'],
+        'fund':   ['fund'],
+    };
+    // 더 정확하게: 각 그룹이 갖는 spec key 집합
+    var GROUP_SPEC_KEYS = {
+        'search': ['q'],
+        'market': ['markets', 'sectors'],
+        'cap':    ['market_cap_krw', 'market_cap_buckets', 'min_daily_value_krw', 'min_daily_value_usd'],
+        'perf':   ['return_ranges'],
+        'tech':   ['max_vol60_pct', 'volume_ratio_min', 'high_52w_proximity_min', 'max_drawdown_60d_pct', 'ma200_proximity_min'],
+        'fund':   ['min_per','max_per','min_pbr','max_pbr','min_dividend_yield_pct','exclude_negative_eps'],
+    };
+
+    function renderActiveChips(spec) {
+        var bar = $('chipsBar');
+        if (!bar) return;
+        var html = '';
+        var hasAny = false;
+        CHIP_DEFS.forEach(function(def) {
+            var v = spec[def.key];
+            if (v == null || v === '' || v === false) return;
+            if (Array.isArray(v) && v.length === 0) return;
+            if (typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length === 0) return;
+            hasAny = true;
+            var label = def.label(v);
+            html += '<span class="chip chip-' + def.cat + '">'
+                  + '<span>' + label + '</span>'
+                  + '<button type="button" class="chip-x" data-key="' + def.key + '" title="제거">×</button>'
+                  + '</span>';
+        });
+        bar.classList.toggle('empty', !hasAny);
+        bar.innerHTML = html;
+        bar.querySelectorAll('.chip-x').forEach(function(btn) {
+            btn.addEventListener('click', function() { removeChip(btn.dataset.key); });
+        });
+        // 그룹별 has-active dot 갱신
+        Object.keys(GROUP_SPEC_KEYS).forEach(function(gname) {
+            var keys = GROUP_SPEC_KEYS[gname];
+            var active = keys.some(function(k) {
+                var v = spec[k];
+                if (v == null || v === '' || v === false) return false;
+                if (Array.isArray(v) && v.length === 0) return false;
+                if (typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length === 0) return false;
+                return true;
+            });
+            var g = document.querySelector('.filter-group[data-group="' + gname + '"]');
+            if (g) g.classList.toggle('has-active', active);
+        });
+    }
+
+    function removeChip(specKey) {
+        var def = CHIP_DEFS.find(function(d){ return d.key === specKey; });
+        if (def && def.reset) def.reset();
+        // chips 재렌더 + auto-run
+        var spec = SpecBuilder.fromDOM();
+        renderActiveChips(spec);
+        if ($('autoRunToggle') && $('autoRunToggle').checked) {
+            scheduleAutoRun();
+        }
+    }
+
+    // ── 자동 실행 (debounce 500ms) ────────────────
+    var _autoRunTimer = null;
+    function scheduleAutoRun() {
+        if (_autoRunTimer) clearTimeout(_autoRunTimer);
+        _autoRunTimer = setTimeout(function() {
+            _autoRunTimer = null;
+            run();
+        }, 500);
+    }
+
+    // 모든 입력 change → chips 갱신 (auto-run 은 제외 — 사용자가 ×/실행 누를 때만)
+    function updateChipsFromDOM() {
+        renderActiveChips(SpecBuilder.fromDOM());
+    }
+    document.addEventListener('change', function(e) {
+        if (e.target.closest('.screener-side-panel')) updateChipsFromDOM();
+    });
+    document.addEventListener('input', function(e) {
+        if (e.target.closest('.screener-side-panel')) updateChipsFromDOM();
+    });
+
+    function clearAll() {
+        clearAllInputs();
+        updateChipsFromDOM();
+        if ($('status')) $('status').textContent = '필터 초기화됨';
+        if ($('autoRunToggle') && $('autoRunToggle').checked) scheduleAutoRun();
+    }
+
     window.Screener = {
         run: run,
         savePreset: savePreset,
@@ -1042,14 +1449,18 @@
         askAI: askAI,
         copyTicker: copyTicker,
         openExternal: openExternal,
+        toggleSidePanel: toggleSidePanel,
+        clearAll: clearAll,
     };
 
     var prefilled = applyUrlParams();
     var pendingSectors = (prefilled && new URLSearchParams(window.location.search).get('sectors'))
         ? new URLSearchParams(window.location.search).get('sectors').split(',')
         : null;
+    restoreGroupState();
     loadSectors(pendingSectors);
     loadSeeds();
+    updateChipsFromDOM();
     if (prefilled) {
         setTimeout(run, 800);
     }
