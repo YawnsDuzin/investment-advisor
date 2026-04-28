@@ -1776,6 +1776,47 @@ def _migrate_to_v41(cur) -> None:
     print("[DB] v41 마이그레이션 완료 — Sprint 1 (NL→SQL / Red Team / Vision / 글로벌뉴스 / 시드)")
 
 
+def _migrate_to_v43(cur) -> None:
+    """v43: 스크리너 시드 프리셋 spec → UI 포맷 통일 + UPSERT 재적용.
+
+    v41 에서 INSERT 된 시드는 'filters' 배열 포맷이라 UI 가 바로 해석 못 했다.
+    v43 은 동일 시드 set 을 UI 포맷({max_per, max_pbr, return_ranges, ...}) 으로
+    UPSERT 재적용. UI '빠른 시작' 카드 클릭 → SpecBuilder.toDOM(spec) → 즉시 실행 가능.
+
+    Spec 갱신 내용은 `shared/db/migrations/seeds_screener.py` 의 SCREENER_SEED_PRESETS.
+    펀더 v1(per/pbr/eps/배당률)만 활용. ROE/부채/성장률은 펀더 v2 에서 복원.
+    """
+    from psycopg2.extras import execute_values
+    from shared.db.migrations.seeds_screener import seed_to_sql_values
+
+    seed_rows = seed_to_sql_values()
+    execute_values(
+        cur,
+        """
+        INSERT INTO screener_presets (
+            strategy_key, name, description, persona, persona_summary,
+            markets_supported, risk_warning, spec, is_seed, user_id
+        ) VALUES %s
+        ON CONFLICT (strategy_key) WHERE is_seed = TRUE DO UPDATE SET
+            name              = EXCLUDED.name,
+            description       = EXCLUDED.description,
+            persona           = EXCLUDED.persona,
+            persona_summary   = EXCLUDED.persona_summary,
+            markets_supported = EXCLUDED.markets_supported,
+            risk_warning      = EXCLUDED.risk_warning,
+            spec              = EXCLUDED.spec,
+            updated_at        = NOW();
+        """,
+        [(*r, True, None) for r in seed_rows],
+    )
+
+    cur.execute("""
+        INSERT INTO schema_version (version) VALUES (43)
+        ON CONFLICT (version) DO NOTHING;
+    """)
+    print("[DB] v43 마이그레이션 완료 — 스크리너 시드 spec UI 포맷 통일")
+
+
 def _migrate_to_v42(cur) -> None:
     """v42: 자유 질문 채팅 (General Chat / Ask AI) — 테마/토픽 비종속 대화.
 
