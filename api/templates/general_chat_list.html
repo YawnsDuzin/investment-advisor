@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Ask AI — AlphaSignal{% endblock %}
+{% block page_title %}Ask AI{% endblock %}
+
+{% block content %}
+<div style="margin-bottom:20px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+    <a href="/pages/general-chat/new" class="btn btn-primary">+ 새 대화 시작</a>
+    <span style="color:var(--text-muted);font-size:13px;">
+        투자/시장 관련 자유 질문. 관심 종목·최근 추천이 자동으로 컨텍스트에 들어갑니다.
+    </span>
+</div>
+
+{% if chat_sessions %}
+{% for cs in chat_sessions %}
+<a href="/pages/general-chat/{{ cs.id }}" class="chat-session-card">
+    <div class="chat-session-info">
+        <div class="chat-session-title">{{ cs.title or '새 대화' }}</div>
+        <div class="chat-session-meta">
+            <span>{{ cs.updated_at }}</span>
+        </div>
+    </div>
+    <span class="chat-session-count">{{ cs.message_count }}건</span>
+</a>
+{% endfor %}
+{% else %}
+<div class="chat-empty">
+    <h3>아직 대화가 없습니다</h3>
+    <p>"새 대화 시작" 버튼을 눌러 자유 질문을 시작하세요.</p>
+    <p style="font-size:13px;margin-top:12px;color:var(--text-muted);">
+        예시 질문:<br>
+        · "내 관심 종목 중 최근 펀더멘털이 개선된 게 있어?"<br>
+        · "지금 미국 빅테크 비중을 줄여야 할까?"<br>
+        · "한미 금리차가 코스피에 미치는 영향은?"
+    </p>
+</div>
+{% endif %}
+{% endblock %}

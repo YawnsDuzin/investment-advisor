@@ -140,8 +140,9 @@ def test_v41_registered_in_migrations_dict():
     assert _MIGRATIONS[41] is _migrate_to_v41
 
 
-def test_schema_version_is_41():
+def test_schema_version_is_at_least_41():
+    """v41 도입 안전장치 — 후속 마이그레이션은 SCHEMA_VERSION 을 증가시킨다."""
     import importlib
     import shared.db.schema as s
     importlib.reload(s)
-    assert s.SCHEMA_VERSION == 41
+    assert s.SCHEMA_VERSION >= 41

@@ -89,9 +89,12 @@
             </a></li>
             {% endif %}
 
-            {# ── 대화 — 로그인 필수 (Theme Chat은 Pro/Premium) ── #}
+            {# ── 대화 — 로그인 필수 (Theme Chat은 Pro/Premium, Ask AI/AI Tutor는 Free OK) ── #}
             {% if not auth_enabled or current_user %}
             <li class="nav-group-title">대화</li>
+            <li><a href="/pages/general-chat" class="{% if active_page == 'general_chat' %}active{% endif %}" onclick="document.body.classList.remove('sidebar-open')">
+                <i data-lucide="sparkles" aria-hidden="true"></i><span class="nav-label">Ask AI</span>
+            </a></li>
             {% if not auth_enabled or (current_user and (current_user.role in ('admin', 'moderator') or current_user.effective_tier() in ('pro', 'premium'))) %}
             <li><a href="/pages/chat" class="{% if active_page == 'chat' %}active{% endif %}" onclick="document.body.classList.remove('sidebar-open')">
                 <i data-lucide="message-circle" aria-hidden="true"></i><span class="nav-label">Theme Chat</span>

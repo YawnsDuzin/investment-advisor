@@ -15,7 +15,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **AI**: Claude Code SDK (`claude-agent-sdk`) — 멀티스테이지 분석 파이프라인
 - **Backend**: FastAPI + Uvicorn (REST API + HTML 서빙)
 - **Template**: Jinja2 (다크 테마 UI)
-- **Database**: PostgreSQL + psycopg2 (스키마 자동 마이그레이션 v1~v40)
+- **Database**: PostgreSQL + psycopg2 (스키마 자동 마이그레이션 v1~v42)
 - **News**: feedparser + httpx (RSS 수집)
 - **Stock Data**: yfinance (해외 주가/재무 데이터) + pykrx (한국 주식 크로스체크/폴백)
 - **Async**: anyio (async/sync 브릿지)
@@ -29,9 +29,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 investment-advisor/
 ├── shared/              ← 공용: config(.env 로드), db(마이그레이션+저장), logger(DB 로그), pg_setup(자동 설치), tier_limits(구독 티어 제한)
 ├── analyzer/            ← 배치: main(엔트리) → news_collector(RSS) → stock_data(주가조회) → analyzer(2단계) → recommender(Top Picks) → price_tracker(수익률추적) → checkpoint(중단점복구) → krx_data(KRX수급/공매도) → overnight_us(US 오버나이트 집계) → briefing_main(프리마켓 브리핑 엔트리) → fundamentals_sync(펀더 PIT)
-├── api/                 ← 웹: main(FastAPI) → routes/(pages, sessions, themes, proposals, stocks, chat, education, inquiry, admin, admin_systemd, auth, user_admin, watchlist, track_record, briefing)
+├── api/                 ← 웹: main(FastAPI) → routes/(pages, sessions, themes, proposals, stocks, chat, general_chat, education, inquiry, admin, admin_systemd, auth, user_admin, watchlist, track_record, briefing)
 │   ├── auth/            ← JWT 인증 모듈: dependencies, jwt_handler, password, models
 │   ├── chat_engine.py   ← Claude SDK 기반 테마 채팅 엔진
+│   ├── general_chat_engine.py ← Claude SDK 기반 자유 질문(Ask AI) 엔진 — 워치리스트·최근 추천 동적 주입
 │   ├── education_engine.py ← Claude SDK 기반 투자 교육 AI 튜터 엔진
 │   ├── templates/       ← Jinja2 HTML (다크 테마 + 우측 상단 드롭다운 메뉴) + _macros/(공통 매크로 — common, theme, proposal, admin)
 │   └── static/css/ + static/js/(sse_log_viewer.js 공용 SSE 컨트롤러, stock_cockpit.js Cockpit 페이지 전용)
@@ -195,10 +196,12 @@ sudo systemctl enable --now pre-market-briefing.timer            # 매일 06:30 
 - `routes/pages.py` — Jinja2 HTML 페이지 라우트. 대시보드, tracking 뱃지, 테마·종목 히스토리, 워치리스트, 알림, 프로필, 채팅, 관리자 페이지. `_base_ctx()`로 인증 컨텍스트 + 알림 수 주입. 커스텀 Jinja2 필터(`nl_numbered`, `fmt_price`) 등록.
 - `auth/` — JWT 인증 모듈. `dependencies.py`(Depends 팩토리), `jwt_handler.py`(토큰 발급/검증), `password.py`(bcrypt), `models.py`(Pydantic 모델).
 - `routes/education.py` — 투자 교육 API. 토픽 목록/상세, 교육 채팅 세션 CRUD, AI 튜터 메시지 전송. 티어별 일일 턴 제한(`EDU_CHAT_DAILY_TURNS`). 인증 필수.
+- `routes/general_chat.py` — 자유 질문 채팅(Ask AI) API. 테마/토픽 비종속 — 사용자 워치리스트 + 최근 7일 추천을 시스템 프롬프트에 동적 주입. 인증 필수, 티어별 일일 턴 제한(`GENERAL_CHAT_DAILY_TURNS`: Free 5 / Pro 50 / Premium ∞). 도메인은 투자/시장 한정 (페르소나가 비투자 질문 거절).
 - `routes/inquiry.py` — 고객 문의 게시판. 문의 CRUD, 답변/댓글, 상태 관리(open→answered→closed). 카테고리: general/bug/feature. `is_private` 플래그로 비공개 문의 지원. Admin/Moderator만 답변·상태 변경 가능.
 - `chat_engine.py` — Claude Agent SDK 기반 테마 채팅 엔진. 테마 컨텍스트를 시스템 프롬프트에 주입하여 대화.
+- `general_chat_engine.py` — Claude SDK 기반 자유 채팅 엔진. `build_user_context()`가 워치리스트·최근 추천을 시스템 프롬프트로 변환 → 투자 어시스턴트 페르소나로 답변. user_id=None(비로그인) 또는 조회 실패 시 빈 컨텍스트로 안전 폴백.
 - `education_engine.py` — Claude SDK 기반 투자 교육 AI 튜터. 토픽별 커리큘럼을 시스템 프롬프트에 주입하여 대화형 학습 제공.
-- `templates/` — 다크 테마 UI. base(우측 상단 유저 드롭다운 + 알림 배지 + 401 자동 갱신 인터셉터), landing, pricing, dashboard, sessions, session_detail, themes, proposals, theme_history, ticker_history, stock_cockpit(종목 페이지), track_record, watchlist, notifications, profile, chat_list, chat_room, education(topic/chat_list/chat_room), inquiry(list/detail/new), admin, admin_audit_logs, login, register, user_admin.
+- `templates/` — 다크 테마 UI. base(우측 상단 유저 드롭다운 + 알림 배지 + 401 자동 갱신 인터셉터), landing, pricing, dashboard, sessions, session_detail, themes, proposals, theme_history, ticker_history, stock_cockpit(종목 페이지), track_record, watchlist, notifications, profile, chat_list, chat_room, general_chat_list, general_chat_room, education(topic/chat_list/chat_room), inquiry(list/detail/new), admin, admin_audit_logs, login, register, user_admin.
 
 ### shared/ — 공용 모듈
 - `config.py` — `.env` 파일 자동 로드, `DatabaseConfig`, `NewsConfig`, `AnalyzerConfig`, `RecommendationConfig`(Top Picks 가중치·다양성), `UniverseConfig`/`ScreenerConfig`/`ValidationConfig`(Phase 1~3), `OhlcvConfig`(Phase 7 — retention/auto_adjust/on_price_sync), `AuthConfig`, `AppConfig`
@@ -230,6 +233,8 @@ users → refresh_tokens (v11, CASCADE)
      → admin_audit_logs (v17, actor/target SET NULL, 이메일 denormalize)
 
 theme_chat_sessions → theme_chat_messages (v6, 테마 기반 채팅)
+
+general_chat_sessions → general_chat_messages (v42, 자유 질문 채팅 — 테마/토픽 비종속)
 
 education_topics → education_chat_sessions (v21, 투자 교육 토픽)
                  → education_chat_messages (v21, 교육 채팅)
@@ -278,6 +283,7 @@ stock_universe_ohlcv (v27, 종목별 일별 OHLCV 이력, PK `(ticker, market, t
 - `pre_market_briefings`(v34) — 프리마켓 브리핑 결과 영속화. PK `briefing_date`, 컬럼 `source_trade_date / status / us_summary JSONB / briefing_data JSONB / regime_snapshot JSONB`. `analyzer/briefing_main.py`가 매일 KST 06:30 미국 OHLCV 집계(`analyzer/overnight_us.py`) + Claude SDK 브리핑 생성 + sector_norm 공통키로 한국 수혜 매핑 + 화이트리스트 검증 + 워치리스트/구독 알림 자동 생성. `pre-market-briefing.timer` (06:30) systemd unit으로 트리거. UI는 `/pages/briefing` (`api/templates/briefing.html`). 운영 매뉴얼: `_docs/20260425101355_pre_market_briefing.md`.
 - `stock_universe_fundamentals`(v39) — 종목별 PIT 펀더멘털 시계열 (B-Lite). PK `(ticker, market, snapshot_date)`. pykrx KR (PER/PBR/EPS/BPS/DPS/배당률) + yfinance.info US (trailingPE/priceToBook 등). FK 미설정 (PIT 원칙 — 상폐 종목 이력 보존). `analyzer/fundamentals_sync.py`가 일별 sync, `tools/fundamentals_health_check.py`가 결측률 진단. 운영 매뉴얼: `_docs/20260426_fundamentals-operations.md` (M6 작성 예정).
 - `screener_presets` 확장(v40) — 거장 시드 프리셋 대비. user_id NULLABLE (시드=NULL), 신규 컬럼 6개 (is_seed/strategy_key/persona/persona_summary/markets_supported/risk_warning), `strategy_key` 부분 UNIQUE 인덱스 (is_seed=TRUE 한정 — UPSERT 멱등). 시드 프리셋 본격 INSERT 는 M4 (v41) 에서 진행.
+- `general_chat_sessions`/`general_chat_messages`(v42) — 자유 질문 채팅(Ask AI) 테이블. user_id FK SET NULL, theme_id/topic_id 없음 (테마/토픽 비종속). `api/general_chat_engine.py:build_user_context()`가 워치리스트 + 최근 7일 추천을 시스템 프롬프트에 동적 주입. KST 기준 일일 턴 제한(`GENERAL_CHAT_DAILY_TURNS`: Free 5/Pro 50/Premium ∞). 도메인은 투자/시장 한정.
 
 ## Key Conventions
 
