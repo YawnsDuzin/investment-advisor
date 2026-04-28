@@ -137,6 +137,12 @@ def run_screener(
         where.append("UPPER(u.market) = ANY(%s)")
         params.append([str(m).upper() for m in markets])
 
+    # exclude_tickers — 유사 종목 찾기에서 자기 자신 제외용
+    exclude_tickers = spec.get("exclude_tickers")
+    if exclude_tickers:
+        where.append("UPPER(u.ticker) <> ALL(%s)")
+        params.append([str(t).upper() for t in exclude_tickers])
+
     # 검색어 q — 티커/이름/영문이름 LIKE (2자 이상만)
     q = (spec.get("q") or "").strip()
     if len(q) >= 2:
@@ -289,7 +295,10 @@ def run_screener(
     where_sql = " AND ".join(where)
 
     # 공통 CTE — 항상 포함
-    common_ctes = """
+    # 워치리스트 user_id 는 int 강제 변환 후 SQL 인터폴레이션 (positional %s 와 섞이지 않게).
+    # 비로그인 시 0 → 어떤 user_watchlist row 도 매칭 안 됨.
+    wl_user_id = int(user.id) if user else 0
+    common_ctes = f"""
         latest_fund AS (
             -- 최근 7일 내 가장 최신 snapshot 1 row per (ticker, market). 결측은 NULL JOIN.
             SELECT DISTINCT ON (ticker, market)
@@ -313,12 +322,19 @@ def run_screener(
                 FROM daily_top_picks
                 WHERE analysis_date >= CURRENT_DATE - INTERVAL '7 days'
             )
+        ),
+        my_watchlist AS (
+            -- 본인 워치리스트 (ticker 기반 — user_watchlist 는 (user_id, ticker) UNIQUE).
+            SELECT UPPER(ticker) AS ticker
+            FROM user_watchlist
+            WHERE user_id = {wl_user_id}
         )
     """
 
     common_select_tail = """
         f.per, f.pbr, f.eps, f.dividend_yield, f.fund_snapshot_date,
-        (tp.ticker IS NOT NULL) AS is_top_pick
+        (tp.ticker IS NOT NULL) AS is_top_pick,
+        (wl.ticker IS NOT NULL) AS is_in_watchlist
     """
 
     common_join_tail = """
@@ -326,6 +342,8 @@ def run_screener(
           ON UPPER(u.ticker) = UPPER(f.ticker) AND UPPER(u.market) = f.market
         LEFT JOIN top_picks_recent tp
           ON tp.ticker = UPPER(u.ticker) AND tp.market = UPPER(u.market)
+        LEFT JOIN my_watchlist wl
+          ON wl.ticker = UPPER(u.ticker)
     """
 
     if join_ohlcv:

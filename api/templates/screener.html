@@ -69,6 +69,73 @@
     border: 1px solid var(--border);
 }
 .f-tip:hover { color: var(--accent); border-color: var(--accent); }
+
+/* 행 액션 (⭐ + ⋮) */
+.row-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+}
+.row-watch-toggle {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 2px 6px;
+    font-size: 16px;
+    line-height: 1;
+    color: var(--text-muted);
+    transition: color .15s, transform .1s;
+}
+.row-watch-toggle:hover { color: #f6c245; transform: scale(1.15); }
+.row-watch-toggle.is-on { color: #f6c245; }
+.row-watch-toggle:disabled { opacity: .4; cursor: wait; }
+
+.row-menu-wrap { position: relative; display: inline-block; }
+.row-menu-btn {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 4px 8px;
+    color: var(--text-muted);
+    font-size: 16px;
+    line-height: 1;
+    border-radius: 4px;
+}
+.row-menu-btn:hover { background: var(--bg-elevated); color: var(--text); }
+
+.row-menu-dropdown {
+    position: absolute;
+    right: 0;
+    top: 100%;
+    margin-top: 4px;
+    min-width: 180px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+    z-index: 100;
+    display: none;
+    overflow: hidden;
+}
+.row-menu-dropdown.open { display: block; }
+.row-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    cursor: pointer;
+    color: var(--text);
+    font-size: 13px;
+    border: none;
+    background: transparent;
+    width: 100%;
+    text-align: left;
+    text-decoration: none;
+}
+.row-menu-item:hover { background: rgba(99, 102, 241, 0.10); color: var(--accent); }
+.row-menu-item .icon { width: 16px; text-align: center; }
+.row-menu-divider { height: 1px; background: var(--border); margin: 4px 0; }
 </style>
 {% endblock %}
 
@@ -466,13 +533,35 @@
         pbr:       { label: 'PBR',  cls: 'num', html: function(r){ return r.pbr != null ? r.pbr.toFixed(2) : '-'; }, sortKey:'pbr' },
         eps:       { label: 'EPS',  cls: 'num', html: function(r){ return r.eps != null ? Math.round(r.eps).toLocaleString() : '-'; }, sortKey:'eps' },
         div_yield: { label: '배당%', cls: 'num', html: function(r){ return r.dividend_yield != null ? r.dividend_yield.toFixed(2)+'%' : '-'; }, sortKey:'dividend_yield' },
+        // 행 액션 (⭐ 워치리스트 토글 + ⋮ 드롭다운)
+        actions: { label: '', cls: 'actions-cell', html: function(r) {
+            var t = encodeURIComponent(r.ticker);
+            var m = encodeURIComponent(r.market || '');
+            var on = r.is_in_watchlist ? ' is-on' : '';
+            var star = r.is_in_watchlist ? '★' : '☆';
+            var title = r.is_in_watchlist ? '워치리스트에서 제거' : '워치리스트에 추가';
+            return '<div class="row-actions">'
+                 + '<button class="row-watch-toggle' + on + '" data-ticker="' + r.ticker + '" data-market="' + (r.market||'') + '" data-name="' + (r.asset_name||'').replace(/"/g,'&quot;') + '" title="' + title + '" onclick="Screener.toggleWatch(this)">' + star + '</button>'
+                 + '<div class="row-menu-wrap">'
+                 +   '<button class="row-menu-btn" title="더 많은 액션" onclick="Screener.toggleRowMenu(this)">⋮</button>'
+                 +   '<div class="row-menu-dropdown" data-ticker="' + r.ticker + '" data-market="' + (r.market||'') + '">'
+                 +     '<button class="row-menu-item" onclick="Screener.askAI(this)" data-ticker="' + r.ticker + '" data-market="' + (r.market||'') + '" data-name="' + (r.asset_name||'').replace(/"/g,'&quot;') + '" data-per="' + (r.per||'') + '" data-divy="' + (r.dividend_yield||'') + '" data-r1y="' + (r.r1y||'') + '"><span class="icon">💬</span><span>Ask AI 에 추가</span></button>'
+                 +     '<button class="row-menu-item" onclick="Screener.findSimilar(this)" data-ticker="' + r.ticker + '" data-sector="' + (r.sector_norm||'') + '" data-bucket="' + (r.market_cap_bucket||'') + '"><span class="icon">🔍</span><span>유사 종목 찾기</span></button>'
+                 +     '<a class="row-menu-item" href="/pages/stocks/' + t + (m ? '?market=' + m : '') + '"><span class="icon">📊</span><span>종목 상세</span></a>'
+                 +     '<div class="row-menu-divider"></div>'
+                 +     '<button class="row-menu-item" onclick="Screener.copyTicker(this)" data-ticker="' + r.ticker + '"><span class="icon">📋</span><span>티커 복사</span></button>'
+                 +     '<button class="row-menu-item" onclick="Screener.openExternal(this)" data-ticker="' + r.ticker + '" data-market="' + (r.market||'') + '"><span class="icon">🔗</span><span>외부 검색</span></button>'
+                 +   '</div>'
+                 + '</div>'
+                 + '</div>';
+        }},
     };
 
     var ViewColumns = {
-        overview:    ['ticker','name','sector','market_cap','last_price','per','div_yield','r1m','r1y','sparkline'],
-        performance: ['ticker','name','r1m','r3m','r6m','r1y','ytd','high_252d','low_252d','drawdown'],
-        technical:   ['ticker','name','vol60','vol_ratio','ma20','ma60','ma200','prox52','last_price'],
-        fundamental: ['ticker','name','sector','market_cap','per','pbr','eps','div_yield','last_price'],
+        overview:    ['ticker','name','sector','market_cap','last_price','per','div_yield','r1m','r1y','sparkline','actions'],
+        performance: ['ticker','name','r1m','r3m','r6m','r1y','ytd','high_252d','low_252d','drawdown','actions'],
+        technical:   ['ticker','name','vol60','vol_ratio','ma20','ma60','ma200','prox52','last_price','actions'],
+        fundamental: ['ticker','name','sector','market_cap','per','pbr','eps','div_yield','last_price','actions'],
     };
 
     function fmtPct(v) {
@@ -786,12 +875,173 @@
         if ($('f-eps-pos')) $('f-eps-pos').checked = false;
     }
 
+    // ── 행 액션 (⭐ 토글 + ⋮ 드롭다운) ──────────────
+
+    function toggleWatch(btn) {
+        var ticker = btn.dataset.ticker;
+        var name = btn.dataset.name || ticker;
+        var wasOn = btn.classList.contains('is-on');
+        btn.disabled = true;
+        // 낙관적 업데이트
+        btn.classList.toggle('is-on');
+        btn.textContent = wasOn ? '☆' : '★';
+        btn.title = wasOn ? '워치리스트에 추가' : '워치리스트에서 제거';
+
+        var url = '/api/watchlist/' + encodeURIComponent(ticker);
+        var opts = wasOn
+            ? { method: 'DELETE', headers: {'X-Requested-With':'XMLHttpRequest'} }
+            : {
+                method: 'POST',
+                headers: {'Content-Type':'application/json', 'X-Requested-With':'XMLHttpRequest'},
+                body: JSON.stringify({ asset_name: name })
+            };
+
+        fetch(url, opts)
+            .then(function(r) {
+                if (r.status === 402) {
+                    // 한도 초과 — 업그레이드 모달은 base.html 인터셉터가 자동 처리
+                    throw new Error('quota_exceeded');
+                }
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.json();
+            })
+            .then(function() {
+                // 같은 ticker 다른 row 들도 동기화
+                document.querySelectorAll('.row-watch-toggle[data-ticker="' + ticker + '"]').forEach(function(el) {
+                    if (wasOn) { el.classList.remove('is-on'); el.textContent = '☆'; el.title = '워치리스트에 추가'; }
+                    else       { el.classList.add('is-on');    el.textContent = '★'; el.title = '워치리스트에서 제거'; }
+                });
+            })
+            .catch(function(err) {
+                // 롤백
+                if (wasOn) { btn.classList.add('is-on'); btn.textContent = '★'; }
+                else       { btn.classList.remove('is-on'); btn.textContent = '☆'; }
+                if (err.message !== 'quota_exceeded') {
+                    showModal('워치리스트 동기화 실패: ' + err.message);
+                }
+            })
+            .finally(function() { btn.disabled = false; });
+    }
+
+    function toggleRowMenu(btn) {
+        var dd = btn.parentElement.querySelector('.row-menu-dropdown');
+        var wasOpen = dd.classList.contains('open');
+        // 모든 다른 드롭다운 닫기
+        document.querySelectorAll('.row-menu-dropdown.open').forEach(function(d){ d.classList.remove('open'); });
+        if (!wasOpen) dd.classList.add('open');
+    }
+    // 외부 클릭으로 드롭다운 닫기
+    document.addEventListener('click', function(e) {
+        if (e.target.closest('.row-menu-wrap')) return;
+        document.querySelectorAll('.row-menu-dropdown.open').forEach(function(d){ d.classList.remove('open'); });
+    });
+
+    function findSimilar(btn) {
+        var ticker = btn.dataset.ticker;
+        var sector = btn.dataset.sector;
+        var bucket = btn.dataset.bucket;
+        if (!sector && !bucket) {
+            showModal('이 종목은 sector/bucket 정보가 없어 유사 종목 찾기를 사용할 수 없습니다.');
+            return;
+        }
+        clearAllInputs();
+        var spec = { exclude_tickers: [ticker], sort: 'market_cap_desc' };
+        if (sector) spec.sectors = [sector];
+        if (bucket) spec.market_cap_buckets = [bucket];
+        SpecBuilder.toDOM(spec);
+        if ($('status')) $('status').textContent = '"' + ticker + '" 유사 종목 검색 중...';
+        // 드롭다운 닫기
+        document.querySelectorAll('.row-menu-dropdown.open').forEach(function(d){ d.classList.remove('open'); });
+        setTimeout(run, 100);
+    }
+
+    function askAI(btn) {
+        var ticker = btn.dataset.ticker;
+        var market = btn.dataset.market || '';
+        var name = btn.dataset.name || ticker;
+        var per = btn.dataset.per;
+        var divy = btn.dataset.divy;
+        var r1y = btn.dataset.r1y;
+
+        // prefill 메시지 — 종목 핵심 메트릭 포함
+        var ctx = '[' + name + ' / ' + ticker + (market ? ' · ' + market : '') + ']';
+        var stats = [];
+        if (per) stats.push('PER ' + parseFloat(per).toFixed(1));
+        if (divy) stats.push('배당률 ' + parseFloat(divy).toFixed(2) + '%');
+        if (r1y) stats.push('1Y ' + parseFloat(r1y).toFixed(1) + '%');
+        var statsLine = stats.length ? '\n핵심 지표 — ' + stats.join(' · ') + '.' : '';
+        var prefill = ctx + ' 종목 분석 부탁해.' + statsLine + '\n현재 가격대에서 매수 적정성, 주요 리스크, 캐털리스트 정리해줘.';
+
+        // 드롭다운 닫기
+        document.querySelectorAll('.row-menu-dropdown.open').forEach(function(d){ d.classList.remove('open'); });
+
+        // 신규 세션 생성 → prefill 붙여 채팅방 이동
+        fetch('/general-chat/sessions', {
+            method: 'POST',
+            headers: {'Content-Type':'application/json', 'X-Requested-With':'XMLHttpRequest'},
+            body: JSON.stringify({ title: ctx + ' 분석' }),
+        }).then(function(r) {
+            if (r.status === 401) {
+                showModal('Ask AI 사용에는 로그인이 필요합니다.');
+                throw new Error('unauthorized');
+            }
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.json();
+        }).then(function(session) {
+            window.location.href = '/pages/general-chat/' + session.id + '?prefill=' + encodeURIComponent(prefill);
+        }).catch(function(err) {
+            if (err.message !== 'unauthorized') showModal('Ask AI 세션 생성 실패: ' + err.message);
+        });
+    }
+
+    function copyTicker(btn) {
+        var ticker = btn.dataset.ticker;
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(ticker).then(function() {
+                showModal(ticker + ' 복사 완료', { icon: '📋', title: '복사됨' });
+            }).catch(function(){
+                _fallbackCopy(ticker);
+            });
+        } else {
+            _fallbackCopy(ticker);
+        }
+        document.querySelectorAll('.row-menu-dropdown.open').forEach(function(d){ d.classList.remove('open'); });
+    }
+    function _fallbackCopy(text) {
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); showModal(text + ' 복사 완료'); }
+        catch (e) { showModal('복사 실패'); }
+        document.body.removeChild(ta);
+    }
+
+    function openExternal(btn) {
+        var ticker = btn.dataset.ticker;
+        var market = (btn.dataset.market || '').toUpperCase();
+        var url;
+        if (market === 'KOSPI' || market === 'KOSDAQ' || market === 'KONEX') {
+            url = 'https://finance.naver.com/item/main.naver?code=' + encodeURIComponent(ticker);
+        } else {
+            url = 'https://finance.yahoo.com/quote/' + encodeURIComponent(ticker);
+        }
+        window.open(url, '_blank', 'noopener');
+        document.querySelectorAll('.row-menu-dropdown.open').forEach(function(d){ d.classList.remove('open'); });
+    }
+
     window.Screener = {
         run: run,
         savePreset: savePreset,
         togglePresetPanel: togglePresetPanel,
         loadPreset: loadPreset,
         deletePreset: deletePreset,
+        toggleWatch: toggleWatch,
+        toggleRowMenu: toggleRowMenu,
+        findSimilar: findSimilar,
+        askAI: askAI,
+        copyTicker: copyTicker,
+        openExternal: openExternal,
     };
 
     var prefilled = applyUrlParams();
