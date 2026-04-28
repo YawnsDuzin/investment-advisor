@@ -163,5 +163,25 @@ async function deleteSession() {
 
 scrollToBottom();
 chatInput.focus();
+
+// ── prefill query param 처리 ──
+// /pages/general-chat/{id}?prefill=<urlencoded text>
+// 첫 진입 시 textarea 에 prefill 채우고 자동 전송. 새로고침 시 두 번 전송 방지 위해
+// auto-send 후 query 제거 (history.replaceState).
+(function() {
+    var params = new URLSearchParams(window.location.search);
+    var prefill = params.get('prefill');
+    if (!prefill) return;
+    // 메시지가 이미 있으면 (새로고침 등) prefill 무시 — 기존 대화 보존
+    if ({{ messages | length }} > 0) {
+        history.replaceState({}, '', window.location.pathname);
+        return;
+    }
+    chatInput.value = prefill;
+    chatInput.style.height = Math.min(chatInput.scrollHeight, 160) + 'px';
+    history.replaceState({}, '', window.location.pathname);
+    // 약간의 지연 후 자동 전송 (UI 그려진 뒤)
+    setTimeout(sendMessage, 200);
+})();
 </script>
 {% endblock %}
