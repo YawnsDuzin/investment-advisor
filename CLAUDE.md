@@ -15,7 +15,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **AI**: Claude Code SDK (`claude-agent-sdk`) — 멀티스테이지 분석 파이프라인
 - **Backend**: FastAPI + Uvicorn (REST API + HTML 서빙)
 - **Template**: Jinja2 (다크 테마 UI)
-- **Database**: PostgreSQL + psycopg2 (스키마 자동 마이그레이션 v1~v42)
+- **Database**: PostgreSQL + psycopg2 (스키마 자동 마이그레이션 v1~v43)
 - **News**: feedparser + httpx (RSS 수집)
 - **Stock Data**: yfinance (해외 주가/재무 데이터) + pykrx (한국 주식 크로스체크/폴백)
 - **Async**: anyio (async/sync 브릿지)
@@ -284,6 +284,7 @@ stock_universe_ohlcv (v27, 종목별 일별 OHLCV 이력, PK `(ticker, market, t
 - `stock_universe_fundamentals`(v39) — 종목별 PIT 펀더멘털 시계열 (B-Lite). PK `(ticker, market, snapshot_date)`. pykrx KR (PER/PBR/EPS/BPS/DPS/배당률) + yfinance.info US (trailingPE/priceToBook 등). FK 미설정 (PIT 원칙 — 상폐 종목 이력 보존). `analyzer/fundamentals_sync.py`가 일별 sync, `tools/fundamentals_health_check.py`가 결측률 진단. 운영 매뉴얼: `_docs/20260426_fundamentals-operations.md` (M6 작성 예정).
 - `screener_presets` 확장(v40) — 거장 시드 프리셋 대비. user_id NULLABLE (시드=NULL), 신규 컬럼 6개 (is_seed/strategy_key/persona/persona_summary/markets_supported/risk_warning), `strategy_key` 부분 UNIQUE 인덱스 (is_seed=TRUE 한정 — UPSERT 멱등). 시드 프리셋 본격 INSERT 는 M4 (v41) 에서 진행.
 - `general_chat_sessions`/`general_chat_messages`(v42) — 자유 질문 채팅(Ask AI) 테이블. user_id FK SET NULL, theme_id/topic_id 없음 (테마/토픽 비종속). `api/general_chat_engine.py:build_user_context()`가 워치리스트 + 최근 7일 추천을 시스템 프롬프트에 동적 주입. KST 기준 일일 턴 제한(`GENERAL_CHAT_DAILY_TURNS`: Free 5/Pro 50/Premium ∞). 도메인은 투자/시장 한정.
+- `screener_presets` 시드 spec UI 포맷 통일(v43) — v41 의 `{"filters":[...]}` 포맷을 `routes/screener.py:run` 입력 포맷({max_per, max_pbr, return_ranges, ...})으로 UPSERT 재적용. 거장 5(buffett/lynch/graham/oneil/greenblatt) + 운영 자동 5(52w_high/volume_spike/foreign_streak/momentum/value_yield). UI '빠른 시작' 카드 클릭 → `SpecBuilder.toDOM(spec)` → 즉시 실행. **펀더 v1 활성화 — 스크리너 UI/API 가 `stock_universe_fundamentals` 의 최근 7일 latest snapshot 을 LEFT JOIN 해 PER/PBR/EPS/배당률 4종 필터·정렬·표시.** ROE/부채/성장률은 펀더 v2 (DART API 통합 후) 예정.
 
 ## Key Conventions
 

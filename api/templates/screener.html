@@ -6,14 +6,91 @@
 <button class="btn" id="loadBtn" style="font-size:12px;padding:4px 12px;margin-left:4px;" onclick="Screener.togglePresetPanel()">내 프리셋</button>
 {% endblock %}
 
+{% block head %}
+<style>
+/* 빠른 시작 — 시드 프리셋 카드 그리드 */
+.seed-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 10px;
+    padding: 12px 16px;
+}
+.seed-card {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    background: var(--bg-elevated);
+    cursor: pointer;
+    transition: border-color .15s, transform .1s;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    text-align: left;
+    color: var(--text);
+    font-family: inherit;
+}
+.seed-card:hover {
+    border-color: var(--accent);
+    transform: translateY(-1px);
+}
+.seed-card-name {
+    font-weight: 600;
+    font-size: 13.5px;
+    line-height: 1.3;
+}
+.seed-card-summary {
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.45;
+}
+.seed-card-markets {
+    font-size: 10.5px;
+    color: var(--text-muted);
+    margin-top: auto;
+    padding-top: 4px;
+}
+.seed-card-persona {
+    font-size: 11px;
+    color: var(--accent);
+    font-weight: 500;
+}
+/* ℹ 툴팁 */
+.f-tip {
+    display: inline-block;
+    margin-left: 4px;
+    width: 14px; height: 14px;
+    line-height: 14px;
+    text-align: center;
+    border-radius: 50%;
+    background: var(--bg-elevated);
+    color: var(--text-muted);
+    font-size: 10px;
+    cursor: help;
+    border: 1px solid var(--border);
+}
+.f-tip:hover { color: var(--accent); border-color: var(--accent); }
+</style>
+{% endblock %}
+
 {% block content %}
+<!-- 빠른 시작 — 시드 프리셋 카드 (거장 + 운영 자동) -->
+<div class="card" id="seedCard" style="margin-bottom:16px;">
+    <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;">
+        <strong>⚡ 빠른 시작</strong>
+        <span style="color:var(--text-muted);font-size:11px;">카드 클릭 → 자동 적용 + 즉시 실행</span>
+    </div>
+    <div id="seedGrid" class="seed-grid">
+        <div style="grid-column:1/-1;color:var(--text-muted);font-size:13px;padding:8px 4px;">불러오는 중…</div>
+    </div>
+</div>
+
 <div class="card" style="margin-bottom:16px;">
     <div class="screener-tabs" role="tablist">
         <button class="screener-tab active" role="tab" data-tab="search" aria-selected="true">🔍 Search</button>
         <button class="screener-tab" role="tab" data-tab="descriptive" aria-selected="false">📊 Descriptive</button>
         <button class="screener-tab" role="tab" data-tab="performance" aria-selected="false">🚀 Performance</button>
         <button class="screener-tab" role="tab" data-tab="technical" aria-selected="false">📈 Technical</button>
-        <button class="screener-tab" role="tab" data-tab="fundamental" disabled aria-disabled="true" title="데이터 준비 중 (B-2 단계)">💰 Fundamental</button>
+        <button class="screener-tab" role="tab" data-tab="fundamental" aria-selected="false">💰 Fundamental</button>
     </div>
 
     <!-- Search -->
@@ -65,7 +142,7 @@
         <div class="screener-grid">
             {% for p, lbl in [('1m','1개월'),('3m','3개월'),('6m','6개월'),('1y','1년'),('ytd','YTD')] %}
             <label>
-                <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">{{ lbl }} 수익률 (%)</div>
+                <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">{{ lbl }} 수익률 (%) <span class="f-tip" title="해당 기간 동안 종가 기준 수익률. 예: 10 = +10%, -5 = -5%. min·max 모두 비우면 미적용.">i</span></div>
                 <div style="display:flex;gap:6px;">
                     <input id="f-r{{p}}-min" type="number" placeholder="min" style="flex:1;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);">
                     <input id="f-r{{p}}-max" type="number" placeholder="max" style="flex:1;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);">
@@ -84,6 +161,9 @@
                     <option value="volume_surge_desc">거래량 비율 ↓</option>
                     <option value="liquidity_desc">거래대금 ↓</option>
                     <option value="drawdown_asc">낙폭 적은 순</option>
+                    <option value="per_asc">PER 낮은 순</option>
+                    <option value="pbr_asc">PBR 낮은 순</option>
+                    <option value="dividend_yield_desc">배당률 ↓</option>
                     <option value="name_asc">이름 A→Z</option>
                 </select>
             </label>
@@ -94,40 +174,68 @@
     <div class="screener-tab-body" data-body="technical">
         <div class="screener-grid">
             <label>
-                <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">60일 변동성 상한 (%)</div>
+                <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">변동성 ≤ X% <span class="f-tip" title="60일 일별 종가 표준편차. 작을수록 안정. 보수적: 2.5, 균형: 3.0, 공격: 4.0+">i</span></div>
                 <input id="f-vol60" type="number" step="0.1" placeholder="예: 3.0" style="width:100%;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);">
             </label>
             <label>
-                <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">거래량 비율(20d/60d) 하한</div>
+                <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">거래량 ≥ N배 <span class="f-tip" title="최근 20일 평균 / 60일 평균. 1.2 = 20% 증가 (수급 우위 신호). 3.0 = 거래량 급증.">i</span></div>
                 <input id="f-volr" type="number" step="0.1" placeholder="예: 1.2" style="width:100%;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);">
             </label>
             <label>
-                <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">52주 고점 근접도 (0~1)</div>
+                <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">52주 고점 ≥ N% <span class="f-tip" title="현재가 / 52주 최고가. 0.95 = 신고가 5% 이내, 1.00 = 신고가. 모멘텀 강세 종목 필터.">i</span></div>
                 <input id="f-prox" type="number" step="0.01" min="0" max="1" placeholder="예: 0.85" style="width:100%;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);">
             </label>
             <label>
-                <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">60일 max drawdown 상한 (%, 절대값)</div>
+                <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">최대 낙폭 ≤ X% <span class="f-tip" title="60일 고점 대비 현재 낙폭(절대값). 15 = 고점 대비 -15% 이내. 작을수록 약세 위험 적음.">i</span></div>
                 <input id="f-mdd" type="number" step="0.1" min="0" placeholder="예: 15" style="width:100%;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);">
             </label>
             <label>
-                <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">MA200 근접도 하한 (close/MA200)</div>
+                <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">200일 이평선 위 N배 <span class="f-tip" title="현재가 / 200일 이동평균. 1.0 = 정확히 MA200, 0.95 = MA200의 -5% 아래, 1.05 = MA200 위 +5%.">i</span></div>
                 <input id="f-ma200" type="number" step="0.01" min="0" placeholder="예: 0.95" style="width:100%;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);">
             </label>
             <label>
-                <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">일평균 거래대금 하한 (KRX, 억원)</div>
+                <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">일평균 거래대금 ≥ (KRX, 억원) <span class="f-tip" title="60일 평균 거래대금. 10억 미만은 유동성 위험 — 슬리피지 큼.">i</span></div>
                 <input id="f-liq-krw" type="number" placeholder="예: 10" style="width:100%;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);">
             </label>
             <label>
-                <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">일평균 거래대금 하한 (US, 천달러)</div>
+                <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">일평균 거래대금 ≥ (US, 천달러) <span class="f-tip" title="60일 평균 거래대금. 500K 미만은 유동성 위험.">i</span></div>
                 <input id="f-liq-usd" type="number" placeholder="예: 500" style="width:100%;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);">
             </label>
         </div>
     </div>
 
-    <!-- Fundamental (disabled) -->
+    <!-- Fundamental (펀더멘털 v1 — PER/PBR/EPS/배당률) -->
     <div class="screener-tab-body" data-body="fundamental">
-        <div style="padding:30px 16px;text-align:center;color:var(--text-muted);font-size:13px;">
-            펀더멘털 데이터(PER/PBR/배당/ROE 등)는 데이터 파이프라인 준비 중입니다 (B-2 단계 예정).
+        <div class="screener-grid">
+            <label>
+                <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">PER 범위 <span class="f-tip" title="주가수익비율 (Price-to-Earnings). 낮을수록 저밸류. 가치주: ≤15, 성장주: ≤25. 음수 PER은 자동 제외.">i</span></div>
+                <div style="display:flex;gap:6px;">
+                    <input id="f-per-min" type="number" step="0.1" min="0" placeholder="min" style="flex:1;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);">
+                    <input id="f-per-max" type="number" step="0.1" min="0" placeholder="max" style="flex:1;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);">
+                </div>
+            </label>
+            <label>
+                <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">PBR 범위 <span class="f-tip" title="주가순자산비율 (Price-to-Book). 1.0 = 청산가치. 안전마진: ≤1.5, 딥밸류: ≤1.0.">i</span></div>
+                <div style="display:flex;gap:6px;">
+                    <input id="f-pbr-min" type="number" step="0.1" min="0" placeholder="min" style="flex:1;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);">
+                    <input id="f-pbr-max" type="number" step="0.1" min="0" placeholder="max" style="flex:1;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);">
+                </div>
+            </label>
+            <label>
+                <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">배당률 ≥ X% <span class="f-tip" title="시가배당률. 인컴 전략: ≥3%, 고배당: ≥4%. KR/US 평균 ~1.5%.">i</span></div>
+                <input id="f-divy" type="number" step="0.1" min="0" placeholder="예: 2.0" style="width:100%;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);">
+            </label>
+            <label>
+                <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">EPS 필터 <span class="f-tip" title="주당순이익. 적자 종목 (EPS≤0) 제외 시 가치투자 안전성 ↑.">i</span></div>
+                <label style="display:flex;align-items:center;gap:6px;font-size:13px;padding-top:4px;">
+                    <input id="f-eps-pos" type="checkbox">
+                    <span>적자 기업 제외 (EPS &gt; 0)</span>
+                </label>
+            </label>
+            <div style="grid-column:1/-1;color:var(--text-muted);font-size:11px;line-height:1.5;padding-top:4px;border-top:1px dashed var(--border);">
+                ℹ 데이터 출처 — KRX(pykrx) + US(yfinance.info), 매일 KST 자동 sync.
+                ROE / 부채비율 / 매출성장률은 펀더 v2 (DART API 통합 후) 예정.
+            </div>
         </div>
     </div>
 
@@ -158,7 +266,7 @@
                 <button class="view-btn active" data-view="overview">Overview</button>
                 <button class="view-btn" data-view="performance">Performance</button>
                 <button class="view-btn" data-view="technical">Technical</button>
-                <button class="view-btn" data-view="custom">Custom</button>
+                <button class="view-btn" data-view="fundamental">Fundamental</button>
             </div>
         </div>
     </div>
@@ -236,6 +344,14 @@
             var mdd = num('f-mdd');     if (mdd !== null) spec.max_drawdown_60d_pct = mdd;
             var ma2 = num('f-ma200');   if (ma2 !== null) spec.ma200_proximity_min = ma2;
 
+            // 펀더 필터
+            var perMin = num('f-per-min'); if (perMin !== null) spec.min_per = perMin;
+            var perMax = num('f-per-max'); if (perMax !== null) spec.max_per = perMax;
+            var pbrMin = num('f-pbr-min'); if (pbrMin !== null) spec.min_pbr = pbrMin;
+            var pbrMax = num('f-pbr-max'); if (pbrMax !== null) spec.max_pbr = pbrMax;
+            var divy = num('f-divy');      if (divy !== null) spec.min_dividend_yield_pct = divy;
+            if ($('f-eps-pos') && $('f-eps-pos').checked) spec.exclude_negative_eps = true;
+
             spec.sort = $('f-sort').value;
             spec.include_sparkline = $('f-sparkline').checked;
             return spec;
@@ -275,6 +391,15 @@
             $('f-prox').value  = spec.high_52w_proximity_min != null ? spec.high_52w_proximity_min : '';
             $('f-mdd').value   = spec.max_drawdown_60d_pct != null ? spec.max_drawdown_60d_pct : '';
             $('f-ma200').value = spec.ma200_proximity_min != null ? spec.ma200_proximity_min : '';
+
+            // 펀더
+            $('f-per-min').value = spec.min_per != null ? spec.min_per : '';
+            $('f-per-max').value = spec.max_per != null ? spec.max_per : '';
+            $('f-pbr-min').value = spec.min_pbr != null ? spec.min_pbr : '';
+            $('f-pbr-max').value = spec.max_pbr != null ? spec.max_pbr : '';
+            $('f-divy').value    = spec.min_dividend_yield_pct != null ? spec.min_dividend_yield_pct : '';
+            if ($('f-eps-pos')) $('f-eps-pos').checked = !!spec.exclude_negative_eps;
+
             if (spec.sort) $('f-sort').value = spec.sort;
             if (spec.include_sparkline === false) $('f-sparkline').checked = false;
         }
@@ -336,13 +461,18 @@
         low_252d:  { label: '52w-low',  cls: 'num', html: function(r){ return r.low_252d  != null ? r.low_252d.toFixed(0)  : '-'; }, sortKey:'low_252d' },
         drawdown:  { label: 'DD60',     cls: 'num', html: function(r){ return r.drawdown_60d_pct != null ? r.drawdown_60d_pct.toFixed(2)+'%' : '-'; }, sortKey:'drawdown_60d_pct' },
         sparkline: { label: '60d', html: function(r){ return r.sparkline_60d ? sparklineSVG(r.sparkline_60d) : '-'; }},
+        // 펀더
+        per:       { label: 'PER',  cls: 'num', html: function(r){ return r.per != null ? r.per.toFixed(1) : '-'; }, sortKey:'per' },
+        pbr:       { label: 'PBR',  cls: 'num', html: function(r){ return r.pbr != null ? r.pbr.toFixed(2) : '-'; }, sortKey:'pbr' },
+        eps:       { label: 'EPS',  cls: 'num', html: function(r){ return r.eps != null ? Math.round(r.eps).toLocaleString() : '-'; }, sortKey:'eps' },
+        div_yield: { label: '배당%', cls: 'num', html: function(r){ return r.dividend_yield != null ? r.dividend_yield.toFixed(2)+'%' : '-'; }, sortKey:'dividend_yield' },
     };
 
     var ViewColumns = {
-        overview:    ['ticker','name','sector','market_cap','last_price','r1m','r1y','liquidity','sparkline'],
+        overview:    ['ticker','name','sector','market_cap','last_price','per','div_yield','r1m','r1y','sparkline'],
         performance: ['ticker','name','r1m','r3m','r6m','r1y','ytd','high_252d','low_252d','drawdown'],
         technical:   ['ticker','name','vol60','vol_ratio','ma20','ma60','ma200','prox52','last_price'],
-        custom:      ['ticker','name','sector','market_cap','last_price','r1m','r3m','r1y','vol60','vol_ratio'],
+        fundamental: ['ticker','name','sector','market_cap','per','pbr','eps','div_yield','last_price'],
     };
 
     function fmtPct(v) {
@@ -501,21 +631,39 @@
     }
 
     function savePreset() {
-        var name = prompt('프리셋 이름');
-        if (!name) return;
-        var isPublic = confirm('이 프리셋을 공개할까요? (확인=공개, 취소=비공개)');
+        if (typeof showFormModal !== 'function') {
+            // base.html showFormModal 미적재 시 폴백
+            var n = prompt('프리셋 이름'); if (!n) return;
+            return _doSavePreset(n, false);
+        }
+        showFormModal({
+            title: '프리셋 저장',
+            icon: '💾',
+            fields: [
+                { id: 'name', label: '프리셋 이름', type: 'text', required: true, placeholder: '예: 내 가치주 컷' },
+                { id: 'is_public', label: '이 프리셋을 공개 (다른 사용자도 불러올 수 있음)', type: 'checkbox', value: false },
+            ],
+            confirmText: '저장',
+            onSubmit: function(values) {
+                _doSavePreset(values.name, !!values.is_public);
+            },
+        });
+    }
+
+    function _doSavePreset(name, isPublic) {
         var spec = SpecBuilder.fromDOM();
         fetch('/api/screener/presets', {
             method: 'POST',
             headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
             body: JSON.stringify({name: name, spec: spec, is_public: isPublic}),
         }).then(function(r) {
-            if (r.status === 403) { r.json().then(function(d){ alert('저장 불가: '+d.detail); }); return null; }
-            if (r.status === 409) { r.json().then(function(d){ alert(d.detail); }); return null; }
+            if (r.status === 403) { r.json().then(function(d){ showModal('저장 불가: '+(d.detail || d.message || '권한 없음')); }); return null; }
+            if (r.status === 409) { r.json().then(function(d){ showModal(d.detail || '동일 이름 프리셋이 이미 있습니다.'); }); return null; }
             if (!r.ok) throw new Error('HTTP '+r.status);
             return r.json();
-        }).then(function(data) { if (data) alert('프리셋 "'+name+'" 저장 완료'); })
-          .catch(function(err){ alert('실패: '+err.message); });
+        }).then(function(data) {
+            if (data) showModal('프리셋 "'+name+'" 저장 완료', { icon: '✓', title: '저장됨' });
+        }).catch(function(err){ showModal('실패: '+err.message); });
     }
     function togglePresetPanel() {
         var panel = $('loadPanel');
@@ -557,11 +705,85 @@
         togglePresetPanel();
     }
     function deletePreset(id) {
-        if (!confirm('이 프리셋을 삭제할까요?')) return;
-        fetch('/api/screener/presets/'+id, {method:'DELETE', headers:{'X-Requested-With':'XMLHttpRequest'}})
+        var doDelete = function() {
+            fetch('/api/screener/presets/'+id, {method:'DELETE', headers:{'X-Requested-With':'XMLHttpRequest'}})
+                .then(function(r){ if (!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+                .then(function(){ loadPresets(); })
+                .catch(function(err){ showModal('삭제 실패: '+err.message); });
+        };
+        if (typeof showConfirm === 'function') {
+            showConfirm('이 프리셋을 삭제할까요?', doDelete, {
+                confirmText: '삭제', confirmClass: 'btn-danger', icon: '⚠'
+            });
+        } else if (confirm('이 프리셋을 삭제할까요?')) {
+            doDelete();
+        }
+    }
+
+    // ── 시드 프리셋 카드 ──────────────────────────
+    function loadSeeds() {
+        var grid = $('seedGrid');
+        if (!grid) return;
+        fetch('/api/screener/presets/seeds')
             .then(function(r){ if (!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
-            .then(function(){ loadPresets(); })
-            .catch(function(err){ alert('삭제 실패: '+err.message); });
+            .then(function(data) {
+                var seeds = (data && data.seeds) || [];
+                if (!seeds.length) {
+                    grid.innerHTML = '<div style="grid-column:1/-1;color:var(--text-muted);font-size:13px;padding:8px 4px;">시드 프리셋이 없습니다 (마이그레이션 v43 적용 확인 필요).</div>';
+                    return;
+                }
+                var html = '';
+                seeds.forEach(function(s) {
+                    var markets = (s.markets_supported || []).join(' · ');
+                    html += '<button class="seed-card" type="button" data-seed-id="' + s.id + '" title="'
+                          + (s.persona_summary || '').replace(/"/g,'&quot;') + '">'
+                          + '<div class="seed-card-name">' + s.name + '</div>'
+                          + '<div class="seed-card-summary">' + (s.description || '') + '</div>'
+                          + '<div class="seed-card-persona">' + (s.persona || '') + '</div>'
+                          + '<div class="seed-card-markets">' + markets + '</div>'
+                          + '</button>';
+                });
+                grid.innerHTML = html;
+                // 카드 클릭 → spec 적용 + 즉시 실행
+                grid.querySelectorAll('.seed-card').forEach(function(btn) {
+                    btn.addEventListener('click', function() {
+                        var id = parseInt(btn.dataset.seedId, 10);
+                        var seed = seeds.find(function(s){ return s.id === id; });
+                        if (!seed || !seed.spec) return;
+                        applySeedSpec(seed);
+                    });
+                });
+            })
+            .catch(function(err) {
+                grid.innerHTML = '<div style="grid-column:1/-1;color:var(--text-muted);font-size:13px;padding:8px 4px;">시드 로딩 실패: ' + err.message + '</div>';
+            });
+    }
+
+    function applySeedSpec(seed) {
+        // 기존 입력 초기화 후 spec 주입
+        clearAllInputs();
+        SpecBuilder.toDOM(seed.spec);
+        // 시장 필터가 spec에 있으면 활성화 (markets_supported 가 아니라 spec.markets)
+        var statusEl = $('status');
+        if (statusEl) statusEl.textContent = '"' + seed.name + '" 적용 — 실행 중...';
+        // 즉시 실행
+        setTimeout(run, 100);
+    }
+
+    function clearAllInputs() {
+        ['f-q','f-mcap-min','f-mcap-max','f-liq-krw','f-liq-usd',
+         'f-vol60','f-volr','f-prox','f-mdd','f-ma200',
+         'f-per-min','f-per-max','f-pbr-min','f-pbr-max','f-divy'].forEach(function(id) {
+            var el = $(id); if (el) el.value = '';
+        });
+        ['1m','3m','6m','1y','ytd'].forEach(function(p) {
+            var mn = $('f-r'+p+'-min'); if (mn) mn.value = '';
+            var mx = $('f-r'+p+'-max'); if (mx) mx.value = '';
+        });
+        $('f-markets-checks').querySelectorAll('input[type=checkbox]').forEach(function(el){ el.checked = false; });
+        document.querySelectorAll('input[name="f-bucket"]').forEach(function(el){ el.checked = false; });
+        Array.from($('f-sectors').options).forEach(function(o){ o.selected = false; });
+        if ($('f-eps-pos')) $('f-eps-pos').checked = false;
     }
 
     window.Screener = {
@@ -577,6 +799,7 @@
         ? new URLSearchParams(window.location.search).get('sectors').split(',')
         : null;
     loadSectors(pendingSectors);
+    loadSeeds();
     if (prefilled) {
         setTimeout(run, 800);
     }

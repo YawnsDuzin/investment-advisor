@@ -129,6 +129,7 @@ def run_screener(
     where: list[str] = ["u.listed = TRUE", "u.has_preferred = FALSE"]
     params: list = []
     join_ohlcv = False  # 필요 시 ohlcv_metrics CTE LEFT JOIN
+    # latest_fund CTE 는 항상 포함 — 비용 작고 응답에 PER/PBR/배당 노출하면 UX 향상
 
     # market 필터
     markets = spec.get("markets")
@@ -241,6 +242,31 @@ def run_screener(
         where.append("m.ma200_proximity IS NOT NULL AND m.ma200_proximity >= %s")
         params.append(float(ma200_prox))
 
+    # ── 펀더멘털 필터 (v39 stock_universe_fundamentals 기반) ──
+    # latest_fund CTE 가 종목별 최근 7일 내 최신 snapshot 1행 보유.
+    # 결측 종목은 IS NOT NULL 가드로 자연스레 제외 (max/min 필터 시).
+    if spec.get("min_per") is not None:
+        where.append("f.per IS NOT NULL AND f.per >= %s")
+        params.append(float(spec["min_per"]))
+    if spec.get("max_per") is not None:
+        where.append("f.per IS NOT NULL AND f.per > 0 AND f.per <= %s")
+        params.append(float(spec["max_per"]))
+
+    if spec.get("min_pbr") is not None:
+        where.append("f.pbr IS NOT NULL AND f.pbr >= %s")
+        params.append(float(spec["min_pbr"]))
+    if spec.get("max_pbr") is not None:
+        where.append("f.pbr IS NOT NULL AND f.pbr > 0 AND f.pbr <= %s")
+        params.append(float(spec["max_pbr"]))
+
+    if spec.get("min_dividend_yield_pct") is not None:
+        where.append("f.dividend_yield IS NOT NULL AND f.dividend_yield >= %s")
+        params.append(float(spec["min_dividend_yield_pct"]))
+
+    # exclude_negative_eps 는 펀더 결측 종목도 통과 (관대 정책)
+    if spec.get("exclude_negative_eps"):
+        where.append("(f.eps IS NULL OR f.eps > 0)")
+
     sort_map = {
         "market_cap_desc":   "u.market_cap_krw DESC NULLS LAST",
         "market_cap_asc":    "u.market_cap_krw ASC NULLS LAST",
@@ -253,13 +279,57 @@ def run_screener(
         "liquidity_desc":    "m.avg_daily_value DESC NULLS LAST" if join_ohlcv else "u.market_cap_krw DESC NULLS LAST",
         "drawdown_asc":      "m.drawdown_60d_pct ASC NULLS LAST" if join_ohlcv else "u.market_cap_krw DESC NULLS LAST",
         "name_asc":          "u.asset_name ASC",
+        # 펀더 정렬 — latest_fund 항상 LEFT JOIN 됐으니 join_ohlcv 무관하게 가능
+        "per_asc":            "f.per ASC NULLS LAST",
+        "pbr_asc":            "f.pbr ASC NULLS LAST",
+        "dividend_yield_desc":"f.dividend_yield DESC NULLS LAST",
     }
     order_by = sort_map.get(spec.get("sort") or "", "u.market_cap_krw DESC NULLS LAST")
 
     where_sql = " AND ".join(where)
 
+    # 공통 CTE — 항상 포함
+    common_ctes = """
+        latest_fund AS (
+            -- 최근 7일 내 가장 최신 snapshot 1 row per (ticker, market). 결측은 NULL JOIN.
+            SELECT DISTINCT ON (ticker, market)
+                   ticker, UPPER(market) AS market,
+                   per::float AS per, pbr::float AS pbr,
+                   eps::float AS eps, bps::float AS bps,
+                   dps::float AS dps,
+                   dividend_yield::float AS dividend_yield,
+                   snapshot_date AS fund_snapshot_date
+            FROM stock_universe_fundamentals
+            WHERE snapshot_date >= CURRENT_DATE - INTERVAL '7 days'
+            ORDER BY ticker, market, snapshot_date DESC
+        ),
+        top_picks_recent AS (
+            -- 가장 최근 analysis_date (최근 7일 이내) 의 Top Picks 종목 식별
+            SELECT DISTINCT UPPER(p.ticker) AS ticker, UPPER(p.market) AS market
+            FROM investment_proposals p
+            JOIN daily_top_picks d ON d.proposal_id = p.id
+            WHERE d.analysis_date = (
+                SELECT MAX(analysis_date)
+                FROM daily_top_picks
+                WHERE analysis_date >= CURRENT_DATE - INTERVAL '7 days'
+            )
+        )
+    """
+
+    common_select_tail = """
+        f.per, f.pbr, f.eps, f.dividend_yield, f.fund_snapshot_date,
+        (tp.ticker IS NOT NULL) AS is_top_pick
+    """
+
+    common_join_tail = """
+        LEFT JOIN latest_fund f
+          ON UPPER(u.ticker) = UPPER(f.ticker) AND UPPER(u.market) = f.market
+        LEFT JOIN top_picks_recent tp
+          ON tp.ticker = UPPER(u.ticker) AND tp.market = UPPER(u.market)
+    """
+
     if join_ohlcv:
-        cte = """
+        cte = f"""
         WITH ranked AS (
             SELECT ticker, UPPER(market) AS market, trade_date,
                    close::float AS close, volume,
@@ -319,17 +389,7 @@ def run_screener(
             FROM metrics m
             LEFT JOIN ytd_anchor y ON y.ticker=m.ticker AND y.market=m.market
         ),
-        top_picks_recent AS (
-            -- 가장 최근 analysis_date (최근 7일 이내) 의 Top Picks 종목 식별
-            SELECT DISTINCT UPPER(p.ticker) AS ticker, UPPER(p.market) AS market
-            FROM investment_proposals p
-            JOIN daily_top_picks d ON d.proposal_id = p.id
-            WHERE d.analysis_date = (
-                SELECT MAX(analysis_date)
-                FROM daily_top_picks
-                WHERE analysis_date >= CURRENT_DATE - INTERVAL '7 days'
-            )
-        )
+        {common_ctes.strip().rstrip(',')}
         """
         sql = f"""
         {cte}
@@ -341,34 +401,23 @@ def run_screener(
                m.high_52w_proximity, m.ma200_proximity, m.drawdown_60d_pct,
                m.r1m, m.r3m, m.r6m, m.r1y, m.ytd,
                m.sparkline_60d,
-               (tp.ticker IS NOT NULL) AS is_top_pick
+               {common_select_tail}
         FROM stock_universe u
         LEFT JOIN ohlcv_metrics m
           ON UPPER(u.ticker) = UPPER(m.ticker) AND UPPER(u.market) = UPPER(m.market)
-        LEFT JOIN top_picks_recent tp
-          ON tp.ticker = UPPER(u.ticker) AND tp.market = UPPER(u.market)
+        {common_join_tail}
         WHERE {where_sql}
         ORDER BY {order_by}
         LIMIT %s
         """
     else:
         sql = f"""
-        WITH top_picks_recent AS (
-            SELECT DISTINCT UPPER(p.ticker) AS ticker, UPPER(p.market) AS market
-            FROM investment_proposals p
-            JOIN daily_top_picks d ON d.proposal_id = p.id
-            WHERE d.analysis_date = (
-                SELECT MAX(analysis_date)
-                FROM daily_top_picks
-                WHERE analysis_date >= CURRENT_DATE - INTERVAL '7 days'
-            )
-        )
+        WITH {common_ctes.strip().rstrip(',')}
         SELECT u.ticker, u.market, u.asset_name, u.asset_name_en, u.sector_norm,
                u.market_cap_krw, u.market_cap_bucket, u.last_price, u.last_price_ccy,
-               (tp.ticker IS NOT NULL) AS is_top_pick
+               {common_select_tail}
         FROM stock_universe u
-        LEFT JOIN top_picks_recent tp
-          ON tp.ticker = UPPER(u.ticker) AND tp.market = UPPER(u.market)
+        {common_join_tail}
         WHERE {where_sql}
         ORDER BY {order_by}
         LIMIT %s
@@ -396,12 +445,37 @@ def run_screener(
 # ──────────────────────────────────────────────
 # 프리셋 CRUD (인증 필수 — Pro 이상 저장 가능, Free는 공개 프리셋만 read)
 # ──────────────────────────────────────────────
+@router.get("/presets/seeds")
+def list_seed_presets(response: Response, conn = Depends(get_db_conn)):
+    """시드 프리셋(거장 + 운영 자동) 공개 목록 — 인증 불필요.
+
+    UI '빠른 시작' 카드 그리드용. is_seed=TRUE 만. spec 포맷은 UI SpecBuilder 가
+    바로 toDOM(spec) 가능하도록 routes/screener.py /run 의 입력 포맷 그대로.
+    """
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute(
+            """
+            SELECT id, strategy_key, name, description,
+                   persona, persona_summary, markets_supported, risk_warning,
+                   spec
+            FROM screener_presets
+            WHERE is_seed = TRUE
+            ORDER BY
+                CASE WHEN persona = '운영 자동' THEN 1 ELSE 0 END,  -- 거장 먼저
+                id ASC
+            """
+        )
+        rows = cur.fetchall()
+    response.headers["Cache-Control"] = "public, max-age=900"
+    return {"count": len(rows), "seeds": [_serialize_row(r) for r in rows]}
+
+
 @router.get("/presets")
 def list_presets(
     user: UserInDB = Depends(get_current_user_required),
     conn = Depends(get_db_conn),
 ):
-    """본인 프리셋 + 공개 프리셋 (다른 유저 포함) 목록."""
+    """본인 프리셋 + 공개 프리셋 (다른 유저 포함) 목록. 시드 프리셋은 별도 /presets/seeds."""
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute(
             """
@@ -409,7 +483,8 @@ def list_presets(
                    (p.user_id = %s) AS owned
             FROM screener_presets p
             LEFT JOIN users u ON u.id = p.user_id
-            WHERE p.user_id = %s OR p.is_public = TRUE
+            WHERE (p.user_id = %s OR p.is_public = TRUE)
+              AND p.is_seed = FALSE
             ORDER BY owned DESC, p.updated_at DESC
             LIMIT 200
             """,

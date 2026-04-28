@@ -294,6 +294,93 @@
         if (cb) cb();
     }
 
+    /**
+     * 폼 모달 — prompt() 의 폼 버전. 다중 필드 입력 받음.
+     *
+     * showFormModal({
+     *   title: '프리셋 저장',
+     *   icon: '💾',
+     *   fields: [
+     *     { id: 'name', label: '이름', type: 'text', required: true, placeholder: '예: 내 가치주', value: '' },
+     *     { id: 'is_public', label: '이 프리셋을 공개', type: 'checkbox', value: false },
+     *   ],
+     *   confirmText: '저장',
+     *   cancelText: '취소',
+     *   onSubmit: function(values) { ... }   // values = { id1: val1, id2: val2 }
+     * })
+     *
+     * required: true 이면 빈 값 시 alert. 필드 type: text/number/textarea/checkbox 지원.
+     */
+    function showFormModal(opts) {
+        opts = opts || {};
+        var modal = document.getElementById('common-modal');
+        if (!modal) { showModal('폼을 표시할 수 없습니다.'); return; }
+        var fields = opts.fields || [];
+        document.getElementById('common-modal-icon').textContent = opts.icon || '✏';
+        document.getElementById('common-modal-title').textContent = opts.title || '입력';
+
+        var bodyHtml = '<form id="common-modal-form" onsubmit="_submitFormModal(event); return false;" style="display:flex;flex-direction:column;gap:12px;text-align:left;">';
+        fields.forEach(function(f) {
+            var idAttr = 'cm-field-' + f.id;
+            var ph = f.placeholder ? ' placeholder="' + f.placeholder.replace(/"/g, '&quot;') + '"' : '';
+            var req = f.required ? ' required' : '';
+            var val = f.value;
+            if (f.type === 'checkbox') {
+                bodyHtml += '<label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">'
+                          + '<input type="checkbox" id="' + idAttr + '" data-fid="' + f.id + '"' + (val ? ' checked' : '') + '>'
+                          + '<span>' + (f.label || f.id) + '</span></label>';
+            } else if (f.type === 'textarea') {
+                bodyHtml += '<label style="font-size:13px;display:block;">'
+                          + '<div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">' + (f.label || f.id) + '</div>'
+                          + '<textarea id="' + idAttr + '" data-fid="' + f.id + '" rows="3"' + ph + req
+                          + ' style="width:100%;padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;resize:vertical;">'
+                          + (val == null ? '' : String(val).replace(/&/g,'&amp;').replace(/</g,'&lt;')) + '</textarea></label>';
+            } else {
+                var typeAttr = f.type === 'number' ? 'number' : 'text';
+                var valAttr = (val != null) ? ' value="' + String(val).replace(/"/g,'&quot;') + '"' : '';
+                bodyHtml += '<label style="font-size:13px;display:block;">'
+                          + '<div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">' + (f.label || f.id) + '</div>'
+                          + '<input type="' + typeAttr + '" id="' + idAttr + '" data-fid="' + f.id + '"' + ph + req + valAttr
+                          + ' style="width:100%;padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;">'
+                          + '</label>';
+            }
+        });
+        bodyHtml += '</form>';
+        document.getElementById('common-modal-body').innerHTML = bodyHtml;
+
+        _commonModalCallback = opts.onSubmit || null;
+        var confirmCls = opts.confirmClass || 'btn-primary';
+        document.getElementById('common-modal-actions').innerHTML =
+            '<button type="button" class="btn" onclick="closeCommonModal()">' + (opts.cancelText || '취소') + '</button>' +
+            '<button type="button" class="btn ' + confirmCls + '" onclick="_submitFormModal()">' + (opts.confirmText || '확인') + '</button>';
+        modal.classList.add('open');
+        modal.setAttribute('aria-hidden', 'false');
+
+        // 첫 입력 필드 자동 포커스
+        setTimeout(function() {
+            var first = modal.querySelector('input[data-fid], textarea[data-fid]');
+            if (first && first.type !== 'checkbox') first.focus();
+        }, 50);
+    }
+
+    function _submitFormModal(ev) {
+        if (ev && ev.preventDefault) ev.preventDefault();
+        var form = document.getElementById('common-modal-form');
+        if (!form) return;
+        // HTML5 검증
+        if (!form.checkValidity()) { form.reportValidity(); return; }
+        var values = {};
+        form.querySelectorAll('[data-fid]').forEach(function(el) {
+            var fid = el.dataset.fid;
+            if (el.type === 'checkbox') values[fid] = el.checked;
+            else if (el.type === 'number') values[fid] = el.value === '' ? null : parseFloat(el.value);
+            else values[fid] = el.value;
+        });
+        var cb = _commonModalCallback;
+        closeCommonModal();
+        if (cb) cb(values);
+    }
+
     // 범용 모달 Esc/배경 클릭으로 닫기
     document.addEventListener('keydown', function(e) {
         if (e.key === 'Escape') {

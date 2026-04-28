@@ -9,7 +9,7 @@ from shared.db.migrations import run_migrations
 
 
 # ── 스키마 버전 관리 ──────────────────────────────
-SCHEMA_VERSION = 42  # v42: 자유 질문 채팅 (general_chat_sessions / general_chat_messages)
+SCHEMA_VERSION = 43  # v43: 스크리너 시드 spec UI 포맷 통일 (UPSERT)
 
 
 def _create_base_schema(cur) -> None:
