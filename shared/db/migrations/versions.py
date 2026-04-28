@@ -1774,3 +1774,49 @@ def _migrate_to_v41(cur) -> None:
         ON CONFLICT (version) DO NOTHING;
     """)
     print("[DB] v41 마이그레이션 완료 — Sprint 1 (NL→SQL / Red Team / Vision / 글로벌뉴스 / 시드)")
+
+
+def _migrate_to_v42(cur) -> None:
+    """v42: 자유 질문 채팅 (General Chat / Ask AI) — 테마/토픽 비종속 대화.
+
+    Theme Chat(theme_id 필수) / AI Tutor(topic_id 필수) 와 달리 컨텍스트는
+    사용자 워치리스트·최근 추천에서 동적 주입한다. 시스템 프롬프트는
+    투자 어시스턴트 페르소나로 도메인 한정.
+    """
+
+    # ── 자유 채팅 세션 ──
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS general_chat_sessions (
+            id SERIAL PRIMARY KEY,
+            user_id INT REFERENCES users(id) ON DELETE SET NULL,
+            title VARCHAR(500),
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+        );
+    """)
+
+    # ── 메시지 ──
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS general_chat_messages (
+            id SERIAL PRIMARY KEY,
+            chat_session_id INT REFERENCES general_chat_sessions(id) ON DELETE CASCADE,
+            role VARCHAR(10) NOT NULL CHECK (role IN ('user', 'assistant')),
+            content TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT NOW()
+        );
+    """)
+
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_general_chat_sessions_user
+            ON general_chat_sessions(user_id, updated_at DESC);
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_general_chat_messages_session
+            ON general_chat_messages(chat_session_id, created_at);
+    """)
+
+    cur.execute("""
+        INSERT INTO schema_version (version) VALUES (42)
+        ON CONFLICT (version) DO NOTHING;
+    """)
+    print("[DB] v42 마이그레이션 완료 — general_chat_sessions + general_chat_messages 생성")

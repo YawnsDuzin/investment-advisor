@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+{% block title %}{{ session.title or 'Ask AI' }} — AlphaSignal{% endblock %}
+{% block page_title %}{{ session.title or 'Ask AI' }}{% endblock %}
+{% block header_actions %}
+<div style="display:flex;gap:8px;align-items:center;">
+    <a href="/pages/general-chat" class="btn">목록으로</a>
+    <button class="btn" onclick="deleteSession()" style="color:var(--red);">삭제</button>
+</div>
+{% endblock %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="chat-container">
+    <div class="chat-messages" id="chatMessages">
+        {% if not messages %}
+        <div class="chat-empty" id="chatWelcome">
+            <p>투자/시장 관련 자유 질문을 입력하세요.</p>
+            <p style="font-size:13px;margin-top:8px;color:var(--text-muted);">
+                관심 종목·최근 추천 이력이 답변에 자동 반영됩니다.
+            </p>
+        </div>
+        {% endif %}
+
+        {% for msg in messages %}
+        <div class="chat-bubble chat-bubble-{{ msg.role }}">
+            {% if msg.role == 'assistant' %}
+            <div class="chat-bubble-content">{{ msg.content }}</div>
+            {% else %}
+            {{ msg.content }}
+            {% endif %}
+            <div class="chat-bubble-time">{{ msg.created_at }}</div>
+        </div>
+        {% endfor %}
+
+        <div class="chat-loading" id="chatLoading">
+            <span class="chat-loading-dots">분석 중<span>.</span><span>.</span><span>.</span></span>
+        </div>
+    </div>
+
+    <div class="chat-input-bar">
+        <textarea id="chatInput" rows="1" placeholder="질문을 입력하세요..."
+                  onkeydown="handleKeyDown(event)"></textarea>
+        <button class="btn-send" id="btnSend" onclick="sendMessage()">전송</button>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const SESSION_ID = {{ session.id }};
+const chatMessages = document.getElementById('chatMessages');
+const chatInput = document.getElementById('chatInput');
+const btnSend = document.getElementById('btnSend');
+const chatLoading = document.getElementById('chatLoading');
+const chatWelcome = document.getElementById('chatWelcome');
+
+if (typeof marked !== 'undefined') {
+    marked.setOptions({ breaks: true, gfm: true });
+}
+
+document.querySelectorAll('.chat-bubble-assistant .chat-bubble-content').forEach(el => {
+    if (typeof marked !== 'undefined') {
+        el.innerHTML = marked.parse(el.textContent);
+    }
+});
+
+chatInput.addEventListener('input', function() {
+    this.style.height = 'auto';
+    this.style.height = Math.min(this.scrollHeight, 160) + 'px';
+});
+
+function handleKeyDown(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+    }
+}
+
+function scrollToBottom() {
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+function appendMessage(role, content, time) {
+    const bubble = document.createElement('div');
+    bubble.className = `chat-bubble chat-bubble-${role}`;
+
+    if (role === 'assistant' && typeof marked !== 'undefined') {
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'chat-bubble-content';
+        contentDiv.innerHTML = marked.parse(content);
+        bubble.appendChild(contentDiv);
+    } else {
+        bubble.textContent = content;
+    }
+
+    if (time) {
+        const timeDiv = document.createElement('div');
+        timeDiv.className = 'chat-bubble-time';
+        timeDiv.textContent = time;
+        bubble.appendChild(timeDiv);
+    }
+
+    chatMessages.insertBefore(bubble, chatLoading);
+    scrollToBottom();
+}
+
+async function sendMessage() {
+    const content = chatInput.value.trim();
+    if (!content) return;
+
+    if (chatWelcome) chatWelcome.remove();
+
+    appendMessage('user', content);
+    chatInput.value = '';
+    chatInput.style.height = 'auto';
+    btnSend.disabled = true;
+    chatLoading.classList.add('active');
+    scrollToBottom();
+
+    try {
+        const res = await fetch(`/general-chat/sessions/${SESSION_ID}/messages`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content }),
+        });
+
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            const detail = err.detail;
+            const msg = (detail && typeof detail === 'object') ? (detail.message || '오류') : (detail || `오류 (${res.status})`);
+            throw new Error(msg);
+        }
+
+        const data = await res.json();
+        appendMessage(
+            'assistant',
+            data.assistant_message.content,
+            data.assistant_message.created_at
+        );
+    } catch (err) {
+        appendMessage('assistant', `오류가 발생했습니다: ${err.message}`);
+    } finally {
+        chatLoading.classList.remove('active');
+        btnSend.disabled = false;
+        chatInput.focus();
+        scrollToBottom();
+    }
+}
+
+async function deleteSession() {
+    showConfirm('이 대화를 삭제하시겠습니까?', async () => {
+        try {
+            await fetch(`/general-chat/sessions/${SESSION_ID}`, { method: 'DELETE' });
+            window.location.href = '/pages/general-chat';
+        } catch (err) {
+            showModal('삭제 실패: ' + err.message);
+        }
+    });
+}
+
+scrollToBottom();
+chatInput.focus();
+</script>
+{% endblock %}

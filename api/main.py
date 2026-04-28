@@ -117,6 +117,11 @@ from api.routes import briefing as _briefing_routes
 app.include_router(_briefing_routes.router)
 app.include_router(_briefing_routes.pages_router)
 
+# 자유 질문 채팅 (Ask AI)
+from api.routes import general_chat as _general_chat_routes
+app.include_router(_general_chat_routes.router)
+app.include_router(_general_chat_routes.pages_router)
+
 
 if __name__ == "__main__":
     import uvicorn

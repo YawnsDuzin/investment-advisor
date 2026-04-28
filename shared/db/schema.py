@@ -9,7 +9,7 @@ from shared.db.migrations import run_migrations
 
 
 # ── 스키마 버전 관리 ──────────────────────────────
-SCHEMA_VERSION = 41  # v41: Sprint 1 통합 (NL→SQL / Red Team / Vision / 글로벌뉴스 / 시드)
+SCHEMA_VERSION = 42  # v42: 자유 질문 채팅 (general_chat_sessions / general_chat_messages)
 
 
 def _create_base_schema(cur) -> None:
