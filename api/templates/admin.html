@@ -592,25 +592,16 @@ function runForeignFlowDiag() {
     logEl.textContent = '';
     logEl.style.display = 'block';
     btn.disabled = true;
-
-    // 기존 SSE 연결이 있으면 닫기
-    if (window.detachSseLog) window.detachSseLog('foreignFlowDiagLog');
-
-    const es = new EventSource('/admin/diagnostics/foreign-flow');
-    es.onmessage = function(e) {
-        const line = document.createElement('div');
-        line.textContent = e.data;
-        logEl.appendChild(line);
-        logEl.scrollTop = logEl.scrollHeight;
-    };
-    es.addEventListener('done', function() {
-        es.close();
+    if (window.attachSseLog) {
+        window.attachSseLog('foreignFlowDiagLog', '/admin/diagnostics/foreign-flow', {
+            onDone: function() { btn.disabled = false; },
+            onError: function() { btn.disabled = false; }
+        });
+    } else {
+        // attachSseLog 없으면 fallback (방어적, 실제 환경에선 불필요)
         btn.disabled = false;
-    });
-    es.onerror = function() {
-        es.close();
-        btn.disabled = false;
-    };
+        logEl.textContent = 'sse_log_viewer.js 로드 실패';
+    }
 }
 
 /* 페이지 로드 시: 실행 중이면 기존 로그 복원 + 실시간 구독 */
