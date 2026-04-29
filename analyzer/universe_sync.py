@@ -1762,7 +1762,7 @@ def _run_mode_cleanup(cfg: AppConfig, args: argparse.Namespace) -> dict:
     return result
 
 
-def _cleanup_foreign_flow(db_cfg, retention_days: int, delisted_retention_days: int) -> dict:
+def _cleanup_foreign_flow(db_cfg: DatabaseConfig, retention_days: int, delisted_retention_days: int) -> dict:
     """`stock_universe_foreign_flow` retention 초과 row 삭제."""
     conn = get_connection(db_cfg)
     deleted = 0
@@ -1773,16 +1773,20 @@ def _cleanup_foreign_flow(db_cfg, retention_days: int, delisted_retention_days: 
                 WHERE snapshot_date < CURRENT_DATE - %s::int
             """, (int(retention_days),))
             deleted = cur.rowcount
-            # 상폐 종목 축소 retention
-            cur.execute("""
-                DELETE FROM stock_universe_foreign_flow ff
-                USING stock_universe u
-                WHERE u.ticker = ff.ticker AND u.market = ff.market
-                  AND u.listed = FALSE
-                  AND ff.snapshot_date < CURRENT_DATE - %s::int
-            """, (int(delisted_retention_days),))
-            deleted += cur.rowcount
+            # 상폐 종목 축소 retention (delisted_retention_days < retention_days 일 때만)
+            if delisted_retention_days < retention_days:
+                cur.execute("""
+                    DELETE FROM stock_universe_foreign_flow ff
+                    USING stock_universe u
+                    WHERE u.ticker = ff.ticker AND u.market = ff.market
+                      AND u.listed = FALSE
+                      AND ff.snapshot_date < CURRENT_DATE - %s::int
+                """, (int(delisted_retention_days),))
+                deleted += cur.rowcount
         conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
     finally:
         conn.close()
     _log.info(f"foreign_flow cleanup — {deleted} row 삭제")
@@ -1917,7 +1921,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.mode == "foreign":
         from analyzer.foreign_flow_sync import run_foreign_flow_sync
-        backfill = int(args.days) if args.days else 0
+        backfill = args.days if args.days else 0
         result = run_foreign_flow_sync(
             cfg.db, cfg=cfg.foreign_flow, backfill_days=backfill,
         )
