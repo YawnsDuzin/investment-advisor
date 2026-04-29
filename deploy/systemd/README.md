@@ -118,7 +118,7 @@ sudo systemctl enable --now monthly-sector-refresh.timer
 # 6. 프리마켓 브리핑 활성화 (v34, 2026-04-25 도입)
 sudo systemctl enable --now pre-market-briefing.timer
 
-# 6. 상태 확인
+# 7. 상태 확인
 sudo systemctl list-timers --all | grep -E "investment-advisor|universe|ohlcv|sector"
 sudo systemctl status investment-advisor-api.service
 journalctl -u investment-advisor-analyzer.service -n 100 --no-pager

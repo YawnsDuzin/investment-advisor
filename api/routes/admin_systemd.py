@@ -1,6 +1,6 @@
 """관리자 — systemd unit 제어 라우터.
 
-deploy/systemd/README.md 의 9개 unit을 웹에서 제어한다:
+deploy/systemd/README.md 의 10개 unit을 웹에서 제어한다:
   start/stop/restart/enable/disable + journalctl SSE 스트리밍.
 API 자체 service는 self_protected (mutation 차단). sudo NOPASSWD 화이트리스트 가정.
 """

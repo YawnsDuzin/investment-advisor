@@ -239,7 +239,7 @@ def _summary_stub(u):
 
 
 class TestUnitsListEndpoint:
-    def test_returns_nine_units_when_systemd_available(self):
+    def test_returns_ten_units_when_systemd_available(self):
         from fastapi.testclient import TestClient
         from api.main import app
         with patch("api.routes.admin_systemd._systemd_available",
