@@ -273,6 +273,44 @@ def run_screener(
     if spec.get("exclude_negative_eps"):
         where.append("(f.eps IS NULL OR f.eps > 0)")
 
+    # ── 외국인 수급 필터 (v44 stock_universe_foreign_flow) ──
+    join_foreign = False
+
+    # 윈도우 화이트리스트 (SQL injection 방어 — f-string 인터폴레이션 안전)
+    delta_win = spec.get("delta_window_days") or 20
+    netbuy_win = spec.get("net_buy_window_days") or 20
+    try:
+        delta_win = int(delta_win)
+        netbuy_win = int(netbuy_win)
+    except (TypeError, ValueError):
+        delta_win = netbuy_win = 20
+    if delta_win not in (5, 20, 60):
+        delta_win = 20
+    if netbuy_win not in (5, 20, 60):
+        netbuy_win = 20
+
+    if spec.get("min_foreign_ownership_pct") is not None:
+        join_foreign = True
+        where.append("ff.own_latest IS NOT NULL AND ff.own_latest >= %s")
+        params.append(float(spec["min_foreign_ownership_pct"]))
+
+    if spec.get("min_foreign_ownership_delta_pp") is not None:
+        join_foreign = True
+        where.append(
+            f"ff.own_latest IS NOT NULL AND ff.own_d{delta_win} IS NOT NULL "
+            f"AND (ff.own_latest - ff.own_d{delta_win}) >= %s"
+        )
+        params.append(float(spec["min_foreign_ownership_delta_pp"]))
+
+    if spec.get("min_foreign_net_buy_krw") is not None:
+        join_foreign = True
+        where.append(f"ff.net_buy_{netbuy_win}d IS NOT NULL AND ff.net_buy_{netbuy_win}d >= %s")
+        params.append(float(spec["min_foreign_net_buy_krw"]))
+
+    sort_key = spec.get("sort") or ""
+    if sort_key in ("foreign_ownership_desc", "foreign_delta_desc", "foreign_net_buy_desc"):
+        join_foreign = True
+
     sort_map = {
         "market_cap_desc":   "u.market_cap_krw DESC NULLS LAST",
         "market_cap_asc":    "u.market_cap_krw ASC NULLS LAST",
@@ -290,9 +328,58 @@ def run_screener(
         "pbr_asc":            "f.pbr ASC NULLS LAST",
         "dividend_yield_desc":"f.dividend_yield DESC NULLS LAST",
     }
+    # 외국인 정렬 — join_foreign 여부에 따라 동적 매핑 (윈도우 자동 연동)
+    sort_map["foreign_ownership_desc"] = (
+        "ff.own_latest DESC NULLS LAST" if join_foreign else "u.market_cap_krw DESC NULLS LAST"
+    )
+    sort_map["foreign_delta_desc"] = (
+        f"(ff.own_latest - ff.own_d{delta_win}) DESC NULLS LAST"
+        if join_foreign else "u.market_cap_krw DESC NULLS LAST"
+    )
+    sort_map["foreign_net_buy_desc"] = (
+        f"ff.net_buy_{netbuy_win}d DESC NULLS LAST"
+        if join_foreign else "u.market_cap_krw DESC NULLS LAST"
+    )
     order_by = sort_map.get(spec.get("sort") or "", "u.market_cap_krw DESC NULLS LAST")
 
     where_sql = " AND ".join(where)
+
+    # ── 외국인 수급 CTE / SELECT / JOIN 조각 (lazy: join_foreign=False 면 전부 "") ──
+    foreign_flow_cte = (f""",
+        foreign_flow_ranked AS (
+            SELECT ticker, UPPER(market) AS market, snapshot_date,
+                   foreign_ownership_pct::float AS ownership_pct,
+                   foreign_net_buy_value AS net_buy,
+                   ROW_NUMBER() OVER (PARTITION BY ticker, UPPER(market)
+                                      ORDER BY snapshot_date DESC) AS rn
+            FROM stock_universe_foreign_flow
+            WHERE snapshot_date >= CURRENT_DATE - 90
+        ),
+        foreign_flow_metrics AS (
+            SELECT ticker, market,
+                   MAX(CASE WHEN rn=1   THEN ownership_pct END) AS own_latest,
+                   MAX(CASE WHEN rn=6   THEN ownership_pct END) AS own_d5,
+                   MAX(CASE WHEN rn=21  THEN ownership_pct END) AS own_d20,
+                   MAX(CASE WHEN rn=61  THEN ownership_pct END) AS own_d60,
+                   SUM(net_buy) FILTER (WHERE rn<=5)  AS net_buy_5d,
+                   SUM(net_buy) FILTER (WHERE rn<=20) AS net_buy_20d,
+                   SUM(net_buy) FILTER (WHERE rn<=60) AS net_buy_60d
+            FROM foreign_flow_ranked
+            GROUP BY ticker, market
+        )""") if join_foreign else ""
+
+    foreign_select_tail = (
+        f", ff.own_latest AS foreign_ownership_pct,"
+        f" (ff.own_latest - ff.own_d{delta_win}) AS foreign_ownership_delta_pp,"
+        f" ff.net_buy_{netbuy_win}d AS foreign_net_buy_krw,"
+        f" {delta_win}::int AS foreign_ownership_delta_window_days,"
+        f" {netbuy_win}::int AS foreign_net_buy_window_days"
+    ) if join_foreign else ""
+
+    foreign_join_tail = ("""
+        LEFT JOIN foreign_flow_metrics ff
+          ON UPPER(u.ticker) = UPPER(ff.ticker) AND UPPER(u.market) = ff.market
+    """) if join_foreign else ""
 
     # 공통 CTE — 항상 포함
     # 워치리스트 user_id 는 int 강제 변환 후 SQL 인터폴레이션 (positional %s 와 섞이지 않게).
@@ -408,6 +495,7 @@ def run_screener(
             LEFT JOIN ytd_anchor y ON y.ticker=m.ticker AND y.market=m.market
         ),
         {common_ctes.strip().rstrip(',')}
+        {foreign_flow_cte}
         """
         sql = f"""
         {cte}
@@ -419,11 +507,11 @@ def run_screener(
                m.high_52w_proximity, m.ma200_proximity, m.drawdown_60d_pct,
                m.r1m, m.r3m, m.r6m, m.r1y, m.ytd,
                m.sparkline_60d,
-               {common_select_tail}
+               {common_select_tail}{foreign_select_tail}
         FROM stock_universe u
         LEFT JOIN ohlcv_metrics m
           ON UPPER(u.ticker) = UPPER(m.ticker) AND UPPER(u.market) = UPPER(m.market)
-        {common_join_tail}
+        {common_join_tail}{foreign_join_tail}
         WHERE {where_sql}
         ORDER BY {order_by}
         LIMIT %s
@@ -431,11 +519,12 @@ def run_screener(
     else:
         sql = f"""
         WITH {common_ctes.strip().rstrip(',')}
+        {foreign_flow_cte}
         SELECT u.ticker, u.market, u.asset_name, u.asset_name_en, u.sector_norm,
                u.market_cap_krw, u.market_cap_bucket, u.last_price, u.last_price_ccy,
-               {common_select_tail}
+               {common_select_tail}{foreign_select_tail}
         FROM stock_universe u
-        {common_join_tail}
+        {common_join_tail}{foreign_join_tail}
         WHERE {where_sql}
         ORDER BY {order_by}
         LIMIT %s
