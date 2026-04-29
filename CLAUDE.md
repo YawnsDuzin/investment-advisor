@@ -28,7 +28,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```
 investment-advisor/
 ├── shared/              ← 공용: config(.env 로드), db(마이그레이션+저장), logger(DB 로그), pg_setup(자동 설치), tier_limits(구독 티어 제한)
-├── analyzer/            ← 배치: main(엔트리) → news_collector(RSS) → stock_data(주가조회) → analyzer(2단계) → recommender(Top Picks) → price_tracker(수익률추적) → checkpoint(중단점복구) → krx_data(KRX수급/공매도) → overnight_us(US 오버나이트 집계) → briefing_main(프리마켓 브리핑 엔트리) → fundamentals_sync(펀더 PIT)
+├── analyzer/            ← 배치: main(엔트리) → news_collector(RSS) → stock_data(주가조회) → analyzer(2단계) → recommender(Top Picks) → price_tracker(수익률추적) → checkpoint(중단점복구) → krx_data(KRX수급/공매도) → overnight_us(US 오버나이트 집계) → briefing_main(프리마켓 브리핑 엔트리) → fundamentals_sync(펀더 PIT) → foreign_flow_sync(외국인 수급 PIT)
 ├── api/                 ← 웹: main(FastAPI) → routes/(pages, sessions, themes, proposals, stocks, chat, general_chat, education, inquiry, admin, admin_systemd, auth, user_admin, watchlist, track_record, briefing)
 │   ├── auth/            ← JWT 인증 모듈: dependencies, jwt_handler, password, models
 │   ├── chat_engine.py   ← Claude SDK 기반 테마 채팅 엔진
@@ -37,7 +37,7 @@ investment-advisor/
 │   ├── templates/       ← Jinja2 HTML (다크 테마 + 우측 상단 드롭다운 메뉴) + _macros/(공통 매크로 — common, theme, proposal, admin)
 │   └── static/css/ + static/js/(sse_log_viewer.js 공용 SSE 컨트롤러, stock_cockpit.js Cockpit 페이지 전용)
 ├── deploy/systemd/      ← systemd unit 템플릿 (API + 분석 배치 + universe sync + OHLCV cleanup — 플레이스홀더 치환 방식)
-├── tools/               ← 운영 도구: refresh_us_universe(S&P500/NDX100 시드 갱신), ohlcv_health_check(OHLCV 무결성 검사), fundamentals_health_check(결측률 진단)
+├── tools/               ← 운영 도구: refresh_us_universe(S&P500/NDX100 시드 갱신), ohlcv_health_check(OHLCV 무결성 검사), fundamentals_health_check(결측률 진단), foreign_flow_health_check(외국인 수급 결측률 진단)
 └── _docs/               ← 운영 문서 (분석 파이프라인, 라즈베리파이 매뉴얼)
     ├── _prompts/        ← 작업 요청 프롬프트 기록 (날짜별)
     └── _exception/      ← 분석/운영 예외·장애 관리 대장 (README.md가 이슈 인덱스)
@@ -143,6 +143,13 @@ sudo systemctl enable --now pre-market-briefing.timer            # 매일 06:30 
 | `FUNDAMENTALS_MISSING_THRESHOLD_KOSDAQ` | `5.0` | 결측률 경고 임계 (%) |
 | `FUNDAMENTALS_MISSING_THRESHOLD_NASDAQ` | `3.0` | 결측률 경고 임계 (%) |
 | `FUNDAMENTALS_MISSING_THRESHOLD_NYSE` | `3.0` | 결측률 경고 임계 (%) |
+| `FOREIGN_FLOW_SYNC_ENABLED` | `true` | 외국인 수급 sync 활성화 스위치 (false=skip) |
+| `FOREIGN_FLOW_RETENTION_DAYS` | `400` | 외국인 수급 PIT 시계열 보존일 |
+| `FOREIGN_FLOW_DELISTED_RETENTION_DAYS` | `200` | 상폐 종목 외국인 수급 축소 retention |
+| `FOREIGN_FLOW_MAX_CONSECUTIVE_FAILURES` | `50` | 연속 실패 시 조기 종료 (pykrx throttling 회피) |
+| `FOREIGN_FLOW_STALENESS_DAYS` | `2` | health check — 최근 N일 내 row 보유 = "신선" |
+| `FOREIGN_FLOW_MISSING_THRESHOLD_KOSPI` | `5.0` | 결측률 경고 임계 — KOSPI (%) |
+| `FOREIGN_FLOW_MISSING_THRESHOLD_KOSDAQ` | `10.0` | 결측률 경고 임계 — KOSDAQ (%) |
 
 - `.env`는 `.gitignore`에 포함 — Git에 커밋되지 않음
 - `.env.example`은 Git에 포함 — 플레이스홀더 값으로 구성
@@ -287,6 +294,9 @@ stock_universe_ohlcv (v27, 종목별 일별 OHLCV 이력, PK `(ticker, market, t
 - `screener_presets` 시드 spec UI 포맷 통일(v43) — v41 의 `{"filters":[...]}` 포맷을 `routes/screener.py:run` 입력 포맷({max_per, max_pbr, return_ranges, ...})으로 UPSERT 재적용. 거장 5(buffett/lynch/graham/oneil/greenblatt) + 운영 자동 5(52w_high/volume_spike/foreign_streak/momentum/value_yield). UI '빠른 시작' 카드 클릭 → `SpecBuilder.toDOM(spec)` → 즉시 실행. **펀더 v1 활성화 — 스크리너 UI/API 가 `stock_universe_fundamentals` 의 최근 7일 latest snapshot 을 LEFT JOIN 해 PER/PBR/EPS/배당률 4종 필터·정렬·표시.** ROE/부채/성장률은 펀더 v2 (DART API 통합 후) 예정.
 - **스크리너 행 액션** — 결과 표 각 row 우측에 `⭐` 워치리스트 토글 + `⋮` 드롭다운(Ask AI 추가 / 유사 종목 찾기 / 종목 상세 / 티커 복사 / 외부 검색). `/api/screener/run` 응답에 `is_in_watchlist`(로그인 시 `my_watchlist` CTE 기반) 포함. spec 신규 키 `exclude_tickers`(유사 종목 찾기에서 자기 자신 제외). Ask AI prefill 은 클라이언트 사이드 — `POST /general-chat/sessions` → `?prefill=<urlencoded>` 로 redirect → `general_chat_room.html` 이 query 감지 후 자동 첫 메시지 전송. 티어 한도 초과(워치리스트 추가) 는 base.html fetch 인터셉터가 402 → 업그레이드 모달 자동 처리.
 - **스크리너 사이드패널 + chips** — 기존 탭 5개 → 좌측 sticky 사이드패널 6개 collapsible 그룹(검색/시장·섹터/시총·유동/수익률/변동성·기술/펀더). `<details>` 네이티브 + toggle 이벤트로 펼침 상태 `screener_groups_open_v2` localStorage 저장. 결과 영역 상단에 활성 필터 chips bar — `CHIP_DEFS` (spec key → 자연어 라벨) 매핑으로 동적 렌더, × 클릭 시 해당 spec 키 reset + chips 재렌더 + auto-rerun(debounce 500ms, `autoRunToggle` 체크 시). 그룹 헤더에 `has-active` dot 표시. 모바일 ≤900px → 사이드패널 슬라이드 in/out (햄버거 `screener-panel-toggle`). 입력 ID 모두 동일 유지 (`f-q`, `f-vol60`, …) — `SpecBuilder.fromDOM/toDOM` 호환성 보장.
+- `stock_universe_foreign_flow`(v44) — KRX 종목별 투자자별 수급 PIT 시계열. PK `(ticker, market, snapshot_date)`, 컬럼 `foreign_ownership_pct/foreign_net_buy_value/inst_net_buy_value/retail_net_buy_value/data_source/fetched_at`. pykrx 2종 API (`get_exhaustion_rates_of_foreign_investment` + `get_market_trading_value_by_date`) 일배치 수집. **KRX (KOSPI/KOSDAQ) 한정**. v1 스크리너 UI 는 외국인 컬럼만 노출, 기관/개인은 데이터 레이어에만 보존 (재백필 회피). `analyzer/foreign_flow_sync.py` + `analyzer/universe_sync.py --mode foreign` 으로 관리. retention 400일 (상폐 200일). systemd `foreign-flow-sync.timer` (KST 06:40). 운영 매뉴얼: `_docs/_exception/` (이슈 발생 시 추가).
+- **외국인 보유율 PIT 의미** — `foreign_ownership_pct` 는 KSD T+2 결제 룰로 인해 보통 `snapshot_date - 2 영업일` 의 보유 상태. UI 툴팁 + 스크리너 응답 메타에 명시.
+- **스크리너 외국인 수급 필터 (v44)** — `routes/screener.py:run_screener` 가 `min_foreign_ownership_pct` / `min_foreign_ownership_delta_pp` (+ `delta_window_days ∈ {5, 20, 60}`) / `min_foreign_net_buy_krw` (+ `net_buy_window_days ∈ {5, 20, 60}`) spec 키 받아 `stock_universe_foreign_flow` LEFT JOIN. 윈도우는 화이트리스트 가드 (외 값은 fallback 20). 정렬 `foreign_ownership_desc` / `foreign_delta_desc` / `foreign_net_buy_desc` 는 필터 윈도우와 자동 연동.
 
 ## Key Conventions
 
