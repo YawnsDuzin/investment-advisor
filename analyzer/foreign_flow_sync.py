@@ -7,13 +7,10 @@ Spec: docs/superpowers/specs/2026-04-30-foreign-flow-screener-design.md
 """
 from __future__ import annotations
 
-import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
+import math
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
-from shared.config import DatabaseConfig
-from shared.db import get_connection
 from shared.logger import get_logger
 from analyzer.stock_data import _check_pykrx, _safe_pykrx_call
 
@@ -39,6 +36,8 @@ def _pick_column(df, *candidates: str) -> Optional[str]:
         if c in df.columns:
             return c
     # 부분 매칭 (예: "외국인합계" vs "외국인" only)
+    # 주의: pykrx 가 다른 "외국인*" 컬럼을 동시 반환하면 첫 매칭이 정확치 않을 수 있음.
+    # 현재 pykrx API 는 "외국인합계" 만 반환 → 안전.
     for c in df.columns:
         s = str(c)
         for cand in candidates:
@@ -60,12 +59,13 @@ def _to_float_or_none(v) -> Optional[float]:
     try:
         if v is None:
             return None
-        return float(v)
+        f = float(v)
+        return None if math.isnan(f) else f
     except (TypeError, ValueError):
         return None
 
 
-def pd_to_date(idx) -> Optional[date]:
+def _pd_to_date(idx) -> Optional[date]:
     """pandas Timestamp / datetime / str → date. 실패 시 None."""
     try:
         if hasattr(idx, "date"):
@@ -73,12 +73,6 @@ def pd_to_date(idx) -> Optional[date]:
         return datetime.strptime(str(idx)[:10], "%Y-%m-%d").date()
     except Exception:
         return None
-
-
-def _to_pd_ts(d: date):
-    """date → pandas Timestamp (tz-naive, DataFrame 인덱스 매칭용)."""
-    import pandas as pd
-    return pd.Timestamp(d)
 
 
 def fetch_kr_investor_flow(
@@ -140,10 +134,10 @@ def fetch_kr_investor_flow(
     own_dates: set[date] = set()
     tv_dates: set[date] = set()
     if not own_empty and own_col:
-        own_dates = {pd_to_date(idx) for idx in own_df.index}
+        own_dates = {_pd_to_date(idx) for idx in own_df.index}
         own_dates.discard(None)
     if not tv_empty and f_col:
-        tv_dates = {pd_to_date(idx) for idx in tv_df.index}
+        tv_dates = {_pd_to_date(idx) for idx in tv_df.index}
         tv_dates.discard(None)
     all_dates = sorted(own_dates | tv_dates)
 
@@ -156,14 +150,14 @@ def fetch_kr_investor_flow(
     own_index_map: dict[date, int] = {}
     if not own_empty and own_col:
         for pos, idx in enumerate(own_df.index):
-            d = pd_to_date(idx)
+            d = _pd_to_date(idx)
             if d is not None:
                 own_index_map[d] = pos
 
     tv_index_map: dict[date, int] = {}
     if not tv_empty:
         for pos, idx in enumerate(tv_df.index):
-            d = pd_to_date(idx)
+            d = _pd_to_date(idx)
             if d is not None:
                 tv_index_map[d] = pos
 
