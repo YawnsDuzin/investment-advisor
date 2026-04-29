@@ -57,16 +57,13 @@ def build_user_context(
 
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            # 워치리스트
+            # 워치리스트 (user_watchlist 스키마: ticker/asset_name/memo — market 컬럼 없음)
             cur.execute(
                 """
-                SELECT w.ticker, w.market, w.note,
-                       COALESCE(su.asset_name, w.ticker) AS asset_name
-                FROM user_watchlist w
-                LEFT JOIN stock_universe su
-                    ON su.ticker = w.ticker AND su.market = w.market
-                WHERE w.user_id = %s
-                ORDER BY w.created_at DESC
+                SELECT ticker, asset_name, memo
+                FROM user_watchlist
+                WHERE user_id = %s
+                ORDER BY created_at DESC
                 LIMIT %s
                 """,
                 (user_id, watchlist_limit),
@@ -90,14 +87,20 @@ def build_user_context(
             recent = cur.fetchall()
     except Exception as e:
         print(f"[general_chat_engine.build_user_context] 컨텍스트 조회 실패 (user_id={user_id}): {e}")
+        # 망가진 transaction 을 caller 로 흘려보내지 않는다 — 후속 INSERT 가 InFailedSqlTransaction 으로 죽는 것 방지
+        try:
+            conn.rollback()
+        except Exception:
+            pass
         return ""
 
     if watchlist:
         lines.append("## 사용자 관심 종목 (Watchlist)")
         for w in watchlist:
-            line = f"- {w['asset_name']} ({w['ticker']} · {w['market']})"
-            if w.get("note"):
-                line += f" — 메모: {w['note']}"
+            name = w.get("asset_name") or w["ticker"]
+            line = f"- {name} ({w['ticker']})"
+            if w.get("memo"):
+                line += f" — 메모: {w['memo']}"
             lines.append(line)
 
     if recent:
