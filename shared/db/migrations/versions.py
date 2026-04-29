@@ -1861,3 +1861,43 @@ def _migrate_to_v42(cur) -> None:
         ON CONFLICT (version) DO NOTHING;
     """)
     print("[DB] v42 마이그레이션 완료 — general_chat_sessions + general_chat_messages 생성")
+
+
+def _migrate_to_v44(cur) -> None:
+    """v44: stock_universe_foreign_flow — KRX 종목 투자자별 수급 PIT 시계열.
+
+    pykrx 2종 API 일배치 수집:
+      - get_exhaustion_rates_of_foreign_investment → foreign_ownership_pct
+      - get_market_trading_value_by_date          → foreign/inst/retail net_buy_value
+
+    v1 UI 는 외국인 컬럼만 노출, 기관/개인은 데이터 레이어에만 저장 (재백필 회피).
+
+    Spec: docs/superpowers/specs/2026-04-30-foreign-flow-screener-design.md §3.2
+    """
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS stock_universe_foreign_flow (
+            ticker                TEXT NOT NULL,
+            market                TEXT NOT NULL,
+            snapshot_date         DATE NOT NULL,
+            foreign_ownership_pct NUMERIC(7,4),
+            foreign_net_buy_value BIGINT,
+            inst_net_buy_value    BIGINT,
+            retail_net_buy_value  BIGINT,
+            data_source           TEXT NOT NULL DEFAULT 'pykrx',
+            fetched_at            TIMESTAMPTZ DEFAULT NOW(),
+            PRIMARY KEY (ticker, market, snapshot_date)
+        );
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_foreign_flow_latest
+            ON stock_universe_foreign_flow(ticker, market, snapshot_date DESC);
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_foreign_flow_date
+            ON stock_universe_foreign_flow(snapshot_date);
+    """)
+    cur.execute("""
+        INSERT INTO schema_version (version) VALUES (44)
+        ON CONFLICT (version) DO NOTHING;
+    """)
+    print("[DB] v44 마이그레이션 완료 — stock_universe_foreign_flow")

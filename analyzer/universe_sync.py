@@ -1679,7 +1679,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     p.add_argument("--mode",
                    choices=("meta", "price", "auto", "ohlcv", "backfill", "cleanup",
-                            "indices", "industry_kr", "fundamentals"),
+                            "indices", "industry_kr", "fundamentals", "foreign"),
                    default="auto",
                    help=("meta: 주간 메타/시총/업종 | "
                          "price: 일별 가격 (+ OHLCV if OHLCV_ON_PRICE_SYNC=true) | "
@@ -1689,7 +1689,9 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                          "cleanup: retention 초과 OHLCV row 삭제 | "
                          "indices: 벤치마크 지수(KOSPI/S&P500 등) OHLCV 수집 -로드맵 B2 | "
                          "industry_kr: 한국 종목 industry/sector_gics yfinance 백필 -P0-B | "
-                         "fundamentals: 펀더멘털 PIT 일별 sync — pykrx KR + yfinance.info US (B-Lite)"))
+                         "fundamentals: 펀더멘털 PIT 일별 sync — pykrx KR + yfinance.info US (B-Lite) | "
+                         "foreign: 외국인/기관/개인 수급 PIT sync (KRX 한정) — "
+                         "--days N 으로 백필"))
     p.add_argument("--all", action="store_true",
                    help="industry_kr 모드에서 industry NULL 필터 해제 (전체 재수집)")
     p.add_argument("--limit", type=int, default=None,
@@ -1746,10 +1748,49 @@ def _resolve_targets(market_arg: str, krx_cfg_enabled: bool, us_cfg_enabled: boo
 
 
 def _run_mode_cleanup(cfg: AppConfig, args: argparse.Namespace) -> dict:
-    """--mode cleanup: retention 초과 row 삭제."""
+    """--mode cleanup: retention 초과 row 삭제 (OHLCV + foreign_flow)."""
     retention = args.days if args.days is not None else cfg.ohlcv.retention_days
     delisted = cfg.ohlcv.delisted_retention_days
-    return cleanup_ohlcv(cfg.db, retention_days=retention, delisted_retention_days=delisted)
+    result = {"ohlcv": cleanup_ohlcv(cfg.db, retention_days=retention,
+                                     delisted_retention_days=delisted)}
+
+    # foreign_flow cleanup
+    ff_cfg = cfg.foreign_flow
+    result["foreign_flow"] = _cleanup_foreign_flow(
+        cfg.db, ff_cfg.retention_days, ff_cfg.delisted_retention_days,
+    )
+    return result
+
+
+def _cleanup_foreign_flow(db_cfg: DatabaseConfig, retention_days: int, delisted_retention_days: int) -> dict:
+    """`stock_universe_foreign_flow` retention 초과 row 삭제."""
+    conn = get_connection(db_cfg)
+    deleted = 0
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                DELETE FROM stock_universe_foreign_flow
+                WHERE snapshot_date < CURRENT_DATE - %s::int
+            """, (int(retention_days),))
+            deleted = cur.rowcount
+            # 상폐 종목 축소 retention (delisted_retention_days < retention_days 일 때만)
+            if delisted_retention_days < retention_days:
+                cur.execute("""
+                    DELETE FROM stock_universe_foreign_flow ff
+                    USING stock_universe u
+                    WHERE u.ticker = ff.ticker AND u.market = ff.market
+                      AND u.listed = FALSE
+                      AND ff.snapshot_date < CURRENT_DATE - %s::int
+                """, (int(delisted_retention_days),))
+                deleted += cur.rowcount
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+    _log.info(f"foreign_flow cleanup — {deleted} row 삭제")
+    return {"deleted": deleted}
 
 
 def _run_mode_ohlcv_single(cfg: AppConfig, args: argparse.Namespace,
@@ -1876,6 +1917,15 @@ def main(argv: list[str] | None = None) -> int:
     if args.mode == "fundamentals":
         from analyzer.fundamentals_sync import run_fundamentals_sync
         run_fundamentals_sync(cfg.db, cfg.fundamentals)
+        return 0
+
+    if args.mode == "foreign":
+        from analyzer.foreign_flow_sync import run_foreign_flow_sync
+        backfill = args.days if args.days else 0
+        result = run_foreign_flow_sync(
+            cfg.db, cfg=cfg.foreign_flow, backfill_days=backfill,
+        )
+        _log.info(f"--mode foreign 완료: total={result['total']} by_market={result['by_market']}")
         return 0
 
     if not krx_markets and not us_filter:

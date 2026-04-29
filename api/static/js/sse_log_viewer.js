@@ -37,8 +37,14 @@
         panel.scrollTop = panel.scrollHeight;
       }
     };
-    es.addEventListener('done', function () { detachSseLog(panelId); });
-    es.onerror = function () { /* EventSource 자동 재연결 */ };
+    es.addEventListener('done', function () {
+      detachSseLog(panelId);
+      if (opts && opts.onDone) opts.onDone();
+    });
+    es.onerror = function () {
+      /* EventSource 자동 재연결 */
+      if (opts && opts.onError) opts.onError();
+    };
     _conns.set(panelId, es);
   }
 

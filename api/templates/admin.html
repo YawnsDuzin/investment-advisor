@@ -127,6 +127,25 @@
         </div>
     </div>
 
+    <!-- 외국인 수급 결측률 진단 -->
+    <div class="card" style="padding:20px;margin-bottom:12px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:12px;">
+            <div>
+                <div style="font-size:16px;font-weight:600;margin-bottom:4px;">외국인 수급 결측률 진단</div>
+                <div style="font-size:13px;color:var(--text-muted);">
+                    stock_universe_foreign_flow 테이블의 종목별 수급 데이터 결측률 및 최신도를 진단합니다.
+                </div>
+            </div>
+            <button id="btnForeignFlowDiag" class="btn btn-primary"
+                    onclick="runForeignFlowDiag()">진단 실행</button>
+        </div>
+        <pre id="foreignFlowDiagLog"
+             style="background:rgba(0,0,0,0.25);padding:12px;border-radius:4px;
+                    font-size:12px;font-family:monospace;white-space:pre-wrap;
+                    max-height:300px;overflow-y:auto;margin:0;
+                    color:var(--text);display:none;"></pre>
+    </div>
+
     <!-- 진행률 표시 -->
     <div id="progressSection" style="display:none;margin-bottom:18px;">
         <div class="admin-progress-bar">
@@ -564,6 +583,25 @@ function copyFromRemote() {
         copyBadge.textContent = '대기';
         btnCopy.disabled = false;
     });
+}
+
+/* ───────────── 외국인 수급 결측률 진단 ───────────── */
+function runForeignFlowDiag() {
+    const logEl = document.getElementById('foreignFlowDiagLog');
+    const btn = document.getElementById('btnForeignFlowDiag');
+    logEl.textContent = '';
+    logEl.style.display = 'block';
+    btn.disabled = true;
+    if (window.attachSseLog) {
+        window.attachSseLog('foreignFlowDiagLog', '/admin/diagnostics/foreign-flow', {
+            onDone: function() { btn.disabled = false; },
+            onError: function() { btn.disabled = false; }
+        });
+    } else {
+        // attachSseLog 없으면 fallback (방어적, 실제 환경에선 불필요)
+        btn.disabled = false;
+        logEl.textContent = 'sse_log_viewer.js 로드 실패';
+    }
 }
 
 /* 페이지 로드 시: 실행 중이면 기존 로그 복원 + 실시간 구독 */

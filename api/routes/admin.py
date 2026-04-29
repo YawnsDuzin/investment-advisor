@@ -891,6 +891,43 @@ def api_checkpoint_archive_download(
     )
 
 
+@router.get("/diagnostics/foreign-flow")
+def stream_foreign_flow_diagnostics(
+    _admin: Optional[UserInDB] = Depends(require_role("admin")),
+):
+    """외국인 수급 결측률 진단 SSE 스트림 (tools.foreign_flow_health_check)."""
+
+    def stream():
+        try:
+            python_exe = sys.executable
+            env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
+            proc = subprocess.Popen(
+                [python_exe, "-u", "-m", "tools.foreign_flow_health_check"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                cwd=".",
+                bufsize=1,
+                env=env,
+            )
+            for raw_line in iter(proc.stdout.readline, b""):
+                text = raw_line.decode("utf-8", errors="replace").rstrip()
+                if text:
+                    yield f"data: {text}\n\n"
+            proc.stdout.close()
+            proc.wait()
+            exit_code = proc.returncode
+            if exit_code == 0:
+                yield "data: [완료] 외국인 수급 결측률 진단 완료\n\n"
+            else:
+                yield f"data: [오류] 진단 종료 (exit code: {exit_code})\n\n"
+        except Exception as e:
+            yield f"data: [오류] {str(e)}\n\n"
+        finally:
+            yield "event: done\ndata: finished\n\n"
+
+    return StreamingResponse(stream(), media_type="text/event-stream")
+
+
 @router.get("/incidents")
 def api_list_incidents(
     severity: Optional[str] = Query(default=None, description="info/warn/critical"),
