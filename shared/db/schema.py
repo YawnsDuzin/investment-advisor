@@ -9,7 +9,7 @@ from shared.db.migrations import run_migrations
 
 
 # ── 스키마 버전 관리 ──────────────────────────────
-SCHEMA_VERSION = 43  # v43: 스크리너 시드 spec UI 포맷 통일 (UPSERT)
+SCHEMA_VERSION = 44  # v44: stock_universe_foreign_flow (KRX 외국인/기관/개인 수급 PIT)
 
 
 def _create_base_schema(cur) -> None:
