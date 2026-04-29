@@ -1,0 +1,12 @@
+[Unit]
+Description=Investment Advisor — 외국인 수급 sync 매일 06:40 KST (fundamentals 직후)
+Documentation=https://github.com/yawnsduzin/investment-advisor
+
+[Timer]
+# 매일 06:40 KST — investment-advisor-fundamentals.timer(06:35) 이후 5분
+OnCalendar=*-*-* 06:40:00 Asia/Seoul
+Persistent=true
+Unit=investment-advisor-foreign-flow-sync.service
+
+[Install]
+WantedBy=timers.target

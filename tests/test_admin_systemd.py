@@ -65,7 +65,7 @@ class TestUnitRegistry:
         keys = {u["key"] for u in MANAGED_UNITS}
         expected = {"api", "analyzer", "sync-price", "sync-indices",
                     "sync-meta", "ohlcv-cleanup", "sector-refresh",
-                    "briefing", "fundamentals"}
+                    "briefing", "fundamentals", "foreign-flow-sync"}
         assert keys == expected, f"MANAGED_UNITS 키 불일치: 예상 {expected} vs 실제 {keys}"
         assert len(MANAGED_UNITS) == len(expected), \
             f"MANAGED_UNITS 길이 {len(MANAGED_UNITS)} != 예상 {len(expected)}"
@@ -252,7 +252,7 @@ class TestUnitsListEndpoint:
         assert resp.status_code == 200
         body = resp.json()
         assert body["systemd_available"] is True
-        assert len(body["units"]) == 9
+        assert len(body["units"]) == 10
 
     def test_returns_empty_when_unavailable(self):
         from fastapi.testclient import TestClient

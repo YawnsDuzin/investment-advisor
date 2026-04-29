@@ -35,6 +35,8 @@
 | `ohlcv-cleanup.timer` | 매주 일요일 08:00 KST | 위 service 트리거 |
 | `investment-advisor-fundamentals.service` | 펀더멘털 PIT 일별 sync (`--mode fundamentals`) — pykrx KR PER/PBR/EPS/배당률 + yfinance.info US (B-Lite) | `investment-advisor-fundamentals.timer` |
 | `investment-advisor-fundamentals.timer` | 매일 06:35 KST (sync-price 5분 후) | 위 service 트리거 |
+| `investment-advisor-foreign-flow-sync.service` | 외국인/기관/개인 수급 PIT 일별 sync (`--mode foreign`) — KRX KOSPI+KOSDAQ (v44) | `investment-advisor-foreign-flow-sync.timer` |
+| `investment-advisor-foreign-flow-sync.timer` | 매일 06:40 KST (fundamentals 5분 후) | 위 service 트리거 |
 
 ### C. 섹터 분류 유지보수 (P1-ext2 이후)
 
@@ -63,6 +65,7 @@
   → investment-advisor-analyzer  ← After=pre-market-briefing  (분석 배치)
 
 06:35  investment-advisor-fundamentals  ← 펀더멘털 PIT (stock_universe_fundamentals) — sync-price 직후
+06:40  investment-advisor-foreign-flow-sync  ← 외국인/기관/개인 수급 PIT (stock_universe_foreign_flow) — fundamentals 직후
 07:30  universe-sync-meta        ← 주간 메타 (일요일만)
 07:45  monthly-sector-refresh    ← 월간 섹터 리프레시 (매월 1일)
 08:00  ohlcv-cleanup             ← retention 정리 (일요일만)
@@ -106,7 +109,8 @@ sudo systemctl enable --now universe-sync-price.timer \
                               universe-sync-indices.timer \
                               universe-sync-meta.timer \
                               ohlcv-cleanup.timer \
-                              investment-advisor-fundamentals.timer
+                              investment-advisor-fundamentals.timer \
+                              investment-advisor-foreign-flow-sync.timer
 
 # 5. 섹터 분류 월간 유지보수 활성화 (P1-ext2 이후)
 sudo systemctl enable --now monthly-sector-refresh.timer
@@ -146,7 +150,8 @@ sudo systemctl disable --now \
   universe-sync-meta.timer \
   ohlcv-cleanup.timer \
   monthly-sector-refresh.timer \
-  investment-advisor-fundamentals.timer
+  investment-advisor-fundamentals.timer \
+  investment-advisor-foreign-flow-sync.timer
 
 sudo rm /etc/systemd/system/investment-advisor-*.{service,timer}
 sudo rm /etc/systemd/system/universe-sync-*.{service,timer}
@@ -200,7 +205,10 @@ Cmnd_Alias INV_SVC_ACTIONS = \
   /bin/systemctl restart pre-market-briefing.service, \
   /bin/systemctl start   investment-advisor-fundamentals.service, \
   /bin/systemctl stop    investment-advisor-fundamentals.service, \
-  /bin/systemctl restart investment-advisor-fundamentals.service
+  /bin/systemctl restart investment-advisor-fundamentals.service, \
+  /bin/systemctl start   investment-advisor-foreign-flow-sync.service, \
+  /bin/systemctl stop    investment-advisor-foreign-flow-sync.service, \
+  /bin/systemctl restart investment-advisor-foreign-flow-sync.service
 
 Cmnd_Alias INV_TIMER_ACTIONS = \
   /bin/systemctl enable  --now investment-advisor-analyzer.timer, \
@@ -218,7 +226,9 @@ Cmnd_Alias INV_TIMER_ACTIONS = \
   /bin/systemctl enable  --now pre-market-briefing.timer, \
   /bin/systemctl disable --now pre-market-briefing.timer, \
   /bin/systemctl enable  --now investment-advisor-fundamentals.timer, \
-  /bin/systemctl disable --now investment-advisor-fundamentals.timer
+  /bin/systemctl disable --now investment-advisor-fundamentals.timer, \
+  /bin/systemctl enable  --now investment-advisor-foreign-flow-sync.timer, \
+  /bin/systemctl disable --now investment-advisor-foreign-flow-sync.timer
 
 dzp ALL=(root) NOPASSWD: INV_SVC_ACTIONS, INV_TIMER_ACTIONS
 ```

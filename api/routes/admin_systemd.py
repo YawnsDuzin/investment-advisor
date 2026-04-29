@@ -95,6 +95,14 @@ MANAGED_UNITS: list[dict] = [
         "schedule": "매일 06:35 KST",
         "description": "stock_universe_fundamentals 일별 sync (pykrx KR + yfinance.info US, B-Lite)",
     },
+    {
+        "key": "foreign-flow-sync", "category": "B", "label": "외국인/기관/개인 수급 sync",
+        "service": "investment-advisor-foreign-flow-sync.service",
+        "timer": "investment-advisor-foreign-flow-sync.timer",
+        "self_protected": False,
+        "schedule": "매일 06:40 KST",
+        "description": "외국인/기관/개인 수급 PIT 일배치 sync (KRX KOSPI+KOSDAQ, stock_universe_foreign_flow v44)",
+    },
 ]
 
 
