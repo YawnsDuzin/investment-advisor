@@ -298,6 +298,44 @@ class FundamentalsConfig:
 
 
 @dataclass
+class ForeignFlowConfig:
+    """외국인/기관/개인 수급 PIT 시계열 수집 설정 (KRX 한정).
+
+    `stock_universe_foreign_flow` 테이블의 수집·보존 정책.
+    Spec: docs/superpowers/specs/2026-04-30-foreign-flow-screener-design.md §3.5
+    """
+    sync_enabled: bool = field(
+        default_factory=lambda: _env_bool("FOREIGN_FLOW_SYNC_ENABLED", True)
+    )
+    retention_days: int = field(
+        default_factory=lambda: int(os.getenv("FOREIGN_FLOW_RETENTION_DAYS", "400"))
+    )
+    delisted_retention_days: int = field(
+        default_factory=lambda: int(os.getenv("FOREIGN_FLOW_DELISTED_RETENTION_DAYS", "200"))
+    )
+    max_consecutive_failures: int = field(
+        default_factory=lambda: int(os.getenv("FOREIGN_FLOW_MAX_CONSECUTIVE_FAILURES", "50"))
+    )
+    staleness_days: int = field(
+        default_factory=lambda: int(os.getenv("FOREIGN_FLOW_STALENESS_DAYS", "2"))
+    )
+    missing_threshold_kospi: float = field(
+        default_factory=lambda: float(os.getenv("FOREIGN_FLOW_MISSING_THRESHOLD_KOSPI", "5.0"))
+    )
+    missing_threshold_kosdaq: float = field(
+        default_factory=lambda: float(os.getenv("FOREIGN_FLOW_MISSING_THRESHOLD_KOSDAQ", "10.0"))
+    )
+
+    def missing_pct_threshold(self, market: str) -> float:
+        """시장별 결측률 임계 조회. KRX 외 시장은 100.0 fallback (사실상 무제한 = 검증 제외)."""
+        table = {
+            "KOSPI": self.missing_threshold_kospi,
+            "KOSDAQ": self.missing_threshold_kosdaq,
+        }
+        return table.get(market.upper(), 100.0)
+
+
+@dataclass
 class ScreenerConfig:
     """Universe-First Stage 1-B 분해 설정 (Phase 2 — recommendation-engine-redesign).
 
@@ -397,5 +435,6 @@ class AppConfig:
     validation: ValidationConfig = field(default_factory=ValidationConfig)
     ohlcv: OhlcvConfig = field(default_factory=OhlcvConfig)
     fundamentals: FundamentalsConfig = field(default_factory=FundamentalsConfig)
+    foreign_flow: ForeignFlowConfig = field(default_factory=ForeignFlowConfig)
     sprint1: Sprint1Config = field(default_factory=Sprint1Config)
     max_turns: int = field(default_factory=lambda: int(os.getenv("MAX_TURNS", "1")))  # 하위호환
