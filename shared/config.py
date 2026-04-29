@@ -304,14 +304,14 @@ class ForeignFlowConfig:
     `stock_universe_foreign_flow` 테이블의 수집·보존 정책.
     Spec: docs/superpowers/specs/2026-04-30-foreign-flow-screener-design.md §3.5
     """
-    sync_enabled: bool = field(
-        default_factory=lambda: _env_bool("FOREIGN_FLOW_SYNC_ENABLED", True)
-    )
     retention_days: int = field(
         default_factory=lambda: int(os.getenv("FOREIGN_FLOW_RETENTION_DAYS", "400"))
     )
     delisted_retention_days: int = field(
         default_factory=lambda: int(os.getenv("FOREIGN_FLOW_DELISTED_RETENTION_DAYS", "200"))
+    )
+    sync_enabled: bool = field(
+        default_factory=lambda: _env_bool("FOREIGN_FLOW_SYNC_ENABLED", True)
     )
     max_consecutive_failures: int = field(
         default_factory=lambda: int(os.getenv("FOREIGN_FLOW_MAX_CONSECUTIVE_FAILURES", "50"))

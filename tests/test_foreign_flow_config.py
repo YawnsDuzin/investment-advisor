@@ -7,14 +7,8 @@ from shared.config import AppConfig, ForeignFlowConfig
 
 def test_default_values():
     """미설정 시 default 값 적용."""
-    with patch.dict(os.environ, {}, clear=False):
-        for k in [
-            "FOREIGN_FLOW_SYNC_ENABLED", "FOREIGN_FLOW_RETENTION_DAYS",
-            "FOREIGN_FLOW_DELISTED_RETENTION_DAYS", "FOREIGN_FLOW_MAX_CONSECUTIVE_FAILURES",
-            "FOREIGN_FLOW_STALENESS_DAYS",
-            "FOREIGN_FLOW_MISSING_THRESHOLD_KOSPI", "FOREIGN_FLOW_MISSING_THRESHOLD_KOSDAQ",
-        ]:
-            os.environ.pop(k, None)
+    env_clean = {k: v for k, v in os.environ.items() if not k.startswith("FOREIGN_FLOW_")}
+    with patch.dict(os.environ, env_clean, clear=True):
         cfg = ForeignFlowConfig()
     assert cfg.sync_enabled is True
     assert cfg.retention_days == 400
