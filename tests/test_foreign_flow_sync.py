@@ -1,5 +1,5 @@
 """foreign_flow_sync — pykrx 호출 + 컬럼 매핑 + 가드 테스트."""
-from datetime import date
+from datetime import date, timedelta
 from unittest.mock import MagicMock, patch
 
 import pandas as pd
@@ -162,3 +162,60 @@ def test_sync_market_investor_flow_skips_failed_tickers():
     # market 이 row 에 채워졌는지 확인
     values = mock_exec.call_args[0][2]
     assert values[0][1] == "KOSPI"
+
+
+def test_run_foreign_flow_sync_skips_when_disabled():
+    from analyzer.foreign_flow_sync import run_foreign_flow_sync
+    db_cfg = MagicMock()
+    cfg = MagicMock(sync_enabled=False, max_consecutive_failures=0)
+    result = run_foreign_flow_sync(db_cfg, cfg=cfg)
+    assert result["total"] == 0
+
+
+def test_run_foreign_flow_sync_calls_market_sync():
+    from analyzer.foreign_flow_sync import run_foreign_flow_sync
+
+    db_cfg = MagicMock()
+    cfg = MagicMock(sync_enabled=True, max_consecutive_failures=50)
+
+    fake_conn = MagicMock()
+    fake_cur = MagicMock()
+    fake_cur.fetchall.return_value = [
+        ("005930", "KOSPI"), ("035720", "KOSPI"), ("247540", "KOSDAQ"),
+    ]
+    fake_conn.cursor.return_value.__enter__.return_value = fake_cur
+
+    with patch("analyzer.foreign_flow_sync.get_connection", return_value=fake_conn), \
+         patch("analyzer.foreign_flow_sync.sync_market_investor_flow", return_value=3) as mock_sync:
+        result = run_foreign_flow_sync(
+            db_cfg, cfg=cfg, snapshot_date=date(2026, 4, 28), backfill_days=0
+        )
+
+    # KOSPI + KOSDAQ 각각 1번 호출
+    assert mock_sync.call_count == 2
+    assert result["total"] == 6  # 2 markets × 3 rows
+
+
+def test_run_foreign_flow_sync_backfill_days_expands_range():
+    from analyzer.foreign_flow_sync import run_foreign_flow_sync
+
+    cfg = MagicMock(sync_enabled=True, max_consecutive_failures=0)
+    fake_conn = MagicMock()
+    fake_cur = MagicMock()
+    fake_cur.fetchall.return_value = [("005930", "KOSPI")]
+    fake_conn.cursor.return_value.__enter__.return_value = fake_cur
+
+    captured: dict = {}
+
+    def _capture(cur, market, tickers, start, end, **kw):
+        captured["start"] = start
+        captured["end"] = end
+        return 1
+
+    with patch("analyzer.foreign_flow_sync.get_connection", return_value=fake_conn), \
+         patch("analyzer.foreign_flow_sync.sync_market_investor_flow", side_effect=_capture):
+        run_foreign_flow_sync(
+            MagicMock(), cfg=cfg, snapshot_date=date(2026, 4, 28), backfill_days=90
+        )
+    assert captured["start"] == date(2026, 4, 28) - timedelta(days=90)
+    assert captured["end"] == date(2026, 4, 28)

@@ -15,6 +15,8 @@ from typing import Optional
 
 from psycopg2.extras import execute_values
 
+from shared.config import DatabaseConfig, ForeignFlowConfig
+from shared.db import get_connection
 from shared.logger import get_logger
 from analyzer.stock_data import _check_pykrx, _safe_pykrx_call
 
@@ -296,3 +298,71 @@ def sync_market_investor_flow(
         f"{len(all_rows)} row / {success_tickers}/{len(tickers)} 종목{abort_marker} / {duration:.1f}s"
     )
     return len(all_rows)
+
+
+def run_foreign_flow_sync(
+    db_cfg: DatabaseConfig,
+    *,
+    cfg: Optional[ForeignFlowConfig] = None,
+    snapshot_date: Optional[date] = None,
+    markets: tuple[str, ...] = _KR_MARKETS,
+    backfill_days: int = 0,
+) -> dict:
+    """엔트리포인트. `stock_universe` 활성 KRX 종목 일괄 sync.
+
+    Args:
+        snapshot_date: 종료일 기준. None 이면 오늘 (KST).
+        backfill_days: 0=종료일 1일만, N>0=종료일 기준 과거 N일 일괄.
+        markets: KOSPI/KOSDAQ 만 지원 (다른 시장은 자연 skip).
+
+    Returns:
+        {"start_date", "end_date", "by_market": {KOSPI: int, ...}, "total": int}
+    """
+    cfg = cfg or ForeignFlowConfig()
+    if not cfg.sync_enabled:
+        _log.info("FOREIGN_FLOW_SYNC_ENABLED=false — skip")
+        return {"start_date": None, "end_date": None, "by_market": {}, "total": 0}
+
+    end_d = snapshot_date or _today_kst()
+    start_d = end_d - timedelta(days=backfill_days) if backfill_days > 0 else end_d
+
+    conn = get_connection(db_cfg)
+    by_market: dict[str, int] = {}
+    total = 0
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT ticker, market FROM stock_universe
+                WHERE listed = TRUE AND has_preferred = FALSE
+                  AND market = ANY(%s)
+            """, (list(markets),))
+            rows = cur.fetchall()
+        grouped: dict[str, list[str]] = {}
+        for ticker, market in rows:
+            grouped.setdefault(market.upper(), []).append(ticker)
+
+        for market, tickers in grouped.items():
+            with conn.cursor() as cur:
+                n = sync_market_investor_flow(
+                    cur, market, tickers, start_d, end_d,
+                    max_consecutive_failures=cfg.max_consecutive_failures,
+                )
+                conn.commit()
+            by_market[market] = n
+            total += n
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+    _log.info(
+        f"foreign_flow sync 완료 — 총 {total} row "
+        f"(범위 {start_d}~{end_d}, by_market={by_market})"
+    )
+    return {
+        "start_date": start_d,
+        "end_date": end_d,
+        "by_market": by_market,
+        "total": total,
+    }
