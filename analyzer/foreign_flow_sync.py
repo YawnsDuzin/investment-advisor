@@ -8,8 +8,12 @@ Spec: docs/superpowers/specs/2026-04-30-foreign-flow-screener-design.md
 from __future__ import annotations
 
 import math
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional
+
+from psycopg2.extras import execute_values
 
 from shared.logger import get_logger
 from analyzer.stock_data import _check_pykrx, _safe_pykrx_call
@@ -194,3 +198,101 @@ def fetch_kr_investor_flow(
             "data_source": "pykrx",
         })
     return rows
+
+
+# ─── UPSERT SQL ────────────────────────────────────────────────────────────────
+
+_UPSERT_SQL = """
+INSERT INTO stock_universe_foreign_flow (
+    ticker, market, snapshot_date,
+    foreign_ownership_pct, foreign_net_buy_value,
+    inst_net_buy_value, retail_net_buy_value,
+    data_source
+) VALUES %s
+ON CONFLICT (ticker, market, snapshot_date) DO UPDATE SET
+    foreign_ownership_pct = EXCLUDED.foreign_ownership_pct,
+    foreign_net_buy_value = EXCLUDED.foreign_net_buy_value,
+    inst_net_buy_value    = EXCLUDED.inst_net_buy_value,
+    retail_net_buy_value  = EXCLUDED.retail_net_buy_value,
+    data_source           = EXCLUDED.data_source,
+    fetched_at            = NOW()
+"""
+
+
+def upsert_investor_flow(cur, rows: list[dict]) -> None:
+    """일괄 UPSERT. 빈 리스트는 no-op."""
+    if not rows:
+        return
+    values = [
+        (
+            r["ticker"], r["market"], r["snapshot_date"],
+            r.get("foreign_ownership_pct"),
+            r.get("foreign_net_buy_value"),
+            r.get("inst_net_buy_value"),
+            r.get("retail_net_buy_value"),
+            r.get("data_source") or "pykrx",
+        )
+        for r in rows
+    ]
+    execute_values(cur, _UPSERT_SQL, values, page_size=500)
+
+
+def sync_market_investor_flow(
+    cur,
+    market: str,
+    tickers: list[str],
+    start_date: date,
+    end_date: date,
+    *,
+    max_workers: int = 4,
+    max_consecutive_failures: int = 0,
+) -> int:
+    """단일 시장 일괄 sync. 병렬 fetch → 한꺼번에 UPSERT.
+
+    Returns: UPSERT 된 row 수 (= 성공 종목별 영업일 수 합).
+    """
+    started = time.time()
+    market_up = market.upper()
+    if market_up not in _KR_MARKETS:
+        _log.warning(f"[{market}] KRX 외 시장 — skip")
+        return 0
+
+    all_rows: list[dict] = []
+    consecutive_failures = 0
+    aborted = False
+
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        future_map = {
+            pool.submit(fetch_kr_investor_flow, t, start_date, end_date): t
+            for t in tickers
+        }
+        for fut in as_completed(future_map):
+            t = future_map[fut]
+            try:
+                rows = fut.result() or []
+            except Exception as e:
+                _log.debug(f"[{t}] fetch 예외: {e}")
+                rows = []
+            if not rows:
+                consecutive_failures += 1
+                if max_consecutive_failures > 0 and consecutive_failures >= max_consecutive_failures:
+                    _log.warning(
+                        f"[{market_up}] 연속 {max_consecutive_failures}건 실패 — 조기 종료"
+                    )
+                    aborted = True
+                    break
+                continue
+            consecutive_failures = 0
+            for r in rows:
+                r["market"] = market_up
+                all_rows.append(r)
+
+    upsert_investor_flow(cur, all_rows)
+    duration = time.time() - started
+    abort_marker = " (early-abort)" if aborted else ""
+    success_tickers = len({r["ticker"] for r in all_rows})
+    _log.info(
+        f"[{market_up}] {start_date}~{end_date} 수급 sync — "
+        f"{len(all_rows)} row / {success_tickers}/{len(tickers)} 종목{abort_marker} / {duration:.1f}s"
+    )
+    return len(all_rows)

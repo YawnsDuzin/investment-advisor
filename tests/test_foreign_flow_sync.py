@@ -98,3 +98,67 @@ def test_fetch_kr_investor_flow_non_korean_ticker():
         )
     assert rows == []
     mock_pykrx.get_exhaustion_rates_of_foreign_investment.assert_not_called()
+
+
+def test_upsert_investor_flow_executes_values():
+    """upsert_investor_flow 가 execute_values 로 일괄 INSERT ... ON CONFLICT 실행."""
+    from analyzer.foreign_flow_sync import upsert_investor_flow
+
+    cur = MagicMock()
+    rows = [
+        {
+            "ticker": "005930", "market": "KOSPI", "snapshot_date": date(2026, 4, 28),
+            "foreign_ownership_pct": 51.5, "foreign_net_buy_value": 100,
+            "inst_net_buy_value": 200, "retail_net_buy_value": -300,
+            "data_source": "pykrx",
+        },
+        {
+            "ticker": "035720", "market": "KOSPI", "snapshot_date": date(2026, 4, 28),
+            "foreign_ownership_pct": 30.0, "foreign_net_buy_value": -50,
+            "inst_net_buy_value": 0, "retail_net_buy_value": 50,
+            "data_source": "pykrx",
+        },
+    ]
+    with patch("analyzer.foreign_flow_sync.execute_values") as mock_exec:
+        upsert_investor_flow(cur, rows)
+    assert mock_exec.called
+    args = mock_exec.call_args
+    sql = args[0][1]
+    assert "INSERT INTO stock_universe_foreign_flow" in sql
+    assert "ON CONFLICT (ticker, market, snapshot_date) DO UPDATE" in sql
+    assert "inst_net_buy_value" in sql and "retail_net_buy_value" in sql
+
+
+def test_upsert_investor_flow_empty_noop():
+    from analyzer.foreign_flow_sync import upsert_investor_flow
+    cur = MagicMock()
+    with patch("analyzer.foreign_flow_sync.execute_values") as mock_exec:
+        upsert_investor_flow(cur, [])
+    mock_exec.assert_not_called()
+
+
+def test_sync_market_investor_flow_skips_failed_tickers():
+    """fetch 가 빈 리스트 반환하는 종목은 skip, 성공한 종목만 row 누적."""
+    from analyzer.foreign_flow_sync import sync_market_investor_flow
+
+    def _fake_fetch(ticker, start, end):
+        if ticker == "005930":
+            return [{
+                "ticker": "005930", "snapshot_date": date(2026, 4, 28),
+                "foreign_ownership_pct": 51.5, "foreign_net_buy_value": 100,
+                "inst_net_buy_value": 200, "retail_net_buy_value": -300,
+                "data_source": "pykrx",
+            }]
+        return []
+
+    cur = MagicMock()
+    with patch("analyzer.foreign_flow_sync.fetch_kr_investor_flow", side_effect=_fake_fetch), \
+         patch("analyzer.foreign_flow_sync.execute_values") as mock_exec:
+        n = sync_market_investor_flow(
+            cur, "KOSPI", ["005930", "FAILED1"], date(2026, 4, 28), date(2026, 4, 28),
+            max_workers=2,
+        )
+    assert n == 1
+    # market 이 row 에 채워졌는지 확인
+    values = mock_exec.call_args[0][2]
+    assert values[0][1] == "KOSPI"
