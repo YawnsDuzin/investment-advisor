@@ -1,4 +1,6 @@
 """테마 채팅 엔진 — Claude Code SDK 기반 대화형 질의"""
+import sys
+
 import anyio
 from claude_agent_sdk import query, ClaudeAgentOptions, AssistantMessage, TextBlock
 
@@ -59,19 +61,39 @@ def build_theme_context(theme: dict, scenarios: list, proposals: list,
 async def _query_claude_chat(
     prompt: str, system: str, max_turns: int,
 ) -> str:
-    """Claude SDK 비동기 쿼리 (내부용)"""
+    """Claude SDK 비동기 쿼리 (내부용).
+
+    CLI subprocess stderr 를 캡처하여 실패 시 systemd journal 에 덤프.
+    """
     full_response = ""
-    async for message in query(
-        prompt=prompt,
-        options=ClaudeAgentOptions(
-            system_prompt=system,
-            max_turns=max_turns,
-        ),
-    ):
-        if isinstance(message, AssistantMessage):
-            for block in message.content:
-                if isinstance(block, TextBlock):
-                    full_response += block.text
+    cli_stderr: list[str] = []
+
+    def _on_stderr(line: str) -> None:
+        cli_stderr.append(line)
+
+    try:
+        async for message in query(
+            prompt=prompt,
+            options=ClaudeAgentOptions(
+                system_prompt=system,
+                max_turns=max_turns,
+                stderr=_on_stderr,
+            ),
+        ):
+            if isinstance(message, AssistantMessage):
+                for block in message.content:
+                    if isinstance(block, TextBlock):
+                        full_response += block.text
+    except BaseException as e:
+        dump = "\n".join(cli_stderr[-200:]) if cli_stderr else "(stderr empty)"
+        print(
+            f"[chat_engine] Claude SDK 호출 실패: {type(e).__name__}: {e}\n"
+            f"--- CLI stderr (마지막 200줄) ---\n{dump}\n"
+            f"--- end ---",
+            file=sys.stderr,
+            flush=True,
+        )
+        raise
     return full_response
 
 

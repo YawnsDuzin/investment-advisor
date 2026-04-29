@@ -8,6 +8,7 @@ Theme Chat / AI Tutor 와 달리 테마/토픽 컨텍스트가 없다.
 """
 from __future__ import annotations
 
+import sys
 from typing import Optional
 
 import anyio
@@ -117,16 +118,41 @@ def build_user_context(
 
 
 async def _query_claude_chat(prompt: str, system: str, max_turns: int) -> str:
-    """Claude SDK 비동기 쿼리 (내부용)"""
+    """Claude SDK 비동기 쿼리 (내부용).
+
+    CLI subprocess stderr 를 캡처하여 실패 시 systemd journal 에 덤프.
+    SDK 기본은 stderr=None(inherit) 인데 운영기에서 침묵 종료(`exit 1`) 케이스가
+    잡히지 않아 진단 불가 → callback 으로 직접 보관.
+    """
     full_response = ""
-    async for message in query(
-        prompt=prompt,
-        options=ClaudeAgentOptions(system_prompt=system, max_turns=max_turns),
-    ):
-        if isinstance(message, AssistantMessage):
-            for block in message.content:
-                if isinstance(block, TextBlock):
-                    full_response += block.text
+    cli_stderr: list[str] = []
+
+    def _on_stderr(line: str) -> None:
+        cli_stderr.append(line)
+
+    try:
+        async for message in query(
+            prompt=prompt,
+            options=ClaudeAgentOptions(
+                system_prompt=system,
+                max_turns=max_turns,
+                stderr=_on_stderr,
+            ),
+        ):
+            if isinstance(message, AssistantMessage):
+                for block in message.content:
+                    if isinstance(block, TextBlock):
+                        full_response += block.text
+    except BaseException as e:
+        dump = "\n".join(cli_stderr[-200:]) if cli_stderr else "(stderr empty)"
+        print(
+            f"[general_chat_engine] Claude SDK 호출 실패: {type(e).__name__}: {e}\n"
+            f"--- CLI stderr (마지막 200줄) ---\n{dump}\n"
+            f"--- end ---",
+            file=sys.stderr,
+            flush=True,
+        )
+        raise
     return full_response
 
 
