@@ -249,11 +249,12 @@
     font-size: 12px;
     color: var(--text);
 }
-.chip.chip-market { border-color: rgba(34, 211, 238, 0.5); }
-.chip.chip-sector { border-color: rgba(99, 102, 241, 0.5); }
-.chip.chip-fund   { border-color: rgba(46, 204, 113, 0.5); }
-.chip.chip-perf   { border-color: rgba(155, 89, 182, 0.5); }
-.chip.chip-tech   { border-color: rgba(241, 196, 15, 0.5); }
+.chip.chip-market   { border-color: rgba(34, 211, 238, 0.5); }
+.chip.chip-sector   { border-color: rgba(99, 102, 241, 0.5); }
+.chip.chip-fund     { border-color: rgba(46, 204, 113, 0.5); }
+.chip.chip-perf     { border-color: rgba(155, 89, 182, 0.5); }
+.chip.chip-tech     { border-color: rgba(241, 196, 15, 0.5); }
+.chip.chip-foreign  { border-color: rgba(255, 159, 67, 0.5); }
 .chip-x {
     cursor: pointer;
     color: var(--text-muted);
@@ -451,6 +452,9 @@
                         <option value="pbr_asc">PBR 낮은 순</option>
                         <option value="dividend_yield_desc">배당률 ↓</option>
                         <option value="name_asc">이름 A→Z</option>
+                        <option value="foreign_ownership_desc">외국인 보유율 ↓</option>
+                        <option value="foreign_delta_desc">외국인 보유 변화 ↓</option>
+                        <option value="foreign_net_buy_desc">외국인 순매수 ↓</option>
                     </select>
                 </label>
             </div>
@@ -523,6 +527,65 @@
             </div>
         </details>
 
+        <!-- 그룹 7: 외국인 수급 -->
+        <details class="filter-group" data-group="foreign">
+            <summary class="filter-group-header">
+                <span class="filter-group-caret">▶</span>
+                <span>🌐 외국인 수급</span>
+                <span class="filter-group-active-dot"></span>
+            </summary>
+            <div class="filter-group-body">
+                <label>
+                    <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">현재 보유율 ≥ <span class="f-tip" title="외국인 지분율(%). 예: 30 = 30% 이상">i</span></div>
+                    <div style="display:flex;align-items:center;gap:6px;">
+                        <input id="f-foreign-own-min" type="number" step="0.1"
+                               placeholder="예: 30" inputmode="decimal"
+                               style="flex:1;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12.5px;">
+                        <span style="color:var(--text-muted);font-size:12px;">%</span>
+                    </div>
+                </label>
+
+                <fieldset style="border:none;padding:0;margin:8px 0 4px;">
+                    <legend style="color:var(--text-muted);font-size:11px;margin-bottom:6px;">변화 윈도우</legend>
+                    <div style="display:flex;gap:10px;">
+                        <label style="font-size:12.5px;display:flex;align-items:center;gap:4px;"><input type="radio" name="foreign-delta-window" value="5"> 5일</label>
+                        <label style="font-size:12.5px;display:flex;align-items:center;gap:4px;"><input type="radio" name="foreign-delta-window" value="20" checked> 20일</label>
+                        <label style="font-size:12.5px;display:flex;align-items:center;gap:4px;"><input type="radio" name="foreign-delta-window" value="60"> 60일</label>
+                    </div>
+                </fieldset>
+                <label>
+                    <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">보유율 변화 ≥ <span class="f-tip" title="선택한 윈도우 기간 동안 보유율 변화(%p). 음수=감소 허용">i</span></div>
+                    <div style="display:flex;align-items:center;gap:6px;">
+                        <input id="f-foreign-delta-min" type="number" step="0.1"
+                               placeholder="예: 1.5 (음수=감소)" inputmode="decimal"
+                               style="flex:1;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12.5px;">
+                        <span style="color:var(--text-muted);font-size:12px;">%p</span>
+                    </div>
+                </label>
+
+                <fieldset style="border:none;padding:0;margin:8px 0 4px;">
+                    <legend style="color:var(--text-muted);font-size:11px;margin-bottom:6px;">순매수 윈도우</legend>
+                    <div style="display:flex;gap:10px;">
+                        <label style="font-size:12.5px;display:flex;align-items:center;gap:4px;"><input type="radio" name="foreign-netbuy-window" value="5"> 5일</label>
+                        <label style="font-size:12.5px;display:flex;align-items:center;gap:4px;"><input type="radio" name="foreign-netbuy-window" value="20" checked> 20일</label>
+                        <label style="font-size:12.5px;display:flex;align-items:center;gap:4px;"><input type="radio" name="foreign-netbuy-window" value="60"> 60일</label>
+                    </div>
+                </fieldset>
+                <label>
+                    <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">누적 순매수 ≥ <span class="f-tip" title="선택한 윈도우 기간 외국인 순매수액(억원). 음수=순매도 허용">i</span></div>
+                    <div style="display:flex;align-items:center;gap:6px;">
+                        <input id="f-foreign-netbuy-min" type="number" step="10"
+                               placeholder="예: 500 (음수=순매도)" inputmode="decimal"
+                               style="flex:1;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12.5px;">
+                        <span style="color:var(--text-muted);font-size:12px;">억원</span>
+                    </div>
+                </label>
+                <div style="color:var(--text-muted);font-size:10.5px;line-height:1.5;padding-top:8px;border-top:1px dashed var(--border);margin-top:8px;">
+                    ℹ KRX 종목만 지원 (pykrx 수급). US 종목은 미지원.
+                </div>
+            </div>
+        </details>
+
         <!-- 하단 sticky 액션 영역 -->
         <div class="screener-side-actions">
             <button class="btn btn-primary" onclick="Screener.run()">실행</button>
@@ -561,6 +624,7 @@
                         <button class="view-btn" data-view="performance">Performance</button>
                         <button class="view-btn" data-view="technical">Technical</button>
                         <button class="view-btn" data-view="fundamental">Fundamental</button>
+                        <button class="view-btn" data-view="foreign">외국인</button>
                     </div>
                 </div>
             </div>
@@ -648,6 +712,21 @@
             var divy = num('f-divy');      if (divy !== null) spec.min_dividend_yield_pct = divy;
             if ($('f-eps-pos') && $('f-eps-pos').checked) spec.exclude_negative_eps = true;
 
+            // 외국인 수급 필터
+            var ownMin     = num('f-foreign-own-min');
+            var deltaMin   = num('f-foreign-delta-min');
+            var netbuyMinB = num('f-foreign-netbuy-min');
+            var deltaWinEl   = document.querySelector('input[name="foreign-delta-window"]:checked');
+            var netbuyWinEl  = document.querySelector('input[name="foreign-netbuy-window"]:checked');
+            var deltaWin  = deltaWinEl  ? deltaWinEl.value  : null;
+            var netbuyWin = netbuyWinEl ? netbuyWinEl.value : null;
+
+            if (ownMin !== null)   spec.min_foreign_ownership_pct = ownMin;
+            if (deltaMin !== null) spec.min_foreign_ownership_delta_pp = deltaMin;
+            if (netbuyMinB !== null) spec.min_foreign_net_buy_krw = Math.round(netbuyMinB * 1e8);
+            if (deltaWin)  spec.delta_window_days = parseInt(deltaWin, 10);
+            if (netbuyWin) spec.net_buy_window_days = parseInt(netbuyWin, 10);
+
             spec.sort = $('f-sort').value;
             spec.include_sparkline = $('f-sparkline').checked;
             return spec;
@@ -695,6 +774,22 @@
             $('f-pbr-max').value = spec.max_pbr != null ? spec.max_pbr : '';
             $('f-divy').value    = spec.min_dividend_yield_pct != null ? spec.min_dividend_yield_pct : '';
             if ($('f-eps-pos')) $('f-eps-pos').checked = !!spec.exclude_negative_eps;
+
+            // 외국인 수급
+            if ($('f-foreign-own-min'))
+                $('f-foreign-own-min').value = spec.min_foreign_ownership_pct != null ? spec.min_foreign_ownership_pct : '';
+            if ($('f-foreign-delta-min'))
+                $('f-foreign-delta-min').value = spec.min_foreign_ownership_delta_pp != null ? spec.min_foreign_ownership_delta_pp : '';
+            if ($('f-foreign-netbuy-min'))
+                $('f-foreign-netbuy-min').value = spec.min_foreign_net_buy_krw != null ? spec.min_foreign_net_buy_krw / 1e8 : '';
+            if (spec.delta_window_days) {
+                var rDelta = document.querySelector('input[name="foreign-delta-window"][value="'+spec.delta_window_days+'"]');
+                if (rDelta) rDelta.checked = true;
+            }
+            if (spec.net_buy_window_days) {
+                var rNetbuy = document.querySelector('input[name="foreign-netbuy-window"][value="'+spec.net_buy_window_days+'"]');
+                if (rNetbuy) rNetbuy.checked = true;
+            }
 
             if (spec.sort) $('f-sort').value = spec.sort;
             if (spec.include_sparkline === false) $('f-sparkline').checked = false;
@@ -795,6 +890,26 @@
         pbr:       { label: 'PBR',  cls: 'num', html: function(r){ return r.pbr != null ? r.pbr.toFixed(2) : '-'; }, sortKey:'pbr' },
         eps:       { label: 'EPS',  cls: 'num', html: function(r){ return r.eps != null ? Math.round(r.eps).toLocaleString() : '-'; }, sortKey:'eps' },
         div_yield: { label: '배당%', cls: 'num', html: function(r){ return r.dividend_yield != null ? r.dividend_yield.toFixed(2)+'%' : '-'; }, sortKey:'dividend_yield' },
+        // 외국인 수급
+        foreign_own: { label: '보유율(%)', cls: 'num', html: function(r){
+            return r.foreign_ownership_pct != null ? r.foreign_ownership_pct.toFixed(2)+'%' : '-';
+        }, sortKey:'foreign_ownership_pct' },
+        foreign_delta: { label: '보유변화(%p)', cls: 'num', html: function(r){
+            var v = r.foreign_ownership_delta_pp;
+            var w = r.foreign_ownership_delta_window_days || 20;
+            if (v == null) return '-';
+            var cls = v > 0 ? 'positive' : v < 0 ? 'negative' : '';
+            var sign = v >= 0 ? '+' : '';
+            return '<span class="'+cls+'">'+sign+v.toFixed(2)+'</span><small style="color:var(--text-muted);font-size:10px;"> '+w+'d</small>';
+        }, sortKey:'foreign_ownership_delta_pp' },
+        foreign_netbuy: { label: '순매수(억)', cls: 'num', html: function(r){
+            var v = r.foreign_net_buy_krw;
+            var w = r.foreign_net_buy_window_days || 20;
+            if (v == null) return '-';
+            var cls = v > 0 ? 'positive' : v < 0 ? 'negative' : '';
+            var sign = v >= 0 ? '+' : '';
+            return '<span class="'+cls+'">'+sign+(v/1e8).toFixed(0)+'</span><small style="color:var(--text-muted);font-size:10px;"> '+w+'d</small>';
+        }, sortKey:'foreign_net_buy_krw' },
         // 행 액션 (⭐ 워치리스트 토글 + ⋮ 드롭다운)
         actions: { label: '', cls: 'actions-cell', html: function(r) {
             var t = encodeURIComponent(r.ticker);
@@ -824,6 +939,7 @@
         performance: ['ticker','name','r1m','r3m','r6m','r1y','ytd','high_252d','low_252d','drawdown','actions'],
         technical:   ['ticker','name','vol60','vol_ratio','ma20','ma60','ma200','prox52','last_price','actions'],
         fundamental: ['ticker','name','sector','market_cap','per','pbr','eps','div_yield','last_price','actions'],
+        foreign:     ['ticker','name','sector','market_cap','last_price','foreign_own','foreign_delta','foreign_netbuy','actions'],
     };
 
     function fmtPct(v) {
@@ -1340,25 +1456,57 @@
         { key: 'max_pbr',  cat: 'fund', label: function(v){ return 'PBR ≤ ' + v; }, reset: function(){ $('f-pbr-max').value = ''; } },
         { key: 'min_dividend_yield_pct', cat: 'fund', label: function(v){ return '배당 ≥ ' + v + '%'; }, reset: function(){ $('f-divy').value = ''; } },
         { key: 'exclude_negative_eps', cat: 'fund', label: function(){ return '적자 제외'; }, reset: function(){ if ($('f-eps-pos')) $('f-eps-pos').checked = false; } },
+        // 외국인 수급
+        { key: 'min_foreign_ownership_pct', cat: 'foreign',
+          label: function(v){ return '외국인 보유 ≥ ' + v + '%'; },
+          reset: function(){ if ($('f-foreign-own-min')) $('f-foreign-own-min').value = ''; }
+        },
+        { key: 'min_foreign_ownership_delta_pp', cat: 'foreign',
+          label: function(v, spec){
+            var w = (spec && spec.delta_window_days) || 20;
+            var sign = v >= 0 ? '+' : '';
+            return '외국인 ' + w + '일 변화 ≥ ' + sign + v + '%p';
+          },
+          reset: function(){
+            if ($('f-foreign-delta-min')) $('f-foreign-delta-min').value = '';
+            // 윈도우 라디오는 기본값(20일)으로 복원
+            var r = document.querySelector('input[name="foreign-delta-window"][value="20"]');
+            if (r) r.checked = true;
+          }
+        },
+        { key: 'min_foreign_net_buy_krw', cat: 'foreign',
+          label: function(v, spec){
+            var w = (spec && spec.net_buy_window_days) || 20;
+            var sign = v >= 0 ? '+' : '';
+            return '외국인 ' + w + '일 순매수 ≥ ' + sign + (v / 1e8).toFixed(0) + '억';
+          },
+          reset: function(){
+            if ($('f-foreign-netbuy-min')) $('f-foreign-netbuy-min').value = '';
+            var r = document.querySelector('input[name="foreign-netbuy-window"][value="20"]');
+            if (r) r.checked = true;
+          }
+        },
     ];
 
     // 그룹 키 → chip cat 매핑 (has-active dot 표시용)
     var GROUP_TO_CATS = {
-        'search': ['sector'],   // q
-        'market': ['market', 'sector'],
-        'cap':    ['market', 'tech'],
-        'perf':   ['perf'],
-        'tech':   ['tech'],
-        'fund':   ['fund'],
+        'search':  ['sector'],   // q
+        'market':  ['market', 'sector'],
+        'cap':     ['market', 'tech'],
+        'perf':    ['perf'],
+        'tech':    ['tech'],
+        'fund':    ['fund'],
+        'foreign': ['foreign'],
     };
     // 더 정확하게: 각 그룹이 갖는 spec key 집합
     var GROUP_SPEC_KEYS = {
-        'search': ['q'],
-        'market': ['markets', 'sectors'],
-        'cap':    ['market_cap_krw', 'market_cap_buckets', 'min_daily_value_krw', 'min_daily_value_usd'],
-        'perf':   ['return_ranges'],
-        'tech':   ['max_vol60_pct', 'volume_ratio_min', 'high_52w_proximity_min', 'max_drawdown_60d_pct', 'ma200_proximity_min'],
-        'fund':   ['min_per','max_per','min_pbr','max_pbr','min_dividend_yield_pct','exclude_negative_eps'],
+        'search':  ['q'],
+        'market':  ['markets', 'sectors'],
+        'cap':     ['market_cap_krw', 'market_cap_buckets', 'min_daily_value_krw', 'min_daily_value_usd'],
+        'perf':    ['return_ranges'],
+        'tech':    ['max_vol60_pct', 'volume_ratio_min', 'high_52w_proximity_min', 'max_drawdown_60d_pct', 'ma200_proximity_min'],
+        'fund':    ['min_per','max_per','min_pbr','max_pbr','min_dividend_yield_pct','exclude_negative_eps'],
+        'foreign': ['min_foreign_ownership_pct','min_foreign_ownership_delta_pp','min_foreign_net_buy_krw'],
     };
 
     function renderActiveChips(spec) {
@@ -1372,7 +1520,7 @@
             if (Array.isArray(v) && v.length === 0) return;
             if (typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length === 0) return;
             hasAny = true;
-            var label = def.label(v);
+            var label = def.label(v, spec);
             html += '<span class="chip chip-' + def.cat + '">'
                   + '<span>' + label + '</span>'
                   + '<button type="button" class="chip-x" data-key="' + def.key + '" title="제거">×</button>'
