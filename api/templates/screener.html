@@ -1241,7 +1241,8 @@
     function clearAllInputs() {
         ['f-q','f-mcap-min','f-mcap-max','f-liq-krw','f-liq-usd',
          'f-vol60','f-volr','f-prox','f-mdd','f-ma200',
-         'f-per-min','f-per-max','f-pbr-min','f-pbr-max','f-divy'].forEach(function(id) {
+         'f-per-min','f-per-max','f-pbr-min','f-pbr-max','f-divy',
+         'f-foreign-own-min','f-foreign-delta-min','f-foreign-netbuy-min'].forEach(function(id) {
             var el = $(id); if (el) el.value = '';
         });
         ['1m','3m','6m','1y','ytd'].forEach(function(p) {
@@ -1252,6 +1253,11 @@
         document.querySelectorAll('input[name="f-bucket"]').forEach(function(el){ el.checked = false; });
         Array.from($('f-sectors').options).forEach(function(o){ o.selected = false; });
         if ($('f-eps-pos')) $('f-eps-pos').checked = false;
+        // 외국인 수급 라디오 버튼 초기화 (기본값: 20일)
+        var rDelta = document.querySelector('input[name="foreign-delta-window"][value="20"]');
+        if (rDelta) rDelta.checked = true;
+        var rNetbuy = document.querySelector('input[name="foreign-netbuy-window"][value="20"]');
+        if (rNetbuy) rNetbuy.checked = true;
     }
 
     // ── 행 액션 (⭐ 토글 + ⋮ 드롭다운) ──────────────
