@@ -113,19 +113,13 @@ def list_sectors(response: Response, conn=Depends(get_db_conn)):
 
 
 # ──────────────────────────────────────────────
-# POST /api/screener/run — 필터 스펙으로 후보 조회
+# 공용 필터 빌더 — /run 과 /count 가 공유
 # ──────────────────────────────────────────────
-@router.post("/run")
-def run_screener(
-    spec: dict = Body(...),
-    user: Optional[UserInDB] = Depends(get_current_user),
-    conn = Depends(get_db_conn),
-):
-    tier = _tier_of(user)
-    tier_limit = SCREENER_RESULT_ROW_LIMIT.get(tier) or 50
-    requested_limit = int(spec.get("limit") or tier_limit)
-    limit = min(requested_limit, tier_limit)
+def _build_screener_filters(spec: dict):
+    """spec → (where, params, join_ohlcv, join_foreign, delta_win, netbuy_win).
 
+    /run 과 /count 가 동일 필터 로직을 공유. SELECT/ORDER BY/LIMIT 은 caller 가 결정.
+    """
     where: list[str] = ["u.listed = TRUE", "u.has_preferred = FALSE"]
     params: list = []
     join_ohlcv = False  # 필요 시 ohlcv_metrics CTE LEFT JOIN
@@ -310,6 +304,25 @@ def run_screener(
     sort_key = spec.get("sort") or ""
     if sort_key in ("foreign_ownership_desc", "foreign_delta_desc", "foreign_net_buy_desc"):
         join_foreign = True
+
+    return where, params, join_ohlcv, join_foreign, delta_win, netbuy_win
+
+
+# ──────────────────────────────────────────────
+# POST /api/screener/run — 필터 스펙으로 후보 조회
+# ──────────────────────────────────────────────
+@router.post("/run")
+def run_screener(
+    spec: dict = Body(...),
+    user: Optional[UserInDB] = Depends(get_current_user),
+    conn = Depends(get_db_conn),
+):
+    tier = _tier_of(user)
+    tier_limit = SCREENER_RESULT_ROW_LIMIT.get(tier) or 50
+    requested_limit = int(spec.get("limit") or tier_limit)
+    limit = min(requested_limit, tier_limit)
+
+    where, params, join_ohlcv, join_foreign, delta_win, netbuy_win = _build_screener_filters(spec)
 
     sort_map = {
         "market_cap_desc":   "u.market_cap_krw DESC NULLS LAST",
@@ -547,6 +560,153 @@ def run_screener(
         "limit_applied": limit,
         "rows": result_rows,
     }
+
+
+# ──────────────────────────────────────────────
+# POST /api/screener/count — 필터 스펙의 매칭 종목 수 (행 데이터 X, 라이브 카운터용)
+# ──────────────────────────────────────────────
+@router.post("/count")
+def count_screener(
+    spec: dict = Body(...),
+    user: Optional[UserInDB] = Depends(get_current_user),
+    conn = Depends(get_db_conn),
+):
+    """spec 매칭 종목 수만 반환. /run 의 SELECT/ORDER BY/LIMIT 부담 없는 경량 쿼리.
+
+    UI 사이드패널 라이브 카운트용 (입력 변경 시 디바운스 후 호출).
+    tier_limit 무시 — 실제 매칭 총 수 반환 (limit_applied 표시는 /run 결과).
+    """
+    where, params, join_ohlcv, join_foreign, delta_win, netbuy_win = _build_screener_filters(spec)
+    where_sql = " AND ".join(where)
+
+    # 외국인 CTE — join_foreign=True 시만 생성 (run_screener 와 동일 로직)
+    foreign_flow_cte = (f""",
+        foreign_flow_ranked AS (
+            SELECT ticker, UPPER(market) AS market, snapshot_date,
+                   foreign_ownership_pct::float AS ownership_pct,
+                   foreign_net_buy_value AS net_buy,
+                   ROW_NUMBER() OVER (PARTITION BY ticker, UPPER(market)
+                                      ORDER BY snapshot_date DESC) AS rn
+            FROM stock_universe_foreign_flow
+            WHERE snapshot_date >= CURRENT_DATE - 90
+        ),
+        foreign_flow_metrics AS (
+            SELECT ticker, market,
+                   MAX(CASE WHEN rn=1   THEN ownership_pct END) AS own_latest,
+                   MAX(CASE WHEN rn=6   THEN ownership_pct END) AS own_d5,
+                   MAX(CASE WHEN rn=21  THEN ownership_pct END) AS own_d20,
+                   MAX(CASE WHEN rn=61  THEN ownership_pct END) AS own_d60,
+                   SUM(net_buy) FILTER (WHERE rn<=5)  AS net_buy_5d,
+                   SUM(net_buy) FILTER (WHERE rn<=20) AS net_buy_20d,
+                   SUM(net_buy) FILTER (WHERE rn<=60) AS net_buy_60d
+            FROM foreign_flow_ranked
+            GROUP BY ticker, market
+        )""") if join_foreign else ""
+    foreign_join_tail = ("""
+        LEFT JOIN foreign_flow_metrics ff
+          ON UPPER(u.ticker) = UPPER(ff.ticker) AND UPPER(u.market) = ff.market
+    """) if join_foreign else ""
+
+    # latest_fund — 펀더 WHERE 가드용 (항상 LEFT JOIN, 미사용 시도 비용 작음)
+    fund_cte = """
+        latest_fund AS (
+            SELECT DISTINCT ON (ticker, market)
+                   ticker, UPPER(market) AS market,
+                   per::float AS per, pbr::float AS pbr,
+                   eps::float AS eps,
+                   dividend_yield::float AS dividend_yield
+            FROM stock_universe_fundamentals
+            WHERE snapshot_date >= CURRENT_DATE - INTERVAL '7 days'
+            ORDER BY ticker, market, snapshot_date DESC
+        )
+    """
+    fund_join = """
+        LEFT JOIN latest_fund f
+          ON UPPER(u.ticker) = UPPER(f.ticker) AND UPPER(u.market) = f.market
+    """
+
+    if join_ohlcv:
+        # ohlcv_metrics 만 (sparkline_60d ARRAY_AGG 빼고 — count 에 불필요)
+        cte = f"""
+        WITH ranked AS (
+            SELECT ticker, UPPER(market) AS market, trade_date,
+                   close::float AS close, volume,
+                   change_pct::float AS change_pct,
+                   ROW_NUMBER() OVER (PARTITION BY ticker, UPPER(market)
+                                      ORDER BY trade_date DESC) AS rn
+            FROM stock_universe_ohlcv
+            WHERE trade_date >= CURRENT_DATE - 400
+        ),
+        metrics AS (
+            SELECT ticker, market,
+                MAX(CASE WHEN rn=1   THEN close END) AS close_latest,
+                MAX(CASE WHEN rn=21  THEN close END) AS close_1m,
+                MAX(CASE WHEN rn=63  THEN close END) AS close_3m,
+                MAX(CASE WHEN rn=126 THEN close END) AS close_6m,
+                MAX(CASE WHEN rn=252 THEN close END) AS close_1y,
+                MAX(close) FILTER (WHERE rn<=252) AS high_252d,
+                MIN(close) FILTER (WHERE rn<=252) AS low_252d,
+                MAX(close) FILTER (WHERE rn<=60)  AS high_60d,
+                AVG(close)  FILTER (WHERE rn<=200) AS ma200,
+                AVG(close*volume) FILTER (WHERE rn<=60) AS avg_daily_value,
+                STDDEV(LEAST(GREATEST(change_pct,-50),50)) FILTER (WHERE rn<=60) AS vol60_pct,
+                AVG(volume) FILTER (WHERE rn<=20) AS v20,
+                AVG(volume) FILTER (WHERE rn<=60) AS v60
+            FROM ranked GROUP BY ticker, market
+        ),
+        ytd_anchor AS (
+            SELECT DISTINCT ON (ticker, mkt)
+                   ticker, mkt AS market, close::float AS close_ytd
+            FROM (
+                SELECT ticker, UPPER(market) AS mkt, trade_date, close
+                FROM stock_universe_ohlcv
+                WHERE trade_date <  DATE_TRUNC('year', CURRENT_DATE)
+                  AND trade_date >= DATE_TRUNC('year', CURRENT_DATE) - INTERVAL '30 days'
+            ) t
+            ORDER BY ticker, mkt, trade_date DESC
+        ),
+        ohlcv_metrics AS (
+            SELECT m.ticker, m.market, m.close_latest, m.high_252d, m.low_252d,
+                   m.high_60d, m.ma200,
+                   m.avg_daily_value, m.vol60_pct,
+                   y.close_ytd,
+                   (m.close_latest - m.close_1m) / NULLIF(m.close_1m,0) * 100 AS r1m,
+                   (m.close_latest - m.close_3m) / NULLIF(m.close_3m,0) * 100 AS r3m,
+                   (m.close_latest - m.close_6m) / NULLIF(m.close_6m,0) * 100 AS r6m,
+                   (m.close_latest - m.close_1y) / NULLIF(m.close_1y,0) * 100 AS r1y,
+                   (m.close_latest - y.close_ytd) / NULLIF(y.close_ytd,0) * 100 AS ytd,
+                   (m.close_latest - m.high_60d) / NULLIF(m.high_60d,0) * 100 AS drawdown_60d_pct,
+                   m.close_latest / NULLIF(m.ma200,0) AS ma200_proximity,
+                   m.close_latest / NULLIF(m.high_252d,0) AS high_52w_proximity,
+                   CASE WHEN m.v60>0 THEN m.v20/m.v60 END AS volume_ratio
+            FROM metrics m
+            LEFT JOIN ytd_anchor y ON y.ticker=m.ticker AND y.market=m.market
+        ),
+        {fund_cte.strip()}{foreign_flow_cte}
+        """
+        sql = f"""
+        {cte}
+        SELECT COUNT(*) AS n
+        FROM stock_universe u
+        LEFT JOIN ohlcv_metrics m
+          ON UPPER(u.ticker) = UPPER(m.ticker) AND UPPER(u.market) = UPPER(m.market)
+        {fund_join}{foreign_join_tail}
+        WHERE {where_sql}
+        """
+    else:
+        sql = f"""
+        WITH {fund_cte.strip()}{foreign_flow_cte}
+        SELECT COUNT(*) AS n
+        FROM stock_universe u
+        {fund_join}{foreign_join_tail}
+        WHERE {where_sql}
+        """
+
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute(sql, params)
+        row = cur.fetchone()
+
+    return {"count": int(row["n"]) if row and row.get("n") is not None else 0}
 
 
 # ──────────────────────────────────────────────

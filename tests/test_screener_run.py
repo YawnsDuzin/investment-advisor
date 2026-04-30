@@ -6,8 +6,9 @@ from contextlib import contextmanager
 
 
 class _FakeCursor:
-    def __init__(self, rows=None):
+    def __init__(self, rows=None, one=None):
         self.rows = rows or []
+        self.one = one
         self.executed: list[tuple] = []
 
     def execute(self, sql, params=None):
@@ -15,6 +16,9 @@ class _FakeCursor:
 
     def fetchall(self):
         return self.rows
+
+    def fetchone(self):
+        return self.one
 
     def __enter__(self):
         return self
@@ -24,8 +28,8 @@ class _FakeCursor:
 
 
 class _FakeConn:
-    def __init__(self, rows=None):
-        self._cur = _FakeCursor(rows)
+    def __init__(self, rows=None, one=None):
+        self._cur = _FakeCursor(rows, one)
 
     @property
     def executed(self):
@@ -36,10 +40,10 @@ class _FakeConn:
 
 
 @contextmanager
-def _override_db(rows=None):
+def _override_db(rows=None, one=None):
     from api.main import app
     from api.deps import get_db_conn
-    fake = _FakeConn(rows)
+    fake = _FakeConn(rows, one)
     app.dependency_overrides[get_db_conn] = lambda: fake
     try:
         yield fake
@@ -240,3 +244,66 @@ def test_run_includes_is_top_pick_even_without_ohlcv_join():
         sql, _ = _last_sql(fake)
         assert "top_picks_recent" in sql
         assert "is_top_pick" in sql
+
+
+# ──────────────────────────────────────────────
+# A3: /api/screener/count — 경량 카운트 엔드포인트
+# ──────────────────────────────────────────────
+
+def test_count_returns_n_for_simple_spec():
+    """spec 매칭 종목 수만 반환 (rows 없이 경량 SQL)."""
+    from fastapi.testclient import TestClient
+    from api.main import app
+    with _override_db(one={"n": 1234}) as fake:
+        client = TestClient(app)
+        r = client.post("/api/screener/count", json={})
+        assert r.status_code == 200
+        body = r.json()
+        assert body == {"count": 1234}
+        sql, _ = _last_sql(fake)
+        assert "COUNT(*)" in sql
+        # CTE 내부 DISTINCT ON 정렬은 허용. 메인 쿼리에 ORDER BY/LIMIT 없어야 (count = 전 매칭).
+        # WHERE 이후 부분에서 ORDER BY/LIMIT 가 없는지 확인
+        after_where = sql.upper().rsplit("WHERE", 1)[1]
+        assert "ORDER BY" not in after_where
+        assert "LIMIT" not in after_where
+
+
+def test_count_handles_zero_match():
+    """매칭 0건이면 count=0."""
+    from fastapi.testclient import TestClient
+    from api.main import app
+    with _override_db(one={"n": 0}):
+        client = TestClient(app)
+        r = client.post("/api/screener/count", json={"max_per": 0.5})
+        assert r.status_code == 200
+        assert r.json()["count"] == 0
+
+
+def test_count_with_ohlcv_filter_includes_metrics_cte():
+    """OHLCV 필터가 있으면 ohlcv_metrics CTE 가 포함된다."""
+    from fastapi.testclient import TestClient
+    from api.main import app
+    with _override_db(one={"n": 50}) as fake:
+        client = TestClient(app)
+        r = client.post("/api/screener/count", json={"max_vol60_pct": 3.0})
+        assert r.status_code == 200
+        sql, _ = _last_sql(fake)
+        # ohlcv_metrics CTE 키 + sparkline_60d 누락 (count 는 불필요)
+        assert "ohlcv_metrics" in sql
+        assert "sparkline_60d" not in sql
+        assert "COUNT(*)" in sql
+
+
+def test_count_with_foreign_filter_joins_foreign_flow_metrics():
+    """외국인 필터 사용 시 foreign_flow_metrics CTE + JOIN."""
+    from fastapi.testclient import TestClient
+    from api.main import app
+    with _override_db(one={"n": 12}) as fake:
+        client = TestClient(app)
+        r = client.post("/api/screener/count",
+                        json={"min_foreign_ownership_pct": 30.0})
+        assert r.status_code == 200
+        sql, _ = _last_sql(fake)
+        assert "foreign_flow_metrics" in sql
+        assert "ff.own_latest" in sql
