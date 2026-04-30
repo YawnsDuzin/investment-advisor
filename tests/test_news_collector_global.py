@@ -29,10 +29,12 @@ def _fake_entry(title: str, summary: str, published: str | None = None):
     return e
 
 
-def _fake_feed(source_name: str, entries: list):
+def _fake_feed(source_name: str, entries: list, bozo: int = 0):
     feed = MagicMock()
     feed.feed.get = lambda k, default="": {"title": source_name}.get(k, default)
     feed.entries = entries
+    feed.bozo = bozo  # 0 = 정상, 1 = 파싱 에러
+    feed.bozo_exception = None
     return feed
 
 
@@ -141,6 +143,122 @@ class TestRegionGroupedText:
         assert "Nikkei" in news_text
         assert "Caixin" in news_text
         assert "FT" in news_text
+
+
+class TestRegionDedup:
+    """region 별 분리 dedup — 동일 헤드라인이 다른 region 에 등장하면 둘 다 보존."""
+
+    def test_same_title_different_regions_both_preserved(self):
+        from shared.config import NewsConfig, FeedSpec
+        from analyzer.news_collector import collect_news_structured
+
+        cfg = NewsConfig.__new__(NewsConfig)
+        cfg.feed_sources = [
+            FeedSpec("http://us/rss", "en", "US", "finance"),
+            FeedSpec("http://kr/rss", "ko", "KR", "korea"),
+        ]
+        cfg.max_articles_per_feed = 5
+
+        # 동일 헤드라인 (prefix 30 동일)
+        title = "Fed holds rates steady at 5.25%"
+
+        with patch("analyzer.news_collector.feedparser.parse") as fp:
+            def parse_side(url):
+                src = "Bloomberg" if "us" in url else "한경"
+                return _fake_feed(src, [_fake_entry(title, "내용")])
+            fp.side_effect = parse_side
+            _, articles = collect_news_structured(cfg)
+
+        # region 별 분리 dedup → US + KR 각각 1건씩 = 2건
+        assert len(articles) == 2
+        regions = {a["region"] for a in articles}
+        assert regions == {"US", "KR"}
+
+    def test_same_title_same_region_deduped(self):
+        from shared.config import NewsConfig, FeedSpec
+        from analyzer.news_collector import collect_news_structured
+
+        cfg = NewsConfig.__new__(NewsConfig)
+        cfg.feed_sources = [
+            FeedSpec("http://us1/rss", "en", "US", "finance"),
+            FeedSpec("http://us2/rss", "en", "US", "finance"),
+        ]
+        cfg.max_articles_per_feed = 5
+
+        title = "Fed holds rates steady at 5.25%"
+        with patch("analyzer.news_collector.feedparser.parse") as fp:
+            fp.return_value = _fake_feed("src", [_fake_entry(title, "내용")])
+            _, articles = collect_news_structured(cfg)
+
+        # 동일 region 내 중복은 dedup 됨
+        assert len(articles) == 1
+
+
+class TestHealthLabels:
+    """health check 3계층 — dead / stale / parse_error."""
+
+    def test_dead_feed_logs_warning(self, caplog):
+        import logging
+        from shared.config import NewsConfig, FeedSpec
+        from analyzer.news_collector import collect_news_structured
+
+        cfg = NewsConfig.__new__(NewsConfig)
+        cfg.feed_sources = [FeedSpec("http://dead/rss", "en", "US", "finance")]
+        cfg.max_articles_per_feed = 5
+
+        caplog.set_level(logging.WARNING)
+        with patch("analyzer.news_collector.feedparser.parse") as fp:
+            fp.return_value = _fake_feed("dead_src", [])  # entries 비어있음
+            _, articles = collect_news_structured(cfg)
+
+        assert len(articles) == 0
+        assert any("피드 0건" in rec.message for rec in caplog.records)
+
+    def test_stale_feed_logs_warning(self, caplog):
+        """entries > 0 but 24h fresh == 0 → stale 라벨."""
+        import logging
+        from shared.config import NewsConfig, FeedSpec
+        from analyzer.news_collector import collect_news_structured
+
+        cfg = NewsConfig.__new__(NewsConfig)
+        cfg.feed_sources = [FeedSpec("http://stale/rss", "en", "US", "finance")]
+        cfg.max_articles_per_feed = 5
+
+        # 7일 전 published — 24h cutoff 위반
+        old_published = "Mon, 01 Apr 2026 10:00:00 +0000"
+
+        caplog.set_level(logging.WARNING)
+        with patch("analyzer.news_collector.feedparser.parse") as fp:
+            fp.return_value = _fake_feed("stale_src",
+                [_fake_entry("old headline", "내용", published=old_published)])
+            _, articles = collect_news_structured(cfg)
+
+        assert len(articles) == 0
+        assert any("피드 stale" in rec.message for rec in caplog.records)
+
+    def test_parse_error_feed_logs_warning(self, caplog):
+        """feedparser bozo 플래그 + entries 0 → parse_error."""
+        import logging
+        from shared.config import NewsConfig, FeedSpec
+        from analyzer.news_collector import collect_news_structured
+
+        cfg = NewsConfig.__new__(NewsConfig)
+        cfg.feed_sources = [FeedSpec("http://broken/rss", "en", "US", "finance")]
+        cfg.max_articles_per_feed = 5
+
+        broken_feed = MagicMock()
+        broken_feed.feed.get = lambda k, default="": default
+        broken_feed.entries = []
+        broken_feed.bozo = 1
+        broken_feed.bozo_exception = Exception("XML 파싱 실패")
+
+        caplog.set_level(logging.WARNING)
+        with patch("analyzer.news_collector.feedparser.parse") as fp:
+            fp.return_value = broken_feed
+            _, articles = collect_news_structured(cfg)
+
+        assert len(articles) == 0
+        assert any("파싱 에러" in rec.message for rec in caplog.records)
 
 
 class TestGlobalNewsEnabledIntegration:

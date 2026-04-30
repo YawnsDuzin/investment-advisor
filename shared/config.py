@@ -97,7 +97,7 @@ class NewsConfig:
         FeedSpec("https://www.ft.com/companies?format=rss",            "en", "EU", "eu_companies"),
         FeedSpec("https://www.theguardian.com/uk/business/rss",        "en", "EU", "eu_business"),
     ])
-    max_articles_per_feed: int = field(default_factory=lambda: int(os.getenv("MAX_ARTICLES_PER_FEED", "5")))
+    max_articles_per_feed: int = field(default_factory=lambda: int(os.getenv("MAX_ARTICLES_PER_FEED", "10")))
 
     @property
     def feeds(self) -> dict:
