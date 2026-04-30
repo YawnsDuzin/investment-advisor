@@ -62,35 +62,38 @@ class NewsConfig:
     GLOBAL_NEWS_ENABLED 토글로 JP/CN/EU 활성화 제어.
     """
     feed_sources: list[FeedSpec] = field(default_factory=lambda: [
+        # 2026-04-30 health check 결과 dead 피드 10개 제거 + 신규 7개 추가.
+        # 제거 사유 메모 (audit trail):
+        #   - hankyung economy/stock, thebell      : KR RSS 종료 또는 차단
+        #   - feeds.reuters.com/* (3건)            : Reuters 2022 RSS 서비스 종료
+        #   - federalregister.gov atom              : 0건 응답 (필터 URL 정책 변경)
+        #   - digitimes daily_news                  : 0건
+        #   - caixinglobal, yicaiglobal             : CN 영문 RSS 종료
         # ── KR (한국, ko) ──────────────────────────────
-        FeedSpec("https://www.hankyung.com/feed/economy",      "ko", "KR", "korea"),
-        FeedSpec("https://www.hankyung.com/feed/stock",        "ko", "KR", "korea"),
-        FeedSpec("https://www.etnews.com/rss/Section901.xml",  "ko", "KR", "korea_early"),
-        FeedSpec("https://www.thebell.co.kr/rss/rss_news_all.xml", "ko", "KR", "korea_early"),
+        FeedSpec("https://www.etnews.com/rss/Section901.xml",          "ko", "KR", "korea_early"),
+        FeedSpec("https://www.yna.co.kr/rss/economy.xml",              "ko", "KR", "korea"),
 
         # ── US (미국, en) ──────────────────────────────
         FeedSpec("https://feeds.bbci.co.uk/news/world/rss.xml",        "en", "US", "global"),
-        FeedSpec("https://feeds.reuters.com/reuters/worldNews",        "en", "US", "global"),
-        FeedSpec("https://feeds.reuters.com/reuters/businessNews",     "en", "US", "finance"),
         FeedSpec("https://feeds.bloomberg.com/markets/news.rss",       "en", "US", "finance"),
         FeedSpec("https://www.cnbc.com/id/10001147/device/rss/rss.html","en", "US", "finance"),
+        FeedSpec("https://feeds.content.dowjones.io/public/rss/mw_topstories", "en", "US", "finance"),
         FeedSpec("https://rss.nytimes.com/services/xml/rss/nyt/Technology.xml", "en", "US", "technology"),
-        FeedSpec("https://feeds.arstechnica.com/arstechnica/technology-lab",     "en", "US", "technology"),
+        FeedSpec("https://feeds.arstechnica.com/arstechnica/technology-lab",    "en", "US", "technology"),
         FeedSpec("https://oilprice.com/rss/main",                      "en", "US", "commodities"),
-        FeedSpec("https://www.federalregister.gov/documents/search.atom?conditions%5Btype%5D=RULE",
-                                                                       "en", "US", "early_signals"),
-        FeedSpec("https://www.digitimes.com/rss/daily_news.xml",       "en", "US", "early_signals"),
+        FeedSpec("https://www.semianalysis.com/feed",                  "en", "US", "early_signals"),
 
         # ── JP (일본, en — Nikkei Asia 영문) ────────────
         FeedSpec("https://asia.nikkei.com/rss/feed/nar",               "en", "JP", "asia_business"),
 
-        # ── CN (중국, en — Caixin/Yicai 영문) ───────────
-        FeedSpec("https://www.caixinglobal.com/rss/news.xml",          "en", "CN", "china_business"),
-        FeedSpec("https://www.yicaiglobal.com/rss/news.xml",           "en", "CN", "china_business"),
+        # ── CN (중국, en — SCMP / Global Times) ─────────
+        FeedSpec("https://www.scmp.com/rss/91/feed",                   "en", "CN", "china_business"),
+        FeedSpec("https://www.globaltimes.cn/rss/outbrain.xml",        "en", "CN", "china_business"),
+        FeedSpec("https://www.scmp.com/rss/318208/feed",               "en", "CN", "early_signals"),
 
-        # ── EU (유럽, en — Reuters Europe / FT) ─────────
+        # ── EU (유럽, en — FT / Guardian) ───────────────
         FeedSpec("https://www.ft.com/companies?format=rss",            "en", "EU", "eu_companies"),
-        FeedSpec("https://feeds.reuters.com/reuters/UKBusinessNews",   "en", "EU", "eu_business"),
+        FeedSpec("https://www.theguardian.com/uk/business/rss",        "en", "EU", "eu_business"),
     ])
     max_articles_per_feed: int = field(default_factory=lambda: int(os.getenv("MAX_ARTICLES_PER_FEED", "5")))
 

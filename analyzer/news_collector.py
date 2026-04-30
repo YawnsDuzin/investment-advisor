@@ -95,10 +95,20 @@ def collect_news_structured(cfg: NewsConfig) -> tuple[str, list[dict]]:
 
         by_region: dict[str, list[dict]] = defaultdict(list)
 
+        dead_feeds: list[str] = []
+
         for spec in feed_specs:
             try:
                 feed = feedparser.parse(spec.url)
                 source = feed.feed.get("title", spec.url)
+
+                if not feed.entries:
+                    dead_feeds.append(f"[{spec.region}/{spec.category}] {spec.url}")
+                    log.warning(
+                        f"피드 0건: [{spec.region}/{spec.category}] {spec.url}",
+                        extra={"context": {"feed_url": spec.url, "region": spec.region, "category": spec.category}},
+                    )
+                    continue
 
                 for entry in feed.entries[: cfg.max_articles_per_feed]:
                     title = entry.get("title", "")
@@ -170,6 +180,11 @@ def collect_news_structured(cfg: NewsConfig) -> tuple[str, list[dict]]:
     log.info(f"총 {total}건 수집 완료 (region {len(by_region)}개)")
     if skipped_old or skipped_dup:
         log.info(f"필터링: 24시간 초과 {skipped_old}건, 중복 {skipped_dup}건 제외")
+    if dead_feeds:
+        log.warning(
+            f"피드 사망 {len(dead_feeds)}/{len(feed_specs)}건 — 신뢰도 저하. 대체 피드 검토 필요:\n  - "
+            + "\n  - ".join(dead_feeds)
+        )
 
     news_text = "\n\n---\n\n".join(sections)
     return news_text, articles

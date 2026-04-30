@@ -6,12 +6,21 @@ feedparser 는 conftest.py 에서 mock 처리되어 실제 RSS 호출 없음.
 Spec: _docs/20260427055258_sprint1-design.md §6
 """
 from unittest.mock import MagicMock, patch
+from datetime import datetime, timedelta, timezone
 import os
 
 import pytest
 
 
-def _fake_entry(title: str, summary: str, published: str = "Mon, 27 Apr 2026 10:00:00 +0000"):
+def _recent_published() -> str:
+    """24h cutoff 안에 들어가도록 항상 1시간 전으로 동적 생성."""
+    dt = datetime.now(timezone.utc) - timedelta(hours=1)
+    return dt.strftime("%a, %d %b %Y %H:%M:%S +0000")
+
+
+def _fake_entry(title: str, summary: str, published: str | None = None):
+    if published is None:
+        published = _recent_published()
     e = MagicMock()
     e.get = lambda k, default="": {
         "title": title, "summary": summary, "description": summary,
