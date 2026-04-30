@@ -307,3 +307,95 @@ def test_count_with_foreign_filter_joins_foreign_flow_metrics():
         sql, _ = _last_sql(fake)
         assert "foreign_flow_metrics" in sql
         assert "ff.own_latest" in sql
+
+
+# ──────────────────────────────────────────────
+# B4: /api/screener/distribution — 분포 통계 hint
+# ──────────────────────────────────────────────
+
+class _MultiCallCursor:
+    """metric 별 SQL 호출당 다른 fetchone 응답을 줘야 하는 경우용."""
+    def __init__(self, ones):
+        self._ones = list(ones)
+        self.executed = []
+
+    def execute(self, sql, params=None):
+        self.executed.append((sql, params))
+
+    def fetchone(self):
+        return self._ones.pop(0) if self._ones else None
+
+    def fetchall(self):
+        return []
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        pass
+
+
+class _MultiCallConn:
+    def __init__(self, ones):
+        self._cur = _MultiCallCursor(ones)
+
+    def cursor(self, **kw):
+        return self._cur
+
+
+def test_distribution_returns_avg_median_per_metric():
+    """metrics=per,pbr → metric 별 avg/median/n 반환."""
+    from fastapi.testclient import TestClient
+    from api.main import app
+    from api.deps import get_db_conn
+    fake = _MultiCallConn([
+        {"avg": 14.3, "median": 12.1, "n": 2451},   # per
+        {"avg": 1.6, "median": 1.2, "n": 2300},     # pbr
+    ])
+    app.dependency_overrides[get_db_conn] = lambda: fake
+    try:
+        client = TestClient(app)
+        r = client.get("/api/screener/distribution?metrics=per,pbr")
+        assert r.status_code == 200
+        body = r.json()
+        assert body["metrics"]["per"]["avg"] == 14.3
+        assert body["metrics"]["per"]["median"] == 12.1
+        assert body["metrics"]["pbr"]["avg"] == 1.6
+    finally:
+        app.dependency_overrides.pop(get_db_conn, None)
+
+
+def test_distribution_filters_invalid_metrics():
+    """미지정 metric (예: foo) 은 응답에 포함 안 됨."""
+    from fastapi.testclient import TestClient
+    from api.main import app
+    from api.deps import get_db_conn
+    fake = _MultiCallConn([{"avg": 14.3, "median": 12.1, "n": 100}])
+    app.dependency_overrides[get_db_conn] = lambda: fake
+    try:
+        client = TestClient(app)
+        r = client.get("/api/screener/distribution?metrics=per,foo,bar")
+        assert r.status_code == 200
+        # 1개 SQL 호출만 (per) — foo/bar 는 거부
+        assert len(fake._cur.executed) == 1
+        assert "per" in fake._cur.executed[0][0]
+    finally:
+        app.dependency_overrides.pop(get_db_conn, None)
+
+
+def test_distribution_with_markets_filter_passes_param():
+    """markets 파라미터가 SQL params 에 ANY() 로 전달."""
+    from fastapi.testclient import TestClient
+    from api.main import app
+    from api.deps import get_db_conn
+    fake = _MultiCallConn([{"avg": 18.5, "median": 15.0, "n": 800}])
+    app.dependency_overrides[get_db_conn] = lambda: fake
+    try:
+        client = TestClient(app)
+        r = client.get("/api/screener/distribution?metrics=per&markets=KOSPI,KOSDAQ")
+        assert r.status_code == 200
+        sql, params = fake._cur.executed[0]
+        assert "UPPER(market) = ANY(%s)" in sql
+        assert ["KOSPI", "KOSDAQ"] in params
+    finally:
+        app.dependency_overrides.pop(get_db_conn, None)
