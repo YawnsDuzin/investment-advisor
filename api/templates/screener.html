@@ -154,9 +154,47 @@
     top: 16px;
     max-height: calc(100vh - 32px);
     overflow-y: auto;
+    overflow-x: hidden;
     background: var(--bg-card, var(--bg-elevated));
     border: 1px solid var(--border);
     border-radius: 10px;
+    scroll-behavior: smooth;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+    transition: scrollbar-color .2s;
+}
+.screener-side-panel:hover,
+.screener-side-panel:focus-within {
+    scrollbar-color: rgba(255,255,255,0.18) transparent;
+}
+.screener-side-panel::-webkit-scrollbar {
+    width: 6px;
+}
+.screener-side-panel::-webkit-scrollbar-track {
+    background: transparent;
+    margin: 4px 0;
+}
+.screener-side-panel::-webkit-scrollbar-thumb {
+    background: transparent;
+    border-radius: 999px;
+    transition: background .15s;
+}
+.screener-side-panel:hover::-webkit-scrollbar-thumb,
+.screener-side-panel:focus-within::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,0.18);
+}
+.screener-side-panel::-webkit-scrollbar-thumb:hover {
+    background: rgba(99,102,241,0.55);
+}
+/* 안쪽 콘텐츠가 패널 폭을 넘기지 않게 */
+.screener-side-panel > * { min-width: 0; }
+.screener-side-panel .filter-group-body { min-width: 0; }
+.screener-side-panel .filter-group-body input,
+.screener-side-panel .filter-group-body select,
+.screener-side-panel .filter-group-body textarea {
+    max-width: 100%;
+    box-sizing: border-box;
 }
 .screener-side-header {
     padding: 10px 14px;
