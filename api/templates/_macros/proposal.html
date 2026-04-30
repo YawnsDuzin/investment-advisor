@@ -10,7 +10,7 @@
         <span class="badge badge-{{ p.action }}">{{ p.action|upper }}</span>
         <span class="asset-name">{{ p.asset_name }}</span>
         <span class="ticker">
-            <a href="/pages/proposals/history/{{ p.ticker }}">{{ p.ticker }}</a> @ {{ p.market }}
+            <a href="/pages/stocks/{{ p.ticker }}">{{ p.ticker }}</a> @ {{ p.market }}
         </span>
         {% if p.vendor_tier %}
         <span class="badge badge-tier{{ p.vendor_tier }}">Tier {{ p.vendor_tier }}</span>
@@ -68,7 +68,7 @@
         <span class="badge badge-{{ p.action }}">{{ p.action|upper }}</span>
         <span class="asset-name">{{ p.asset_name }}</span>
         <span class="ticker">
-            <a href="/pages/proposals/history/{{ p.ticker }}">{{ p.ticker }}</a> @ {{ p.market }}
+            <a href="/pages/stocks/{{ p.ticker }}">{{ p.ticker }}</a> @ {{ p.market }}
         </span>
         {% if p.vendor_tier %}
         <span class="badge badge-tier{{ p.vendor_tier }}">Tier {{ p.vendor_tier }}</span>

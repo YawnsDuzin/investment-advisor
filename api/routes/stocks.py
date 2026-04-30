@@ -434,7 +434,9 @@ def get_stock_proposals(ticker: str):
                     p.post_return_1m_pct, p.post_return_3m_pct,
                     p.post_return_6m_pct, p.post_return_1y_pct,
                     p.max_drawdown_pct, p.max_drawdown_date,
-                    p.alpha_vs_benchmark_pct
+                    p.alpha_vs_benchmark_pct,
+                    p.target_allocation, p.current_price, p.upside_pct,
+                    p.quant_score, p.sentiment_score, p.currency, p.market
                 FROM investment_proposals p
                 JOIN investment_themes t ON p.theme_id = t.id
                 JOIN analysis_sessions s ON t.session_id = s.id
@@ -497,6 +499,13 @@ def get_stock_proposals(ticker: str):
             "max_drawdown_pct": _f(r["max_drawdown_pct"]),
             "max_drawdown_date": _d(r["max_drawdown_date"]),
             "alpha_vs_benchmark_pct": _f(r["alpha_vs_benchmark_pct"]),
+            "target_allocation": _f(r.get("target_allocation")),
+            "current_price": _f(r.get("current_price")),
+            "upside_pct": _f(r.get("upside_pct")),
+            "quant_score": _f(r.get("quant_score")),
+            "sentiment_score": _f(r.get("sentiment_score")),
+            "currency": r.get("currency"),
+            "market": r.get("market"),
             "validation_mismatches": mismatches_by_pid.get(r["id"], []),
         })
 

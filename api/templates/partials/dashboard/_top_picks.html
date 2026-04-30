@@ -71,7 +71,7 @@
         </div>
 
         <div class="top-pick-title">
-            <a href="/pages/proposals/history/{{ pk.ticker }}" class="top-pick-name">{{ pk.asset_name }}</a>
+            <a href="/pages/stocks/{{ pk.ticker }}" class="top-pick-name">{{ pk.asset_name }}</a>
             <span class="top-pick-ticker">{{ pk.ticker }}{% if pk.market %} &middot; {{ pk.market }}{% endif %}</span>
             {{ external_links(pk.ticker, pk.market or '') }}
         </div>

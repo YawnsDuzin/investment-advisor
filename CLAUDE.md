@@ -208,7 +208,7 @@ sudo systemctl enable --now pre-market-briefing.timer            # 매일 06:30 
 - `chat_engine.py` — Claude Agent SDK 기반 테마 채팅 엔진. 테마 컨텍스트를 시스템 프롬프트에 주입하여 대화.
 - `general_chat_engine.py` — Claude SDK 기반 자유 채팅 엔진. `build_user_context()`가 워치리스트·최근 추천을 시스템 프롬프트로 변환 → 투자 어시스턴트 페르소나로 답변. user_id=None(비로그인) 또는 조회 실패 시 빈 컨텍스트로 안전 폴백.
 - `education_engine.py` — Claude SDK 기반 투자 교육 AI 튜터. 토픽별 커리큘럼을 시스템 프롬프트에 주입하여 대화형 학습 제공.
-- `templates/` — 다크 테마 UI. base(우측 상단 유저 드롭다운 + 알림 배지 + 401 자동 갱신 인터셉터), landing, pricing, dashboard, sessions, session_detail, themes, proposals, theme_history, ticker_history, stock_cockpit(종목 페이지), track_record, watchlist, notifications, profile, chat_list, chat_room, general_chat_list, general_chat_room, education(topic/chat_list/chat_room), inquiry(list/detail/new), admin, admin_audit_logs, login, register, user_admin.
+- `templates/` — 다크 테마 UI. base(우측 상단 유저 드롭다운 + 알림 배지 + 401 자동 갱신 인터셉터), landing, pricing, dashboard, sessions, session_detail, themes, proposals, theme_history, stock_cockpit(종목 페이지 — 옛 ticker_history 흡수: 헤더 구독+외부링크, § 6 타임라인 + 요약 라인 + § 6-B 일자별 상세 표), track_record, watchlist, notifications, profile, chat_list, chat_room, general_chat_list, general_chat_room, education(topic/chat_list/chat_room), inquiry(list/detail/new), admin, admin_audit_logs, login, register, user_admin.
 
 ### shared/ — 공용 모듈
 - `config.py` — `.env` 파일 자동 로드, `DatabaseConfig`, `NewsConfig`, `AnalyzerConfig`, `RecommendationConfig`(Top Picks 가중치·다양성), `UniverseConfig`/`ScreenerConfig`/`ValidationConfig`(Phase 1~3), `OhlcvConfig`(Phase 7 — retention/auto_adjust/on_price_sync), `AuthConfig`, `AppConfig`

@@ -220,7 +220,7 @@ python -m api.main
 | Themes | `/pages/themes` | 시계/신뢰도/키워드 필터, 종목 태그, tracking 뱃지 |
 | Theme History | `/pages/themes/history/{key}` | 특정 테마의 일자별 신뢰도·시나리오·종목 변화 + 구독 버튼 |
 | Stocks | `/pages/proposals` | 종목 스크리너 테이블 (★워치리스트 토글, 행 클릭→근거/리스크/메모 펼침) |
-| Ticker History | `/pages/proposals/history/{ticker}` | 특정 종목의 일자별 추천 이력 + 구독 버튼 |
+| Stock Cockpit | `/pages/stocks/{ticker}` | 종목 종합 페이지 — 가격차트·벤치마크·팩터·레짐·펀더·KRX 수급·AI 추천 이력(타임라인+표) + 구독 |
 | Watchlist | `/pages/watchlist` | 관심 종목 목록 + 최신 분석 요약 + 알림 구독 관리 |
 | Notifications | `/pages/notifications` | 알림 목록 (읽음/모두읽음 처리) |
 | Profile | `/pages/profile` | 비밀번호 변경 |

@@ -125,7 +125,7 @@
                 {% for item in watchlist %}
                 <tr>
                     <td data-label="종목" style="font-weight:600;">{{ item.asset_name or '-' }}</td>
-                    <td data-label="티커"><a href="/pages/proposals/history/{{ item.ticker }}" style="color:var(--accent);">{{ item.ticker }}</a></td>
+                    <td data-label="티커"><a href="/pages/stocks/{{ item.ticker }}" style="color:var(--accent);">{{ item.ticker }}</a></td>
                     {% if item.latest %}
                     <td data-label="Action"><span class="badge badge-{{ item.latest.action }}">{{ item.latest.action|upper }}</span></td>
                     <td data-label="확신도"><span class="badge badge-{{ item.latest.conviction }}">{{ item.latest.conviction }}</span></td>
@@ -197,7 +197,7 @@
                     <td><span class="badge" style="font-size:12px;">{{ '종목' if sub.sub_type == 'ticker' else '테마' }}</span></td>
                     <td>
                         {% if sub.sub_type == 'ticker' %}
-                        <a href="/pages/proposals/history/{{ sub.sub_key }}" style="color:var(--accent);">{{ sub.label or sub.sub_key }}</a>
+                        <a href="/pages/stocks/{{ sub.sub_key }}" style="color:var(--accent);">{{ sub.label or sub.sub_key }}</a>
                         {% else %}
                         <a href="/pages/themes/history/{{ sub.sub_key }}" style="color:var(--accent);">{{ sub.label or sub.sub_key }}</a>
                         {% endif %}

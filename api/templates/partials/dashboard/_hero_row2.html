@@ -27,7 +27,7 @@
         <div class="watchlist-quick">
             {% if watched_in_today %}
                 {% for w in watched_in_today[:6] %}
-                <a href="/pages/proposals/history/{{ w.ticker }}" class="wl-item {% if w.in_top_picks %}wl-item-hot{% endif %}">
+                <a href="/pages/stocks/{{ w.ticker }}" class="wl-item {% if w.in_top_picks %}wl-item-hot{% endif %}">
                     <span class="wl-ticker">{{ w.ticker }}</span>
                     <span class="wl-name">{{ w.asset_name }}</span>
                     {% if w.current_price %}

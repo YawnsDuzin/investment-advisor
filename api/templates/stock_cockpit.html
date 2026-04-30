@@ -1,14 +1,18 @@
 {% extends "base.html" %}
-{% block title %}{{ ticker }} Cockpit — AlphaSignal{% endblock %}
+{% from "_macros/common.html" import external_links %}
+{% block title %}{{ ticker }} — AlphaSignal{% endblock %}
 {% block page_title %}
 <span id="stock-name">{{ ticker }}</span>
 {% endblock %}
 
 {% block header_actions %}
-<a href="/pages/proposals/history/{{ ticker }}" class="btn"
-   style="font-size:13px;padding:5px 14px;background:var(--bg-card);
-          border:1px solid var(--border);border-radius:6px;
-          color:var(--text-muted);text-decoration:none;">추천 이력</a>
+{% if current_user %}
+<button class="btn" id="subTickerBtn" onclick="toggleTickerSub('{{ ticker }}')"
+        style="font-size:12px;padding:4px 12px;margin-right:8px;">구독</button>
+{% endif %}
+{{ external_links(ticker, market or '', 'icon') }}
+<a href="/pages/proposals" class="btn"
+   style="font-size:12px;padding:4px 12px;margin-left:8px;">제안 목록</a>
 {% endblock %}
 
 {% block content %}
@@ -209,13 +213,42 @@
 
   {# ─────────────── § 6. 추천 이력 타임라인 ─────────────── #}
   <section class="cockpit-section" id="sec-timeline">
-    <div class="cockpit-section-head"><h3>AI 추천 이력</h3></div>
+    <div class="cockpit-section-head">
+      <h3>AI 추천 이력</h3>
+      <div id="history-summary" class="history-summary" style="display:none;"></div>
+    </div>
     <div id="timeline-empty" style="display:none;padding:30px;text-align:center;
          color:var(--text-muted);background:var(--bg-card);border-radius:10px;
          border:1px solid var(--border);">
       이 종목은 아직 추천 이력이 없습니다.
     </div>
     <div id="timeline-list" class="timeline-list"></div>
+  </section>
+
+  {# ─────────────── § 6-B. 일자별 추천 이력 표 ─────────────── #}
+  <section class="cockpit-section" id="sec-history-table" style="display:none;">
+    <div class="cockpit-section-head"><h3>일자별 상세 표</h3></div>
+    <div class="table-wrap">
+      <table id="history-table" style="width:100%;background:var(--bg-card);
+             border:1px solid var(--border);border-radius:10px;
+             border-collapse:separate;border-spacing:0;font-size:13px;">
+        <thead>
+          <tr style="color:var(--text-muted);font-size:12px;">
+            <th style="text-align:left;padding:8px 12px;">날짜</th>
+            <th style="text-align:left;padding:8px 12px;">Action</th>
+            <th style="text-align:left;padding:8px 12px;">확신도</th>
+            <th style="text-align:right;padding:8px 12px;">비중</th>
+            <th style="text-align:right;padding:8px 12px;">현재가</th>
+            <th style="text-align:right;padding:8px 12px;">목표가</th>
+            <th style="text-align:right;padding:8px 12px;">상승여력</th>
+            <th style="text-align:right;padding:8px 12px;">퀀트</th>
+            <th style="text-align:right;padding:8px 12px;">센티먼트</th>
+            <th style="text-align:left;padding:8px 12px;">테마</th>
+          </tr>
+        </thead>
+        <tbody id="history-table-body"></tbody>
+      </table>
+    </div>
   </section>
 
 </div>
@@ -286,11 +319,41 @@
 .tl-neg { color:var(--red); }
 .tl-warn { color:var(--orange, #f5a623); font-size:11px; margin-left:6px; }
 
+.history-summary { display:flex; gap:14px; flex-wrap:wrap; font-size:12px;
+  color:var(--text-muted); }
+.history-summary strong { color:var(--text); font-variant-numeric:tabular-nums; }
+#history-table thead tr { border-bottom:1px solid var(--border); }
+#history-table tbody tr { border-bottom:1px solid var(--border); }
+#history-table tbody tr:last-child { border-bottom:none; }
+#history-table td { padding:8px 12px; vertical-align:middle; }
+#history-table td.num { text-align:right; font-variant-numeric:tabular-nums; }
+.confidence-up { color:var(--green); }
+.confidence-down { color:var(--red); }
+.table-wrap { overflow-x:auto; }
+
 @media (max-width: 768px) {
   .fund-grid { grid-template-columns:1fr; }
   .hero-price-row { flex-direction:column; align-items:flex-start; }
 }
 </style>
+
+{% if current_user %}
+<script>
+async function toggleTickerSub(ticker) {
+    var btn = document.getElementById('subTickerBtn');
+    var res = await fetch('/api/subscriptions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sub_type: 'ticker', sub_key: ticker, label: ticker }),
+    });
+    if (res.ok) {
+        btn.textContent = '구독 완료';
+        btn.disabled = true;
+        btn.style.opacity = '0.6';
+    }
+}
+</script>
+{% endif %}
 
 <script src="/static/js/stock_cockpit.js?v={{ js_version|default(0) }}" defer></script>
 {% endblock %}

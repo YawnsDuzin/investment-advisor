@@ -506,6 +506,39 @@
     return '<strong class="' + cls + '">' + (v > 0 ? '+' : '') + v.toFixed(2) + '%</strong>';
   }
 
+  function pctText(v) {
+    if (v == null) return '-';
+    var cls = v > 0 ? 'confidence-up' : v < 0 ? 'confidence-down' : '';
+    return '<span class="' + cls + '">' + (v > 0 ? '+' : '') + v.toFixed(2) + '%</span>';
+  }
+
+  function badgeHtml(kind, val) {
+    if (!val) return '-';
+    return '<span class="badge badge-' + esc(val) + '">' + esc(String(val).toUpperCase()) + '</span>';
+  }
+
+  function renderHistorySummary(items) {
+    var summaryEl = document.getElementById('history-summary');
+    if (!summaryEl || !items.length) return;
+    var dates = items.map(function(it) { return (it.analysis_date || '').slice(0, 10); }).filter(Boolean);
+    var firstDate = dates.length ? dates[dates.length - 1] : '-';
+    var lastDate = dates.length ? dates[0] : '-';
+    var distinctDates = {};
+    var distinctThemes = {};
+    items.forEach(function(it) {
+      if (it.analysis_date) distinctDates[it.analysis_date.slice(0, 10)] = 1;
+      if (it.theme_id != null) distinctThemes[it.theme_id] = 1;
+    });
+    var distinctCount = Object.keys(distinctDates).length;
+    var themeCount = Object.keys(distinctThemes).length;
+    summaryEl.innerHTML =
+      '<span>최초 추천 <strong>' + firstDate + '</strong></span>' +
+      '<span>최근 추천 <strong>' + lastDate + '</strong></span>' +
+      '<span>추천 <strong>' + distinctCount + '회</strong></span>' +
+      '<span>등장 테마 <strong>' + themeCount + '개</strong></span>';
+    summaryEl.style.display = 'flex';
+  }
+
   function renderTimeline(items) {
     var listEl = document.getElementById('timeline-list');
     var emptyEl = document.getElementById('timeline-empty');
@@ -545,8 +578,47 @@
     });
   }
 
+  function renderHistoryTable(items) {
+    var sectionEl = document.getElementById('sec-history-table');
+    var bodyEl = document.getElementById('history-table-body');
+    if (!sectionEl || !bodyEl || !items.length) return;
+
+    var rowsHtml = items.map(function(it) {
+      var cur = it.currency || '';
+      var dt = (it.analysis_date || '').slice(0, 10);
+      var dtCell = dt
+        ? '<a href="/pages/sessions/date/' + esc(dt) + '">' + esc(dt) + '</a>'
+        : '-';
+      var target = (it.target_price_low != null && it.target_price_high != null)
+        ? c.fmtPrice(it.target_price_low, cur) + '~' + c.fmtPrice(it.target_price_high, cur)
+        : '-';
+      var alloc = it.target_allocation != null ? it.target_allocation + '%' : '-';
+      var quant = it.quant_score != null ? it.quant_score + '/5' : '-';
+      var sent = it.sentiment_score != null ? it.sentiment_score : '-';
+      return '<tr>' +
+        '<td>' + dtCell + '</td>' +
+        '<td>' + badgeHtml('action', it.action) + '</td>' +
+        '<td>' + badgeHtml('conviction', it.conviction) + '</td>' +
+        '<td class="num">' + alloc + '</td>' +
+        '<td class="num">' + (it.current_price != null ? c.fmtPrice(it.current_price, cur) : '-') + '</td>' +
+        '<td class="num">' + target + '</td>' +
+        '<td class="num">' + pctText(it.upside_pct) + '</td>' +
+        '<td class="num">' + quant + '</td>' +
+        '<td class="num">' + sent + '</td>' +
+        '<td>' + esc(it.theme_name || '-') + '</td>' +
+        '</tr>';
+    }).join('');
+    bodyEl.innerHTML = rowsHtml;
+    sectionEl.style.display = 'block';
+  }
+
   c.getProposals()
-    .then(function(d) { renderTimeline(d.items || []); })
+    .then(function(d) {
+      var items = d.items || [];
+      renderHistorySummary(items);
+      renderTimeline(items);
+      renderHistoryTable(items);
+    })
     .catch(function() {
       var emptyEl = document.getElementById('timeline-empty');
       emptyEl.textContent = '추천 이력 조회 실패';

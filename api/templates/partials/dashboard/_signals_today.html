@@ -29,7 +29,7 @@
         let extra = '';
         if (m.gap_pct != null) extra = ' ' + (m.gap_pct > 0 ? '+' : '') + m.gap_pct + '%';
         else if (m.ratio != null) extra = ' ×' + m.ratio;
-        return '<a href="/pages/proposals/history/' + encodeURIComponent(s.ticker) +
+        return '<a href="/pages/stocks/' + encodeURIComponent(s.ticker) +
                '" style="color:inherit;text-decoration:none;">' +
                '<span style="font-family:ui-monospace,monospace;">' + s.ticker + '</span>' +
                '<span style="color:var(--text-muted);font-size:11px;">' + (s.market ? ' @' + s.market : '') + extra + '</span>' +

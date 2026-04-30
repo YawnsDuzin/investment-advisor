@@ -267,7 +267,7 @@
             <td data-label="Action"><span class="badge badge-{{ p.action }}">{{ p.action|upper }}</span></td>
             <td data-label="종목" style="font-weight:600;">{{ p.asset_name }}</td>
             <td data-label="티커">
-                <a href="/pages/proposals/history/{{ p.ticker }}" style="color:var(--accent);" onclick="event.stopPropagation();">{{ p.ticker }}</a>
+                <a href="/pages/stocks/{{ p.ticker }}" style="color:var(--accent);" onclick="event.stopPropagation();">{{ p.ticker }}</a>
                 <a href="/pages/stocks/{{ p.ticker }}{% if p.market %}?market={{ p.market }}{% endif %}" style="font-size:10px;color:var(--text-muted);margin-left:4px;border:1px solid var(--border);border-radius:3px;padding:1px 4px;" onclick="event.stopPropagation();" title="기초정보">info</a>
                 <span onclick="event.stopPropagation();">{{ external_links(p.ticker, p.market or '') }}</span>
                 {% if p.market %}<span style="font-size:11px;color:var(--text-muted);">{{ p.market }}</span>{% endif %}

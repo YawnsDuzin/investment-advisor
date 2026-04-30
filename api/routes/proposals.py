@@ -213,64 +213,6 @@ def stock_analysis_page(
     })
 
 
-@pages_router.get("/history/{ticker}")
-def ticker_history_page(ticker: str, ctx: dict = Depends(make_page_ctx("proposals")), conn=Depends(get_db_conn)):
-    """특정 종목의 일자별 추천 이력"""
-    with conn.cursor(cursor_factory=RealDictCursor) as cur:
-        # 추적 정보
-        cur.execute("""
-            SELECT * FROM proposal_tracking
-            WHERE UPPER(ticker) = UPPER(%s)
-            ORDER BY last_recommended_date DESC
-        """, (ticker,))
-        tracking_list = [_serialize_row(r) for r in cur.fetchall()]
-
-        # 일자별 제안 이력
-        cur.execute("""
-            SELECT p.*, t.theme_name, t.confidence_score AS theme_confidence,
-                   s.analysis_date
-            FROM investment_proposals p
-            JOIN investment_themes t ON p.theme_id = t.id
-            JOIN analysis_sessions s ON t.session_id = s.id
-            WHERE UPPER(p.ticker) = UPPER(%s)
-            ORDER BY s.analysis_date DESC
-            LIMIT 30
-        """, (ticker,))
-        history = [_serialize_row(r) for r in cur.fetchall()]
-
-    # tracking_list 를 ticker 단위 단일 요약으로 집계 — 같은 종목이 여러 테마에서 추천되면 테마별 행이 생기므로 통합 표시
-    tracking = None
-    if tracking_list:
-        currency = history[0].get("currency") if history else None
-        latest = tracking_list[0]  # ORDER BY last_recommended_date DESC 첫 행 = 최신
-        lows = [tr["latest_target_price_low"] for tr in tracking_list if tr.get("latest_target_price_low") is not None]
-        highs = [tr["latest_target_price_high"] for tr in tracking_list if tr.get("latest_target_price_high") is not None]
-        first_dates = [tr["first_recommended_date"] for tr in tracking_list if tr.get("first_recommended_date")]
-        last_dates = [tr["last_recommended_date"] for tr in tracking_list if tr.get("last_recommended_date")]
-        distinct_dates = {h["analysis_date"] for h in history if h.get("analysis_date")} if history else set()
-
-        tracking = {
-            "asset_name": latest.get("asset_name") or ticker.upper(),
-            "theme_count": len(tracking_list),
-            "recommendation_count": len(distinct_dates) if distinct_dates else sum(tr.get("recommendation_count") or 0 for tr in tracking_list),
-            "first_recommended_date": min(first_dates) if first_dates else None,
-            "last_recommended_date": max(last_dates) if last_dates else None,
-            "latest_action": latest.get("latest_action"),
-            "prev_action": latest.get("prev_action"),
-            "latest_conviction": latest.get("latest_conviction"),
-            "latest_target_price_low": min(lows) if lows else None,
-            "latest_target_price_high": max(highs) if highs else None,
-            "latest_currency": currency,
-        }
-
-    return templates.TemplateResponse(request=ctx["request"], name="ticker_history.html", context={
-        **ctx,
-        "ticker": ticker.upper(),
-        "tracking": tracking,
-        "history": history,
-    })
-
-
 @pages_router.get("")
 def proposals_page(
     ctx: dict = Depends(make_page_ctx("proposals")),
