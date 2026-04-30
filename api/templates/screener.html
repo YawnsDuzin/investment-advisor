@@ -213,6 +213,43 @@
     padding: 4px 14px 12px;
 }
 .filter-group.open > .filter-group-body { display: block; }
+
+/* preset bin 빠른 선택 칩 — 입력 옆 1-클릭 프리셋 */
+.preset-bins {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 4px;
+}
+.preset-bins .bin {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    border-radius: 12px;
+    padding: 1px 8px;
+    font-size: 11px;
+    cursor: pointer;
+    transition: border-color .12s, color .12s;
+    font-family: inherit;
+}
+.preset-bins .bin:hover  { border-color: var(--accent); color: var(--accent); }
+.preset-bins .bin.is-on  { border-color: var(--accent); color: var(--accent); background: rgba(99,102,241,0.08); }
+
+/* 그룹 비활성화 — 시장 의존성 (예: 외국인 = KRX 전용) */
+.filter-group.is-disabled > .filter-group-body { opacity: 0.45; pointer-events: none; }
+.filter-group.is-disabled > .filter-group-header { color: var(--text-muted); }
+.filter-group-disabled-banner {
+    display: none;
+    margin: 0 0 8px 0;
+    padding: 6px 10px;
+    font-size: 11px;
+    color: var(--text-muted);
+    background: rgba(255,159,67,0.08);
+    border: 1px dashed rgba(255,159,67,0.4);
+    border-radius: 6px;
+    line-height: 1.4;
+}
+.filter-group.is-disabled > .filter-group-body > .filter-group-disabled-banner { display: block; }
 .filter-group-body label {
     display: block;
     margin-bottom: 10px;
@@ -269,6 +306,61 @@
     padding: 0 2px;
 }
 .chip-x:hover { color: var(--danger, #e74c3c); }
+
+/* A1: chip 편집형 — 클릭 시 popover */
+.chip[data-editable="1"] { cursor: pointer; }
+.chip[data-editable="1"]:hover { background: rgba(99,102,241,0.08); }
+.chip-popover {
+    position: absolute;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+    padding: 10px 12px;
+    z-index: 250;
+    min-width: 220px;
+    font-size: 12.5px;
+    color: var(--text);
+}
+.chip-popover-label {
+    color: var(--text-muted);
+    font-size: 11px;
+    margin-bottom: 6px;
+}
+.chip-popover .row {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 8px;
+}
+.chip-popover input[type=number],
+.chip-popover input[type=text] {
+    flex: 1;
+    padding: 6px 8px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text);
+    font-size: 13px;
+}
+.chip-popover .actions {
+    display: flex;
+    gap: 6px;
+    justify-content: flex-end;
+}
+.chip-popover .actions button {
+    padding: 4px 12px;
+    font-size: 12px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    cursor: pointer;
+}
+.chip-popover .actions button.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: white;
+}
 
 /* 자동 실행 토글 */
 .chips-autorun-toggle {
@@ -351,11 +443,11 @@
             <button class="btn" style="font-size:11px;padding:2px 8px;" onclick="Screener.clearAll()">전체 초기화</button>
         </div>
 
-        <!-- 그룹 1: 검색 -->
-        <details class="filter-group" data-group="search">
+        <!-- 그룹 1: 기본 (검색 + 시장·섹터 + 시총·유동성) -->
+        <details class="filter-group" data-group="basic" open>
             <summary class="filter-group-header">
                 <span class="filter-group-caret">▶</span>
-                <span>🔍 검색</span>
+                <span>🎯 기본</span>
                 <span class="filter-group-active-dot"></span>
             </summary>
             <div class="filter-group-body">
@@ -363,17 +455,6 @@
                     <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">티커 / 종목명 (2자 이상)</div>
                     <input id="f-q" type="text" placeholder="삼성, AAPL, 반도체..." style="width:100%;padding:8px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;">
                 </label>
-            </div>
-        </details>
-
-        <!-- 그룹 2: 시장·섹터 -->
-        <details class="filter-group" data-group="market">
-            <summary class="filter-group-header">
-                <span class="filter-group-caret">▶</span>
-                <span>🌐 시장·섹터</span>
-                <span class="filter-group-active-dot"></span>
-            </summary>
-            <div class="filter-group-body">
                 <label>
                     <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">시장</div>
                     <div id="f-markets-checks" style="display:flex;gap:10px;flex-wrap:wrap;font-size:13px;">
@@ -385,21 +466,11 @@
                 </label>
                 <label>
                     <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">섹터 (다중 선택, Ctrl/Cmd 클릭)</div>
-                    <select id="f-sectors" multiple style="width:100%;min-height:120px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:6px;font-size:12.5px;">
+                    <select id="f-sectors" multiple style="width:100%;min-height:100px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:6px;font-size:12.5px;">
                         <option value="">로딩 중…</option>
                     </select>
                 </label>
-            </div>
-        </details>
-
-        <!-- 그룹 3: 시총·유동 -->
-        <details class="filter-group" data-group="cap">
-            <summary class="filter-group-header">
-                <span class="filter-group-caret">▶</span>
-                <span>💰 시총·유동성</span>
-                <span class="filter-group-active-dot"></span>
-            </summary>
-            <div class="filter-group-body">
+                <div style="border-top:1px dashed var(--border);margin:6px 0;"></div>
                 <label>
                     <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">시총 범위 (억원)</div>
                     <div style="display:flex;gap:6px;">
@@ -426,11 +497,11 @@
             </div>
         </details>
 
-        <!-- 그룹 4: 수익률 -->
-        <details class="filter-group" data-group="perf">
+        <!-- 그룹 2 (구 4+5): 기술·수익률 (수익률 + 변동성·기술) -->
+        <details class="filter-group" data-group="perftech">
             <summary class="filter-group-header">
                 <span class="filter-group-caret">▶</span>
-                <span>🚀 수익률</span>
+                <span>📈 기술·수익률</span>
                 <span class="filter-group-active-dot"></span>
             </summary>
             <div class="filter-group-body">
@@ -443,66 +514,58 @@
                     </div>
                 </label>
                 {% endfor %}
-                <label>
-                    <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">정렬</div>
-                    <select id="f-sort" style="width:100%;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12.5px;">
-                        <option value="market_cap_desc">시총 ↓</option>
-                        <option value="r1m_desc">1m 수익률 ↓</option>
-                        <option value="r3m_desc">3m 수익률 ↓</option>
-                        <option value="r6m_desc">6m 수익률 ↓</option>
-                        <option value="r1y_desc">1y 수익률 ↓</option>
-                        <option value="ytd_desc">YTD ↓</option>
-                        <option value="volume_surge_desc">거래량 비율 ↓</option>
-                        <option value="liquidity_desc">거래대금 ↓</option>
-                        <option value="drawdown_asc">낙폭 적은 순</option>
-                        <option value="per_asc">PER 낮은 순</option>
-                        <option value="pbr_asc">PBR 낮은 순</option>
-                        <option value="dividend_yield_desc">배당률 ↓</option>
-                        <option value="name_asc">이름 A→Z</option>
-                        <option value="foreign_ownership_desc">외국인 보유율 ↓</option>
-                        <option value="foreign_delta_desc">외국인 보유 변화 ↓</option>
-                        <option value="foreign_net_buy_desc">외국인 순매수 ↓</option>
-                    </select>
-                </label>
-            </div>
-        </details>
-
-        <!-- 그룹 5: 변동성·기술 -->
-        <details class="filter-group" data-group="tech">
-            <summary class="filter-group-header">
-                <span class="filter-group-caret">▶</span>
-                <span>📈 변동성·기술</span>
-                <span class="filter-group-active-dot"></span>
-            </summary>
-            <div class="filter-group-body">
+                <div style="border-top:1px dashed var(--border);margin:6px 0;"></div>
                 <label>
                     <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">변동성 ≤ X% <span class="f-tip" title="60일 일별 종가 표준편차. 보수적: 2.5, 균형: 3.0.">i</span></div>
                     <input id="f-vol60" type="number" step="0.1" placeholder="예: 3.0" style="width:100%;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12.5px;">
+                    <div class="preset-bins" data-target="f-vol60">
+                        <button type="button" class="bin" data-value="2.5">보수 ≤2.5</button>
+                        <button type="button" class="bin" data-value="3.0">균형 ≤3.0</button>
+                        <button type="button" class="bin" data-value="4.0">적극 ≤4.0</button>
+                    </div>
                 </label>
                 <label>
                     <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">거래량 ≥ N배 <span class="f-tip" title="20일 평균 / 60일 평균. 1.2 = 20% 증가.">i</span></div>
                     <input id="f-volr" type="number" step="0.1" placeholder="예: 1.2" style="width:100%;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12.5px;">
+                    <div class="preset-bins" data-target="f-volr">
+                        <button type="button" class="bin" data-value="1.2">×1.2</button>
+                        <button type="button" class="bin" data-value="1.5">×1.5</button>
+                        <button type="button" class="bin" data-value="2.0">×2.0</button>
+                    </div>
                 </label>
                 <label>
                     <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">52주 고점 ≥ N% <span class="f-tip" title="현재가 / 52주 최고가. 0.95 = 신고가 5% 이내.">i</span></div>
                     <input id="f-prox" type="number" step="0.01" min="0" max="1" placeholder="예: 0.85" style="width:100%;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12.5px;">
+                    <div class="preset-bins" data-target="f-prox">
+                        <button type="button" class="bin" data-value="0.95">신고가 5%</button>
+                        <button type="button" class="bin" data-value="0.85">15% 이내</button>
+                        <button type="button" class="bin" data-value="0.75">25% 이내</button>
+                    </div>
                 </label>
                 <label>
                     <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">최대 낙폭 ≤ X% <span class="f-tip" title="60일 고점 대비 낙폭(절대값). 15 = 고점 대비 -15% 이내.">i</span></div>
                     <input id="f-mdd" type="number" step="0.1" min="0" placeholder="예: 15" style="width:100%;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12.5px;">
+                    <div class="preset-bins" data-target="f-mdd">
+                        <button type="button" class="bin" data-value="10">≤10%</button>
+                        <button type="button" class="bin" data-value="20">≤20%</button>
+                        <button type="button" class="bin" data-value="30">≤30%</button>
+                    </div>
                 </label>
                 <label>
                     <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">200일 이평선 위 N배 <span class="f-tip" title="현재가 / 200일 MA. 1.0 = 정확히 MA200.">i</span></div>
                     <input id="f-ma200" type="number" step="0.01" min="0" placeholder="예: 0.95" style="width:100%;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12.5px;">
                 </label>
+                <div style="color:var(--text-muted);font-size:10.5px;line-height:1.4;padding-top:8px;border-top:1px dashed var(--border);margin-top:8px;">
+                    ℹ 정렬은 결과 영역 헤더에서 변경하세요.
+                </div>
             </div>
         </details>
 
-        <!-- 그룹 6: 펀더 -->
+        <!-- 그룹 3: 펀더 -->
         <details class="filter-group" data-group="fund">
             <summary class="filter-group-header">
                 <span class="filter-group-caret">▶</span>
-                <span>💎 펀더멘털</span>
+                <span>💎 펀더</span>
                 <span class="filter-group-active-dot"></span>
             </summary>
             <div class="filter-group-body">
@@ -512,6 +575,11 @@
                         <input id="f-per-min" type="number" step="0.1" min="0" placeholder="min" style="flex:1;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12.5px;">
                         <input id="f-per-max" type="number" step="0.1" min="0" placeholder="max" style="flex:1;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12.5px;">
                     </div>
+                    <div class="preset-bins" data-target="f-per-max">
+                        <button type="button" class="bin" data-value="15">≤15</button>
+                        <button type="button" class="bin" data-value="20">≤20</button>
+                        <button type="button" class="bin" data-value="25">≤25</button>
+                    </div>
                 </label>
                 <label>
                     <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">PBR 범위 <span class="f-tip" title="안전마진: ≤1.5, 딥밸류: ≤1.0.">i</span></div>
@@ -519,10 +587,20 @@
                         <input id="f-pbr-min" type="number" step="0.1" min="0" placeholder="min" style="flex:1;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12.5px;">
                         <input id="f-pbr-max" type="number" step="0.1" min="0" placeholder="max" style="flex:1;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12.5px;">
                     </div>
+                    <div class="preset-bins" data-target="f-pbr-max">
+                        <button type="button" class="bin" data-value="1.0">≤1.0</button>
+                        <button type="button" class="bin" data-value="1.5">≤1.5</button>
+                        <button type="button" class="bin" data-value="2.0">≤2.0</button>
+                    </div>
                 </label>
                 <label>
                     <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">배당률 ≥ X% <span class="f-tip" title="인컴 전략: ≥3%, 고배당: ≥4%.">i</span></div>
                     <input id="f-divy" type="number" step="0.1" min="0" placeholder="예: 2.0" style="width:100%;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12.5px;">
+                    <div class="preset-bins" data-target="f-divy">
+                        <button type="button" class="bin" data-value="2">≥2%</button>
+                        <button type="button" class="bin" data-value="3">≥3%</button>
+                        <button type="button" class="bin" data-value="4">≥4%</button>
+                    </div>
                 </label>
                 <label style="display:flex;align-items:center;gap:6px;font-size:13px;">
                     <input id="f-eps-pos" type="checkbox">
@@ -534,14 +612,17 @@
             </div>
         </details>
 
-        <!-- 그룹 7: 외국인 수급 -->
-        <details class="filter-group" data-group="foreign">
+        <!-- 그룹 4: 수급 (외국인) -->
+        <details class="filter-group" data-group="foreign" data-requires-market="KOSPI,KOSDAQ">
             <summary class="filter-group-header">
                 <span class="filter-group-caret">▶</span>
-                <span>🌐 외국인 수급</span>
+                <span>🌐 수급 (외국인)</span>
                 <span class="filter-group-active-dot"></span>
             </summary>
             <div class="filter-group-body">
+                <div class="filter-group-disabled-banner">
+                    🔒 시장 필터에 KOSPI 또는 KOSDAQ 선택 시 활성화됩니다 (KRX 전용 데이터).
+                </div>
                 <label>
                     <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">현재 보유율 ≥ <span class="f-tip" title="외국인 지분율(%). 예: 30 = 30% 이상">i</span></div>
                     <div style="display:flex;align-items:center;gap:6px;">
@@ -593,6 +674,11 @@
             </div>
         </details>
 
+        <!-- 라이브 카운트 (A3) -->
+        <div id="liveCountBadge" style="padding:8px 14px;border-top:1px solid var(--border);font-size:12px;color:var(--text-muted);background:var(--bg-card,var(--bg-elevated));text-align:center;">
+            <span id="liveCountText">— / —</span>
+        </div>
+
         <!-- 하단 sticky 액션 영역 -->
         <div class="screener-side-actions">
             <button class="btn btn-primary" onclick="Screener.run()">실행</button>
@@ -618,13 +704,34 @@
         <div class="card">
             <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
                 <strong>결과 <span id="status" style="color:var(--text-muted);font-size:12px;font-weight:400;margin-left:8px;"></span></strong>
-                <div style="display:flex;gap:10px;align-items:center;">
+                <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
                     <span id="resultSummary" style="color:var(--text-muted);font-size:12px;"></span>
+                    <label style="font-size:11px;color:var(--text-muted);display:inline-flex;align-items:center;gap:4px;">
+                        정렬
+                        <select id="f-sort" style="padding:3px 6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12px;">
+                            <option value="market_cap_desc">시총 ↓</option>
+                            <option value="r1m_desc">1m 수익률 ↓</option>
+                            <option value="r3m_desc">3m 수익률 ↓</option>
+                            <option value="r6m_desc">6m 수익률 ↓</option>
+                            <option value="r1y_desc">1y 수익률 ↓</option>
+                            <option value="ytd_desc">YTD ↓</option>
+                            <option value="volume_surge_desc">거래량 비율 ↓</option>
+                            <option value="liquidity_desc">거래대금 ↓</option>
+                            <option value="drawdown_asc">낙폭 적은 순</option>
+                            <option value="per_asc">PER 낮은 순</option>
+                            <option value="pbr_asc">PBR 낮은 순</option>
+                            <option value="dividend_yield_desc">배당률 ↓</option>
+                            <option value="name_asc">이름 A→Z</option>
+                            <option value="foreign_ownership_desc">외국인 보유율 ↓</option>
+                            <option value="foreign_delta_desc">외국인 보유 변화 ↓</option>
+                            <option value="foreign_net_buy_desc">외국인 순매수 ↓</option>
+                        </select>
+                    </label>
                     <label style="font-size:11px;color:var(--text-muted);">
                         <input type="checkbox" id="f-sparkline" checked> 스파크라인
                     </label>
                     <label class="chips-autorun-toggle" style="margin-left:0;">
-                        <input type="checkbox" id="autoRunToggle" checked> chip 변경 시 자동 실행
+                        <input type="checkbox" id="autoRunToggle" checked> 자동 실행
                     </label>
                     <div class="view-toggle">
                         <button class="view-btn active" data-view="overview">Overview</button>
@@ -804,8 +911,9 @@
     };
 
     // ── 사이드패널 그룹 펼침 상태 (localStorage) ────
-    var GROUPS_KEY = 'screener_groups_open_v2';
-    var DEFAULT_OPEN = ['search', 'market'];   // 기본 펼침: 검색 + 시장·섹터
+    // v3 (2026-04-30): 7그룹 → 4그룹 통합 — basic/perftech/fund/foreign
+    var GROUPS_KEY = 'screener_groups_open_v3';
+    var DEFAULT_OPEN = ['basic'];   // 기본 펼침: 기본만
 
     function restoreGroupState() {
         var saved;
@@ -1072,6 +1180,7 @@
 
     function run() {
         var spec = SpecBuilder.fromDOM();
+        syncUrlState(spec);   // A7: 실행 시점에 URL 동기화
         $('status').textContent = '실행 중...';
         fetch('/api/screener/run', {
             method: 'POST',
@@ -1109,15 +1218,62 @@
         });
     }
 
+    // ── A7: URL state 영속화 ──────────────────────
+    // ?spec=<base64url-of-json> 풀링·압축 (한글 섹터 라벨 안전 + URL 단축)
+    function _b64urlEncode(s) {
+        return btoa(unescape(encodeURIComponent(s)))
+                .replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+    }
+    function _b64urlDecode(s) {
+        s = String(s).replace(/-/g,'+').replace(/_/g,'/');
+        while (s.length % 4) s += '=';
+        return decodeURIComponent(escape(atob(s)));
+    }
+    function encodeSpec(spec) {
+        var pruned = {};
+        Object.keys(spec || {}).forEach(function(k) {
+            var v = spec[k];
+            if (v == null || v === '' || v === false) return;
+            if (Array.isArray(v) && !v.length) return;
+            if (typeof v === 'object' && !Array.isArray(v) && !Object.keys(v).length) return;
+            // 기본값 키 제외 — URL 노이즈 회피
+            if (k === 'sort' && v === 'market_cap_desc') return;
+            if (k === 'include_sparkline' && v === true) return;
+            pruned[k] = v;
+        });
+        if (!Object.keys(pruned).length) return '';
+        try { return _b64urlEncode(JSON.stringify(pruned)); }
+        catch (e) { return ''; }
+    }
+    function decodeSpec(s) {
+        if (!s) return null;
+        try { return JSON.parse(_b64urlDecode(s)); }
+        catch (e) { return null; }
+    }
+    function syncUrlState(spec) {
+        var encoded = encodeSpec(spec);
+        var url = encoded ? (location.pathname + '?spec=' + encoded) : location.pathname;
+        try { history.replaceState(null, '', url); } catch (e) {}
+    }
+
     function applyUrlParams() {
         var p = new URLSearchParams(window.location.search);
-        var spec = {};
-        if (p.has('q')) spec.q = p.get('q');
-        if (p.has('sectors')) spec.sectors = p.get('sectors').split(',').filter(Boolean);
-        if (p.has('markets')) spec.markets = p.get('markets').split(',').filter(Boolean);
-        if (p.has('market_cap_buckets')) spec.market_cap_buckets = p.get('market_cap_buckets').split(',').filter(Boolean);
-        if (Object.keys(spec).length === 0) return false;
-        SpecBuilder.toDOM(spec);
+        // 1순위: ?spec=<base64url> — 풀 스펙
+        if (p.has('spec')) {
+            var spec = decodeSpec(p.get('spec'));
+            if (spec) {
+                SpecBuilder.toDOM(spec);
+                return true;
+            }
+        }
+        // 2순위 (호환): 평면 파라미터
+        var flatSpec = {};
+        if (p.has('q')) flatSpec.q = p.get('q');
+        if (p.has('sectors')) flatSpec.sectors = p.get('sectors').split(',').filter(Boolean);
+        if (p.has('markets')) flatSpec.markets = p.get('markets').split(',').filter(Boolean);
+        if (p.has('market_cap_buckets')) flatSpec.market_cap_buckets = p.get('market_cap_buckets').split(',').filter(Boolean);
+        if (Object.keys(flatSpec).length === 0) return false;
+        SpecBuilder.toDOM(flatSpec);
         return true;
     }
 
@@ -1440,9 +1596,14 @@
     // ── 활성 chips 렌더 ─────────────────────────
     var SECTOR_LABELS_CACHE = {};   // sector key → label (loadSectors에서 채움)
 
+    // editor: { type: 'text'|'number', input: 'f-q', label: '...', step?: number, scale?: number, suffix?: string }
+    //   scale: input 값에 곱해서 spec 에 저장. 예: 시총 (억원) → spec 은 원 단위라 scale=1e8
+    //   거래대금 KRW 도 동일. 거래대금 US 는 천달러 → 1000.
+    //   ratio: 외국인 net_buy 값을 억원으로 표시 → input scale=1e8.
     var CHIP_DEFS = [
-        // [spec key, category, label fn(value), removeKeys (DOM reset 대상)]
-        { key: 'q',           cat: 'sector', label: function(v){ return '검색: "' + v + '"'; }, reset: function(){ $('f-q').value = ''; } },
+        { key: 'q',           cat: 'sector', label: function(v){ return '검색: "' + v + '"'; },
+          reset: function(){ $('f-q').value = ''; },
+          editor: { type: 'text', input: 'f-q', label: '티커 / 종목명' } },
         { key: 'markets',     cat: 'market', label: function(v){ return '시장: ' + v.join(', '); },
           reset: function(){ $('f-markets-checks').querySelectorAll('input[type=checkbox]').forEach(function(el){ el.checked = false; }); } },
         { key: 'sectors',     cat: 'sector', label: function(v){
@@ -1456,9 +1617,14 @@
             if (v.min != null) parts.push('≥ ' + (v.min/1e8).toFixed(0) + '억');
             if (v.max != null) parts.push('≤ ' + (v.max/1e8).toFixed(0) + '억');
             return '시총 ' + parts.join(' ');
-          }, reset: function(){ $('f-mcap-min').value = ''; $('f-mcap-max').value = ''; } },
-        { key: 'min_daily_value_krw', cat: 'tech', label: function(v){ return '거래대금(KRX) ≥ ' + (v/1e8).toFixed(0) + '억'; }, reset: function(){ $('f-liq-krw').value = ''; } },
-        { key: 'min_daily_value_usd', cat: 'tech', label: function(v){ return '거래대금(US) ≥ ' + (v/1000).toFixed(0) + 'K$'; }, reset: function(){ $('f-liq-usd').value = ''; } },
+          }, reset: function(){ $('f-mcap-min').value = ''; $('f-mcap-max').value = ''; },
+          editor: { type: 'range', minInput: 'f-mcap-min', maxInput: 'f-mcap-max', scale: 1e8, label: '시총 범위 (억원)' } },
+        { key: 'min_daily_value_krw', cat: 'tech', label: function(v){ return '거래대금(KRX) ≥ ' + (v/1e8).toFixed(0) + '억'; },
+          reset: function(){ $('f-liq-krw').value = ''; },
+          editor: { type: 'number', input: 'f-liq-krw', step: 1, scale: 1e8, suffix: '억원', label: '거래대금(KRX) ≥' } },
+        { key: 'min_daily_value_usd', cat: 'tech', label: function(v){ return '거래대금(US) ≥ ' + (v/1000).toFixed(0) + 'K$'; },
+          reset: function(){ $('f-liq-usd').value = ''; },
+          editor: { type: 'number', input: 'f-liq-usd', step: 1, scale: 1000, suffix: 'K$', label: '거래대금(US) ≥' } },
         { key: 'return_ranges', cat: 'perf', label: function(v){
             return Object.keys(v).map(function(p){
                 var r = v[p];
@@ -1473,21 +1639,43 @@
                 var mx = $('f-r'+p+'-max'); if (mx) mx.value = '';
             });
           } },
-        { key: 'max_vol60_pct',     cat: 'tech', label: function(v){ return '변동성 ≤ ' + v + '%'; }, reset: function(){ $('f-vol60').value = ''; } },
-        { key: 'volume_ratio_min',  cat: 'tech', label: function(v){ return '거래량 ≥ ×' + v; }, reset: function(){ $('f-volr').value = ''; } },
-        { key: 'high_52w_proximity_min', cat: 'tech', label: function(v){ return '52w고점 ≥ ' + (v*100).toFixed(0) + '%'; }, reset: function(){ $('f-prox').value = ''; } },
-        { key: 'max_drawdown_60d_pct',   cat: 'tech', label: function(v){ return '낙폭 ≤ ' + v + '%'; }, reset: function(){ $('f-mdd').value = ''; } },
-        { key: 'ma200_proximity_min',    cat: 'tech', label: function(v){ return 'MA200 ≥ ×' + v; }, reset: function(){ $('f-ma200').value = ''; } },
-        { key: 'min_per',  cat: 'fund', label: function(v){ return 'PER ≥ ' + v; }, reset: function(){ $('f-per-min').value = ''; } },
-        { key: 'max_per',  cat: 'fund', label: function(v){ return 'PER ≤ ' + v; }, reset: function(){ $('f-per-max').value = ''; } },
-        { key: 'min_pbr',  cat: 'fund', label: function(v){ return 'PBR ≥ ' + v; }, reset: function(){ $('f-pbr-min').value = ''; } },
-        { key: 'max_pbr',  cat: 'fund', label: function(v){ return 'PBR ≤ ' + v; }, reset: function(){ $('f-pbr-max').value = ''; } },
-        { key: 'min_dividend_yield_pct', cat: 'fund', label: function(v){ return '배당 ≥ ' + v + '%'; }, reset: function(){ $('f-divy').value = ''; } },
-        { key: 'exclude_negative_eps', cat: 'fund', label: function(){ return '적자 제외'; }, reset: function(){ if ($('f-eps-pos')) $('f-eps-pos').checked = false; } },
+        { key: 'max_vol60_pct',     cat: 'tech', label: function(v){ return '변동성 ≤ ' + v + '%'; },
+          reset: function(){ $('f-vol60').value = ''; },
+          editor: { type: 'number', input: 'f-vol60', step: 0.1, suffix: '%', label: '변동성 ≤' } },
+        { key: 'volume_ratio_min',  cat: 'tech', label: function(v){ return '거래량 ≥ ×' + v; },
+          reset: function(){ $('f-volr').value = ''; },
+          editor: { type: 'number', input: 'f-volr', step: 0.1, suffix: '배', label: '거래량 ≥ N배' } },
+        { key: 'high_52w_proximity_min', cat: 'tech', label: function(v){ return '52w고점 ≥ ' + (v*100).toFixed(0) + '%'; },
+          reset: function(){ $('f-prox').value = ''; },
+          editor: { type: 'number', input: 'f-prox', step: 0.01, suffix: '(0.0~1.0)', label: '52w고점 ≥ N (예: 0.85)' } },
+        { key: 'max_drawdown_60d_pct',   cat: 'tech', label: function(v){ return '낙폭 ≤ ' + v + '%'; },
+          reset: function(){ $('f-mdd').value = ''; },
+          editor: { type: 'number', input: 'f-mdd', step: 0.1, suffix: '%', label: '최대 낙폭 ≤' } },
+        { key: 'ma200_proximity_min',    cat: 'tech', label: function(v){ return 'MA200 ≥ ×' + v; },
+          reset: function(){ $('f-ma200').value = ''; },
+          editor: { type: 'number', input: 'f-ma200', step: 0.01, suffix: '배', label: 'MA200 ≥ N배' } },
+        { key: 'min_per',  cat: 'fund', label: function(v){ return 'PER ≥ ' + v; },
+          reset: function(){ $('f-per-min').value = ''; },
+          editor: { type: 'number', input: 'f-per-min', step: 0.1, label: 'PER ≥' } },
+        { key: 'max_per',  cat: 'fund', label: function(v){ return 'PER ≤ ' + v; },
+          reset: function(){ $('f-per-max').value = ''; },
+          editor: { type: 'number', input: 'f-per-max', step: 0.1, label: 'PER ≤' } },
+        { key: 'min_pbr',  cat: 'fund', label: function(v){ return 'PBR ≥ ' + v; },
+          reset: function(){ $('f-pbr-min').value = ''; },
+          editor: { type: 'number', input: 'f-pbr-min', step: 0.1, label: 'PBR ≥' } },
+        { key: 'max_pbr',  cat: 'fund', label: function(v){ return 'PBR ≤ ' + v; },
+          reset: function(){ $('f-pbr-max').value = ''; },
+          editor: { type: 'number', input: 'f-pbr-max', step: 0.1, label: 'PBR ≤' } },
+        { key: 'min_dividend_yield_pct', cat: 'fund', label: function(v){ return '배당 ≥ ' + v + '%'; },
+          reset: function(){ $('f-divy').value = ''; },
+          editor: { type: 'number', input: 'f-divy', step: 0.1, suffix: '%', label: '배당률 ≥' } },
+        { key: 'exclude_negative_eps', cat: 'fund', label: function(){ return '적자 제외'; },
+          reset: function(){ if ($('f-eps-pos')) $('f-eps-pos').checked = false; } },
         // 외국인 수급
         { key: 'min_foreign_ownership_pct', cat: 'foreign',
           label: function(v){ return '외국인 보유 ≥ ' + v + '%'; },
-          reset: function(){ if ($('f-foreign-own-min')) $('f-foreign-own-min').value = ''; }
+          reset: function(){ if ($('f-foreign-own-min')) $('f-foreign-own-min').value = ''; },
+          editor: { type: 'number', input: 'f-foreign-own-min', step: 0.1, suffix: '%', label: '외국인 보유율 ≥' }
         },
         { key: 'min_foreign_ownership_delta_pp', cat: 'foreign',
           label: function(v, spec){
@@ -1497,10 +1685,10 @@
           },
           reset: function(){
             if ($('f-foreign-delta-min')) $('f-foreign-delta-min').value = '';
-            // 윈도우 라디오는 기본값(20일)으로 복원
             var r = document.querySelector('input[name="foreign-delta-window"][value="20"]');
             if (r) r.checked = true;
-          }
+          },
+          editor: { type: 'number', input: 'f-foreign-delta-min', step: 0.1, suffix: '%p', label: '외국인 보유율 변화 ≥ (음수=감소 허용)' }
         },
         { key: 'min_foreign_net_buy_krw', cat: 'foreign',
           label: function(v, spec){
@@ -1512,29 +1700,29 @@
             if ($('f-foreign-netbuy-min')) $('f-foreign-netbuy-min').value = '';
             var r = document.querySelector('input[name="foreign-netbuy-window"][value="20"]');
             if (r) r.checked = true;
-          }
+          },
+          editor: { type: 'number', input: 'f-foreign-netbuy-min', step: 10, scale: 1e8, suffix: '억원', label: '누적 순매수 ≥' }
         },
     ];
 
     // 그룹 키 → chip cat 매핑 (has-active dot 표시용)
+    // v3 (2026-04-30): 7그룹 → 4그룹 통합
     var GROUP_TO_CATS = {
-        'search':  ['sector'],   // q
-        'market':  ['market', 'sector'],
-        'cap':     ['market', 'tech'],
-        'perf':    ['perf'],
-        'tech':    ['tech'],
-        'fund':    ['fund'],
-        'foreign': ['foreign'],
+        'basic':    ['sector', 'market', 'tech'],   // 검색·시장·섹터·시총·유동성
+        'perftech': ['perf', 'tech'],               // 수익률 + 변동성·기술
+        'fund':     ['fund'],
+        'foreign':  ['foreign'],
     };
-    // 더 정확하게: 각 그룹이 갖는 spec key 집합
+    // 각 그룹이 갖는 spec key 집합
     var GROUP_SPEC_KEYS = {
-        'search':  ['q'],
-        'market':  ['markets', 'sectors'],
-        'cap':     ['market_cap_krw', 'market_cap_buckets', 'min_daily_value_krw', 'min_daily_value_usd'],
-        'perf':    ['return_ranges'],
-        'tech':    ['max_vol60_pct', 'volume_ratio_min', 'high_52w_proximity_min', 'max_drawdown_60d_pct', 'ma200_proximity_min'],
-        'fund':    ['min_per','max_per','min_pbr','max_pbr','min_dividend_yield_pct','exclude_negative_eps'],
-        'foreign': ['min_foreign_ownership_pct','min_foreign_ownership_delta_pp','min_foreign_net_buy_krw'],
+        'basic':    ['q', 'markets', 'sectors',
+                     'market_cap_krw', 'market_cap_buckets',
+                     'min_daily_value_krw', 'min_daily_value_usd'],
+        'perftech': ['return_ranges',
+                     'max_vol60_pct', 'volume_ratio_min',
+                     'high_52w_proximity_min', 'max_drawdown_60d_pct', 'ma200_proximity_min'],
+        'fund':     ['min_per','max_per','min_pbr','max_pbr','min_dividend_yield_pct','exclude_negative_eps'],
+        'foreign':  ['min_foreign_ownership_pct','min_foreign_ownership_delta_pp','min_foreign_net_buy_krw'],
     };
 
     function renderActiveChips(spec) {
@@ -1549,15 +1737,26 @@
             if (typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length === 0) return;
             hasAny = true;
             var label = def.label(v, spec);
-            html += '<span class="chip chip-' + def.cat + '">'
-                  + '<span>' + label + '</span>'
+            var editable = def.editor ? '1' : '0';
+            html += '<span class="chip chip-' + def.cat + '" data-key="' + def.key + '" data-editable="' + editable + '"'
+                  + (def.editor ? ' title="클릭하여 값 수정"' : '') + '>'
+                  + '<span class="chip-text">' + label + '</span>'
                   + '<button type="button" class="chip-x" data-key="' + def.key + '" title="제거">×</button>'
                   + '</span>';
         });
         bar.classList.toggle('empty', !hasAny);
         bar.innerHTML = html;
         bar.querySelectorAll('.chip-x').forEach(function(btn) {
-            btn.addEventListener('click', function() { removeChip(btn.dataset.key); });
+            btn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                removeChip(btn.dataset.key);
+            });
+        });
+        bar.querySelectorAll('.chip[data-editable="1"]').forEach(function(chip) {
+            chip.addEventListener('click', function(e) {
+                if (e.target.classList.contains('chip-x')) return;
+                openChipEditor(chip.dataset.key, chip);
+            });
         });
         // 그룹별 has-active dot 갱신
         Object.keys(GROUP_SPEC_KEYS).forEach(function(gname) {
@@ -1585,6 +1784,113 @@
         }
     }
 
+    // ── A1: chip 편집형 popover ─────────────────
+    var _activePopover = null;
+    function closeChipPopover() {
+        if (_activePopover && _activePopover.parentNode) {
+            _activePopover.parentNode.removeChild(_activePopover);
+        }
+        _activePopover = null;
+    }
+    document.addEventListener('click', function(e) {
+        if (!_activePopover) return;
+        if (e.target.closest('.chip-popover')) return;
+        if (e.target.closest('.chip[data-editable="1"]')) return;
+        closeChipPopover();
+    });
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') closeChipPopover();
+    });
+
+    function openChipEditor(specKey, anchorEl) {
+        closeChipPopover();
+        var def = CHIP_DEFS.find(function(d){ return d.key === specKey; });
+        if (!def || !def.editor) return;
+        var ed = def.editor;
+        var pop = document.createElement('div');
+        pop.className = 'chip-popover';
+
+        if (ed.type === 'text') {
+            var inp = $(ed.input);
+            var current = inp ? inp.value : '';
+            pop.innerHTML =
+                '<div class="chip-popover-label">' + (ed.label || specKey) + '</div>' +
+                '<div class="row"><input type="text" id="_chipEdInput" value="' + (current||'').replace(/"/g,'&quot;') + '"></div>' +
+                '<div class="actions"><button type="button" id="_chipEdCancel">취소</button>' +
+                '<button type="button" class="primary" id="_chipEdApply">적용</button></div>';
+        } else if (ed.type === 'number') {
+            var srcEl = $(ed.input);
+            var raw = srcEl ? srcEl.value : '';
+            // raw 는 사용자 입력 단위. spec 단위로 변환은 SpecBuilder 가 처리.
+            // 표시 단위 그대로.
+            pop.innerHTML =
+                '<div class="chip-popover-label">' + (ed.label || specKey) + '</div>' +
+                '<div class="row"><input type="number" id="_chipEdInput" step="' + (ed.step||1) + '" value="' + raw + '">' +
+                (ed.suffix ? '<span style="font-size:11px;color:var(--text-muted);align-self:center;">' + ed.suffix + '</span>' : '') +
+                '</div>' +
+                '<div class="actions"><button type="button" id="_chipEdCancel">취소</button>' +
+                '<button type="button" class="primary" id="_chipEdApply">적용</button></div>';
+        } else if (ed.type === 'range') {
+            var minEl = $(ed.minInput);
+            var maxEl = $(ed.maxInput);
+            var rawMin = minEl ? minEl.value : '';
+            var rawMax = maxEl ? maxEl.value : '';
+            pop.innerHTML =
+                '<div class="chip-popover-label">' + (ed.label || specKey) + '</div>' +
+                '<div class="row">' +
+                '<input type="number" id="_chipEdMin" placeholder="min" value="' + rawMin + '">' +
+                '<input type="number" id="_chipEdMax" placeholder="max" value="' + rawMax + '">' +
+                '</div>' +
+                '<div class="actions"><button type="button" id="_chipEdCancel">취소</button>' +
+                '<button type="button" class="primary" id="_chipEdApply">적용</button></div>';
+        } else {
+            return;
+        }
+
+        // 위치 — anchor 아래 띄우기
+        document.body.appendChild(pop);
+        var rect = anchorEl.getBoundingClientRect();
+        var top = rect.bottom + window.scrollY + 4;
+        var left = rect.left + window.scrollX;
+        // 우측 화면 넘침 방지
+        var popW = Math.max(pop.offsetWidth, 220);
+        if (left + popW > window.innerWidth - 10) left = Math.max(10, window.innerWidth - popW - 10);
+        pop.style.top = top + 'px';
+        pop.style.left = left + 'px';
+        _activePopover = pop;
+
+        // 입력 포커스
+        var first = pop.querySelector('input');
+        if (first) { first.focus(); first.select && first.select(); }
+
+        function apply() {
+            if (ed.type === 'text') {
+                var v = pop.querySelector('#_chipEdInput').value.trim();
+                var inp2 = $(ed.input);
+                if (inp2) inp2.value = v;
+            } else if (ed.type === 'number') {
+                var v2 = pop.querySelector('#_chipEdInput').value;
+                var inp3 = $(ed.input);
+                if (inp3) inp3.value = v2;
+            } else if (ed.type === 'range') {
+                var vmin = pop.querySelector('#_chipEdMin').value;
+                var vmax = pop.querySelector('#_chipEdMax').value;
+                var minEl2 = $(ed.minInput); if (minEl2) minEl2.value = vmin;
+                var maxEl2 = $(ed.maxInput); if (maxEl2) maxEl2.value = vmax;
+            }
+            closeChipPopover();
+            updateChipsFromDOM();
+            if ($('autoRunToggle') && $('autoRunToggle').checked) scheduleAutoRun();
+        }
+        pop.querySelector('#_chipEdApply').addEventListener('click', apply);
+        pop.querySelector('#_chipEdCancel').addEventListener('click', closeChipPopover);
+        pop.querySelectorAll('input').forEach(function(i) {
+            i.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') apply();
+            });
+        });
+    }
+
     // ── 자동 실행 (debounce 500ms) ────────────────
     var _autoRunTimer = null;
     function scheduleAutoRun() {
@@ -1595,9 +1901,93 @@
         }, 500);
     }
 
-    // 모든 입력 change → chips 갱신 (auto-run 은 제외 — 사용자가 ×/실행 누를 때만)
+    // ── A3: 라이브 카운트 (debounce 300ms) ─────────
+    var _liveCountTimer = null;
+    var _liveCountAbort = null;
+    function scheduleLiveCount() {
+        if (_liveCountTimer) clearTimeout(_liveCountTimer);
+        _liveCountTimer = setTimeout(fetchLiveCount, 300);
+    }
+    function fetchLiveCount() {
+        var spec = SpecBuilder.fromDOM();
+        var badge = $('liveCountText');
+        if (!badge) return;
+        if (_liveCountAbort) { try { _liveCountAbort.abort(); } catch (e) {} }
+        var ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+        _liveCountAbort = ctrl;
+        badge.textContent = '계산 중…';
+        fetch('/api/screener/count', {
+            method: 'POST',
+            headers: {'Content-Type':'application/json','X-Requested-With':'XMLHttpRequest'},
+            body: JSON.stringify(spec),
+            signal: ctrl ? ctrl.signal : undefined,
+        }).then(function(r) {
+            if (!r.ok) throw new Error('HTTP '+r.status);
+            return r.json();
+        }).then(function(data) {
+            var n = data.count || 0;
+            badge.textContent = '매칭 ' + n.toLocaleString() + '건';
+            badge.style.color = n === 0 ? 'var(--orange,#f5a623)'
+                              : n > 500 ? 'var(--orange,#f5a623)'
+                              : 'var(--accent)';
+        }).catch(function(err) {
+            if (err.name === 'AbortError') return;
+            badge.textContent = '카운트 실패';
+            badge.style.color = 'var(--text-muted)';
+        });
+    }
+
+    // ── A2: preset bin 빠른 선택 ──────────────────
+    function syncPresetBinHighlights() {
+        document.querySelectorAll('.preset-bins').forEach(function(g) {
+            var target = $(g.dataset.target);
+            if (!target) return;
+            var current = target.value === '' ? null : parseFloat(target.value);
+            g.querySelectorAll('.bin').forEach(function(b) {
+                var val = parseFloat(b.dataset.value);
+                b.classList.toggle('is-on', current !== null && !isNaN(current) && Math.abs(current - val) < 1e-9);
+            });
+        });
+    }
+    // 클릭 — 값 설정 + toggle (이미 같은 값이면 비움)
+    document.addEventListener('click', function(e) {
+        var bin = e.target.closest('.preset-bins .bin');
+        if (!bin) return;
+        var group = bin.parentElement;
+        var target = $(group.dataset.target);
+        if (!target) return;
+        var val = bin.dataset.value;
+        var current = target.value;
+        target.value = (current !== '' && parseFloat(current) === parseFloat(val)) ? '' : val;
+        // input 이벤트 → updateChipsFromDOM 자동 호출 + auto-run 가능
+        target.dispatchEvent(new Event('input', { bubbles: true }));
+        syncPresetBinHighlights();
+        // chip 변경 즉시 실행 옵션 활성 시 (preset bin 도 chip 과 동급으로 처리)
+        if ($('autoRunToggle') && $('autoRunToggle').checked) scheduleAutoRun();
+    });
+
+    // 그룹별 시장 의존성 (KRX 전용 그룹 등) — markets 체크박스 변화에 따라 활성/비활성
+    function updateMarketDependentGroups() {
+        var groups = document.querySelectorAll('.filter-group[data-requires-market]');
+        if (!groups.length) return;
+        var selectedMarkets = checkedValuesById('f-markets-checks');
+        groups.forEach(function(g) {
+            var required = (g.dataset.requiresMarket || '').split(',').map(function(s){ return s.trim().toUpperCase(); }).filter(Boolean);
+            // 시장 미선택 (default = 전 시장 허용) → 활성. 선택했지만 required 가 1개도 포함 안 되면 disable.
+            var disabled = selectedMarkets.length > 0 && !required.some(function(m) {
+                return selectedMarkets.indexOf(m) >= 0;
+            });
+            g.classList.toggle('is-disabled', disabled);
+            g.querySelectorAll('input, select').forEach(function(el) { el.disabled = disabled; });
+        });
+    }
+
+    // 모든 입력 change → chips 갱신 + 라이브 카운트 페치 (auto-run 과 별도)
     function updateChipsFromDOM() {
+        updateMarketDependentGroups();
+        syncPresetBinHighlights();
         renderActiveChips(SpecBuilder.fromDOM());
+        scheduleLiveCount();   // A3
     }
     document.addEventListener('change', function(e) {
         if (e.target.closest('.screener-side-panel')) updateChipsFromDOM();
@@ -1609,6 +1999,7 @@
     function clearAll() {
         clearAllInputs();
         updateChipsFromDOM();
+        syncUrlState({});   // A7: URL 도 초기화
         if ($('status')) $('status').textContent = '필터 초기화됨';
         if ($('autoRunToggle') && $('autoRunToggle').checked) scheduleAutoRun();
     }
