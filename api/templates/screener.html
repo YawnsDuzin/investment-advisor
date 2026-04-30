@@ -7,6 +7,7 @@
 {% endblock %}
 
 {% block head %}
+<script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js" defer></script>
 <style>
 /* 빠른 시작 — 시드 프리셋 카드 그리드 */
 .seed-grid {
@@ -213,6 +214,155 @@
     padding: 4px 14px 12px;
 }
 .filter-group.open > .filter-group-body { display: block; }
+
+/* B2 인라인 행 펼침 */
+.result-table tbody tr[data-ticker] { cursor: pointer; }
+.result-table tbody tr[data-ticker].is-expanded { background: rgba(99,102,241,0.06); }
+.result-table tbody tr.row-detail > td {
+    padding: 0;
+    background: var(--bg);
+    border-bottom: 2px solid var(--accent);
+}
+.row-detail-body {
+    padding: 14px 18px;
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 16px;
+    min-height: 200px;
+}
+.row-detail-chart {
+    background: var(--bg-card,var(--bg-elevated));
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    height: 200px;
+    position: relative;
+}
+.row-detail-chart .chart-loading {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text-muted); font-size: 12px;
+}
+.row-detail-side {
+    display: flex; flex-direction: column; gap: 10px;
+}
+.row-detail-chips {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
+}
+.row-detail-chip {
+    background: var(--bg-card,var(--bg-elevated));
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 10px;
+    text-align: center;
+}
+.row-detail-chip .chip-label { font-size: 10px; color: var(--text-muted); margin-bottom: 2px; }
+.row-detail-chip .chip-value { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.row-detail-actions {
+    display: flex; gap: 6px; flex-wrap: wrap;
+    margin-top: auto;
+    padding-top: 8px;
+    border-top: 1px dashed var(--border);
+}
+.row-detail-actions .btn { font-size: 11px; padding: 4px 10px; }
+@media (max-width: 768px) {
+    .row-detail-body { grid-template-columns: 1fr; }
+    .row-detail-chart { height: 160px; }
+}
+
+/* B1 컬럼 빌더 모달 */
+.col-picker-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.55);
+    z-index: 300;
+    display: flex; align-items: center; justify-content: center;
+    padding: 20px;
+}
+.col-picker-panel {
+    background: var(--bg-card,var(--bg-elevated));
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    width: min(720px, 95%);
+    max-height: 80vh;
+    display: flex; flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.6);
+}
+.col-picker-head {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex; gap: 10px; align-items: center;
+}
+.col-picker-head strong { font-size: 14px; }
+.col-picker-head input[type=text] {
+    flex: 1;
+    padding: 6px 10px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 13px;
+}
+.col-picker-close {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 22px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 4px;
+}
+.col-picker-close:hover { color: var(--text); }
+.col-picker-body {
+    overflow-y: auto;
+    padding: 8px 16px 12px;
+    flex: 1;
+}
+.col-picker-cat { margin-top: 12px; }
+.col-picker-cat-title {
+    font-size: 11px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+    padding-bottom: 4px;
+    border-bottom: 1px dashed var(--border);
+}
+.col-picker-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 6px;
+}
+.col-picker-item {
+    display: flex; align-items: center; gap: 6px;
+    padding: 5px 8px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg);
+    cursor: pointer;
+    font-size: 12.5px;
+    user-select: none;
+}
+.col-picker-item:hover { border-color: var(--accent); }
+.col-picker-item[data-locked="1"] { opacity: 0.6; cursor: not-allowed; }
+.col-picker-foot {
+    padding: 10px 16px;
+    border-top: 1px solid var(--border);
+    display: flex; gap: 8px; justify-content: flex-end;
+}
+
+/* B4 분포 hint — 라벨 옆 평균/중앙값 작은 텍스트 */
+.dist-hint {
+    color: var(--text-muted);
+    font-size: 10px;
+    font-style: italic;
+    margin-left: 4px;
+}
+.dist-hint:not(:empty)::before {
+    content: '· ';
+    margin-right: 1px;
+}
 
 /* preset bin 빠른 선택 칩 — 입력 옆 1-클릭 프리셋 */
 .preset-bins {
@@ -570,7 +720,7 @@
             </summary>
             <div class="filter-group-body">
                 <label>
-                    <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">PER 범위 <span class="f-tip" title="가치주: ≤15, 성장주: ≤25. 음수는 자동 제외.">i</span></div>
+                    <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">PER 범위 <span class="f-tip" title="가치주: ≤15, 성장주: ≤25. 음수는 자동 제외.">i</span> <span class="dist-hint" data-metric="per"></span></div>
                     <div style="display:flex;gap:6px;">
                         <input id="f-per-min" type="number" step="0.1" min="0" placeholder="min" style="flex:1;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12.5px;">
                         <input id="f-per-max" type="number" step="0.1" min="0" placeholder="max" style="flex:1;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12.5px;">
@@ -582,7 +732,7 @@
                     </div>
                 </label>
                 <label>
-                    <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">PBR 범위 <span class="f-tip" title="안전마진: ≤1.5, 딥밸류: ≤1.0.">i</span></div>
+                    <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">PBR 범위 <span class="f-tip" title="안전마진: ≤1.5, 딥밸류: ≤1.0.">i</span> <span class="dist-hint" data-metric="pbr"></span></div>
                     <div style="display:flex;gap:6px;">
                         <input id="f-pbr-min" type="number" step="0.1" min="0" placeholder="min" style="flex:1;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12.5px;">
                         <input id="f-pbr-max" type="number" step="0.1" min="0" placeholder="max" style="flex:1;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12.5px;">
@@ -594,7 +744,7 @@
                     </div>
                 </label>
                 <label>
-                    <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">배당률 ≥ X% <span class="f-tip" title="인컴 전략: ≥3%, 고배당: ≥4%.">i</span></div>
+                    <div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">배당률 ≥ X% <span class="f-tip" title="인컴 전략: ≥3%, 고배당: ≥4%.">i</span> <span class="dist-hint" data-metric="dividend_yield"></span></div>
                     <input id="f-divy" type="number" step="0.1" min="0" placeholder="예: 2.0" style="width:100%;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12.5px;">
                     <div class="preset-bins" data-target="f-divy">
                         <button type="button" class="bin" data-value="2">≥2%</button>
@@ -740,6 +890,7 @@
                         <button class="view-btn" data-view="fundamental">Fundamental</button>
                         <button class="view-btn" data-view="foreign">외국인</button>
                     </div>
+                    <button type="button" class="btn" id="addColumnBtn" style="font-size:11px;padding:4px 10px;" title="컬럼 추가/제거">+ 컬럼</button>
                 </div>
             </div>
             <div id="limitBanner" style="display:none;"></div>
@@ -962,22 +1113,76 @@
         });
     }
 
-    // 모바일 사이드패널 토글
-    function toggleSidePanel() {
-        document.body.classList.toggle('screener-panel-open');
+    // ── B5: 모바일 사이드패널 + 닫을 때 자동 적용 ────
+    // 패널이 열린 시점의 spec 해시 — 닫을 때 변경 여부 판단용
+    var _panelOpenSpecHash = null;
+    function _hashSpec(spec) {
+        try { return JSON.stringify(spec); } catch (e) { return ''; }
     }
-    // 모바일에서 backdrop 클릭으로 닫기
+    function _isMobile() { return window.matchMedia('(max-width: 900px)').matches; }
+
+    function _closeSidePanelWithMaybeRun() {
+        var wasOpen = document.body.classList.contains('screener-panel-open');
+        if (!wasOpen) return;
+        document.body.classList.remove('screener-panel-open');
+        if (!_isMobile()) return;
+        // 패널 열린 시점 vs 현재 spec 비교 — 변경이 있으면 자동 실행
+        var nowHash = _hashSpec(SpecBuilder.fromDOM());
+        if (_panelOpenSpecHash !== null && nowHash !== _panelOpenSpecHash) {
+            run();
+        }
+        _panelOpenSpecHash = null;
+    }
+
+    function toggleSidePanel() {
+        var willOpen = !document.body.classList.contains('screener-panel-open');
+        if (willOpen) {
+            document.body.classList.add('screener-panel-open');
+            _panelOpenSpecHash = _hashSpec(SpecBuilder.fromDOM());
+        } else {
+            _closeSidePanelWithMaybeRun();
+        }
+    }
+    // 모바일에서 backdrop 클릭으로 닫기 — 닫는 경로 일원화
     document.addEventListener('click', function(e) {
         if (!document.body.classList.contains('screener-panel-open')) return;
         var panel = document.getElementById('sidePanel');
         var trigger = e.target.closest('.screener-panel-toggle');
         if (panel && !panel.contains(e.target) && !trigger) {
-            document.body.classList.remove('screener-panel-open');
+            _closeSidePanelWithMaybeRun();
         }
     });
 
+    // ── B1: 컬럼 빌더 ─────────────────────────────
+    var COLUMNS_KEY = 'screener_custom_columns_v1';
+    var currentColumns = null;   // string[] — null 이면 ViewColumns[currentView] 사용
+
+    function getActiveColumns() {
+        if (currentColumns && currentColumns.length) return currentColumns;
+        return ViewColumns[currentView] || ViewColumns.overview;
+    }
+
+    function saveCustomColumns() {
+        try { localStorage.setItem(COLUMNS_KEY, JSON.stringify(currentColumns || [])); } catch (e) {}
+    }
+    function restoreCustomColumns() {
+        try {
+            var raw = localStorage.getItem(COLUMNS_KEY);
+            var parsed = raw ? JSON.parse(raw) : null;
+            if (Array.isArray(parsed) && parsed.length) {
+                // 무효 키 제거 (ColumnDefs 갱신 호환)
+                currentColumns = parsed.filter(function(k){ return ColumnDefs[k]; });
+                if (currentColumns.length) return true;
+                currentColumns = null;
+            }
+        } catch (e) {}
+        return false;
+    }
+
     function activateView(name) {
         currentView = name;
+        currentColumns = null;   // 프리셋 뷰 활성 = 커스텀 컬럼 클리어
+        try { localStorage.removeItem(COLUMNS_KEY); } catch (e) {}
         document.querySelectorAll('.view-btn').forEach(function(b){
             b.classList.toggle('active', b.dataset.view === name);
         });
@@ -986,45 +1191,154 @@
     document.querySelectorAll('.view-btn').forEach(function(b){
         b.addEventListener('click', function(){ activateView(b.dataset.view); });
     });
+    var addColBtn = document.getElementById('addColumnBtn');
+    if (addColBtn) addColBtn.addEventListener('click', openColumnPicker);
+
+    // ── 컬럼 빌더 모달 ────────────────────────────
+    var COL_CATEGORIES = [
+        { key: 'core',    label: '기본' },
+        { key: 'price',   label: '가격·시총' },
+        { key: 'perf',    label: '수익률' },
+        { key: 'tech',    label: '변동성·기술' },
+        { key: 'fund',    label: '펀더' },
+        { key: 'foreign', label: '외국인 수급' },
+    ];
+
+    function openColumnPicker() {
+        // 이미 열린 모달 제거
+        var existing = document.getElementById('colPickerModal');
+        if (existing) { existing.remove(); return; }
+
+        var active = new Set(getActiveColumns());
+        var html = '<div class="col-picker-overlay" id="colPickerModal">'
+                 + '<div class="col-picker-panel">'
+                 + '<div class="col-picker-head">'
+                 +   '<strong>컬럼 선택</strong>'
+                 +   '<input type="text" id="colPickerSearch" placeholder="컬럼 검색…" autocomplete="off">'
+                 +   '<button type="button" class="col-picker-close" title="닫기">×</button>'
+                 + '</div>'
+                 + '<div class="col-picker-body" id="colPickerBody">';
+        COL_CATEGORIES.forEach(function(cat) {
+            var keys = Object.keys(ColumnDefs).filter(function(k){
+                return (ColumnDefs[k].cat || 'core') === cat.key && ColumnDefs[k].label;
+            });
+            if (!keys.length) return;
+            html += '<div class="col-picker-cat" data-cat="' + cat.key + '">'
+                  + '<div class="col-picker-cat-title">' + cat.label + '</div>'
+                  + '<div class="col-picker-grid">';
+            keys.forEach(function(k) {
+                var d = ColumnDefs[k];
+                var checked = active.has(k) ? 'checked' : '';
+                var locked  = (k === 'ticker' || k === 'actions') ? 'data-locked="1"' : '';
+                html += '<label class="col-picker-item" ' + locked + '>'
+                      + '<input type="checkbox" data-col="' + k + '" ' + checked + ' '
+                      + (locked ? 'disabled' : '') + '>'
+                      + '<span>' + (d.label || k) + '</span>'
+                      + '</label>';
+            });
+            html += '</div></div>';
+        });
+        html += '</div>'
+              + '<div class="col-picker-foot">'
+              +   '<button type="button" class="btn col-picker-reset">기본값으로</button>'
+              +   '<button type="button" class="btn btn-primary col-picker-apply">적용</button>'
+              + '</div></div></div>';
+        var wrap = document.createElement('div');
+        wrap.innerHTML = html;
+        document.body.appendChild(wrap.firstChild);
+        wireColumnPicker();
+    }
+
+    function wireColumnPicker() {
+        var modal = document.getElementById('colPickerModal');
+        if (!modal) return;
+        var close = function() { modal.remove(); };
+        modal.querySelector('.col-picker-close').addEventListener('click', close);
+        modal.addEventListener('click', function(e) {
+            if (e.target === modal) close();
+        });
+        // 검색 — 일치 안하는 항목 hide
+        modal.querySelector('#colPickerSearch').addEventListener('input', function(e) {
+            var q = e.target.value.trim().toLowerCase();
+            modal.querySelectorAll('.col-picker-item').forEach(function(it) {
+                var label = it.textContent.toLowerCase();
+                it.style.display = (!q || label.indexOf(q) >= 0) ? '' : 'none';
+            });
+            modal.querySelectorAll('.col-picker-cat').forEach(function(cat) {
+                var anyVisible = Array.from(cat.querySelectorAll('.col-picker-item'))
+                    .some(function(it){ return it.style.display !== 'none'; });
+                cat.style.display = anyVisible ? '' : 'none';
+            });
+        });
+        modal.querySelector('.col-picker-reset').addEventListener('click', function() {
+            currentColumns = null;
+            try { localStorage.removeItem(COLUMNS_KEY); } catch (e) {}
+            close();
+            renderResults();
+        });
+        modal.querySelector('.col-picker-apply').addEventListener('click', function() {
+            var picked = [];
+            // ticker/actions 자동 포함 (locked)
+            picked.push('ticker');
+            modal.querySelectorAll('input[type=checkbox][data-col]:checked').forEach(function(cb) {
+                var k = cb.dataset.col;
+                if (k === 'ticker' || k === 'actions') return;
+                picked.push(k);
+            });
+            picked.push('actions');
+            // 빈 셋이면 기본 overview 로 fallback
+            if (picked.length <= 2) {
+                currentColumns = null;
+                try { localStorage.removeItem(COLUMNS_KEY); } catch (e) {}
+            } else {
+                currentColumns = picked;
+                saveCustomColumns();
+                // 프리셋 active 해제
+                document.querySelectorAll('.view-btn').forEach(function(b){ b.classList.remove('active'); });
+            }
+            close();
+            renderResults();
+        });
+    }
 
     var ColumnDefs = {
-        ticker:     { label: '티커', cls: 'ticker-cell', html: function(r){
+        ticker:     { label: '티커', cls: 'ticker-cell', cat: 'core', html: function(r){
             return '<a href="/pages/stocks/'+encodeURIComponent(r.ticker)+'" style="color:var(--accent);">'+r.ticker+'</a>'+
                    ' <span style="color:var(--text-muted);font-size:11px;">'+(r.market||'')+'</span>'+
                    (r.is_top_pick ? ' <span class="ai-pick-badge" title="오늘의 AI Top Picks 포함">🏆 AI Pick</span>' : '');
         }},
-        name:       { label: '종목명', html: function(r){ return r.asset_name || '-'; }},
-        sector:     { label: '섹터', html: function(r){ return '<span style="color:var(--text-muted);">'+(r.sector_norm||'-')+'</span>'; }},
-        market_cap: { label: '시총', cls: 'num', html: function(r){ return fmtMcap(r.market_cap_krw); }, sortKey:'market_cap_krw' },
-        last_price: { label: '현재가', cls: 'num', html: function(r){
+        name:       { label: '종목명', cat: 'core', html: function(r){ return r.asset_name || '-'; }},
+        sector:     { label: '섹터', cat: 'core', html: function(r){ return '<span style="color:var(--text-muted);">'+(r.sector_norm||'-')+'</span>'; }},
+        market_cap: { label: '시총', cls: 'num', cat: 'price', html: function(r){ return fmtMcap(r.market_cap_krw); }, sortKey:'market_cap_krw' },
+        last_price: { label: '현재가', cls: 'num', cat: 'price', html: function(r){
             return r.close_latest != null ? r.close_latest.toLocaleString() + ' ' + (r.last_price_ccy||'') : '-';
         }, sortKey:'close_latest' },
-        r1m: { label: '1m',  cls: 'num', html: function(r){ return fmtPctClass(r.r1m); }, sortKey:'r1m' },
-        r3m: { label: '3m',  cls: 'num', html: function(r){ return fmtPctClass(r.r3m); }, sortKey:'r3m' },
-        r6m: { label: '6m',  cls: 'num', html: function(r){ return fmtPctClass(r.r6m); }, sortKey:'r6m' },
-        r1y: { label: '1y',  cls: 'num', html: function(r){ return fmtPctClass(r.r1y); }, sortKey:'r1y' },
-        ytd: { label: 'YTD', cls: 'num', html: function(r){ return fmtPctClass(r.ytd); }, sortKey:'ytd' },
-        liquidity: { label: '거래대금', cls: 'num', html: function(r){ return fmtMcap(r.avg_daily_value); }, sortKey:'avg_daily_value' },
-        vol60:     { label: 'Vol60',    cls: 'num', html: function(r){ return r.vol60_pct != null ? r.vol60_pct.toFixed(2)+'%' : '-'; }, sortKey:'vol60_pct' },
-        vol_ratio: { label: 'VolRatio', cls: 'num', html: function(r){ return r.volume_ratio != null ? '×'+r.volume_ratio.toFixed(2) : '-'; }, sortKey:'volume_ratio' },
-        ma20:  { label: 'MA20',  cls: 'num', html: function(r){ return r.ma20  != null ? r.ma20.toFixed(0)  : '-'; }, sortKey:'ma20' },
-        ma60:  { label: 'MA60',  cls: 'num', html: function(r){ return r.ma60  != null ? r.ma60.toFixed(0)  : '-'; }, sortKey:'ma60' },
-        ma200: { label: 'MA200', cls: 'num', html: function(r){ return r.ma200 != null ? r.ma200.toFixed(0) : '-'; }, sortKey:'ma200' },
-        prox52:    { label: '52w근접', cls: 'num', html: function(r){ return r.high_52w_proximity != null ? (r.high_52w_proximity*100).toFixed(1)+'%' : '-'; }, sortKey:'high_52w_proximity' },
-        high_252d: { label: '52w-high', cls: 'num', html: function(r){ return r.high_252d != null ? r.high_252d.toFixed(0) : '-'; }, sortKey:'high_252d' },
-        low_252d:  { label: '52w-low',  cls: 'num', html: function(r){ return r.low_252d  != null ? r.low_252d.toFixed(0)  : '-'; }, sortKey:'low_252d' },
-        drawdown:  { label: 'DD60',     cls: 'num', html: function(r){ return r.drawdown_60d_pct != null ? r.drawdown_60d_pct.toFixed(2)+'%' : '-'; }, sortKey:'drawdown_60d_pct' },
-        sparkline: { label: '60d', html: function(r){ return r.sparkline_60d ? sparklineSVG(r.sparkline_60d) : '-'; }},
+        r1m: { label: '1m',  cls: 'num', cat: 'perf', html: function(r){ return fmtPctClass(r.r1m); }, sortKey:'r1m' },
+        r3m: { label: '3m',  cls: 'num', cat: 'perf', html: function(r){ return fmtPctClass(r.r3m); }, sortKey:'r3m' },
+        r6m: { label: '6m',  cls: 'num', cat: 'perf', html: function(r){ return fmtPctClass(r.r6m); }, sortKey:'r6m' },
+        r1y: { label: '1y',  cls: 'num', cat: 'perf', html: function(r){ return fmtPctClass(r.r1y); }, sortKey:'r1y' },
+        ytd: { label: 'YTD', cls: 'num', cat: 'perf', html: function(r){ return fmtPctClass(r.ytd); }, sortKey:'ytd' },
+        liquidity: { label: '거래대금', cls: 'num', cat: 'price', html: function(r){ return fmtMcap(r.avg_daily_value); }, sortKey:'avg_daily_value' },
+        vol60:     { label: 'Vol60',    cls: 'num', cat: 'tech', html: function(r){ return r.vol60_pct != null ? r.vol60_pct.toFixed(2)+'%' : '-'; }, sortKey:'vol60_pct' },
+        vol_ratio: { label: 'VolRatio', cls: 'num', cat: 'tech', html: function(r){ return r.volume_ratio != null ? '×'+r.volume_ratio.toFixed(2) : '-'; }, sortKey:'volume_ratio' },
+        ma20:  { label: 'MA20',  cls: 'num', cat: 'tech', html: function(r){ return r.ma20  != null ? r.ma20.toFixed(0)  : '-'; }, sortKey:'ma20' },
+        ma60:  { label: 'MA60',  cls: 'num', cat: 'tech', html: function(r){ return r.ma60  != null ? r.ma60.toFixed(0)  : '-'; }, sortKey:'ma60' },
+        ma200: { label: 'MA200', cls: 'num', cat: 'tech', html: function(r){ return r.ma200 != null ? r.ma200.toFixed(0) : '-'; }, sortKey:'ma200' },
+        prox52:    { label: '52w근접', cls: 'num', cat: 'tech', html: function(r){ return r.high_52w_proximity != null ? (r.high_52w_proximity*100).toFixed(1)+'%' : '-'; }, sortKey:'high_52w_proximity' },
+        high_252d: { label: '52w-high', cls: 'num', cat: 'tech', html: function(r){ return r.high_252d != null ? r.high_252d.toFixed(0) : '-'; }, sortKey:'high_252d' },
+        low_252d:  { label: '52w-low',  cls: 'num', cat: 'tech', html: function(r){ return r.low_252d  != null ? r.low_252d.toFixed(0)  : '-'; }, sortKey:'low_252d' },
+        drawdown:  { label: 'DD60',     cls: 'num', cat: 'tech', html: function(r){ return r.drawdown_60d_pct != null ? r.drawdown_60d_pct.toFixed(2)+'%' : '-'; }, sortKey:'drawdown_60d_pct' },
+        sparkline: { label: '60d', cat: 'tech', html: function(r){ return r.sparkline_60d ? sparklineSVG(r.sparkline_60d) : '-'; }},
         // 펀더
-        per:       { label: 'PER',  cls: 'num', html: function(r){ return r.per != null ? r.per.toFixed(1) : '-'; }, sortKey:'per' },
-        pbr:       { label: 'PBR',  cls: 'num', html: function(r){ return r.pbr != null ? r.pbr.toFixed(2) : '-'; }, sortKey:'pbr' },
-        eps:       { label: 'EPS',  cls: 'num', html: function(r){ return r.eps != null ? Math.round(r.eps).toLocaleString() : '-'; }, sortKey:'eps' },
-        div_yield: { label: '배당%', cls: 'num', html: function(r){ return r.dividend_yield != null ? r.dividend_yield.toFixed(2)+'%' : '-'; }, sortKey:'dividend_yield' },
+        per:       { label: 'PER',  cls: 'num', cat: 'fund', html: function(r){ return r.per != null ? r.per.toFixed(1) : '-'; }, sortKey:'per' },
+        pbr:       { label: 'PBR',  cls: 'num', cat: 'fund', html: function(r){ return r.pbr != null ? r.pbr.toFixed(2) : '-'; }, sortKey:'pbr' },
+        eps:       { label: 'EPS',  cls: 'num', cat: 'fund', html: function(r){ return r.eps != null ? Math.round(r.eps).toLocaleString() : '-'; }, sortKey:'eps' },
+        div_yield: { label: '배당%', cls: 'num', cat: 'fund', html: function(r){ return r.dividend_yield != null ? r.dividend_yield.toFixed(2)+'%' : '-'; }, sortKey:'dividend_yield' },
         // 외국인 수급
-        foreign_own: { label: '보유율(%)', cls: 'num', html: function(r){
+        foreign_own: { label: '보유율(%)', cls: 'num', cat: 'foreign', html: function(r){
             return r.foreign_ownership_pct != null ? r.foreign_ownership_pct.toFixed(2)+'%' : '-';
         }, sortKey:'foreign_ownership_pct' },
-        foreign_delta: { label: '보유변화(%p)', cls: 'num', html: function(r){
+        foreign_delta: { label: '보유변화(%p)', cls: 'num', cat: 'foreign', html: function(r){
             var v = r.foreign_ownership_delta_pp;
             var w = r.foreign_ownership_delta_window_days || 20;
             if (v == null) return '-';
@@ -1032,7 +1346,7 @@
             var sign = v >= 0 ? '+' : '';
             return '<span class="'+cls+'">'+sign+v.toFixed(2)+'</span><small style="color:var(--text-muted);font-size:10px;"> '+w+'d</small>';
         }, sortKey:'foreign_ownership_delta_pp' },
-        foreign_netbuy: { label: '순매수(억)', cls: 'num', html: function(r){
+        foreign_netbuy: { label: '순매수(억)', cls: 'num', cat: 'foreign', html: function(r){
             var v = r.foreign_net_buy_krw;
             var w = r.foreign_net_buy_window_days || 20;
             if (v == null) return '-';
@@ -1041,7 +1355,7 @@
             return '<span class="'+cls+'">'+sign+(v/1e8).toFixed(0)+'</span><small style="color:var(--text-muted);font-size:10px;"> '+w+'d</small>';
         }, sortKey:'foreign_net_buy_krw' },
         // 행 액션 (⭐ 워치리스트 토글 + ⋮ 드롭다운)
-        actions: { label: '', cls: 'actions-cell', html: function(r) {
+        actions: { label: '', cls: 'actions-cell', cat: 'core', html: function(r) {
             var t = encodeURIComponent(r.ticker);
             var m = encodeURIComponent(r.market || '');
             var on = r.is_in_watchlist ? ' is-on' : '';
@@ -1117,7 +1431,163 @@
         });
     }
 
+    // ── B2: 인라인 행 펼침 (mini-cockpit) ──────────
+    var _expandedTicker = null;
+    var _detailCache = {};       // ticker → { overview, ohlcv } promise
+    var _detailChart = null;     // lightweight-charts instance — 1개만 유지
+
+    function attachRowExpand(bodyEl) {
+        bodyEl.addEventListener('click', function(e) {
+            // 액션 버튼·링크는 기본 동작 유지
+            if (e.target.closest('.row-actions')) return;
+            if (e.target.closest('a')) return;
+            if (e.target.closest('.row-menu-dropdown')) return;
+            var tr = e.target.closest('tr[data-ticker]');
+            if (!tr) return;
+            var ticker = tr.dataset.ticker;
+            var market = tr.dataset.market || '';
+            toggleRowDetail(bodyEl, tr, ticker, market);
+        });
+    }
+
+    function _disposeDetailChart() {
+        if (_detailChart) {
+            try { _detailChart.remove(); } catch (e) {}
+            _detailChart = null;
+        }
+    }
+
+    function toggleRowDetail(bodyEl, tr, ticker, market) {
+        // 기존 펼친 행 제거
+        var existing = bodyEl.querySelector('tr.row-detail');
+        if (existing) existing.remove();
+        bodyEl.querySelectorAll('tr[data-ticker].is-expanded').forEach(function(r){
+            r.classList.remove('is-expanded');
+        });
+        _disposeDetailChart();
+
+        if (_expandedTicker === ticker) {
+            _expandedTicker = null;
+            return;
+        }
+        _expandedTicker = ticker;
+        tr.classList.add('is-expanded');
+
+        var colCount = bodyEl.querySelectorAll('table.result-table thead th').length || 10;
+        var detail = document.createElement('tr');
+        detail.className = 'row-detail';
+        detail.innerHTML = '<td colspan="' + colCount + '">'
+            + '<div class="row-detail-body">'
+            +   '<div class="row-detail-chart" id="rd-chart-' + ticker + '">'
+            +     '<div class="chart-loading">차트 로드 중...</div>'
+            +   '</div>'
+            +   '<div class="row-detail-side" id="rd-side-' + ticker + '">'
+            +     '<div style="color:var(--text-muted);font-size:12px;">데이터 조회 중…</div>'
+            +   '</div>'
+            + '</div>'
+            + '</td>';
+        tr.parentNode.insertBefore(detail, tr.nextSibling);
+
+        fetchDetailData(ticker, market).then(function(data) {
+            // 펼침이 다른 행으로 바뀌었으면 무시
+            if (_expandedTicker !== ticker) return;
+            renderDetailChart(ticker, data.ohlcv);
+            renderDetailSide(ticker, market, data.overview);
+        }).catch(function() {
+            var sideEl = document.getElementById('rd-side-' + ticker);
+            if (sideEl && _expandedTicker === ticker) {
+                sideEl.innerHTML = '<div style="color:var(--text-muted);font-size:12px;">데이터 조회 실패</div>';
+            }
+        });
+    }
+
+    function fetchDetailData(ticker, market) {
+        if (_detailCache[ticker]) return _detailCache[ticker];
+        var qs = market ? ('?market=' + encodeURIComponent(market)) : '';
+        var p = Promise.all([
+            fetch('/api/stocks/' + encodeURIComponent(ticker) + '/overview' + qs).then(function(r){ return r.ok ? r.json() : null; }),
+            fetch('/api/stocks/' + encodeURIComponent(ticker) + '/ohlcv' + (market ? '?market=' + encodeURIComponent(market) + '&days=60' : '?days=60')).then(function(r){ return r.ok ? r.json() : null; }),
+        ]).then(function(arr) {
+            return { overview: arr[0], ohlcv: arr[1] };
+        });
+        _detailCache[ticker] = p;
+        return p;
+    }
+
+    function renderDetailChart(ticker, ohlcv) {
+        var container = document.getElementById('rd-chart-' + ticker);
+        if (!container) return;
+        var series = (ohlcv && ohlcv.series) || [];
+        if (!series.length) {
+            container.innerHTML = '<div class="chart-loading">OHLCV 데이터 없음</div>';
+            return;
+        }
+        if (typeof LightweightCharts === 'undefined') {
+            container.innerHTML = '<div class="chart-loading">차트 라이브러리 로드 중…</div>';
+            return;
+        }
+        container.innerHTML = '';
+        try {
+            var chart = LightweightCharts.createChart(container, {
+                width: container.clientWidth,
+                height: container.clientHeight,
+                layout: { background: { type: 'solid', color: 'transparent' }, textColor: '#999' },
+                grid: { vertLines: { color: 'rgba(255,255,255,0.05)' }, horzLines: { color: 'rgba(255,255,255,0.05)' } },
+                timeScale: { timeVisible: false, secondsVisible: false, borderColor: 'rgba(255,255,255,0.1)' },
+                rightPriceScale: { borderColor: 'rgba(255,255,255,0.1)' },
+                handleScroll: false, handleScale: false,
+            });
+            var line = chart.addLineSeries({ color: '#6366f1', lineWidth: 2 });
+            line.setData(series.map(function(p){ return { time: p.date, value: p.close }; }));
+            chart.timeScale().fitContent();
+            _detailChart = chart;
+        } catch (e) {
+            container.innerHTML = '<div class="chart-loading">차트 렌더 실패</div>';
+        }
+    }
+
+    function renderDetailSide(ticker, market, ov) {
+        var side = document.getElementById('rd-side-' + ticker);
+        if (!side) return;
+        if (!ov) {
+            side.innerHTML = '<div style="color:var(--text-muted);font-size:12px;">overview 응답 없음</div>';
+            return;
+        }
+        var s = ov.stats || {};
+        function fmtPctC(v) {
+            if (v == null) return '-';
+            var c = v >= 0 ? 'positive' : 'negative';
+            return '<span class="' + c + '">' + (v > 0 ? '+' : '') + v.toFixed(2) + '%</span>';
+        }
+        var aiScore = s.ai_score != null ? s.ai_score + '/100' : '-';
+        var propCnt = s.proposal_count != null ? s.proposal_count + '회' : '-';
+        var avg3m   = fmtPctC(s.avg_post_return_3m_pct);
+        var alpha   = fmtPctC(s.alpha_vs_benchmark_pct);
+        var factor  = s.factor_pctile_avg != null ? Math.round(s.factor_pctile_avg * 100) + '%ile' : '-';
+
+        var qsMarket = market ? ('?market=' + encodeURIComponent(market)) : '';
+        side.innerHTML =
+            '<div class="row-detail-chips">' +
+              '<div class="row-detail-chip"><div class="chip-label">AI 종합</div><div class="chip-value">' + aiScore + '</div></div>' +
+              '<div class="row-detail-chip"><div class="chip-label">우리 추천</div><div class="chip-value">' + propCnt + '</div></div>' +
+              '<div class="row-detail-chip"><div class="chip-label">평균 3m</div><div class="chip-value">' + avg3m + '</div></div>' +
+              '<div class="row-detail-chip"><div class="chip-label">알파</div><div class="chip-value">' + alpha + '</div></div>' +
+              '<div class="row-detail-chip"><div class="chip-label">팩터 분위</div><div class="chip-value">' + factor + '</div></div>' +
+              (ov.sector ? '<div class="row-detail-chip"><div class="chip-label">섹터</div><div class="chip-value" style="font-size:11px;">' + ov.sector + '</div></div>' : '') +
+            '</div>' +
+            '<div class="row-detail-actions">' +
+              '<a class="btn" href="/pages/stocks/' + encodeURIComponent(ticker) + qsMarket + '">📊 종목 상세</a>' +
+            '</div>';
+    }
+
+    // 결과 재렌더 시 펼침 상태 초기화 (정렬 변경 등)
+    function _resetExpansion() {
+        _expandedTicker = null;
+        _disposeDetailChart();
+    }
+
     function renderResults() {
+        _resetExpansion();
         var body = $('resultsBody');
         var sumEl = $('resultSummary');
         if (!currentRows.length) {
@@ -1126,7 +1596,7 @@
             return;
         }
         sumEl.textContent = '총 '+currentRows.length+'건';
-        var cols = ViewColumns[currentView] || ViewColumns.overview;
+        var cols = getActiveColumns();
         var sorted = applySort(currentRows);
 
         var html = '<table class="result-table"><thead><tr>';
@@ -1141,7 +1611,9 @@
         });
         html += '</tr></thead><tbody>';
         sorted.forEach(function(r) {
-            html += '<tr>';
+            var tk = (r.ticker || '').replace(/"/g,'&quot;');
+            var mk = (r.market || '').replace(/"/g,'&quot;');
+            html += '<tr data-ticker="'+tk+'" data-market="'+mk+'">';
             cols.forEach(function(c) {
                 var def = ColumnDefs[c];
                 html += '<td class="'+(def.cls||'')+'">'+def.html(r)+'</td>';
@@ -1164,6 +1636,7 @@
                 renderResults();
             });
         });
+        attachRowExpand(body);
     }
 
     function showLimitBanner(count, limit) {
@@ -1937,6 +2410,40 @@
         });
     }
 
+    // ── B4: 분포 hint (평균/중앙값) — 시장 변경 시 재페치 ────
+    var _distFetched = { key: '', data: null };
+    function fetchDistribution() {
+        var hints = document.querySelectorAll('.dist-hint[data-metric]');
+        if (!hints.length) return;
+        var metricList = Array.from(new Set(Array.from(hints).map(function(h){ return h.dataset.metric; })));
+        var markets = checkedValuesById('f-markets-checks');
+        var key = metricList.join(',') + '|' + markets.join(',');
+        if (_distFetched.key === key && _distFetched.data) {
+            renderDistHints(_distFetched.data);
+            return;
+        }
+        var qs = 'metrics=' + encodeURIComponent(metricList.join(','));
+        if (markets.length) qs += '&markets=' + encodeURIComponent(markets.join(','));
+        fetch('/api/screener/distribution?' + qs)
+            .then(function(r){ if (!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+            .then(function(data) {
+                _distFetched = { key: key, data: data };
+                renderDistHints(data);
+            })
+            .catch(function() {});  // hint 실패는 silent
+    }
+    function renderDistHints(data) {
+        var metrics = (data && data.metrics) || {};
+        document.querySelectorAll('.dist-hint[data-metric]').forEach(function(h) {
+            var m = metrics[h.dataset.metric];
+            if (!m) { h.textContent = ''; return; }
+            var parts = [];
+            if (m.avg != null)    parts.push('평균 ' + m.avg);
+            if (m.median != null) parts.push('중앙 ' + m.median);
+            h.textContent = parts.join(' / ');
+        });
+    }
+
     // ── A2: preset bin 빠른 선택 ──────────────────
     function syncPresetBinHighlights() {
         document.querySelectorAll('.preset-bins').forEach(function(g) {
@@ -1969,7 +2476,6 @@
     // 그룹별 시장 의존성 (KRX 전용 그룹 등) — markets 체크박스 변화에 따라 활성/비활성
     function updateMarketDependentGroups() {
         var groups = document.querySelectorAll('.filter-group[data-requires-market]');
-        if (!groups.length) return;
         var selectedMarkets = checkedValuesById('f-markets-checks');
         groups.forEach(function(g) {
             var required = (g.dataset.requiresMarket || '').split(',').map(function(s){ return s.trim().toUpperCase(); }).filter(Boolean);
@@ -1980,6 +2486,8 @@
             g.classList.toggle('is-disabled', disabled);
             g.querySelectorAll('input, select').forEach(function(el) { el.disabled = disabled; });
         });
+        // B4: market 변경 → 분포 hint 재페치 (cache 키에 markets 포함)
+        fetchDistribution();
     }
 
     // 모든 입력 change → chips 갱신 + 라이브 카운트 페치 (auto-run 과 별도)
@@ -2025,6 +2533,10 @@
         ? new URLSearchParams(window.location.search).get('sectors').split(',')
         : null;
     restoreGroupState();
+    if (restoreCustomColumns()) {
+        // 사용자가 컬럼 커스터마이즈한 적 있음 → 프리셋 active 해제
+        document.querySelectorAll('.view-btn').forEach(function(b){ b.classList.remove('active'); });
+    }
     loadSectors(pendingSectors);
     loadSeeds();
     updateChipsFromDOM();

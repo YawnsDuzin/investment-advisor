@@ -23,7 +23,7 @@
   }
 """
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, Body, Response
+from fastapi import APIRouter, Depends, HTTPException, Body, Query, Response
 from psycopg2.extras import RealDictCursor
 import json
 
@@ -707,6 +707,72 @@ def count_screener(
         row = cur.fetchone()
 
     return {"count": int(row["n"]) if row and row.get("n") is not None else 0}
+
+
+# ──────────────────────────────────────────────
+# GET /api/screener/distribution — 메트릭별 시장 분포 (B4 hint UI)
+# ──────────────────────────────────────────────
+_DIST_METRICS = {
+    # alias: (table, column, where 추가 필터)
+    "per": ("stock_universe_fundamentals", "per", "per > 0"),
+    "pbr": ("stock_universe_fundamentals", "pbr", "pbr > 0"),
+    "dividend_yield": ("stock_universe_fundamentals", "dividend_yield", "dividend_yield IS NOT NULL"),
+    "eps": ("stock_universe_fundamentals", "eps", "eps IS NOT NULL"),
+}
+
+
+@router.get("/distribution")
+def screener_distribution(
+    metrics: str = Query("per,pbr,dividend_yield"),
+    markets: str = Query(""),
+    conn = Depends(get_db_conn),
+):
+    """메트릭별 분포 통계 (avg/median) — UI hint 용 경량 응답.
+
+    펀더 메트릭만 지원 (latest snapshot 7일). ohlcv 메트릭은 비용 큼 — v2.
+    """
+    metric_list = [m.strip() for m in metrics.split(",") if m.strip() in _DIST_METRICS]
+    if not metric_list:
+        return {"metrics": {}}
+
+    market_list = [m.strip().upper() for m in (markets or "").split(",") if m.strip()]
+
+    result: dict = {}
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        for m in metric_list:
+            table, col, extra_where = _DIST_METRICS[m]
+            where_parts = [
+                "snapshot_date >= CURRENT_DATE - INTERVAL '7 days'",
+                extra_where,
+            ]
+            params: list = []
+            if market_list:
+                where_parts.append("UPPER(market) = ANY(%s)")
+                params.append(market_list)
+            where_sql = " AND ".join(where_parts)
+            sql = f"""
+                WITH latest AS (
+                    SELECT DISTINCT ON (ticker, market) ticker, market, {col} AS v
+                    FROM {table}
+                    WHERE {where_sql}
+                    ORDER BY ticker, market, snapshot_date DESC
+                )
+                SELECT
+                    AVG(v)::float AS avg,
+                    PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY v)::float AS median,
+                    COUNT(*) AS n
+                FROM latest
+            """
+            cur.execute(sql, params)
+            row = cur.fetchone()
+            if row and row.get("n"):
+                result[m] = {
+                    "avg": round(row["avg"], 2) if row.get("avg") is not None else None,
+                    "median": round(row["median"], 2) if row.get("median") is not None else None,
+                    "n": int(row["n"]),
+                }
+
+    return {"metrics": result}
 
 
 # ──────────────────────────────────────────────
