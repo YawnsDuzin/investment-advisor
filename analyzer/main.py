@@ -73,7 +73,7 @@ def _run_analysis(cfg: AppConfig, today: str, run_id: int | None, log,
 
     # 1) 뉴스 수집
     try:
-        news_text, news_articles = collect_news_structured(cfg.news)
+        news_text, news_articles = collect_news_structured(cfg.news, db_cfg=cfg.db)
     except Exception as e:
         log.error(f"뉴스 수집 실패: {e}", extra={"detail": traceback.format_exc()})
         finish_run(cfg.db, run_id, status="failure", error_message=f"뉴스 수집 실패: {e}")

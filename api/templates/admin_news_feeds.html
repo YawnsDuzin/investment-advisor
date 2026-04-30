@@ -1,0 +1,209 @@
+{% extends "base.html" %}
+{% block title %}뉴스 피드 health — AlphaSignal{% endblock %}
+{% block page_title %}뉴스 피드 health 모니터링{% endblock %}
+
+{% block content %}
+<style>
+    .feeds-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .feeds-table th, .feeds-table td {
+        padding: 8px 10px; text-align: left;
+        border-bottom: 1px solid var(--border);
+        vertical-align: middle;
+    }
+    .feeds-table th { color: var(--text-muted); font-weight: 600; white-space: nowrap; }
+    .feeds-table tr:hover { background: var(--bg-card-hover); }
+    .feeds-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+    .feeds-table td.url {
+        font-family: monospace; font-size: 11px; max-width: 360px;
+        word-break: break-all; color: var(--text-muted);
+    }
+    .status-badge {
+        display: inline-block; padding: 2px 8px; border-radius: 3px;
+        font-size: 11px; font-weight: 600; text-transform: uppercase;
+    }
+    .status-badge.ok          { background: rgba(52,211,153,0.18);  color: var(--green); }
+    .status-badge.dead        { background: rgba(248,113,113,0.20); color: var(--red); }
+    .status-badge.stale       { background: rgba(251,191,36,0.20);  color: var(--orange); }
+    .status-badge.parse_error { background: rgba(248,113,113,0.20); color: var(--red); }
+    .status-badge.timeout     { background: rgba(147,130,255,0.18); color: var(--purple); }
+    .status-badge.error       { background: rgba(248,113,113,0.20); color: var(--red); }
+    .region-tag {
+        display: inline-block; padding: 1px 6px; border-radius: 3px;
+        font-size: 11px; font-weight: 600;
+        background: rgba(79,140,255,0.12); color: var(--accent);
+    }
+    .sparkline { display: inline-block; vertical-align: middle; }
+    .sparkline rect { transition: opacity 0.15s; }
+    .sparkline rect:hover { opacity: 0.7; cursor: help; }
+    .topbar {
+        display: flex; justify-content: space-between; align-items: center;
+        margin-bottom: 14px; flex-wrap: wrap; gap: 10px;
+    }
+    .summary-cards {
+        display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        gap: 10px; margin-bottom: 18px;
+    }
+    .summary-card {
+        background: var(--bg-card); border: 1px solid var(--border);
+        border-radius: 6px; padding: 12px;
+    }
+    .summary-card .label { font-size: 11px; color: var(--text-muted); margin-bottom: 4px; }
+    .summary-card .value { font-size: 22px; font-weight: 700; }
+    .summary-card.alert .value { color: var(--red); }
+    .summary-card.warn  .value { color: var(--orange); }
+    .summary-card.ok    .value { color: var(--green); }
+
+    .chronic-banner {
+        background: rgba(248,113,113,0.10); border: 1px solid rgba(248,113,113,0.3);
+        border-radius: 6px; padding: 12px 16px; margin-bottom: 18px;
+    }
+    .chronic-banner h3 { margin: 0 0 8px; color: var(--red); font-size: 14px; }
+    .chronic-banner ul { margin: 0; padding-left: 20px; font-size: 12px; }
+    .chronic-banner li { margin-bottom: 4px; color: var(--text-muted); }
+    .chronic-banner code { font-size: 11px; background: rgba(0,0,0,0.2); padding: 1px 4px; border-radius: 3px; }
+</style>
+
+{# 요약 카운트 계산 #}
+{% set total_feeds = feeds | length %}
+{% set ok_count = feeds | selectattr("latest_status", "equalto", "ok") | list | length %}
+{% set dead_count = feeds | selectattr("latest_status", "equalto", "dead") | list | length %}
+{% set stale_count = feeds | selectattr("latest_status", "equalto", "stale") | list | length %}
+{% set bad_total = total_feeds - ok_count %}
+
+<div class="topbar">
+    <p style="color:var(--text-muted);font-size:13px;margin:0;">
+        14일 rolling — RSS 피드 health 시계열 (news_feed_health v45)
+    </p>
+    <div>
+        <a href="/admin" style="color:var(--accent);font-size:13px;">← 관리자 홈</a>
+        <span style="color:var(--border);margin:0 8px;">|</span>
+        <a href="/admin/news-feeds/data" style="color:var(--accent);font-size:13px;" target="_blank">JSON</a>
+        <span style="color:var(--border);margin:0 8px;">|</span>
+        <a href="/admin/news-feeds/chronic" style="color:var(--accent);font-size:13px;" target="_blank">만성 실패</a>
+    </div>
+</div>
+
+<div class="summary-cards">
+    <div class="summary-card ok">
+        <div class="label">정상</div>
+        <div class="value">{{ ok_count }}</div>
+    </div>
+    <div class="summary-card {% if dead_count %}alert{% endif %}">
+        <div class="label">사망 (dead)</div>
+        <div class="value">{{ dead_count }}</div>
+    </div>
+    <div class="summary-card {% if stale_count %}warn{% endif %}">
+        <div class="label">stale</div>
+        <div class="value">{{ stale_count }}</div>
+    </div>
+    <div class="summary-card {% if chronic_count %}alert{% endif %}">
+        <div class="label">7일 연속 실패</div>
+        <div class="value">{{ chronic_count }}</div>
+    </div>
+    <div class="summary-card">
+        <div class="label">전체 피드</div>
+        <div class="value">{{ total_feeds }}</div>
+    </div>
+</div>
+
+{% if chronic and chronic_count > 0 %}
+<div class="chronic-banner">
+    <h3>⚠ 7일 연속 실패 — 즉시 교체 또는 점검 필요</h3>
+    <ul>
+        {% for c in chronic %}
+        <li>
+            <span class="region-tag">{{ c.region }}</span>
+            <code>{{ c.url }}</code>
+            — {{ c.bad_days }}/{{ c.total_days }}일 실패 (마지막 체크: {{ c.last_check }})
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
+
+{% if error %}
+<div style="background:rgba(248,113,113,0.10);border:1px solid rgba(248,113,113,0.3);border-radius:6px;padding:10px 14px;margin-bottom:14px;color:var(--red);font-size:13px;">
+    ⚠ {{ error }}
+</div>
+{% endif %}
+
+{% if not feeds %}
+<p style="color:var(--text-muted);text-align:center;padding:40px 20px;">
+    아직 수집된 health 데이터가 없습니다. analyzer 가 한 번이라도 실행되면 여기에 표시됩니다.
+</p>
+{% else %}
+<table class="feeds-table">
+    <thead>
+        <tr>
+            <th>Region</th>
+            <th>Category</th>
+            <th>URL</th>
+            <th>오늘 status</th>
+            <th class="num">14일 평균</th>
+            <th class="num">오늘 (raw / fresh / stored)</th>
+            <th class="num">실패 일수</th>
+            <th>14일 추세</th>
+            <th>마지막 발행</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for f in feeds %}
+        <tr>
+            <td><span class="region-tag">{{ f.region }}</span></td>
+            <td style="font-size:11px;color:var(--text-muted);">{{ f.category }}</td>
+            <td class="url">{{ f.url }}</td>
+            <td>
+                {% if f.latest_status %}
+                <span class="status-badge {{ f.latest_status }}">{{ f.latest_status }}</span>
+                {% else %}-{% endif %}
+            </td>
+            <td class="num">{{ f.avg_stored_14d }}</td>
+            <td class="num">
+                {% if f.raw_today is not none %}
+                {{ f.raw_today }} / {{ f.fresh_today or 0 }} / {{ f.stored_today or 0 }}
+                {% else %}-{% endif %}
+            </td>
+            <td class="num">
+                {% if f.bad_days_14d > 0 %}
+                <span style="color:var(--red);font-weight:600;">{{ f.bad_days_14d }}</span> / {{ f.history_count }}
+                {% else %}
+                <span style="color:var(--green);">0</span> / {{ f.history_count }}
+                {% endif %}
+            </td>
+            <td>
+                {# SVG sparkline — 14일 stored 카운트 #}
+                {% if f.history %}
+                {% set max_stored = (f.history | map(attribute='stored') | max) or 1 %}
+                <svg class="sparkline" width="112" height="22" xmlns="http://www.w3.org/2000/svg">
+                    {% for h in f.history %}
+                        {% set bar_h = (h.stored / (max_stored if max_stored > 0 else 1) * 18) | round(1) %}
+                        {% set bar_h = bar_h if bar_h >= 2 or h.stored > 0 else 1 %}
+                        {% set color = '#34d399' if h.status == 'ok'
+                            else '#fbbf24' if h.status == 'stale'
+                            else '#f87171' if h.status in ('dead','parse_error','timeout','error')
+                            else '#525866' %}
+                        <rect x="{{ loop.index0 * 8 }}" y="{{ 20 - bar_h }}"
+                              width="6" height="{{ bar_h }}"
+                              fill="{{ color }}">
+                            <title>{{ h.date }} — {{ h.status }} ({{ h.stored }}건)</title>
+                        </rect>
+                    {% endfor %}
+                </svg>
+                {% endif %}
+            </td>
+            <td style="font-size:11px;color:var(--text-muted);">
+                {% if f.latest_pub_at %}{{ f.latest_pub_at | string | truncate(16, True, "") }}{% else %}-{% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<p style="color:var(--text-muted);font-size:11px;margin-top:14px;">
+    범례 — sparkline 색상:
+    <span style="color:#34d399;">■ ok</span>
+    <span style="color:#fbbf24;margin-left:8px;">■ stale</span>
+    <span style="color:#f87171;margin-left:8px;">■ dead / parse_error / timeout</span>
+</p>
+{% endif %}
+{% endblock %}

@@ -25,6 +25,11 @@ from shared.db.top_picks_repo import (
     save_top_picks,
     update_top_picks_ai_rerank,
 )
+from shared.db.feed_health_repo import (
+    upsert_feed_health,
+    list_recent_feed_health,
+    detect_chronic_failures,
+)
 
 
 __all__ = [
@@ -41,4 +46,7 @@ __all__ = [
     "get_existing_theme_keys",
     "save_top_picks",
     "update_top_picks_ai_rerank",
+    "upsert_feed_health",
+    "list_recent_feed_health",
+    "detect_chronic_failures",
 ]

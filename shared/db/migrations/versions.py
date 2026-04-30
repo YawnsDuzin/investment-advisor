@@ -1901,3 +1901,60 @@ def _migrate_to_v44(cur) -> None:
         ON CONFLICT (version) DO NOTHING;
     """)
     print("[DB] v44 마이그레이션 완료 — stock_universe_foreign_flow")
+
+
+def _migrate_to_v45(cur) -> None:
+    """v45: news_feed_health — RSS 피드 health 시계열 추적.
+
+    `analyzer.news_collector` 가 매 실행마다 피드별 health stat 을 UPSERT.
+    admin UI `/admin/news-feeds` 의 데이터 소스. 14일 rolling 표 + 만성 실패 알림.
+
+    상태 분류:
+      - ok          : 24h 내 fresh article 1건 이상
+      - dead        : feed.entries == 0 (RSS 종료/차단)
+      - stale       : entries > 0 but 24h fresh == 0 (abandoned 또는 정책 변경)
+      - parse_error : feedparser bozo == 1 (XML 파싱 실패)
+      - timeout     : socket 30s timeout
+      - error       : 기타 예외
+
+    UNIQUE(url, check_date) — 하루 1 row, 같은 날 재실행은 UPSERT 로 갱신.
+    retention 정책 미적용 (시계열 분석 가치 → 별도 cleanup 작업으로 관리).
+    """
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS news_feed_health (
+            id              SERIAL PRIMARY KEY,
+            url             TEXT NOT NULL,
+            region          TEXT NOT NULL,
+            category        TEXT NOT NULL,
+            check_date      DATE NOT NULL,
+            raw_entries     INT,
+            fresh_articles  INT,
+            stored_articles INT,
+            status          VARCHAR(20),
+            bozo            BOOLEAN DEFAULT FALSE,
+            bozo_exception  TEXT,
+            latest_pub_at   TIMESTAMPTZ,
+            elapsed_ms      INT,
+            checked_at      TIMESTAMPTZ DEFAULT NOW(),
+            UNIQUE(url, check_date)
+        );
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_feed_health_status
+            ON news_feed_health(status, check_date DESC)
+            WHERE status != 'ok';
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_feed_health_url_date
+            ON news_feed_health(url, check_date DESC);
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_feed_health_region_date
+            ON news_feed_health(region, check_date DESC);
+    """)
+
+    cur.execute("""
+        INSERT INTO schema_version (version) VALUES (45)
+        ON CONFLICT (version) DO NOTHING;
+    """)
+    print("[DB] v45 마이그레이션 완료 — news_feed_health 테이블 (RSS 피드 health 시계열)")
