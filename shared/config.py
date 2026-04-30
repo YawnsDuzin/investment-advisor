@@ -62,13 +62,14 @@ class NewsConfig:
     GLOBAL_NEWS_ENABLED 토글로 JP/CN/EU 활성화 제어.
     """
     feed_sources: list[FeedSpec] = field(default_factory=lambda: [
-        # 2026-04-30 health check 결과 dead 피드 10개 제거 + 신규 7개 추가.
-        # 제거 사유 메모 (audit trail):
-        #   - hankyung economy/stock, thebell      : KR RSS 종료 또는 차단
-        #   - feeds.reuters.com/* (3건)            : Reuters 2022 RSS 서비스 종료
-        #   - federalregister.gov atom              : 0건 응답 (필터 URL 정책 변경)
-        #   - digitimes daily_news                  : 0건
-        #   - caixinglobal, yicaiglobal             : CN 영문 RSS 종료
+        # 2026-04-30 운영기 health check 2차 — 운영기에서만 죽는 피드 3개 교체.
+        # 제거 사유 (audit trail):
+        #   - semianalysis.com/feed         : 운영기 dead (Substack CDN 또는 라즈베리파이 IP 차단)
+        #   - globaltimes.cn/rss/outbrain   : 운영기 dead (CN 매체 한국 IP 차단 추정)
+        #   - scmp.com/rss/318208/feed      : "Health & Environment" 콘텐츠로 early_signals 의도와 불일치
+        # 1차(같은 날) 정리:
+        #   - hankyung economy/stock, thebell, reuters/* (3건), federalregister, digitimes,
+        #     caixinglobal, yicaiglobal — 모두 RSS 종료 또는 차단
         # ── KR (한국, ko) ──────────────────────────────
         FeedSpec("https://www.etnews.com/rss/Section901.xml",          "ko", "KR", "korea_early"),
         FeedSpec("https://www.yna.co.kr/rss/economy.xml",              "ko", "KR", "korea"),
@@ -80,16 +81,17 @@ class NewsConfig:
         FeedSpec("https://feeds.content.dowjones.io/public/rss/mw_topstories", "en", "US", "finance"),
         FeedSpec("https://rss.nytimes.com/services/xml/rss/nyt/Technology.xml", "en", "US", "technology"),
         FeedSpec("https://feeds.arstechnica.com/arstechnica/technology-lab",    "en", "US", "technology"),
+        FeedSpec("https://techcrunch.com/feed/",                       "en", "US", "technology"),
         FeedSpec("https://oilprice.com/rss/main",                      "en", "US", "commodities"),
-        FeedSpec("https://www.semianalysis.com/feed",                  "en", "US", "early_signals"),
+        FeedSpec("https://www.tomshardware.com/feeds/all",             "en", "US", "early_signals"),
 
         # ── JP (일본, en — Nikkei Asia 영문) ────────────
         FeedSpec("https://asia.nikkei.com/rss/feed/nar",               "en", "JP", "asia_business"),
 
-        # ── CN (중국, en — SCMP / Global Times) ─────────
+        # ── CN (중국, en — SCMP × 2 + China Digital Times) ─────────
         FeedSpec("https://www.scmp.com/rss/91/feed",                   "en", "CN", "china_business"),
-        FeedSpec("https://www.globaltimes.cn/rss/outbrain.xml",        "en", "CN", "china_business"),
-        FeedSpec("https://www.scmp.com/rss/318208/feed",               "en", "CN", "early_signals"),
+        FeedSpec("https://www.scmp.com/rss/36/feed",                   "en", "CN", "china_business"),
+        FeedSpec("https://chinadigitaltimes.net/feed/",                "en", "CN", "china_business"),
 
         # ── EU (유럽, en — FT / Guardian) ───────────────
         FeedSpec("https://www.ft.com/companies?format=rss",            "en", "EU", "eu_companies"),
