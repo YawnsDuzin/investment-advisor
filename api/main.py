@@ -89,6 +89,8 @@ app.include_router(chat.router)
 app.include_router(chat.pages_router)
 app.include_router(admin.router)
 app.include_router(admin_systemd.router)
+from api.routes import admin_news_feeds as _admin_news_feeds
+app.include_router(_admin_news_feeds.router)
 app.include_router(user_admin.router)
 app.include_router(watchlist.router)
 app.include_router(watchlist.pages_router)

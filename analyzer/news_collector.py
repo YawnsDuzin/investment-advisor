@@ -9,7 +9,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 import feedparser
-from shared.config import NewsConfig, FeedSpec
+from shared.config import NewsConfig, FeedSpec, DatabaseConfig
 from shared.logger import get_logger
 
 
@@ -64,7 +64,9 @@ def _parse_published(published: str) -> datetime | None:
         return None
 
 
-def collect_news_structured(cfg: NewsConfig) -> tuple[str, list[dict]]:
+def collect_news_structured(
+    cfg: NewsConfig, db_cfg: DatabaseConfig | None = None
+) -> tuple[str, list[dict]]:
     """RSS 피드에서 뉴스를 수집하여 (region-grouped 텍스트, article 리스트) 반환.
 
     각 article:
@@ -74,6 +76,9 @@ def collect_news_structured(cfg: NewsConfig) -> tuple[str, list[dict]]:
       }
 
     news_text 는 region 별 섹션 (`### [한국 뉴스] (N건)`) 으로 그룹.
+
+    db_cfg 가 주어지면 피드별 health stat 을 `news_feed_health` (v45) 에 UPSERT.
+    None 이면 UPSERT 스킵 (테스트·offline 모드).
     """
     articles: list[dict] = []
     # region 별 분리 dedup — 동일 헤드라인이 KR/US/CN 매체에서 등장하면 region 별 1회 보존.
@@ -252,6 +257,14 @@ def collect_news_structured(cfg: NewsConfig) -> tuple[str, list[dict]]:
             f"피드 health 이슈 {len(dead_feeds) + len(stale_feeds) + len(parse_errors)}/{len(feed_specs)}건 — 신뢰도 저하:\n"
             + "\n".join(bad_summary)
         )
+
+    # v45: 피드별 health stat UPSERT — admin UI `/admin/news-feeds` 데이터 소스.
+    if db_cfg is not None and feed_stats:
+        try:
+            from shared.db import upsert_feed_health
+            upsert_feed_health(db_cfg, feed_stats)
+        except Exception as e:
+            log.warning(f"news_feed_health UPSERT 실패 (수집 자체는 정상): {e}")
 
     news_text = "\n\n---\n\n".join(sections)
     return news_text, articles
