@@ -446,6 +446,32 @@ class TestStockCockpitPage:
         # series 키 (ownership/flow/short 시계열)
         assert "series.ownership" in body or "d.series" in body
 
+    def test_cockpit_page_includes_history_table_and_summary(self, patched_base_ctx_conn):
+        """ticker_history 흡수 — 일자별 추천 표 + 요약 섹션 마크업 존재."""
+        client = _make_client()
+        resp = client.get("/pages/stocks/TXN?market=NASDAQ")
+        body = resp.text
+        # § 6 요약 (최초/최근/추천횟수/테마수)
+        assert 'id="history-summary"' in body
+        # § 6-B 표 섹션
+        assert 'id="sec-history-table"' in body
+        assert 'id="history-table-body"' in body
+        # 헤더 액션: 외부링크 + 제안 목록 (구독 버튼은 로그인 필수)
+        assert 'ext-links' in body
+        assert '/pages/proposals' in body
+        # 옛 추천이력 링크 제거 확인
+        assert '/pages/proposals/history/' not in body
+
+    def test_external_js_has_history_table_renderer(self):
+        client = _make_client()
+        resp = client.get("/static/js/stock_cockpit.js")
+        body = resp.text
+        # 신규 표/요약 렌더러 시그니처
+        assert "renderHistoryTable" in body
+        assert "renderHistorySummary" in body
+        assert "history-table-body" in body
+        assert "history-summary" in body
+
 
 class TestExtendedSupplyAPI:
     """GET /api/stocks/{ticker}/extended-supply — 시장별 수급/공매도/지수."""

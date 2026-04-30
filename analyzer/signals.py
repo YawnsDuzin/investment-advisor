@@ -264,7 +264,7 @@ def generate_watchlist_notifications(
                             if k in metric and metric[k] is not None:
                                 detail_parts.append(f"{k}={metric[k]}")
                     detail = ", ".join(detail_parts) if detail_parts else None
-                    link = f"/pages/proposals/history/{ticker_upper}"
+                    link = f"/pages/stocks/{ticker_upper}"
 
                     cur.execute(sql_insert, (
                         user_id, title, detail, link,

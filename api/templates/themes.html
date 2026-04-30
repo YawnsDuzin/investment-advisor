@@ -67,7 +67,7 @@
     {% if theme.proposals %}
     <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px;">
         {% for p in theme.proposals %}
-        <a href="/pages/proposals/history/{{ p.ticker }}" style="text-decoration:none;color:inherit;font-size:13px;padding:4px 10px;border-radius:8px;background:rgba(79,140,255,0.08);border:1px solid var(--border);display:inline-flex;align-items:center;gap:4px;">
+        <a href="/pages/stocks/{{ p.ticker }}" style="text-decoration:none;color:inherit;font-size:13px;padding:4px 10px;border-radius:8px;background:rgba(79,140,255,0.08);border:1px solid var(--border);display:inline-flex;align-items:center;gap:4px;">
             <span class="badge badge-{{ p.action }}" style="font-size:11px;padding:1px 6px;">{{ p.action|upper }}</span>
             <span style="font-weight:600;">{{ p.ticker }}</span>
             <span style="color:var(--text-muted);">{{ p.asset_name }}</span>

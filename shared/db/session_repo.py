@@ -306,7 +306,7 @@ def _generate_notifications(cur, session_id: int, themes: list) -> None:
         if sub_type == "ticker" and sub_key.upper() in tickers:
             display_label = label or sub_key
             title = f"구독 종목 '{display_label}'이(가) 분석에 등장했습니다"
-            link = f"/pages/proposals/history/{sub_key}"
+            link = f"/pages/stocks/{sub_key}"
         elif sub_type == "theme" and sub_key in theme_keys:
             display_label = label or theme_keys[sub_key]
             title = f"구독 테마 '{display_label}'이(가) 분석에 등장했습니다"

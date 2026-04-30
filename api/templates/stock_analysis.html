@@ -8,7 +8,7 @@
 
 {% block header_actions %}
 {% if analysis %}
-<a href="/pages/proposals/history/{{ analysis.ticker }}" class="btn" style="font-size:12px;padding:4px 12px;margin-right:8px;background:var(--bg-card);border:1px solid var(--border);">추천 이력</a>
+<a href="/pages/stocks/{{ analysis.ticker }}" class="btn" style="font-size:12px;padding:4px 12px;margin-right:8px;background:var(--bg-card);border:1px solid var(--border);">추천 이력</a>
 <a href="/pages/stocks/{{ analysis.ticker }}" class="btn" style="font-size:12px;padding:4px 12px;margin-right:8px;background:var(--bg-card);border:1px solid var(--border);">기초정보</a>
 {{ external_links(analysis.ticker, analysis.market or '', 'full') }}
 {% endif %}

@@ -859,7 +859,7 @@
 
     var ColumnDefs = {
         ticker:     { label: '티커', cls: 'ticker-cell', html: function(r){
-            return '<a href="/pages/proposals/history/'+encodeURIComponent(r.ticker)+'" style="color:var(--accent);">'+r.ticker+'</a>'+
+            return '<a href="/pages/stocks/'+encodeURIComponent(r.ticker)+'" style="color:var(--accent);">'+r.ticker+'</a>'+
                    ' <span style="color:var(--text-muted);font-size:11px;">'+(r.market||'')+'</span>'+
                    (r.is_top_pick ? ' <span class="ai-pick-badge" title="오늘의 AI Top Picks 포함">🏆 AI Pick</span>' : '');
         }},

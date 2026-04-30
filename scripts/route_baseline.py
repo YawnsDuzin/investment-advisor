@@ -31,7 +31,7 @@ ROUTES = [
     "/pages/themes",
     "/pages/themes/history/test_key",
     "/pages/proposals",
-    "/pages/proposals/history/AAPL",
+    "/pages/stocks/AAPL",
     "/proposals/1/stock-analysis",
     "/pages/watchlist",
     "/pages/notifications",
