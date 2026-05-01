@@ -3,7 +3,7 @@
 from __future__ import annotations
 import asyncio
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import patch, AsyncMock
 import pytest
 
 
@@ -104,8 +104,8 @@ async def test_db_fallback_user_last_idle_loop_exits_on_disconnect():
             # 두 번째 체크에서 disconnect
             return call_count[0] >= 2
 
-    # asyncio.sleep 을 빠르게
-    with patch("api.routes.chat_stream.asyncio.sleep", new=lambda s: asyncio.sleep(0)):
+    # asyncio.sleep 을 빠르게 (AsyncMock으로 재귀 방지)
+    with patch("api.routes.chat_stream.asyncio.sleep", new=AsyncMock(return_value=None)):
         events = []
         async for ev, payload in _db_fallback_stream(
             MockConn(), "general", cfg, 100, MockReq()
