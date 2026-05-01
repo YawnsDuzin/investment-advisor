@@ -2,17 +2,20 @@
 import json as _json
 from typing import Optional
 from datetime import datetime, timezone, timedelta
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 from shared.tier_limits import get_edu_chat_daily_limit, is_unlimited
 from psycopg2.extras import RealDictCursor
 from api.serialization import serialize_row as _serialize_row
-from api.education_engine import build_topic_context, query_edu_chat_sync
+from api.education_engine import build_topic_context, query_edu_chat_sync, query_edu_chat_stream
 from api.auth.dependencies import get_current_user_required, quota_exceeded_detail
 from api.auth.models import UserInDB
 from api.templates_provider import templates
 from api.deps import get_db_conn, make_page_ctx
+from api.chat_stream_broker import broker, ChannelAlreadyActive
+from shared.config import DatabaseConfig
+from shared.db import get_connection
 
 _KST = timezone(timedelta(hours=9))
 
@@ -138,8 +141,16 @@ def delete_edu_session(session_id: int, conn=Depends(get_db_conn), user: Optiona
 
 
 @router.post("/sessions/{session_id}/messages")
-def send_edu_message(session_id: int, body: EduMessageRequest, conn=Depends(get_db_conn), user: Optional[UserInDB] = Depends(get_current_user_required)):
-    """사용자 질문 전송 → AI 튜터 응답 생성 → 양쪽 DB 저장"""
+async def send_edu_message(
+    session_id: int,
+    body: EduMessageRequest,
+    bg: BackgroundTasks,
+    conn=Depends(get_db_conn),
+    user: Optional[UserInDB] = Depends(get_current_user_required),
+):
+    """user 메시지 INSERT 후 BG task 로 응답 생성 분기.
+    응답 본문은 SSE (`/api/chat-stream/education/{session_id}`) 로 전달.
+    """
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         # 1) 세션 + 토픽 정보 조회
         cur.execute("""
@@ -154,7 +165,7 @@ def send_edu_message(session_id: int, body: EduMessageRequest, conn=Depends(get_
         if user and user.role != "admin" and session.get("user_id") != user.id:
             raise HTTPException(status_code=403, detail="본인의 학습 세션에만 메시지를 보낼 수 있습니다")
 
-        # 일일 턴 한도 체크
+        # 일일 턴 한도 체크 (기존 로직 그대로)
         if user and user.role not in ("admin", "moderator"):
             tier = user.effective_tier()
             daily_limit = get_edu_chat_daily_limit(tier)
@@ -184,62 +195,91 @@ def send_edu_message(session_id: int, body: EduMessageRequest, conn=Depends(get_
         topic_id = session["topic_id"]
         cur.execute("SELECT * FROM education_topics WHERE id = %s", (topic_id,))
         topic = cur.fetchone()
-
         topic_context = build_topic_context(dict(topic)) if topic else "일반 투자 교육"
 
-        # 3) 대화 이력 로드
+        # 3) 대화 이력
         cur.execute("""
             SELECT role, content FROM education_chat_messages
             WHERE chat_session_id = %s ORDER BY created_at
         """, (session_id,))
         history = [dict(row) for row in cur.fetchall()]
 
-        # 4) 사용자 메시지 저장
+        # 4) user 메시지 INSERT
         cur.execute(
             """INSERT INTO education_chat_messages (chat_session_id, role, content)
                VALUES (%s, 'user', %s) RETURNING id, role, content, created_at""",
-            (session_id, body.content)
+            (session_id, body.content),
         )
         user_msg = cur.fetchone()
     conn.commit()
 
-    # 5) Claude SDK 호출
-    assistant_text = query_edu_chat_sync(
-        topic_context=topic_context,
-        conversation_history=history,
-        user_message=body.content,
-    )
-
-    # 6) 응답 저장 + 세션 업데이트
-    with conn.cursor(cursor_factory=RealDictCursor) as cur:
-        cur.execute(
-            """INSERT INTO education_chat_messages (chat_session_id, role, content)
-               VALUES (%s, 'assistant', %s) RETURNING id, role, content, created_at""",
-            (session_id, assistant_text)
+    # 5) broker 채널 open
+    try:
+        channel = broker.open_channel("education", session_id)
+    except ChannelAlreadyActive:
+        raise HTTPException(
+            status_code=409,
+            detail="이전 응답이 아직 생성 중입니다. 잠시만 기다려주세요.",
         )
-        assistant_msg = cur.fetchone()
 
-        # 첫 메시지면 제목 자동 설정
-        cur.execute(
-            "SELECT COUNT(*) AS cnt FROM education_chat_messages WHERE chat_session_id = %s",
-            (session_id,)
-        )
-        if cur.fetchone()["cnt"] <= 2:
-            title = body.content[:50] + ("..." if len(body.content) > 50 else "")
-            cur.execute(
-                "UPDATE education_chat_sessions SET title = %s, updated_at = NOW() WHERE id = %s",
-                (title, session_id)
+    # 6) BG task spawn
+    async def _runner():
+        async def _on_token(t: str):
+            await broker.publish_token("education", session_id, t)
+
+        async def _on_error(msg: str, code: str):
+            await broker.fail("education", session_id, msg, code)
+
+        try:
+            final_text = await query_edu_chat_stream(
+                topic_context=topic_context,
+                conversation_history=history,
+                user_message=body.content,
+                on_token=_on_token,
+                on_error=_on_error,
             )
-        else:
-            cur.execute(
-                "UPDATE education_chat_sessions SET updated_at = NOW() WHERE id = %s",
-                (session_id,)
-            )
-    conn.commit()
+            db_conn = get_connection(DatabaseConfig())
+            try:
+                with db_conn.cursor(cursor_factory=RealDictCursor) as cur2:
+                    cur2.execute(
+                        """INSERT INTO education_chat_messages
+                               (chat_session_id, role, content)
+                           VALUES (%s, 'assistant', %s)
+                           RETURNING id""",
+                        (session_id, final_text),
+                    )
+                    msg_id = cur2.fetchone()["id"]
+                    cur2.execute(
+                        "SELECT COUNT(*) AS c FROM education_chat_messages WHERE chat_session_id = %s",
+                        (session_id,),
+                    )
+                    if cur2.fetchone()["c"] <= 2:
+                        title = body.content[:50] + ("..." if len(body.content) > 50 else "")
+                        cur2.execute(
+                            "UPDATE education_chat_sessions SET title=%s, updated_at=NOW() WHERE id=%s",
+                            (title, session_id),
+                        )
+                    else:
+                        cur2.execute(
+                            "UPDATE education_chat_sessions SET updated_at=NOW() WHERE id=%s",
+                            (session_id,),
+                        )
+                db_conn.commit()
+            finally:
+                db_conn.close()
+            await broker.complete("education", session_id, final_text, msg_id)
+        except Exception as e:
+            await broker.fail("education", session_id, str(e), "runtime")
+
+    bg.add_task(_runner)
 
     return {
         "user_message": _serialize_row(user_msg),
-        "assistant_message": _serialize_row(assistant_msg),
+        "stream": {
+            "kind": "education",
+            "session_id": session_id,
+            "started_at": channel.started_at.isoformat(),
+        },
     }
 
 
