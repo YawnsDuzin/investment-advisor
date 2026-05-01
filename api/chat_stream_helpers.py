@@ -6,6 +6,7 @@ delta 계산 로직을 공용화한다.
 """
 from __future__ import annotations
 import sys
+import warnings
 from typing import Awaitable, Callable, Optional
 
 from claude_agent_sdk import query, ClaudeAgentOptions, AssistantMessage, TextBlock
@@ -26,6 +27,10 @@ def _extract_text(message) -> Optional[str]:
     if not hasattr(message, "content"):
         return None
     parts: list[str] = []
+    # SDK 업그레이드 시 재검토 필요: ToolUseBlock/ToolResultBlock 등이 미래에
+    # `.text` 속성을 갖게 되면 hasattr guard 가 잘못 매칭할 수 있음.
+    # 현재 SDK 버전 (claude-agent-sdk) 에선 안전하나, partial 메시지 타입이
+    # 추가될 때 _extract_text 의 매칭 조건을 재확인할 것.
     for block in getattr(message, "content", []) or []:
         if isinstance(block, TextBlock) or hasattr(block, "text"):
             text = getattr(block, "text", None)
@@ -71,11 +76,20 @@ async def stream_claude_chat(
                 accumulated = new_text
             else:
                 # 새 chunk (별개 TextBlock 또는 분리된 메시지)
+                # 운영 단계에서 SDK 가 prefix-style 이 아닌 chunk 를 보내는지
+                # 검증하기 위한 경로 — 발생 시 진단 로그 + accumulated concat
+                warnings.warn(
+                    f"[chat_stream] non-prefix chunk detected: "
+                    f"prev_len={len(accumulated)}, new_len={len(new_text)}, "
+                    f"new_text[:50]={new_text[:50]!r}",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
                 delta = new_text
                 accumulated += new_text
             if delta:
                 await on_token(delta)
-    except BaseException as e:
+    except Exception as e:
         dump = "\n".join(cli_stderr[-200:]) if cli_stderr else "(stderr empty)"
         msg = f"{type(e).__name__}: {e}"
         print(
