@@ -89,7 +89,8 @@ class ChatStreamBroker:
     async def complete(self, kind: ChatKind, session_id: int,
                        final_text: str, final_message_id: int) -> None:
         ch = self._channels.get((kind, session_id))
-        if ch is None:
+        if ch is None or ch.status != "active":
+            # idempotency: 이미 종료된 채널은 무시 (대칭성 — fail 과 동일).
             return
         ch.status = "completed"
         ch.final_text = final_text
@@ -106,7 +107,10 @@ class ChatStreamBroker:
     async def fail(self, kind: ChatKind, session_id: int,
                    message: str, code: str) -> None:
         ch = self._channels.get((kind, session_id))
-        if ch is None:
+        if ch is None or ch.status != "active":
+            # idempotency: 이미 종료된 채널(completed/failed) 에 fail 재호출은 무시.
+            # _runner 가 stream_claude_chat 의 on_error → outer except 이중 fail 호출
+            # 시 첫 번째만 effect, 두 번째는 silent drop.
             return
         ch.status = "failed"
         ch.error_message = message
