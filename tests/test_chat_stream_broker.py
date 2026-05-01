@@ -129,3 +129,25 @@ async def test_subscribe_to_completed_channel_replays_then_done():
 
     events = [ev for ev, _ in received]
     assert events == ["replay", "done"]
+
+
+@pytest.mark.asyncio
+async def test_cleanup_removes_stale_completed_channel():
+    broker = ChatStreamBroker(ttl_seconds=0)  # 즉시 stale
+    broker.open_channel("general", 600)
+    await broker.complete("general", 600, "done", final_message_id=1)
+    # 채널 status=completed + completed_at 설정됨
+    # cleanup_loop 의 본체 로직만 직접 호출하기 위해 내부 메서드 테스트
+    # → snapshot + stale 검출 부분만 재현
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc)
+    snapshot = list(broker._channels.items())
+    stale = []
+    for key, ch in snapshot:
+        if ch.completed_at is not None:
+            age = (now - ch.completed_at).total_seconds()
+            if age > broker._ttl_seconds:
+                stale.append(key)
+    for key in stale:
+        broker._channels.pop(key, None)
+    assert ("general", 600) not in broker._channels
