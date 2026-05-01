@@ -100,7 +100,6 @@ class ChatStreamBroker:
                 q.put_nowait(("done", {
                     "message_id": final_message_id, "final_text": final_text,
                 }))
-                q.put_nowait(("__close__", None))
             except asyncio.QueueFull:
                 pass
 
@@ -116,7 +115,6 @@ class ChatStreamBroker:
         for q in list(ch.subscribers):
             try:
                 q.put_nowait(("error", {"message": message, "code": code}))
-                q.put_nowait(("__close__", None))
             except asyncio.QueueFull:
                 pass
 
@@ -127,43 +125,56 @@ class ChatStreamBroker:
     ) -> AsyncIterator[tuple[str, dict]]:
         """구독자가 채널 큐에 등록되고 이벤트를 yield 받는다.
 
-        IMPORTANT: 채널 큐 등록 (`ch.subscribers.add(q)`) 은 첫 await 이전에
-        동기적으로 완료된다. 호출자가 `await asyncio.sleep(0)` 한 번으로
-        구독자 등록을 보장받는 계약을 따른다 (테스트가 이 계약에 의존).
+        IMPORTANT (race condition 회피):
+        active 상태 채널의 경우, 큐 등록(`ch.subscribers.add(q)`) 은
+        replay yield *이전* 에 동기적으로 완료된다. 따라서 호출자가
+        `await asyncio.sleep(0)` 한 번 후 publish 를 호출하면 구독자
+        큐에 도달함이 보장된다 (replay 이후 publish 된 토큰 누락 방지).
+
+        완료/실패 채널은 큐 없이 즉시 종료 — replay→done/error 후 generator close.
         """
         ch = self._channels.get((kind, session_id))
         if ch is None:
             return
 
-        if ch.accumulated:
-            yield ("replay", {
-                "text": ch.accumulated_text(),
-                "started_at": ch.started_at.isoformat(),
-            })
+        # active 채널이면 큐를 replay 이전에 등록 (race 방지)
+        active_queue: Optional[asyncio.Queue] = None
+        if ch.status == "active":
+            active_queue = asyncio.Queue(maxsize=1024)
+            ch.subscribers.add(active_queue)
 
-        if ch.status == "completed":
-            yield ("done", {
-                "message_id": ch.final_message_id,
-                "final_text": ch.final_text,
-            })
-            return
-        if ch.status == "failed":
-            yield ("error", {
-                "message": ch.error_message,
-                "code": ch.error_code,
-            })
-            return
-
-        q: asyncio.Queue = asyncio.Queue(maxsize=1024)
-        ch.subscribers.add(q)
         try:
+            if ch.accumulated:
+                yield ("replay", {
+                    "text": ch.accumulated_text(),
+                    "started_at": ch.started_at.isoformat(),
+                })
+
+            if ch.status == "completed":
+                yield ("done", {
+                    "message_id": ch.final_message_id,
+                    "final_text": ch.final_text,
+                })
+                return
+            if ch.status == "failed":
+                yield ("error", {
+                    "message": ch.error_message,
+                    "code": ch.error_code,
+                })
+                return
+
+            # status == "active" — active_queue 가 반드시 non-None
+            assert active_queue is not None
             while True:
-                event, payload = await q.get()
-                if event == "__close__":
+                event, payload = await active_queue.get()
+                if event in ("__close__", "done", "error"):
+                    if event != "__close__":
+                        yield (event, payload)
                     break
                 yield (event, payload)
         finally:
-            ch.subscribers.discard(q)
+            if active_queue is not None:
+                ch.subscribers.discard(active_queue)
 
     # ─── 정리 ─────────────────────────────────────
 

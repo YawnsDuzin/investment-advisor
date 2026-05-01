@@ -132,6 +132,41 @@ async def test_subscribe_to_completed_channel_replays_then_done():
 
 
 @pytest.mark.asyncio
+async def test_late_subscriber_no_token_loss_after_replay():
+    """Replay yield 직후 publish 된 토큰이 누락되지 않음을 검증.
+
+    Issue 1 (race condition) 회귀 방지. 큐 등록이 replay yield 이전에
+    이루어져야 이 테스트가 안정적으로 PASS 한다.
+    """
+    broker = ChatStreamBroker()
+    broker.open_channel("general", 700)
+    await broker.publish_token("general", 700, "이전")
+
+    received: list = []
+
+    async def consume():
+        async for ev, payload in broker.subscribe("general", 700):
+            received.append((ev, payload))
+            if ev == "replay":
+                # replay 직후, 다음 await 가 일어나기 전에 publish_token 호출은
+                # subscribe 내부의 큐 get() 에서 잡혀야 한다.
+                await broker.publish_token("general", 700, "race-token")
+
+    task = asyncio.create_task(consume())
+    await asyncio.sleep(0)
+    await asyncio.sleep(0)  # consume task 가 replay 까지 진행하도록
+    await broker.complete("general", 700, "이전race-token", final_message_id=70)
+    await asyncio.wait_for(task, timeout=1.0)
+
+    events = [ev for ev, _ in received]
+    # replay → token(race-token) → done 시퀀스 — race-token 누락 안 됨
+    assert "replay" in events
+    assert any(ev == "token" and p.get("text") == "race-token"
+               for ev, p in received)
+    assert events[-1] == "done"
+
+
+@pytest.mark.asyncio
 async def test_cleanup_removes_stale_completed_channel():
     broker = ChatStreamBroker(ttl_seconds=0)  # 즉시 stale
     broker.open_channel("general", 600)
