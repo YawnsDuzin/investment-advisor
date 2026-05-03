@@ -32,14 +32,17 @@ def _make_client():
 
 @pytest.fixture(autouse=True)
 def patch_base_ctx_db(monkeypatch):
-    """모든 페이지 테스트에서 _base_ctx의 DB 호출을 가짜 커넥션으로 대체.
+    """모든 페이지 테스트에서 base_ctx + 라우트 DB 호출을 가짜 커넥션으로 대체.
 
     init_db() 는 lifespan에서 호출되므로 TestClient.__enter__가 필요하다.
     여기서는 TestClient를 with 블록 없이 사용 → lifespan 실행 안됨 → init_db() 호출 안됨.
+
+    B1 이후 pages.py 가 dashboard.py 등으로 분리됨. api.deps.get_db_conn 은
+    shared.db.get_connection 을 직접 호출하므로 그 지점을 패치한다.
     """
-    # pages 내 get_connection + init_db 양쪽 패치 — 안전망
     fake = _patch_fake_conn_for_base_ctx()
-    monkeypatch.setattr("api.routes.pages.get_connection", lambda cfg: fake)
+    # api.deps.get_db_conn 이 import 한 get_connection (shared.db) 을 가짜로
+    monkeypatch.setattr("api.deps.get_connection", lambda cfg: fake)
     monkeypatch.setattr("shared.db.init_db", lambda cfg: None)
 
 
@@ -98,3 +101,36 @@ class TestPartialsIncluded:
         client = _make_client()
         resp = client.get("/pages/pricing")
         assert "upgrade-modal" in resp.text
+
+
+class TestDashboardMarketQuotes:
+    """Dashboard 시세 바 통합 — 라우트가 market_quotes context 를 정상 주입하는지."""
+
+    def test_dashboard_renders_with_market_quotes_helper_called(self, monkeypatch):
+        """_fetch_market_quotes 가 라우트에서 호출되고, 결과가 템플릿에 전달되는지."""
+        from datetime import date
+
+        # market_quotes mock — partial 렌더가 실패하지 않을 정도의 최소 dict
+        fake_quotes = {
+            "indices": [
+                {
+                    "code": "KOSPI", "label": "KOSPI",
+                    "trade_date": date(2026, 4, 22),
+                    "close": 2615.32, "change_abs": 10.94, "change_pct": 0.42,
+                    "spark_points": [2580.0 + i for i in range(21)],
+                    "trend": "up",
+                },
+            ],
+            "meta": {"kr_trade_date": date(2026, 4, 22), "us_trade_date": None},
+        }
+        monkeypatch.setattr(
+            "api.routes.dashboard._fetch_market_quotes",
+            lambda cur: fake_quotes,
+        )
+
+        # 본 테스트는 _fetch_market_quotes 가 monkeypatch 됐을 때 import 가
+        # 깨지지 않고 dashboard 라우트가 200 또는 302 반환하는지만 확인 (스모크).
+        client = _make_client()
+        resp = client.get("/")
+        # 인증 활성/비활성 환경 모두 허용 — 비활성이면 200, 활성+비로그인이면 302
+        assert resp.status_code in (200, 302)

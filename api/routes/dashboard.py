@@ -129,6 +129,9 @@ def dashboard(conn = Depends(get_db_conn), ctx: dict = Depends(make_page_ctx("da
 
     user = ctx["_user"]
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        # 시세 바 (regime banner 위 — spec §3.1) — early return 분기에서도 안전하도록 미리 None 초기화
+        market_quotes = None
+
         # 최신 세션
         cur.execute("SELECT * FROM analysis_sessions ORDER BY analysis_date DESC LIMIT 1")
         session = cur.fetchone()
@@ -330,6 +333,13 @@ def dashboard(conn = Depends(get_db_conn), ctx: dict = Depends(make_page_ctx("da
                             })
                             break
 
+        # ── 시세 바 (regime banner 위 — spec §3.1) ──
+        try:
+            market_quotes = _fetch_market_quotes(cur)
+        except Exception:
+            # market_indices_ohlcv 미존재 환경(백필 이전)에서도 페이지 동작
+            market_quotes = None
+
     # Top Picks 직렬화 + 개인화 플래그 주입
     top_picks = []
     for row in top_picks_raw:
@@ -413,4 +423,5 @@ def dashboard(conn = Depends(get_db_conn), ctx: dict = Depends(make_page_ctx("da
         "risk_pct": risk_pct,
         "watched_in_today": watched_in_today,
         "theme_view_limit": theme_view_limit,
+        "market_quotes": market_quotes,
     })
