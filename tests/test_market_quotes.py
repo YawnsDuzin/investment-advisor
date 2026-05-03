@@ -68,3 +68,81 @@ class TestFetchMarketQuotesHappyPath:
 
         assert result["meta"]["kr_trade_date"] == date(2026, 4, 22)
         assert result["meta"]["us_trade_date"] == date(2026, 4, 21)
+
+
+class TestFetchMarketQuotesEdgeCases:
+    def test_empty_table_returns_no_indices(self):
+        from api.routes.dashboard import _fetch_market_quotes
+        cur = _make_cursor([])
+        result = _fetch_market_quotes(cur)
+        assert result["indices"] == []
+        assert result["meta"]["kr_trade_date"] is None
+        assert result["meta"]["us_trade_date"] is None
+
+    def test_partial_indices_only_kr_present(self):
+        from api.routes.dashboard import _fetch_market_quotes
+        rows = []
+        for code in ("KOSPI", "KOSDAQ"):
+            for i in range(21):
+                rows.append(_row(code, date(2026, 4, 2 + i), 2500 + i))
+        cur = _make_cursor(rows)
+
+        result = _fetch_market_quotes(cur)
+
+        codes = [ix["code"] for ix in result["indices"]]
+        assert set(codes) == {"KOSPI", "KOSDAQ"}
+        assert result["meta"]["kr_trade_date"] == date(2026, 4, 22)
+        assert result["meta"]["us_trade_date"] is None
+
+    def test_single_row_no_change_pct(self):
+        from api.routes.dashboard import _fetch_market_quotes
+        rows = [_row("KOSPI", date(2026, 4, 22), 2600.0)]
+        cur = _make_cursor(rows)
+
+        result = _fetch_market_quotes(cur)
+
+        kospi = result["indices"][0]
+        assert kospi["close"] == 2600.0
+        assert kospi["change_pct"] is None
+        assert kospi["change_abs"] is None
+        assert kospi["spark_points"] == [2600.0]
+        assert kospi["trend"] == "flat"
+
+    def test_trend_down_when_change_negative(self):
+        from api.routes.dashboard import _fetch_market_quotes
+        rows = [
+            _row("KOSPI", date(2026, 4, 21), 2700.0),
+            _row("KOSPI", date(2026, 4, 22), 2600.0),
+        ]
+        cur = _make_cursor(rows)
+        result = _fetch_market_quotes(cur)
+        kospi = result["indices"][0]
+        assert kospi["trend"] == "down"
+        assert kospi["change_pct"] == round((2600 - 2700) / 2700 * 100, 2)
+        assert kospi["change_abs"] == -100.0
+
+    def test_trend_flat_when_change_zero(self):
+        from api.routes.dashboard import _fetch_market_quotes
+        rows = [
+            _row("KOSPI", date(2026, 4, 21), 2600.0),
+            _row("KOSPI", date(2026, 4, 22), 2600.0),
+        ]
+        cur = _make_cursor(rows)
+        result = _fetch_market_quotes(cur)
+        assert result["indices"][0]["trend"] == "flat"
+
+    def test_sql_execute_arguments(self):
+        """helper 가 올바른 SQL 과 파라미터로 cursor.execute 를 호출하는지."""
+        from api.routes.dashboard import _fetch_market_quotes
+        cur = _make_cursor([])
+        _fetch_market_quotes(cur)
+
+        cur.execute.assert_called_once()
+        sql, params = cur.execute.call_args[0]
+        assert "market_indices_ohlcv" in sql
+        assert "ROW_NUMBER() OVER" in sql
+        assert "PARTITION BY index_code" in sql
+        # 파라미터 3종: codes list / lookback / window
+        assert params[0] == ["KOSPI", "KOSDAQ", "SP500", "NDX100"]
+        assert params[1] == 60   # _MARKET_QUOTE_LOOKBACK_DAYS
+        assert params[2] == 21   # _MARKET_QUOTE_WINDOW
