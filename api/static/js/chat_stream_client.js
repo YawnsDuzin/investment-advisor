@@ -50,21 +50,27 @@
       });
 
       // 응답 완료 — message_id + 최종 전체 텍스트
+      // ★ 종결 이벤트이므로 EventSource 를 닫고 자동 재연결 차단.
+      //   broker 가 completed 채널을 600s TTL 로 보관 → 재연결 시 같은 done 이 또 도착하여
+      //   클라이언트에 중복 bubble 이 누적되는 버그 방지.
       es.addEventListener('done', function(e) {
         try {
           const d = JSON.parse(e.data);
           callbacks.onDone && callbacks.onDone(d);
-          retry = 0; // 성공 시 재연결 카운터 초기화
         } catch (_) { /* 파싱 실패 무시 */ }
+        detached = true;
+        if (es) { es.close(); es = null; }
       });
 
       // 에러 이벤트 — 서버 명시 에러 또는 네트워크 오류
       es.addEventListener('error', function(e) {
         if (e && e.data) {
-          // 서버가 명시적으로 에러 데이터를 전송한 경우
+          // 서버가 명시적으로 에러 데이터를 전송한 경우 — 종결 이벤트로 취급
           try {
             const d = JSON.parse(e.data);
             callbacks.onError && callbacks.onError(d);
+            detached = true;
+            if (es) { es.close(); es = null; }
             return;
           } catch (_) { /* fallthrough — 네트워크 에러로 처리 */ }
         }

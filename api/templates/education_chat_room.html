@@ -180,6 +180,9 @@ async function sendMessage() {
 
     if (chatWelcome) chatWelcome.remove();
 
+    // 새 발화 — 이후 SSE 이벤트 처리 활성화
+    _ignoreServerEvents = false;
+
     appendMessage('user', content);
     chatInput.value = '';
     chatInput.style.height = 'auto';
@@ -228,9 +231,14 @@ chatLoading.classList.add('active');
 btnSend.disabled = true;
 {% endif %}
 
+// 페이지 진입 시 broker 에 남은 completed 채널이 replay/done 을 다시 송출하는 케이스 차단.
+// 마지막 메시지가 assistant 면 — 이미 화면에 그려진 응답 — sendMessage 전까지 SSE 이벤트 무시.
+var _ignoreServerEvents = {{ 'true' if (messages and messages[-1].role == 'assistant') else 'false' }};
+
 // ── SSE 스트림 연결 (education) ──
 var _stream = attachChatStream('education', SESSION_ID, {
     onReplay: function(text) {
+        if (_ignoreServerEvents) return;
         // 재연결 시 현재까지 누적 텍스트 복원
         var stick = isNearBottom();
         var el = ensureProvisional();
@@ -245,6 +253,7 @@ var _stream = attachChatStream('education', SESSION_ID, {
         if (stick) scrollToBottom();
     },
     onToken: function(text) {
+        if (_ignoreServerEvents) return;
         // 증분 토큰 수신 — provisional bubble 에 누적
         var stick = isNearBottom();
         var el = ensureProvisional();
@@ -260,11 +269,13 @@ var _stream = attachChatStream('education', SESSION_ID, {
         if (stick) scrollToBottom();
     },
     onDone: function(d) {
+        if (_ignoreServerEvents) return;
         // 응답 완료 — provisional → 확정 bubble
         commitAssistant(d.message_id, d.final_text);
         chatInput.focus();
     },
     onError: function(d) {
+        if (_ignoreServerEvents) return;
         if (provisional) {
             provisional.querySelector('.chat-bubble-content').textContent = '오류: ' + d.message;
             provisional = null;
