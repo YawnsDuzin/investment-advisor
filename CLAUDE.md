@@ -34,7 +34,7 @@ investment-advisor/
 │   ├── chat_engine.py   ← Claude SDK 기반 테마 채팅 엔진
 │   ├── general_chat_engine.py ← Claude SDK 기반 자유 질문(Ask AI) 엔진 — 워치리스트·최근 추천 동적 주입
 │   ├── education_engine.py ← Claude SDK 기반 투자 교육 AI 튜터 엔진
-│   ├── templates/       ← Jinja2 HTML (다크 테마 + 우측 상단 드롭다운 메뉴) + _macros/(공통 매크로 — common, theme, proposal, admin)
+│   ├── templates/       ← Jinja2 HTML (다크 테마 + 우측 상단 드롭다운 메뉴) + _macros/(공통 매크로 — common, theme, proposal, admin) + partials/dashboard/_market_quotes_bar.html(EOD 시세 4종 + 20일 sparkline)
 │   └── static/css/ + static/js/(sse_log_viewer.js 공용 SSE 컨트롤러, stock_cockpit.js Cockpit 페이지 전용)
 ├── deploy/systemd/      ← systemd unit 템플릿 (API + 분석 배치 + universe sync + OHLCV cleanup — 플레이스홀더 치환 방식)
 ├── tools/               ← 운영 도구: refresh_us_universe(S&P500/NDX100 시드 갱신), ohlcv_health_check(OHLCV 무결성 검사), fundamentals_health_check(결측률 진단), foreign_flow_health_check(외국인 수급 결측률 진단)
@@ -314,6 +314,7 @@ stock_universe_ohlcv (v27, 종목별 일별 OHLCV 이력, PK `(ticker, market, t
 - 가격 표시 시 `fmt_price` Jinja2 필터 사용 — 통화 기호(₩/$€¥£) + 천 단위 쉼표, KRW/JPY는 소수점 제거
 - 번호 목록(①②③) 표시 시 `nl_numbered` Jinja2 필터 사용 — 원문자 앞에 `<br>` 삽입
 - `base.html` 레이아웃: 좌측 sidebar(네비게이션만) + 우측 상단 드롭다운(유저 메뉴/알림/관리). 로그인 시 `content-header` 우측에 알림 아이콘 + 유저 아바타 드롭다운 배치
+- **대시보드 시세 바**: `_market_quotes_bar.html` partial 이 `market_indices_ohlcv` (v31) EOD 데이터를 카드 4개 + 인라인 SVG `<polyline>` sparkline 으로 렌더. helper `_fetch_market_quotes(cur)` 는 `api/routes/dashboard.py` 내부. 외부 차트 라이브러리·실시간 fetch 없음 (spec: `_docs/20260503142111_dashboard-market-quotes-bar-design.md`).
 - `_base_ctx()`는 모든 페이지에 `current_user`, `auth_enabled`, `unread_notifications`를 주입 — 알림 배지 표시에 사용
 - 401 자동 갱신: `base.html`의 fetch 인터셉터가 401 감지 → `POST /auth/refresh` (AJAX) → 성공 시 원래 요청 재시도, 실패 시 로그인 리다이렉트
 - 개인화 API(`/api/watchlist/*`, `/api/subscriptions/*`, `/api/notifications/*`, `/api/proposals/*/memo`)는 인증 필수. `AUTH_ENABLED=false`이면 접근 불가
