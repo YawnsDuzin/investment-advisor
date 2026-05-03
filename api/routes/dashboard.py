@@ -12,6 +12,109 @@ from api.serialization import serialize_row as _serialize_row
 from api.templates_provider import templates
 from api.deps import get_db_conn, make_page_ctx
 
+# market_indices_ohlcv index_code → 표시 라벨 (analyzer/regime.py 와 동일 매핑)
+_MARKET_QUOTE_INDEX_CODES = ("KOSPI", "KOSDAQ", "SP500", "NDX100")
+_MARKET_QUOTE_LABELS = {
+    "KOSPI": "KOSPI",
+    "KOSDAQ": "KOSDAQ",
+    "SP500": "S&P 500",
+    "NDX100": "Nasdaq 100",
+}
+_MARKET_QUOTE_KR_CODES = ("KOSPI", "KOSDAQ")
+_MARKET_QUOTE_US_CODES = ("SP500", "NDX100")
+_MARKET_QUOTE_WINDOW = 21        # sparkline 포인트 수 (영업일)
+_MARKET_QUOTE_LOOKBACK_DAYS = 60  # 영업일 21개 확보용 캘린더 윈도우
+
+
+def _fetch_market_quotes(cur) -> dict:
+    """market_indices_ohlcv 에서 4개 인덱스 × 21영업일 EOD 데이터를 조회해
+    대시보드 시세 바 카드 렌더용 dict 로 가공.
+
+    Returns
+    -------
+    {
+        "indices": [
+            {"code", "label", "trade_date", "close", "change_pct",
+             "change_abs", "spark_points", "trend"},
+            ...
+        ],
+        "meta": {"kr_trade_date", "us_trade_date"},
+    }
+
+    결측 정책 (spec §6 참조):
+      - 0 row: indices=[] 반환 → 호출자는 partial 자체 비표시
+      - 1 row: change_pct=None, spark_points=[close 1개], trend="flat"
+      - 2~ row: change_pct/spark_points 모두 가용한 만큼
+      - SQL 예외: 호출자가 try/except 로 처리 (helper 내부 catch 안 함)
+    """
+    cur.execute(
+        """
+        WITH recent AS (
+            SELECT index_code, trade_date, close::float AS close,
+                   ROW_NUMBER() OVER (PARTITION BY index_code ORDER BY trade_date DESC) AS rn
+            FROM market_indices_ohlcv
+            WHERE index_code = ANY(%s)
+              AND trade_date >= CURRENT_DATE - %s
+        )
+        SELECT index_code, trade_date, close
+        FROM recent
+        WHERE rn <= %s
+        ORDER BY index_code, trade_date ASC
+        """,
+        (list(_MARKET_QUOTE_INDEX_CODES), _MARKET_QUOTE_LOOKBACK_DAYS, _MARKET_QUOTE_WINDOW),
+    )
+    rows = cur.fetchall()
+
+    by_code: dict[str, list] = {}
+    for r in rows:
+        by_code.setdefault(r["index_code"], []).append(r)
+
+    indices = []
+    for code in _MARKET_QUOTE_INDEX_CODES:
+        bucket = by_code.get(code)
+        if not bucket:
+            continue
+        spark_points = [float(r["close"]) for r in bucket]
+        close = spark_points[-1]
+        if len(spark_points) >= 2:
+            prev = spark_points[-2]
+            change_abs = close - prev
+            change_pct = round((close - prev) / prev * 100, 2) if prev else None
+        else:
+            change_abs = None
+            change_pct = None
+        if change_pct is None:
+            trend = "flat"
+        elif change_pct > 0:
+            trend = "up"
+        elif change_pct < 0:
+            trend = "down"
+        else:
+            trend = "flat"
+        indices.append({
+            "code": code,
+            "label": _MARKET_QUOTE_LABELS[code],
+            "trade_date": bucket[-1]["trade_date"],
+            "close": close,
+            "change_abs": change_abs,
+            "change_pct": change_pct,
+            "spark_points": spark_points,
+            "trend": trend,
+        })
+
+    def _latest_for(codes):
+        dates = [ix["trade_date"] for ix in indices if ix["code"] in codes]
+        return max(dates) if dates else None
+
+    return {
+        "indices": indices,
+        "meta": {
+            "kr_trade_date": _latest_for(_MARKET_QUOTE_KR_CODES),
+            "us_trade_date": _latest_for(_MARKET_QUOTE_US_CODES),
+        },
+    }
+
+
 pages_router = APIRouter(tags=["대시보드"])
 
 
