@@ -10,6 +10,7 @@
 
 {% block head %}
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="/static/js/chat_stream_client.js"></script>
 {% endblock %}
 
 {% block content %}
@@ -133,6 +134,44 @@ function appendMessage(role, content, time) {
     scrollToBottom();
 }
 
+// provisional assistant bubble — SSE 토큰이 흘러올수록 자라남. done 시 commit.
+let provisional = null;
+
+function ensureProvisional() {
+    if (!provisional) {
+        provisional = document.createElement('div');
+        provisional.className = 'chat-bubble chat-bubble-assistant chat-bubble-provisional';
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'chat-bubble-content';
+        contentDiv.dataset.rawText = '';
+        provisional.appendChild(contentDiv);
+        chatMessages.insertBefore(provisional, chatLoading);
+        scrollToBottom();
+    }
+    return provisional.querySelector('.chat-bubble-content');
+}
+
+function commitAssistant(messageId, finalText) {
+    if (!provisional) {
+        // SSE done 만 받은 케이스 (이미 완료 상태로 진입)
+        appendMessage('assistant', finalText);
+        return;
+    }
+    provisional.classList.remove('chat-bubble-provisional');
+    provisional.dataset.messageId = messageId;
+    const contentDiv = provisional.querySelector('.chat-bubble-content');
+    contentDiv.dataset.rawText = finalText;
+    if (typeof marked !== 'undefined') {
+        contentDiv.innerHTML = marked.parse(finalText);
+    } else {
+        contentDiv.textContent = finalText;
+    }
+    provisional = null;
+    chatLoading.classList.remove('active');
+    btnSend.disabled = false;
+    scrollToBottom();
+}
+
 async function sendMessage() {
     const content = chatInput.value.trim();
     if (!content) return;
@@ -159,16 +198,10 @@ async function sendMessage() {
             const err = await res.json().catch(() => ({}));
             throw new Error(err.detail || `오류 (${res.status})`);
         }
-
-        const data = await res.json();
-        appendMessage(
-            'assistant',
-            data.assistant_message.content,
-            data.assistant_message.created_at
-        );
+        // 응답: {user_message, stream:{kind, session_id, started_at}}
+        // assistant 메시지는 SSE 의 done 이벤트로 도착 — data.assistant_message 없음
     } catch (err) {
         appendMessage('assistant', `오류가 발생했습니다: ${err.message}`);
-    } finally {
         chatLoading.classList.remove('active');
         btnSend.disabled = false;
         chatInput.focus();
@@ -188,6 +221,57 @@ async function deleteSession() {
 
 // 초기 스크롤
 scrollToBottom();
+
+// ── SSE 스트림 연결 (theme) ──
+const _stream = attachChatStream('theme', SESSION_ID, {
+    onReplay: function(text) {
+        // 재연결 시 현재까지 누적 텍스트 복원
+        const el = ensureProvisional();
+        el.dataset.rawText = text;
+        if (typeof marked !== 'undefined') {
+            el.innerHTML = marked.parse(text);
+        } else {
+            el.textContent = text;
+        }
+        chatLoading.classList.add('active');
+        btnSend.disabled = true;
+        scrollToBottom();
+    },
+    onToken: function(text) {
+        // 증분 토큰 수신 — provisional bubble 에 누적
+        const el = ensureProvisional();
+        const newRaw = (el.dataset.rawText || '') + text;
+        el.dataset.rawText = newRaw;
+        if (typeof marked !== 'undefined') {
+            el.innerHTML = marked.parse(newRaw);
+        } else {
+            el.textContent = newRaw;
+        }
+        chatLoading.classList.add('active');
+        btnSend.disabled = true;
+        scrollToBottom();
+    },
+    onDone: function({ message_id, final_text }) {
+        // 응답 완료 — provisional → 확정 bubble
+        commitAssistant(message_id, final_text);
+        chatInput.focus();
+    },
+    onError: function({ message, code }) {
+        if (provisional) {
+            provisional.querySelector('.chat-bubble-content').textContent = `오류: ${message}`;
+            provisional = null;
+        } else {
+            appendMessage('assistant', `오류: ${message}`);
+        }
+        chatLoading.classList.remove('active');
+        btnSend.disabled = false;
+    },
+    onIdle: function() {
+        // 진행 중 응답 없음 — 아무것도 안 함 (placeholder 유지)
+    },
+});
+window.addEventListener('beforeunload', function() { _stream.detach(); });
+
 chatInput.focus();
 </script>
 {% endblock %}

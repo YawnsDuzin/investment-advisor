@@ -10,17 +10,20 @@ from __future__ import annotations
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 from psycopg2.extras import RealDictCursor
 
 from api.auth.dependencies import get_current_user_required, quota_exceeded_detail
 from api.auth.models import UserInDB
+from api.chat_stream_broker import broker, ChannelAlreadyActive
 from api.deps import get_db_conn, make_page_ctx
-from api.general_chat_engine import build_user_context, query_general_chat_sync
+from api.general_chat_engine import build_user_context, query_general_chat_sync, query_general_chat_stream
 from api.serialization import serialize_row as _serialize_row
 from api.templates_provider import templates
+from shared.config import DatabaseConfig
+from shared.db import get_connection
 from shared.tier_limits import get_general_chat_daily_limit, is_unlimited
 
 # 일일 한도 리셋 기준 — KST 자정
@@ -181,13 +184,16 @@ def delete_session(
 
 
 @router.post("/sessions/{session_id}/messages")
-def send_message(
+async def send_message(
     session_id: int,
     body: ChatMessageRequest,
+    bg: BackgroundTasks,
     conn=Depends(get_db_conn),
     user: UserInDB = Depends(get_current_user_required),
 ):
-    """사용자 메시지 → 사용자 컨텍스트 동적 주입 → Claude SDK → 양쪽 저장."""
+    """user 메시지 INSERT 후 BG task 로 응답 생성 분기.
+    응답 본문은 SSE (`/api/chat-stream/general/{session_id}`) 로 전달.
+    """
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         # 1) 세션 검증
         cur.execute(
@@ -200,74 +206,97 @@ def send_message(
         if user.role != "admin" and session.get("user_id") != user.id:
             raise HTTPException(status_code=403, detail="본인의 채팅 세션에만 메시지를 보낼 수 있습니다")
 
-        # 2) 일일 한도 체크
+        # 2) quota
         _check_quota_or_raise(cur, user)
 
-        # 3) 사용자 컨텍스트 빌드 (워치리스트 + 최근 추천)
+        # 3) 사용자 컨텍스트 + 이력
         owner_id = session.get("user_id") or user.id
         user_context = build_user_context(conn, owner_id)
-
-        # 4) 기존 대화 이력
         cur.execute(
-            """
-            SELECT role, content FROM general_chat_messages
-            WHERE chat_session_id = %s ORDER BY created_at
-            """,
+            """SELECT role, content FROM general_chat_messages
+               WHERE chat_session_id = %s ORDER BY created_at""",
             (session_id,),
         )
         history = [dict(row) for row in cur.fetchall()]
 
-        # 5) 사용자 메시지 저장
+        # 4) user 메시지 INSERT
         cur.execute(
-            """
-            INSERT INTO general_chat_messages (chat_session_id, role, content)
-            VALUES (%s, 'user', %s)
-            RETURNING id, role, content, created_at
-            """,
+            """INSERT INTO general_chat_messages (chat_session_id, role, content)
+               VALUES (%s, 'user', %s)
+               RETURNING id, role, content, created_at""",
             (session_id, body.content),
         )
         user_msg = cur.fetchone()
     conn.commit()
 
-    # 6) Claude SDK 호출 (별도 이벤트 루프)
-    assistant_text = query_general_chat_sync(
-        user_context=user_context,
-        conversation_history=history,
-        user_message=body.content,
-    )
-
-    # 7) 응답 저장 + 첫 메시지면 제목 자동 설정
-    with conn.cursor(cursor_factory=RealDictCursor) as cur:
-        cur.execute(
-            """
-            INSERT INTO general_chat_messages (chat_session_id, role, content)
-            VALUES (%s, 'assistant', %s)
-            RETURNING id, role, content, created_at
-            """,
-            (session_id, assistant_text),
+    # 5) broker 채널 open
+    try:
+        channel = broker.open_channel("general", session_id)
+    except ChannelAlreadyActive:
+        raise HTTPException(
+            status_code=409,
+            detail="이전 응답이 아직 생성 중입니다. 잠시만 기다려주세요.",
         )
-        assistant_msg = cur.fetchone()
 
-        cur.execute(
-            "SELECT COUNT(*) AS cnt FROM general_chat_messages WHERE chat_session_id = %s",
-            (session_id,),
-        )
-        if cur.fetchone()["cnt"] <= 2:
-            title = body.content[:50] + ("..." if len(body.content) > 50 else "")
-            cur.execute(
-                "UPDATE general_chat_sessions SET title = %s, updated_at = NOW() WHERE id = %s",
-                (title, session_id),
+    # 6) BG task spawn — disconnect 무관하게 끝까지 실행
+    async def _runner():
+        async def _on_token(t: str):
+            await broker.publish_token("general", session_id, t)
+
+        async def _on_error(msg: str, code: str):
+            await broker.fail("general", session_id, msg, code)
+
+        try:
+            final_text = await query_general_chat_stream(
+                user_context=user_context,
+                conversation_history=history,
+                user_message=body.content,
+                on_token=_on_token,
+                on_error=_on_error,
             )
-        else:
-            cur.execute(
-                "UPDATE general_chat_sessions SET updated_at = NOW() WHERE id = %s",
-                (session_id,),
-            )
-    conn.commit()
+            # assistant INSERT — 별도 conn (BG task 라 원본 닫혔을 수 있음)
+            db_conn = get_connection(DatabaseConfig())
+            try:
+                with db_conn.cursor(cursor_factory=RealDictCursor) as cur2:
+                    cur2.execute(
+                        """INSERT INTO general_chat_messages
+                               (chat_session_id, role, content)
+                           VALUES (%s, 'assistant', %s)
+                           RETURNING id""",
+                        (session_id, final_text),
+                    )
+                    msg_id = cur2.fetchone()["id"]
+                    cur2.execute(
+                        "SELECT COUNT(*) AS c FROM general_chat_messages WHERE chat_session_id = %s",
+                        (session_id,),
+                    )
+                    if cur2.fetchone()["c"] <= 2:
+                        title = body.content[:50] + ("..." if len(body.content) > 50 else "")
+                        cur2.execute(
+                            "UPDATE general_chat_sessions SET title=%s, updated_at=NOW() WHERE id=%s",
+                            (title, session_id),
+                        )
+                    else:
+                        cur2.execute(
+                            "UPDATE general_chat_sessions SET updated_at=NOW() WHERE id=%s",
+                            (session_id,),
+                        )
+                db_conn.commit()
+            finally:
+                db_conn.close()
+            await broker.complete("general", session_id, final_text, msg_id)
+        except Exception as e:
+            await broker.fail("general", session_id, str(e), "runtime")
+
+    bg.add_task(_runner)
 
     return {
         "user_message": _serialize_row(user_msg),
-        "assistant_message": _serialize_row(assistant_msg),
+        "stream": {
+            "kind": "general",
+            "session_id": session_id,
+            "started_at": channel.started_at.isoformat(),
+        },
     }
 
 

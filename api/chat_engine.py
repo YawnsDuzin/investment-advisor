@@ -97,6 +97,22 @@ async def _query_claude_chat(
     return full_response
 
 
+def _format_history(conversation_history: list[dict], window: int = 20) -> str:
+    """이전 대화 이력 → 프롬프트 삽입용 텍스트.
+
+    sync/stream 양쪽이 공유. general_chat_engine 의 동일 helper 와
+    포맷 일치 (한국어 prefix, ## 이전 대화 헤더).
+    """
+    recent = conversation_history[-window:]
+    if not recent:
+        return ""
+    parts = ["\n\n## 이전 대화\n"]
+    for msg in recent:
+        prefix = "사용자" if msg["role"] == "user" else "어시스턴트"
+        parts.append(f"\n**{prefix}:** {msg['content']}\n")
+    return "".join(parts)
+
+
 def query_theme_chat_sync(
     theme_context: str,
     conversation_history: list[dict],
@@ -109,16 +125,33 @@ def query_theme_chat_sync(
     FastAPI 엔드포인트에서 run_in_executor로 호출.
     채팅은 tool use 없이 단일 턴 응답이므로 max_turns=1이면 충분.
     """
-    # 대화 이력을 프롬프트에 포함 (최근 20개 제한)
-    recent_history = conversation_history[-20:]
-    history_text = ""
-    if recent_history:
-        history_text = "\n\n## 이전 대화\n"
-        for msg in recent_history:
-            prefix = "사용자" if msg["role"] == "user" else "어시스턴트"
-            history_text += f"\n**{prefix}:** {msg['content']}\n"
-
+    history_text = _format_history(conversation_history)
     prompt = f"{history_text}\n사용자: {user_message}"
     system = CHAT_SYSTEM_PROMPT.format(theme_context=theme_context)
 
     return anyio.run(_query_claude_chat, prompt, system, max_turns)
+
+
+from api.chat_stream_helpers import stream_claude_chat, OnToken, OnError  # noqa: E402
+
+
+async def query_theme_chat_stream(
+    theme_context: str,
+    conversation_history: list[dict],
+    user_message: str,
+    *,
+    on_token: OnToken,
+    on_error: OnError,
+    max_turns: int = 1,
+) -> str:
+    """테마 채팅 streaming 변형. sync 함수와 동일한 prompt 구성.
+
+    sync 함수(query_theme_chat_sync) 는 폴백/테스트용으로 유지.
+    """
+    history_text = _format_history(conversation_history)
+    prompt = f"{history_text}\n사용자: {user_message}"
+    system = CHAT_SYSTEM_PROMPT.format(theme_context=theme_context)
+    return await stream_claude_chat(
+        prompt=prompt, system=system,
+        on_token=on_token, on_error=on_error, max_turns=max_turns,
+    )

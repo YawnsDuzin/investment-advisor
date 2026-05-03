@@ -10,6 +10,7 @@ from api.routes import (
     sessions, themes, proposals, chat, admin, admin_systemd,
     auth as auth_routes, user_admin, watchlist, track_record,
     stocks, education, inquiry, marketing, dashboard,
+    chat_stream,
 )
 
 
@@ -17,6 +18,9 @@ from api.routes import (
 async def lifespan(app: FastAPI):
     """서버 시작 시 DB 테이블 존재 확인 + 인증 설정 경고"""
     init_db(DatabaseConfig())
+    from api.chat_stream_broker import broker as _chat_broker
+    _chat_broker.start_cleanup()
+    print("[CHAT-STREAM] broker cleanup task 시작 (TTL 600s, hard kill 1500s)")
     auth_cfg = AuthConfig()
     if auth_cfg.enabled:
         if auth_cfg.jwt_secret_key == "INSECURE_DEFAULT_CHANGE_IN_PRODUCTION":
@@ -25,6 +29,17 @@ async def lifespan(app: FastAPI):
     else:
         print("[AUTH] 인증 비활성화 (AUTH_ENABLED=false)")
     yield
+    # ── shutdown — active broker 채널을 fail 로 종료 (구독자 hang 방지)
+    # uvicorn 종료 시 BG task 가 CancelledError 로 끊기는데, _runner 의
+    # except Exception 은 이를 못 잡음 → 채널이 active 로 남아 hard_kill (25분) 까지
+    # 구독자가 hang. lifespan shutdown 에서 명시적으로 fail 처리.
+    try:
+        for (kind, sid), ch in list(_chat_broker._channels.items()):
+            if ch.status == "active":
+                await _chat_broker.fail(kind, sid, "server shutdown", "shutdown")
+        print("[CHAT-STREAM] active 채널 shutdown fail 처리 완료")
+    except Exception as e:
+        print(f"[CHAT-STREAM] shutdown cleanup 실패: {e}")
 
 
 app = FastAPI(
@@ -87,6 +102,7 @@ app.include_router(proposals.api_router)
 app.include_router(proposals.pages_router)
 app.include_router(chat.router)
 app.include_router(chat.pages_router)
+app.include_router(chat_stream.router)
 app.include_router(admin.router)
 app.include_router(admin_systemd.router)
 from api.routes import admin_news_feeds as _admin_news_feeds
