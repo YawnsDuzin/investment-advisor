@@ -8,6 +8,9 @@
 {{ ad_slot('banner') }}
 
 {% if session %}
+{# 시장 시세 바 (EOD) — regime banner 위 #}
+{% include "partials/dashboard/_market_quotes_bar.html" %}
+
 {# 시장 레짐 배너 (로드맵 UI-3) — session.market_regime JSONB 시각화 #}
 {% set regime = session.market_regime %}
 {% include "partials/_regime_banner.html" %}
