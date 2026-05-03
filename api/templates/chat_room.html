@@ -109,6 +109,11 @@ function scrollToBottom() {
     chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
+// 사용자가 바닥 근처(80px 이내)에 있을 때만 자동 스크롤 — 위로 올려둔 상태는 보존
+function isNearBottom() {
+    return chatMessages.scrollHeight - chatMessages.scrollTop - chatMessages.clientHeight < 80;
+}
+
 function appendMessage(role, content, time) {
     const bubble = document.createElement('div');
     bubble.className = `chat-bubble chat-bubble-${role}`;
@@ -146,7 +151,6 @@ function ensureProvisional() {
         contentDiv.dataset.rawText = '';
         provisional.appendChild(contentDiv);
         chatMessages.insertBefore(provisional, chatLoading);
-        scrollToBottom();
     }
     return provisional.querySelector('.chat-bubble-content');
 }
@@ -169,7 +173,7 @@ function commitAssistant(messageId, finalText) {
     provisional = null;
     chatLoading.classList.remove('active');
     btnSend.disabled = false;
-    scrollToBottom();
+    if (isNearBottom()) scrollToBottom();
 }
 
 async function sendMessage() {
@@ -222,10 +226,17 @@ async function deleteSession() {
 // 초기 스크롤
 scrollToBottom();
 
+// 페이지 진입 시 마지막 메시지가 user 면 처리 대기 중 — loading 표시 유지
+{% if messages and messages[-1].role == 'user' %}
+chatLoading.classList.add('active');
+btnSend.disabled = true;
+{% endif %}
+
 // ── SSE 스트림 연결 (theme) ──
 const _stream = attachChatStream('theme', SESSION_ID, {
     onReplay: function(text) {
         // 재연결 시 현재까지 누적 텍스트 복원
+        const stick = isNearBottom();
         const el = ensureProvisional();
         el.dataset.rawText = text;
         if (typeof marked !== 'undefined') {
@@ -235,10 +246,11 @@ const _stream = attachChatStream('theme', SESSION_ID, {
         }
         chatLoading.classList.add('active');
         btnSend.disabled = true;
-        scrollToBottom();
+        if (stick) scrollToBottom();
     },
     onToken: function(text) {
         // 증분 토큰 수신 — provisional bubble 에 누적
+        const stick = isNearBottom();
         const el = ensureProvisional();
         const newRaw = (el.dataset.rawText || '') + text;
         el.dataset.rawText = newRaw;
@@ -249,7 +261,7 @@ const _stream = attachChatStream('theme', SESSION_ID, {
         }
         chatLoading.classList.add('active');
         btnSend.disabled = true;
-        scrollToBottom();
+        if (stick) scrollToBottom();
     },
     onDone: function({ message_id, final_text }) {
         // 응답 완료 — provisional → 확정 bubble
