@@ -3,6 +3,8 @@
 복잡도: dashboard 함수는 약 300줄 — 어제 대비 변화·테마 요약·발굴유형 분포·
 sector 카운트·all_proposals 정렬 등 단일 페이지 다수 쿼리. 본문은 무변경 이전.
 """
+import logging
+
 from fastapi import APIRouter, Depends
 from fastapi.responses import RedirectResponse
 from psycopg2.extras import RealDictCursor
@@ -11,6 +13,8 @@ from shared.tier_limits import TIER_INFO
 from api.serialization import serialize_row as _serialize_row
 from api.templates_provider import templates
 from api.deps import get_db_conn, make_page_ctx
+
+_logger = logging.getLogger(__name__)
 
 # market_indices_ohlcv index_code → 표시 라벨 (analyzer/regime.py 와 동일 매핑)
 _MARKET_QUOTE_INDEX_CODES = ("KOSPI", "KOSDAQ", "SP500", "NDX100")
@@ -138,7 +142,7 @@ def dashboard(conn = Depends(get_db_conn), ctx: dict = Depends(make_page_ctx("da
         if not session:
             return templates.TemplateResponse(
                 request=ctx["request"], name="dashboard.html",
-                context={**ctx, "session": None},
+                context={**ctx, "session": None, "market_quotes": market_quotes},
             )
 
         session_id = session["id"]
@@ -333,11 +337,13 @@ def dashboard(conn = Depends(get_db_conn), ctx: dict = Depends(make_page_ctx("da
                             })
                             break
 
-        # ── 시세 바 (regime banner 위 — spec §3.1) ──
+        # ── 시세 바 (regime banner 위 — spec §3.1, §6) ──
         try:
             market_quotes = _fetch_market_quotes(cur)
-        except Exception:
-            # market_indices_ohlcv 미존재 환경(백필 이전)에서도 페이지 동작
+        except Exception as e:
+            # market_indices_ohlcv 미존재 환경(백필 이전)에서도 페이지 동작.
+            # spec §6: SQL 예외 → 로그 WARNING + 배너 자체 비표시.
+            _logger.warning("market_quotes 조회 실패 — 배너 비표시: %s", e)
             market_quotes = None
 
     # Top Picks 직렬화 + 개인화 플래그 주입

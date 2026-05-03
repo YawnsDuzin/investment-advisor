@@ -39,6 +39,10 @@ def patch_base_ctx_db(monkeypatch):
 
     B1 이후 pages.py 가 dashboard.py 등으로 분리됨. api.deps.get_db_conn 은
     shared.db.get_connection 을 직접 호출하므로 그 지점을 패치한다.
+
+    주의: api.deps.get_connection 은 shared.db.get_connection 의 import alias.
+    deps.py 가 import 방식 바꾸면 본 patch target (`api.deps.get_connection`) 도
+    갱신 필요.
     """
     fake = _patch_fake_conn_for_base_ctx()
     # api.deps.get_db_conn 이 import 한 get_connection (shared.db) 을 가짜로
@@ -104,33 +108,17 @@ class TestPartialsIncluded:
 
 
 class TestDashboardMarketQuotes:
-    """Dashboard 시세 바 통합 — 라우트가 market_quotes context 를 정상 주입하는지."""
+    """Dashboard 시세 바 통합 — 라우트가 import-time 에러 없이 동작하는지.
 
-    def test_dashboard_renders_with_market_quotes_helper_called(self, monkeypatch):
-        """_fetch_market_quotes 가 라우트에서 호출되고, 결과가 템플릿에 전달되는지."""
-        from datetime import date
+    실제 wiring 검증 (helper 호출 + context 주입 + 템플릿 렌더) 은 Task 5 의
+    더 상세한 fixture (auth bypass + cursor sequence mock) 에서 다룬다.
+    여기서는 import smoke 한정 — dashboard.py 가 _fetch_market_quotes 를
+    참조해도 module load 가 깨지지 않는지만 확인.
+    """
 
-        # market_quotes mock — partial 렌더가 실패하지 않을 정도의 최소 dict
-        fake_quotes = {
-            "indices": [
-                {
-                    "code": "KOSPI", "label": "KOSPI",
-                    "trade_date": date(2026, 4, 22),
-                    "close": 2615.32, "change_abs": 10.94, "change_pct": 0.42,
-                    "spark_points": [2580.0 + i for i in range(21)],
-                    "trend": "up",
-                },
-            ],
-            "meta": {"kr_trade_date": date(2026, 4, 22), "us_trade_date": None},
-        }
-        monkeypatch.setattr(
-            "api.routes.dashboard._fetch_market_quotes",
-            lambda cur: fake_quotes,
-        )
-
-        # 본 테스트는 _fetch_market_quotes 가 monkeypatch 됐을 때 import 가
-        # 깨지지 않고 dashboard 라우트가 200 또는 302 반환하는지만 확인 (스모크).
+    def test_dashboard_route_loads_without_import_error(self):
         client = _make_client()
         resp = client.get("/")
-        # 인증 활성/비활성 환경 모두 허용 — 비활성이면 200, 활성+비로그인이면 302
+        # AUTH_ENABLED=True 환경에서는 302 (랜딩 redirect), 비활성에서는 200.
+        # 어느 쪽이든 import/wiring 자체가 깨지면 500 발생 → 그것만 잡으면 충분.
         assert resp.status_code in (200, 302)
