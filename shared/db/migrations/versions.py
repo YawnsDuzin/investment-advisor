@@ -1990,3 +1990,63 @@ def _migrate_to_v46(cur) -> None:
         ON CONFLICT (version) DO NOTHING;
     """)
     print("[DB] v46 마이그레이션 완료 — investment_proposals 매도/익절 알림 트래킹 컬럼")
+
+
+def _migrate_to_v47(cur) -> None:
+    """v47: ticker 구독 알림 회사명·테마 backfill.
+
+    기존 user_notifications 의 ticker 알림은 title 에 종목코드만 노출돼
+    사용자가 어느 종목인지 즉시 식별 못하는 UX 이슈가 있었음.
+    stock_universe.asset_name + session 의 등장 theme 을 join 해 title/detail
+    을 새 포맷으로 일괄 갱신. is_read / link / created_at 은 보존.
+
+    공식 포맷터 (`shared.db.session_repo._format_ticker_notification`) 를
+    그대로 import 해 단일 진실 소스 유지.
+    """
+    from shared.db.session_repo import _format_ticker_notification
+
+    # ticker 알림 + 컨텍스트 한 번에 조회
+    cur.execute("""
+        SELECT n.id,
+               s.sub_key,
+               u.asset_name,
+               COALESCE(
+                   (SELECT array_agg(DISTINCT t.theme_name ORDER BY t.theme_name)
+                    FROM investment_themes t
+                    JOIN investment_proposals p ON p.theme_id = t.id
+                    WHERE t.session_id = n.session_id
+                      AND upper(p.ticker) = upper(s.sub_key)
+                      AND t.theme_name IS NOT NULL
+                      AND btrim(t.theme_name) <> ''),
+                   ARRAY[]::TEXT[]
+               ) AS themes
+          FROM user_notifications n
+          JOIN user_subscriptions s
+            ON s.id = n.sub_id AND s.sub_type = 'ticker'
+          LEFT JOIN stock_universe u
+            ON upper(u.ticker) = upper(s.sub_key)
+           AND u.asset_name IS NOT NULL
+           AND btrim(u.asset_name) <> ''
+    """)
+    rows = cur.fetchall()
+
+    updates = []
+    for noti_id, sub_key, asset_name, themes in rows:
+        title, detail = _format_ticker_notification(
+            sub_key=sub_key,
+            asset_name=asset_name,
+            themes=list(themes or []),
+        )
+        updates.append((title, detail, noti_id))
+
+    if updates:
+        cur.executemany(
+            "UPDATE user_notifications SET title = %s, detail = %s WHERE id = %s",
+            updates,
+        )
+
+    cur.execute("""
+        INSERT INTO schema_version (version) VALUES (47)
+        ON CONFLICT (version) DO NOTHING;
+    """)
+    print(f"[DB] v47 마이그레이션 완료 — ticker 알림 backfill {len(updates)}건")
