@@ -38,7 +38,22 @@ SYSTEM_PROMPT_BASE = """당신은 20년 경력의 글로벌 매크로 투자 전
 반드시 요청된 JSON 형식으로만 응답하세요. 다른 텍스트 없이 JSON만 출력하세요."""
 
 
+# ── 공유 블록 ────────────────────────────────────────
+# 여러 Stage 1 프롬프트가 동일하게 참조하는 규칙. drift 방지를 위해 한 곳에서 정의하고
+# 각 프롬프트 정의 시 .replace("{theme_key_rules}", _THEME_KEY_RULES) 로 주입한다.
+
+_THEME_KEY_RULES = """#### theme_key 생성 규칙
+- 각 테마에 영문 snake_case 키를 부여하세요 (예: "secondary_battery_oversupply", "us_fed_rate_cut", "ai_semiconductor_demand")
+- 3~5단어, 소문자, 밑줄(_) 구분. 테마의 핵심 개념을 영어로 표현
+- **의미적으로 동일한 테마에는 반드시 동일한 키를 재사용하세요** — 한국어 테마명 표현이 달라도 같은 주제면 같은 키
+- 예: "2차전지 공급과잉 우려" / "배터리 과잉 생산 심화" → 모두 `secondary_battery_oversupply`
+"""
+
+
 # ── Stage 1: 테마 발굴 + 이슈 분석 ─────────────────
+# DEPRECATED: 단일 호출 출력이 ~23KB 까지 늘어 self-interruption 회귀 발생 (2026-04-22).
+# 신규 코드는 STAGE1A1_/STAGE1A2_ + STAGE1B1_/STAGE1B3_ 분할 경로를 사용한다.
+# 본 STAGE1_* 는 `analyzer.run_analysis()` 하위호환 entry 에서만 살아남음 — 신규 호출자 추가 금지.
 
 STAGE1_SYSTEM = SYSTEM_PROMPT_BASE + """
 
@@ -88,14 +103,9 @@ STAGE1_PROMPT = """## 분석 날짜: {date}
 - 투자 시계 (short: ~1개월 / mid: 1~6개월 / long: 6개월+)
 - 핵심 모니터링 지표
 - **시나리오 분석**: Bull/Base/Bear 케이스 각각의 확률, 설명, 핵심 가정, 시장 영향
-- **매���로 변수 영향**: 해당 테���에 직접 관련된 변수 2~3개만 선별하여 시나리오별 전망 (6개 전부 작성 불필요)
+- **매크로 변수 영향**: 해당 테마에 직접 관련된 변수 2~3개만 선별하여 시나리오별 전망 (6개 전부 작성 불필요)
 
-#### theme_key 생성 규칙
-- 각 테마에 영문 snake_case 키를 부여하세요 (예: "secondary_battery_oversupply", "us_fed_rate_cut", "ai_semiconductor_demand")
-- 3~5단어, 소문자, 밑줄(_) 구분. 테마의 핵심 개념을 영어로 표현
-- **의미적으로 동일한 테마에는 반드시 동일한 키를 재사용하세요** — 한국어 테마명 표현이 달라도 같은 주제면 같은 키
-- 예: "2차전지 공급과잉 우려" / "배터리 과잉 생산 심화" → 모두 `secondary_battery_oversupply`
-{existing_theme_keys_section}
+{theme_key_rules}{existing_theme_keys_section}
 ### 3단계: 투자 제안 (테마당 10~15건)
 
 **종목 선정 프로세스 — "남들보다 먼저 발굴":**
@@ -148,7 +158,7 @@ STAGE1_PROMPT = """## 분석 날짜: {date}
 ```json
 {{
   "analysis_date": "{date}",
-  "market_summary": "간결하게 작성 (총 10~15줄):\n\n[시장 환경] 핵심 요약 1~2문장\n\n[핵심 이슈]\n★ 이슈1: 1문장\n★ 이슈2: 1문장\n★ 이슈3: 1문장\n\n[투자 시사점] 테마별 핵심 포인트 각 1문장\n\n[주의] 리스크 1~2건",
+  "market_summary": "간결하게 작성 (총 10~15줄):\\n\\n[시장 환경] 핵심 요약 1~2문장\\n\\n[핵심 이슈]\\n★ 이슈1: 1문장\\n★ 이슈2: 1문장\\n★ 이슈3: 1문장\\n\\n[투자 시사점] 테마별 핵심 포인트 각 1문장\\n\\n[주의] 리스크 1~2건",
   "risk_temperature": "high|medium|low",
   "data_sources": ["RSS뉴스"],
   "issues": [
@@ -158,7 +168,7 @@ STAGE1_PROMPT = """## 분석 날짜: {date}
       "title": "이슈 제목",
       "summary": "이슈 핵심 요약 (2~3문장)",
       "source": "뉴스 출처",
-      "importance": 1-5,
+      "importance": 3,
       "impact_short": "단기(1개월) 시장 영향 분석",
       "impact_mid": "중기(1~6개월) 파급 경로",
       "impact_long": "장기(6개월+) 구조적 변화",
@@ -171,7 +181,7 @@ STAGE1_PROMPT = """## 분석 날짜: {date}
       "theme_name": "테마명",
       "description": "테마 설명 및 투자 논리 (3~5문장)",
       "related_issue_indices": [0, 1],
-      "confidence_score": 0.00-1.00,
+      "confidence_score": 0.75,
       "time_horizon": "short|mid|long",
       "theme_type": "structural|cyclical",
       "theme_validity": "strong|medium|weak",
@@ -220,13 +230,13 @@ STAGE1_PROMPT = """## 분석 날짜: {date}
           "target_price_low": "향후 상승 목표가의 보수적 하단 (추정치, 별도 시스템에서 현재가 확인 후 검증됨)",
           "target_price_high": "향후 상승 목표가의 낙관적 상단",
           "upside_pct": null,
-          "vendor_tier": 1|2|3,
+          "vendor_tier": 2,
           "supply_chain_position": "밸류체인 내 역할 (예: HBM 핵심 장비, 2차전지 분리막)",
           "discovery_type": "consensus|early_signal|contrarian|deep_value",
           "price_momentum_check": "already_run|fair_priced|undervalued|unknown",
           "rationale": "추천 근거 — ①밸류에이션 ②실적모멘텀 ③수급/수주 ④테마연결성 ⑤경쟁우위 (3~5문장)",
           "risk_factors": "핵심 리스크 (1~2문장)",
-          "target_allocation": 0.0-100.0,
+          "target_allocation": 5.0,
           "sector": "섹터 분류",
           "currency": "KRW|USD|JPY|EUR"
         }}
@@ -234,138 +244,22 @@ STAGE1_PROMPT = """## 분석 날짜: {date}
     }}
   ]
 }}
-```"""
-
-
-# ── Stage 1-A: 이슈 분석 + 테마 발굴 (제안 제외) ─────
-
-STAGE1A_SYSTEM = STAGE1_SYSTEM
-
-# news_text 는 news_collector 가 region 별 섹션 ([한국 뉴스] / [미국 뉴스] / [일본 뉴스] ...) 으로 그룹하여 전달 (Sprint 1 PR-2).
-STAGE1A_PROMPT = """## 분석 날짜: {date}
-
-## 오늘 수집된 글로벌 뉴스 (카테고리별 정리)
-
-{news_text}
-{bond_yield_section}
-{market_regime_section}
----
-
-## 분석 요청 — Stage 1-A: 이슈 분석 + 테마 발굴
-
-위 뉴스를 바탕으로 2단계 분석을 수행하세요.
-(투자 제안은 다음 단계에서 별도 생성합니다.)
-위에 **시장 레짐 스냅샷**이 제공된 경우, 테마/시나리오의 확신도와 리스크 톤을 국면에 맞춰 조정하세요.
-(예: "200일 이평 아래·고변동 국면"이면 컨트래리안 비중 축소 + 리스크 기술 강화,
-"추세 강세·저변동"이면 모멘텀 테마 신뢰도 상향.)
-
-### 1단계: 글로벌 이슈 심층 분석 (8~10건, 엄수)
-각 이슈에 대해:
-- 카테고리 분류 (geopolitical / macroeconomic / monetary_policy / sector / technology / commodity / regulatory)
-- 영향 지역 및 파급 범위 (글로벌/지역/국가별)
-- 중요도 (1~5) — 시장 영향력 기준
-- **단기 영향** (1개월 이내): 구체적 시장 반응 예상 — **2문장 이내**
-- **중기 영향** (1~6개월): 섹터·자산별 파급 경로 — **2문장 이내**
-- **장기 영향** (6개월 이상): 구조적 변화 가능성 — **2문장 이내**
-- **과거 유사 사례** (선택): 명확한 사례가 있을 때만 1문장으로 간략히. 없으면 null
-
-### 2단계: 투자 테마 도출 (4~6개, 권장 5개)
-각 테마에 대해:
-- 복수의 이슈에서 교차 검증된 테마만 선정
-- **theme_key** (영문 snake_case 고유 키): 아래 규칙 참조
-- **테마 유형**: structural(구조적) / cyclical(순환적) 구분
-- **테마 유효성**: strong / medium / weak
-- 신뢰도 (0.00~1.00): 뉴스 일관성, 데이터 뒷받침, 시장 반영 정도 기준
-- 투자 시계 (short: ~1개월 / mid: 1~6개월 / long: 6개월+)
-- **설명 (description)**: 2~3문장으로 간결히 (테마 논리 + 투자 함의)
-- 핵심 모니터링 지표 — **4개만** 선별 (간결한 명사구)
-- **시나리오 분석**: Bull/Base/Bear 각각 확률 + 설명 **1문장** + 핵심 가정 **1구절** + 시장 영향 **1구절**
-- **매크로 변수 영향**: 해당 테마에 직접 관련된 변수 **2개만** 선별 (3개 이상 작성 금지)
-
-#### theme_key 생성 규칙
-- 각 테마에 영문 snake_case 키를 부여하세요 (예: "secondary_battery_oversupply", "us_fed_rate_cut", "ai_semiconductor_demand")
-- 3~5단어, 소문자, 밑줄(_) 구분. 테마의 핵심 개념을 영어로 표현
-- **의미적으로 동일한 테마에는 반드시 동일한 키를 재사용하세요** — 한국어 테마명 표현이 달라도 같은 주제면 같은 키
-- 예: "2차전지 공급과잉 우려" / "배터리 과잉 생산 심화" → 모두 `secondary_battery_oversupply`
-{existing_theme_keys_section}
-## 출력 형식
-
-반드시 아래 JSON 형식으로만 응답하세요 (proposals 필드 없음):
-
-```json
-{{
-  "analysis_date": "{date}",
-  "market_summary": "간결하게 작성 (총 10~15줄):\n\n[시장 환경] 핵심 요약 1~2문장\n\n[핵심 이슈]\n★ 이슈1: 1문장\n★ 이슈2: 1문장\n★ 이슈3: 1문장\n\n[투자 시사점] 테마별 핵심 포인트 각 1문장\n\n[주의] 리스크 1~2건",
-  "risk_temperature": "high|medium|low",
-  "data_sources": ["RSS뉴스"],
-  "issues": [
-    {{
-      "category": "geopolitical|macroeconomic|monetary_policy|sector|technology|commodity|regulatory",
-      "region": "영향 지역",
-      "title": "이슈 제목",
-      "summary": "이슈 핵심 요약 (2~3문장)",
-      "source": "뉴스 출처",
-      "importance": 1-5,
-      "impact_short": "단기(1개월) 시장 영향 분석 (2문장 이내)",
-      "impact_mid": "중기(1~6개월) 파급 경로 (2문장 이내)",
-      "impact_long": "장기(6개월+) 구조적 변화 (2문장 이내)",
-      "historical_analogue": "과거 유사 사례 1문장 (명확한 경우만, 없으면 null)"
-    }}
-  ],
-  "themes": [
-    {{
-      "theme_key": "english_snake_case_key",
-      "theme_name": "테마명",
-      "description": "테마 설명 및 투자 논리 (2~3문장, 한 줄로)",
-      "related_issue_indices": [0, 1],
-      "confidence_score": 0.00-1.00,
-      "time_horizon": "short|mid|long",
-      "theme_type": "structural|cyclical",
-      "theme_validity": "strong|medium|weak",
-      "key_indicators": ["지표1", "지표2", "지표3", "지표4"],
-      "scenarios": [
-        {{
-          "scenario_type": "bull",
-          "probability": 25,
-          "description": "낙관 시나리오 설명 (1문장)",
-          "key_assumptions": "핵심 가정 1구절",
-          "market_impact": "S&P500 +X%, KOSPI +X%"
-        }},
-        {{
-          "scenario_type": "base",
-          "probability": 50,
-          "description": "기본 시나리오 설명 (1문장)",
-          "key_assumptions": "핵심 가정 1구절",
-          "market_impact": "시장 영향 1구절"
-        }},
-        {{
-          "scenario_type": "bear",
-          "probability": 25,
-          "description": "비관 시나리오 설명 (1문장)",
-          "key_assumptions": "핵심 가정 1구절",
-          "market_impact": "시장 영향 1구절"
-        }}
-      ],
-      "macro_impacts": [
-        {{
-          "variable_name": "oil_wti|gold|usdkrw|us_10y_yield|sp500|kospi 중 1개",
-          "base_case": "기본 전망치",
-          "worse_case": "악화 전망치",
-          "better_case": "호전 전망치",
-          "unit": "$|₩|%|pt"
-        }}
-      ]
-    }}
-  ]
-}}
-```"""
+```""".replace("{theme_key_rules}", _THEME_KEY_RULES)
 
 
 # ── Stage 1-A 분할: 1-A1 이슈 전용 + 1-A2 테마 전용 ────
 # 2026-04-22 재발 대응: 단일 쿼리 출력이 ~23KB까지 늘며 self-interruption 발생.
 # 이슈와 테마를 분리 호출하면 각 쿼리 출력이 10~12KB로 안정화됨.
 
-STAGE1A1_SYSTEM = STAGE1_SYSTEM
+# 분할 경로 전용 시스템 — STAGE1_SYSTEM 의 룰 7번("이슈/테마 수를 하한선으로 낮춰도 좋다")이
+# 분할 호출에서는 부적절(토큰 여유 충분, user 프롬프트는 8~10건/4~6개를 강제)하므로,
+# 해당 룰만 "개수는 유지하되 문장 단위만 압축"으로 교체한 사본.
+STAGE1_SPLIT_SYSTEM = STAGE1_SYSTEM.replace(
+    "7. 출력 길이가 길어질 것 같으면, 각 `impact_*` 필드를 1~2문장 이내로 줄이고 테마 `description`은 2~3문장 이내로 작성. 이슈/테마 수는 하한선(각각 8건/4개)으로 낮춰도 좋다. 중간에 포맷을 바꾸지 말 것.",
+    "7. 출력 길이가 길어질 것 같으면, 각 `impact_*` 필드를 1~2문장 이내로 줄이고 테마 `description`은 2~3문장으로 압축. 이미 분할 호출이라 토큰 여유가 있으므로 **이슈/테마 개수를 하한선 미만으로 줄이지 말 것** (STAGE1A1=8~10건, STAGE1A2=4~6개 유지). 중간에 포맷을 바꾸지 말 것.",
+)
+
+STAGE1A1_SYSTEM = STAGE1_SPLIT_SYSTEM
 
 # news_text 는 news_collector 가 region 별 섹션 ([한국 뉴스] / [미국 뉴스] / [일본 뉴스] ...) 으로 그룹하여 전달 (Sprint 1 PR-2).
 STAGE1A1_PROMPT = """## 분석 날짜: {date}
@@ -409,7 +303,7 @@ STAGE1A1_PROMPT = """## 분석 날짜: {date}
       "title": "이슈 제목",
       "summary": "이슈 핵심 요약 (2~3문장)",
       "source": "뉴스 출처",
-      "importance": 1-5,
+      "importance": 3,
       "impact_short": "단기(1개월) 시장 영향 분석 (2문장 이내)",
       "impact_mid": "중기(1~6개월) 파급 경로 (2문장 이내)",
       "impact_long": "장기(6개월+) 구조적 변화 (2문장 이내)",
@@ -420,7 +314,7 @@ STAGE1A1_PROMPT = """## 분석 날짜: {date}
 ```"""
 
 
-STAGE1A2_SYSTEM = STAGE1_SYSTEM
+STAGE1A2_SYSTEM = STAGE1_SPLIT_SYSTEM
 
 # news_text 는 news_collector 가 region 별 섹션 ([한국 뉴스] / [미국 뉴스] / [일본 뉴스] ...) 으로 그룹하여 전달 (Sprint 1 PR-2).
 STAGE1A2_PROMPT = """## 분석 날짜: {date}
@@ -456,12 +350,7 @@ STAGE1A2_PROMPT = """## 분석 날짜: {date}
 - **시나리오 분석**: Bull/Base/Bear 각각 확률 + 설명 **1문장** + 핵심 가정 **1구절** + 시장 영향 **1구절**
 - **매크로 변수 영향**: 해당 테마에 직접 관련된 변수 **2개만** 선별 (3개 이상 작성 금지)
 
-#### theme_key 생성 규칙
-- 각 테마에 영문 snake_case 키를 부여하세요 (예: "secondary_battery_oversupply", "us_fed_rate_cut", "ai_semiconductor_demand")
-- 3~5단어, 소문자, 밑줄(_) 구분. 테마의 핵심 개념을 영어로 표현
-- **의미적으로 동일한 테마에는 반드시 동일한 키를 재사용하세요** — 한국어 테마명 표현이 달라도 같은 주제면 같은 키
-- 예: "2차전지 공급과잉 우려" / "배터리 과잉 생산 심화" → 모두 `secondary_battery_oversupply`
-{existing_theme_keys_section}
+{theme_key_rules}{existing_theme_keys_section}
 ## 출력 형식
 
 반드시 아래 JSON 형식으로만 응답하세요 (issues 필드 없음, themes만):
@@ -475,7 +364,7 @@ STAGE1A2_PROMPT = """## 분석 날짜: {date}
       "theme_name": "테마명",
       "description": "테마 설명 및 투자 논리 (2~3문장, 한 줄로)",
       "related_issue_indices": [0, 1],
-      "confidence_score": 0.00-1.00,
+      "confidence_score": 0.75,
       "time_horizon": "short|mid|long",
       "theme_type": "structural|cyclical",
       "theme_validity": "strong|medium|weak",
@@ -515,7 +404,7 @@ STAGE1A2_PROMPT = """## 분석 날짜: {date}
     }}
   ]
 }}
-```"""
+```""".replace("{theme_key_rules}", _THEME_KEY_RULES)
 
 
 # ── Stage 1-B: 테마별 투자 제안 생성 ──────────────────
@@ -836,21 +725,21 @@ STAGE2_PROMPT = """## 종목 심층분석 요청
     "operating_margin": "XX%",
     "roe": "XX%",
     "debt_ratio": "XX%",
-    "per": XX,
-    "pbr": XX
+    "per": 12,
+    "pbr": 1.5
   }},
   "dcf_fair_value": 0.00,
   "dcf_wacc": 0.00,
   "industry_position": "산업 내 포지션 및 경쟁 분석 (3~5문장)",
   "momentum_summary": "모멘텀/수급 분석 요약 (3~5문장)",
-  "sentiment_score": -1.00 ~ 1.00,
+  "sentiment_score": 0.25,
   "factor_scores": {{
-    "value": 1.0-5.0,
-    "momentum": 1.0-5.0,
-    "quality": 1.0-5.0,
-    "growth": 1.0-5.0,
-    "size_liquidity": 1.0-5.0,
-    "composite": 1.0-5.0
+    "value": 3.0,
+    "momentum": 3.0,
+    "quality": 3.0,
+    "growth": 3.0,
+    "size_liquidity": 3.0,
+    "composite": 3.0
   }},
   "risk_summary": "핵심 리스크 요인 요약 (3~5문장)",
   "bull_case": "낙관 시나리오 (목표가 포함, 2~3문장)",

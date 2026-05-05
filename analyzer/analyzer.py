@@ -17,7 +17,6 @@ from shared.logger import get_logger, archive_ai_query
 
 from analyzer.prompts import (
     STAGE1_SYSTEM, STAGE1_PROMPT,
-    STAGE1A_SYSTEM, STAGE1A_PROMPT,
     STAGE1A1_SYSTEM, STAGE1A1_PROMPT,
     STAGE1A2_SYSTEM, STAGE1A2_PROMPT,
     STAGE1B_SYSTEM, STAGE1B_PROMPT,
@@ -848,37 +847,6 @@ async def stage1a_discover_themes(
         if issues_result.get(key) or themes_result.get(key):
             merged[key] = issues_result.get(key) or themes_result.get(key)
     return merged
-
-
-# ── 레거시 단일 호출 경로 (하위호환용, 신규 코드는 위 분할 버전 사용 권장) ──
-async def stage1a_discover_themes_legacy_single_call(
-    news_text: str, date: str, max_turns: int = 6,
-    existing_keys: list[dict] | None = None,
-    model: str | None = None,
-    timeout_sec: int = 600,
-    bond_yield_section: str = "",
-    market_regime_section: str = "",
-) -> dict:
-    """Stage 1-A 단일 호출 버전 — 2026-04-22 이전 경로 (디버깅·비교용으로만 보존)."""
-    keys_section = _format_existing_theme_keys(existing_keys or [])
-    prompt = STAGE1A_PROMPT.format(
-        news_text=news_text, date=date,
-        existing_theme_keys_section=keys_section,
-        bond_yield_section=bond_yield_section,
-        market_regime_section=market_regime_section,
-    )
-    start = time.time()
-    response = await _query_claude(
-        prompt, STAGE1A_SYSTEM, max_turns, model=model, timeout_sec=timeout_sec,
-        archive_stage="stage1a", archive_target_key=date,
-    )
-    parsed = _parse_json_response(response)
-    _archive_result(
-        stage="stage1a", target_key=date, model=model,
-        system_prompt=STAGE1A_SYSTEM, user_prompt=prompt,
-        response=response, parsed=parsed, elapsed_sec=time.time() - start,
-    )
-    return parsed
 
 
 async def stage1b_generate_proposals(
