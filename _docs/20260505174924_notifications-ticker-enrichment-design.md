@@ -21,7 +21,7 @@
 
 - **포맷 정책**: C 안 — 타이틀 회사명+티커, 다중 테마는 detail 줄에 가운뎃점(`·`) 구분.
 - **데이터 보강**: B 안 — `stock_universe.asset_name` join + 세션 themes 컨텍스트 활용.
-- **기존 알림 처리**: B 안 — v46 마이그레이션으로 일괄 backfill (`is_read` 보존).
+- **기존 알림 처리**: B 안 — v47 마이그레이션으로 일괄 backfill (`is_read` 보존).
 - **테마 구독 알림**: A 안 — 변경 없음 (정보 결손 없음).
 
 ## 명세
@@ -52,13 +52,13 @@
 3. 헬퍼 `_format_ticker_notification(sub_key, asset_name, themes_list)` 가 (title, detail) 튜플 반환.
 4. INSERT 쿼리에 `detail` 컬럼 추가 (이미 `user_notifications.detail` 컬럼은 존재 — 알림 모델에서 사용 중).
 
-### 마이그레이션 v46
+### 마이그레이션 v47
 
-`_migrate_to_v46(cur)` — `user_notifications` ticker 알림 backfill:
+`_migrate_to_v47(cur)` — `user_notifications` ticker 알림 backfill:
 
 ```python
-def _migrate_to_v46(cur):
-    """v46: ticker 구독 알림 회사명·테마 backfill."""
+def _migrate_to_v47(cur):
+    """v47: ticker 구독 알림 회사명·테마 backfill."""
     # 1) ticker 알림 + 컨텍스트 조회 (LEFT JOIN — 세션 삭제된 경우도 처리)
     cur.execute("""
         SELECT n.id,
@@ -93,7 +93,7 @@ def _migrate_to_v46(cur):
 ```
 
 - `_format_ticker_notification` 은 `session_repo` 에 두고 마이그레이션은 import 해서 사용 (단일 진실 소스).
-- `SCHEMA_VERSION` → 46. `init_db()` 의 마이그레이션 분기에 `if current < 46: _migrate_to_v46(cur)` 추가.
+- `SCHEMA_VERSION` → 47. `shared/db/migrations/__init__.py` 의 `_MIGRATIONS` dict 에 `47: _v._migrate_to_v47` 항목 추가 (run_migrations 가 자동 호출).
 
 ### 폴백 / 엣지 케이스
 
@@ -128,5 +128,5 @@ def _migrate_to_v46(cur):
 
 ## CLAUDE.md 업데이트
 
-- `## DB Schema` 절: v46 한 줄 추가 — `user_notifications` ticker 알림 회사명·테마 보강 backfill.
+- `## DB Schema` 절: v47 한 줄 추가 — `user_notifications` ticker 알림 회사명·테마 보강 backfill.
 - `## Key Conventions` 절 알림 관련 항목에 1 줄 — "ticker 구독 알림은 `stock_universe.asset_name` 으로 회사명 보강 + 등장 테마명을 detail 에 노출".
