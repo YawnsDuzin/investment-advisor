@@ -1958,3 +1958,35 @@ def _migrate_to_v45(cur) -> None:
         ON CONFLICT (version) DO NOTHING;
     """)
     print("[DB] v45 마이그레이션 완료 — news_feed_health 테이블 (RSS 피드 health 시계열)")
+
+
+def _migrate_to_v46(cur) -> None:
+    """v46: 매도/익절 시그널 — investment_proposals 에 알림 발송 시각 컬럼 추가.
+
+    `price_tracker` 가 `post_return >= upside_target` 또는 `max_drawdown <= -15%` 룰을
+    매 배치 종료 시 평가하여, NULL 인 proposal 에 한해 알림을 발송하고 컬럼을 NOW() 로 갱신.
+    재발송 방지(idempotent)와 운영 디버깅(언제 알림이 나갔는지) 목적.
+
+    Tier 2 인사이트 #4 (매도/익절 시그널) 의 dedup 레이어.
+    """
+    cur.execute("""
+        ALTER TABLE investment_proposals
+            ADD COLUMN IF NOT EXISTS target_hit_notified_at TIMESTAMPTZ,
+            ADD COLUMN IF NOT EXISTS stop_loss_notified_at TIMESTAMPTZ;
+    """)
+    # 미발송 알림 빠른 스캔용
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_proposals_pending_target_hit
+            ON investment_proposals(target_hit_notified_at)
+            WHERE target_hit_notified_at IS NULL;
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_proposals_pending_stop_loss
+            ON investment_proposals(stop_loss_notified_at)
+            WHERE stop_loss_notified_at IS NULL;
+    """)
+    cur.execute("""
+        INSERT INTO schema_version (version) VALUES (46)
+        ON CONFLICT (version) DO NOTHING;
+    """)
+    print("[DB] v46 마이그레이션 완료 — investment_proposals 매도/익절 알림 트래킹 컬럼")

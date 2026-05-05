@@ -9,7 +9,7 @@ from shared.db.migrations import run_migrations
 
 
 # ── 스키마 버전 관리 ──────────────────────────────
-SCHEMA_VERSION = 45  # v45: news_feed_health (RSS 피드 health 시계열 + admin UI 데이터 소스)
+SCHEMA_VERSION = 46  # v46: 매도/익절 시그널 — investment_proposals.target_hit_notified_at / stop_loss_notified_at
 
 
 def _create_base_schema(cur) -> None:
