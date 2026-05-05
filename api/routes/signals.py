@@ -43,11 +43,15 @@ def get_today_signals(
     conn = Depends(get_db_conn),
     limit: int = Query(default=30, ge=1, le=200),
 ):
-    """OHLCV 최신일의 시그널을 타입별 그룹핑하여 반환 — 대시보드 카드용.
+    """시장별 자체 latest signal_date 의 시그널을 타입별 그룹핑하여 반환.
+
+    한국·미국 거래일 캘린더가 다를 때(어린이날·추수감사절 등) 글로벌 MAX(signal_date)
+    단일 필터를 쓰면 한쪽 시장이 통째로 누락된다 — 시장별 자체 최신일 union 으로 조회.
 
     Returns:
         {
-            "signal_date": "YYYY-MM-DD",
+            "signal_date": "YYYY-MM-DD",   # 전체 최신 (호환성 유지 — 가장 큰 날짜)
+            "signal_dates_by_market": {"KOSPI": "2026-05-01", "NASDAQ": "2026-05-04", ...},
             "total": int,
             "groups": [
                 {"type": "new_52w_high", "label": "52주 신고가", "tone": "positive",
@@ -57,23 +61,55 @@ def get_today_signals(
         }
     """
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        # 1) 전체 최신 signal_date — 호환성 유지용 (옛 클라이언트가 signal_date 단일 키 사용)
         cur.execute("SELECT MAX(signal_date) AS d FROM market_signals")
         row = cur.fetchone()
         latest = row["d"] if row else None
         if latest is None:
-            return {"signal_date": None, "total": 0, "groups": []}
+            return {
+                "signal_date": None,
+                "signal_dates_by_market": {},
+                "total": 0,
+                "groups": [],
+            }
 
+        # 2) 시장별 자체 최신 signal_date — UI 라벨 분리 표기 + 시장 union 필터
         cur.execute(
             """
-            SELECT signal_type, ticker, market, metric
+            SELECT UPPER(market) AS market, MAX(signal_date) AS d
             FROM market_signals
-            WHERE signal_date = %s
-            ORDER BY signal_type, ticker
-            LIMIT %s
-            """,
-            (latest, int(limit) * len(SIGNAL_LABELS)),
+            GROUP BY UPPER(market)
+            """
         )
-        rows = cur.fetchall()
+        market_rows = cur.fetchall()
+        market_dates: dict[str, "date"] = {
+            r["market"]: r["d"] for r in market_rows if r.get("d")
+        }
+        signal_dates_by_market = {
+            m: d.isoformat() for m, d in market_dates.items()
+        }
+
+        # 3) (market, signal_date) 페어 union 으로 시그널 조회 — 시장별 자체 최신만
+        if market_dates:
+            pairs = list(market_dates.items())  # [(market, date), ...]
+            placeholders = ",".join(["(%s, %s)"] * len(pairs))
+            params: list = []
+            for m, d in pairs:
+                params.extend([m, d])
+            params.append(int(limit) * len(SIGNAL_LABELS))
+            cur.execute(
+                f"""
+                SELECT signal_type, ticker, market, metric
+                FROM market_signals
+                WHERE (UPPER(market), signal_date) IN ({placeholders})
+                ORDER BY signal_type, ticker
+                LIMIT %s
+                """,
+                params,
+            )
+            rows = cur.fetchall()
+        else:
+            rows = []
 
     # 타입별 그룹
     groups: dict[str, list] = {}
@@ -101,6 +137,7 @@ def get_today_signals(
 
     return {
         "signal_date": latest.isoformat() if latest else None,
+        "signal_dates_by_market": signal_dates_by_market,
         "total": len(rows),
         "groups": group_list,
     }
