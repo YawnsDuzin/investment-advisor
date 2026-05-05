@@ -36,10 +36,50 @@
                '</a>';
     }
 
+    function fmtMarketDates(byMarket) {
+        // KOSPI/KOSDAQ → KRX, NASDAQ/NYSE → US 그룹별 동일 날짜는 묶어서 표기
+        if (!byMarket) return '';
+        const groupMap = {KOSPI:'KRX', KOSDAQ:'KRX', NASDAQ:'US', NYSE:'US'};
+        const groups = {};  // group → { date → [markets...] }
+        Object.keys(byMarket).forEach(function(m) {
+            const g = groupMap[m] || m;
+            const d = byMarket[m];
+            if (!groups[g]) groups[g] = {};
+            if (!groups[g][d]) groups[g][d] = [];
+            groups[g][d].push(m);
+        });
+        // group마다 단일 date면 'KRX 05-01', 다중이면 'KOSPI 05-01·KOSDAQ 04-30'
+        const parts = [];
+        ['KRX', 'US'].concat(Object.keys(groups).filter(function(g){return g!=='KRX'&&g!=='US';}))
+          .forEach(function(g) {
+              if (!groups[g]) return;
+              const dates = Object.keys(groups[g]);
+              if (dates.length === 1) {
+                  parts.push(g + ' ' + dates[0].slice(5));
+              } else {
+                  dates.forEach(function(d) {
+                      parts.push(groups[g][d].join('/') + ' ' + d.slice(5));
+                  });
+              }
+          });
+        return parts.join(' · ');
+    }
+
     function render(data) {
         const body = document.getElementById('signals-today-body');
         const dateEl = document.getElementById('signals-today-date');
-        dateEl.textContent = data.signal_date || '';
+        // 시장별 latest signal_date 가 다르면 분리 표기 (KR 단독 휴장 등)
+        const byMarket = data.signal_dates_by_market || {};
+        const dates = Object.values(byMarket);
+        const allSame = dates.length > 0 && dates.every(function(d) { return d === dates[0]; });
+        if (Object.keys(byMarket).length === 0) {
+            dateEl.textContent = data.signal_date || '';
+        } else if (allSame) {
+            dateEl.textContent = dates[0];
+        } else {
+            dateEl.textContent = fmtMarketDates(byMarket);
+            dateEl.title = '시장별 거래일이 다릅니다 (한국·미국 캘린더 분기)';
+        }
         if (!data.groups || data.groups.length === 0) {
             body.innerHTML = '<div style="color:var(--text-muted);font-size:13px;">오늘 탐지된 시그널이 없습니다.</div>';
             return;

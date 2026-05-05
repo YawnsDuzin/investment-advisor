@@ -315,6 +315,7 @@ stock_universe_ohlcv (v27, 종목별 일별 OHLCV 이력, PK `(ticker, market, t
 - 번호 목록(①②③) 표시 시 `nl_numbered` Jinja2 필터 사용 — 원문자 앞에 `<br>` 삽입
 - `base.html` 레이아웃: 좌측 sidebar(네비게이션만) + 우측 상단 드롭다운(유저 메뉴/알림/관리). 로그인 시 `content-header` 우측에 알림 아이콘 + 유저 아바타 드롭다운 배치
 - **대시보드 시세 바**: `_market_quotes_bar.html` partial 이 `market_indices_ohlcv` (v31) EOD 데이터를 카드 4개 + 인라인 SVG `<polyline>` sparkline 으로 렌더. helper `_fetch_market_quotes(cur)` 는 `api/routes/dashboard.py` 내부. 외부 차트 라이브러리·실시간 fetch 없음 (spec: `_docs/20260503142111_dashboard-market-quotes-bar-design.md`).
+- **이상 시그널 — 시장별 latest_date 분기**: `analyzer/signals.py:_DETECT_SQL` 의 `market_latest` CTE 가 KOSPI/KOSDAQ/NASDAQ/NYSE 각자의 최신 거래일을 산출하고 enriched 와 JOIN. 한국 단독 휴장(어린이날·설·추석) 또는 미국 단독 휴장(추수감사절 등) 시 한쪽 시장이 통째로 누락되는 회귀를 가드한다. `/api/signals/today` 응답은 `signal_dates_by_market: {KOSPI: '...', NASDAQ: '...'}` 맵을 추가로 노출하고, `_signals_today.html` 헤더가 그룹 단위(KRX/US) 라벨로 분리 표기. `as_of` 인자는 NULL 이 정상값(시장별 자체 latest 사용) — 명시적으로 지정하면 모든 시장에 동일 날짜 강제(백필·디버깅용). 회귀 가드: `tests/test_signals_market_split.py`.
 - `_base_ctx()`는 모든 페이지에 `current_user`, `auth_enabled`, `unread_notifications`를 주입 — 알림 배지 표시에 사용
 - 401 자동 갱신: `base.html`의 fetch 인터셉터가 401 감지 → `POST /auth/refresh` (AJAX) → 성공 시 원래 요청 재시도, 실패 시 로그인 리다이렉트
 - 개인화 API(`/api/watchlist/*`, `/api/subscriptions/*`, `/api/notifications/*`, `/api/proposals/*/memo`)는 인증 필수. `AUTH_ENABLED=false`이면 접근 불가

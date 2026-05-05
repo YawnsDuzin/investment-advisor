@@ -39,6 +39,10 @@ ON CONFLICT (signal_date, signal_type, ticker, market) DO UPDATE SET
 
 
 # ── 탐지 쿼리 (단일 CTE로 6가지 시그널 동시 추출) ──
+# 시장별 latest_date 분기: 한국·미국 거래일 캘린더가 다를 때(어린이날·추수감사절 등)
+# 글로벌 MAX(trade_date) 단일 필터를 쓰면 한쪽 시장이 통째로 누락된다.
+# `market_latest` CTE 가 시장별 자체 최신 거래일을 산출하고 enriched 와 JOIN 한다.
+# `as_of` 파라미터(NULL 허용)는 디버깅·백필용 강제 지정 — 평소엔 NULL.
 _DETECT_SQL = """
 WITH ranked AS (
     SELECT ticker, UPPER(market) AS market, trade_date, open, high, low, close, volume,
@@ -48,6 +52,11 @@ WITH ranked AS (
            ) AS rn
     FROM stock_universe_ohlcv
     WHERE trade_date >= CURRENT_DATE - 300
+),
+market_latest AS (
+    SELECT UPPER(market) AS market, MAX(trade_date) AS m_latest
+    FROM stock_universe_ohlcv
+    GROUP BY UPPER(market)
 ),
 enriched AS (
     SELECT ticker, market,
@@ -64,13 +73,14 @@ enriched AS (
     FROM ranked
     GROUP BY ticker, market
 )
-SELECT ticker, market, latest_date,
-       close_latest, open_latest, volume_latest, close_prev,
-       high_252d, low_252d,
-       ma200_latest, ma200_prev, volume_avg_20
-FROM enriched
-WHERE latest_date = %s
-  AND close_latest IS NOT NULL
+SELECT e.ticker, e.market, e.latest_date,
+       e.close_latest, e.open_latest, e.volume_latest, e.close_prev,
+       e.high_252d, e.low_252d,
+       e.ma200_latest, e.ma200_prev, e.volume_avg_20
+FROM enriched e
+JOIN market_latest ml USING (market)
+WHERE e.latest_date = COALESCE(%s::date, ml.m_latest)
+  AND e.close_latest IS NOT NULL
 """
 
 
@@ -83,19 +93,20 @@ def detect_signals(db_cfg: DatabaseConfig, *, as_of: date | None = None,
     """
     started = time.time()
 
-    # as_of 미지정 시 OHLCV 테이블의 최신 trade_date 사용
+    # as_of=None 이면 SQL 안에서 시장별 자체 latest_date 를 사용 (KR/US 캘린더 분기 안전).
+    # as_of 지정 시 모든 시장에 동일 날짜 강제 (백필·재실행용).
     conn = get_connection(db_cfg)
     try:
         with conn.cursor() as cur:
-            if as_of is None:
-                cur.execute("SELECT MAX(trade_date) FROM stock_universe_ohlcv")
-                row = cur.fetchone()
-                as_of = row[0] if row and row[0] else None
-                if as_of is None:
-                    _log.warning("[signals] stock_universe_ohlcv 비어 있음 — 탐지 불가")
-                    return {}
             cur.execute(_DETECT_SQL, (as_of,))
             rows = cur.fetchall()
+            if not rows:
+                _log.warning(
+                    "[signals] 탐지 결과 0건 — stock_universe_ohlcv 비어 있거나 "
+                    f"as_of={as_of} 와 일치하는 시장이 없음"
+                )
+                conn.close()
+                return {}
     except Exception as e:
         _log.error(f"[signals] 탐지 쿼리 실패: {e}")
         try:
@@ -185,8 +196,14 @@ def detect_signals(db_cfg: DatabaseConfig, *, as_of: date | None = None,
 
     duration = time.time() - started
     total = sum(counts.values())
+    # 시장별 latest_date 분포 — KR/US 캘린더 분기 가시화
+    market_dates: dict[str, set] = {}
+    for r in rows:
+        market_dates.setdefault(r[1], set()).add(str(r[2]))
+    market_dates_repr = {m: sorted(d)[-1] for m, d in market_dates.items()} if market_dates else {}
+    as_of_repr = str(as_of) if as_of is not None else f"시장별 latest({market_dates_repr})"
     _log.info(
-        f"[signals] {as_of} 기준 시그널 {total}건 탐지·저장 "
+        f"[signals] {as_of_repr} 기준 시그널 {total}건 탐지·저장 "
         f"({ {k: v for k, v in sorted(counts.items(), key=lambda x: -x[1])} }) / {duration*1000:.0f}ms"
     )
     return counts
