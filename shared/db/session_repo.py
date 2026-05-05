@@ -263,6 +263,34 @@ def save_analysis(cfg: DatabaseConfig, analysis_date: str, result: dict) -> int:
     return session_id
 
 
+def _format_ticker_notification(
+    sub_key: str,
+    asset_name: str | None,
+    themes: list[str],
+) -> tuple[str, str | None]:
+    """ticker 구독 알림의 title/detail 생성 — 신규/backfill 공통 포맷터.
+
+    회사명이 있으면 '에코프로비엠 (112290)' 형태, 없으면 티커만.
+    테마 1개면 'detail: 테마: X', 다수면 가운뎃점 구분 + 타이틀에 '(N개 테마)'.
+    빈 themes (backfill 폴백) 면 detail=None.
+    """
+    name_clean = (asset_name or "").strip()
+    label = f"{name_clean} ({sub_key})" if name_clean else sub_key
+
+    n = len(themes)
+    if n == 0:
+        title = f"구독 종목 '{label}'이(가) 분석에 등장했습니다"
+        detail = None
+    elif n == 1:
+        title = f"구독 종목 '{label}'이(가) 분석에 등장했습니다"
+        detail = f"테마: {themes[0]}"
+    else:
+        title = f"구독 종목 '{label}'이(가) 분석에 등장했습니다 ({n}개 테마)"
+        detail = " · ".join(themes)
+
+    return title, detail
+
+
 def _generate_notifications(cur, session_id: int, themes: list) -> None:
     """구독 매칭 알림 생성 — 분석 저장 시 호출"""
     # user_subscriptions 테이블이 없으면 스킵 (v12 미적용 환경)
