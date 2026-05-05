@@ -263,6 +263,28 @@ def save_analysis(cfg: DatabaseConfig, analysis_date: str, result: dict) -> int:
     return session_id
 
 
+def _fetch_company_names(cur, tickers: set[str]) -> dict[str, str]:
+    """ticker(대문자) → asset_name lookup. stock_universe 단일 쿼리.
+
+    NULL/공백 asset_name 은 결과에서 제외 → 폴백(티커만 표시)이 자연스럽게 동작.
+    """
+    if not tickers:
+        return {}
+    # 테이블 부재 환경 (v25 미적용) 가드
+    cur.execute(
+        "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'stock_universe')"
+    )
+    if not cur.fetchone()[0]:
+        return {}
+    cur.execute(
+        "SELECT upper(ticker), asset_name FROM stock_universe "
+        "WHERE upper(ticker) = ANY(%s) "
+        "AND asset_name IS NOT NULL AND btrim(asset_name) <> ''",
+        (list(tickers),),
+    )
+    return {row[0]: row[1] for row in cur.fetchall()}
+
+
 def _format_ticker_notification(
     sub_key: str,
     asset_name: str | None,
@@ -300,24 +322,34 @@ def _generate_notifications(cur, session_id: int, themes: list) -> None:
     if not cur.fetchone()[0]:
         return
 
-    # 이번 분석에 등장한 ticker, theme_key 수집
-    tickers = set()
-    theme_keys = {}  # key -> theme_name
+    # 이번 분석에 등장한 ticker, theme_key, ticker→themes 매핑 수집
+    tickers: set[str] = set()
+    theme_keys: dict[str, str] = {}  # key -> theme_name
+    ticker_themes: dict[str, list[str]] = {}  # upper(ticker) -> [theme_name, ...]
     for theme in themes:
+        theme_name = theme.get("theme_name", "")
         tk = _resolve_theme_key(theme)
         if tk:
-            theme_keys[tk] = theme.get("theme_name", "")
+            theme_keys[tk] = theme_name
         # 폴백: 한국어 정규화 키로도 매칭 (기존 구독 호환)
-        tk_legacy = _normalize_theme_key(theme.get("theme_name", ""))
+        tk_legacy = _normalize_theme_key(theme_name)
         if tk_legacy and tk_legacy != tk:
-            theme_keys[tk_legacy] = theme.get("theme_name", "")
+            theme_keys[tk_legacy] = theme_name
         for p in theme.get("proposals", []):
             t = (p.get("ticker") or "").upper().strip()
-            if t:
-                tickers.add(t)
+            if not t:
+                continue
+            tickers.add(t)
+            if theme_name:
+                bucket = ticker_themes.setdefault(t, [])
+                if theme_name not in bucket:
+                    bucket.append(theme_name)
 
     if not tickers and not theme_keys:
         return
+
+    # 회사명 일괄 조회 (N+1 회피)
+    company_names = _fetch_company_names(cur, tickers)
 
     # 매칭 구독 조회 — 일반 커서이므로 컬럼 인덱스로 접근
     cur.execute(
@@ -330,10 +362,13 @@ def _generate_notifications(cur, session_id: int, themes: list) -> None:
         # (id, user_id, sub_type, sub_key, label)
         sub_id, user_id, sub_type, sub_key, label = sub
         title = None
+        detail = None
         link = None
         if sub_type == "ticker" and sub_key.upper() in tickers:
-            display_label = label or sub_key
-            title = f"구독 종목 '{display_label}'이(가) 분석에 등장했습니다"
+            ticker_upper = sub_key.upper()
+            asset_name = company_names.get(ticker_upper)
+            theme_list = ticker_themes.get(ticker_upper, [])
+            title, detail = _format_ticker_notification(sub_key, asset_name, theme_list)
             link = f"/pages/stocks/{sub_key}"
         elif sub_type == "theme" and sub_key in theme_keys:
             display_label = label or theme_keys[sub_key]
@@ -342,9 +377,9 @@ def _generate_notifications(cur, session_id: int, themes: list) -> None:
 
         if title:
             cur.execute(
-                "INSERT INTO user_notifications (user_id, sub_id, session_id, title, link) "
-                "VALUES (%s, %s, %s, %s, %s)",
-                (user_id, sub_id, session_id, title, link),
+                "INSERT INTO user_notifications (user_id, sub_id, session_id, title, detail, link) "
+                "VALUES (%s, %s, %s, %s, %s, %s)",
+                (user_id, sub_id, session_id, title, detail, link),
             )
             noti_count += 1
 
