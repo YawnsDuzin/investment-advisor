@@ -741,6 +741,7 @@ async def stage1a2_build_themes(
     timeout_sec: int = 600,
     bond_yield_section: str = "",
     market_regime_section: str = "",
+    sector_rotation_section: str = "",
 ) -> dict:
     """Stage 1-A2: 이슈 목록을 받아 투자 테마 4~6개 발굴."""
     keys_section = _format_existing_theme_keys(existing_keys or [])
@@ -751,6 +752,7 @@ async def stage1a2_build_themes(
         existing_theme_keys_section=keys_section,
         bond_yield_section=bond_yield_section,
         market_regime_section=market_regime_section,
+        sector_rotation_section=sector_rotation_section,
     )
     start = time.time()
     response = await _query_claude(
@@ -773,6 +775,7 @@ async def stage1a_discover_themes(
     timeout_sec: int = 600,
     bond_yield_section: str = "",
     market_regime_section: str = "",
+    sector_rotation_section: str = "",
 ) -> dict:
     """Stage 1-A: 이슈 분석 + 테마 발굴 오케스트레이터.
 
@@ -815,6 +818,7 @@ async def stage1a_discover_themes(
         model=model, timeout_sec=timeout_sec,
         bond_yield_section=bond_yield_section,
         market_regime_section=market_regime_section,
+        sector_rotation_section=sector_rotation_section,
     )
 
     if themes_result.get("error"):
@@ -1033,6 +1037,90 @@ def stage1b2_screen_candidates(
     return result.candidates
 
 
+# ── B3 폴백: AI 의사결정 실패 시 스크리너 후보를 보수적 watch 제안으로 변환 ──
+
+_FALLBACK_TOP_N = 5  # 폴백 시 노출할 후보 상한
+_FALLBACK_TARGET_ALLOCATION = 1.0  # 보수적 비중 (총합 5% 내외)
+
+_MARKET_CURRENCY_MAP = {
+    "KOSPI": "KRW", "KOSDAQ": "KRW", "KONEX": "KRW",
+    "NYSE": "USD", "NASDAQ": "USD", "AMEX": "USD",
+    "TSE": "JPY", "JPX": "JPY",
+    "HKEX": "HKD", "TWSE": "TWD",
+    "SSE": "CNY", "SZSE": "CNY",
+    "LSE": "GBP", "FSE": "EUR", "XETRA": "EUR",
+}
+
+
+def _screener_candidates_to_fallback_proposals(
+    candidates: list[dict],
+    theme: dict,
+    spec: dict,
+    *,
+    top_n: int = _FALLBACK_TOP_N,
+    reason: str = "stage1b3_failed",
+) -> list[dict]:
+    """B3 실패 시 스크리너 후보 상위 N개를 watch 제안으로 자동 변환.
+
+    AI 가 빈 결과를 내거나 예외를 일으킨 테마를 사용자에게 빈 상태로 보여주는 대신,
+    화이트리스트 후보를 `conviction=low`, `discovery_type=screener_fallback` 태그로
+    보수적 watch 추천으로 노출. 후처리·필터링·UI 배지로 구분 가능하다.
+
+    근거 텍스트는 스크리너 매칭 키워드와 테마 가설을 그대로 인용 — AI 추정 없음.
+    """
+    if not candidates:
+        return []
+
+    theme_name = theme.get("theme_name", "")
+    theme_key = spec.get("theme_key") or theme.get("theme_key") or theme_name
+    thesis = (spec.get("thesis") or theme.get("description") or "").strip()
+    catalyst_window = spec.get("expected_catalyst_window_months", "?")
+
+    proposals: list[dict] = []
+    for cand in candidates[:top_n]:
+        ticker = (cand.get("ticker") or "").strip().upper()
+        if not ticker:
+            continue
+        market = (cand.get("market") or "").strip().upper()
+        sector = cand.get("sector_norm")
+        match_reason = cand.get("screener_match_reason") or "sector/cap_only"
+
+        rationale = (
+            f"[자동 폴백] AI 의사결정 단계 실패({reason})로 스크리너 화이트리스트 후보 자동 노출. "
+            f"테마 '{theme_name}' 가설: {thesis[:160]} "
+            f"매칭 근거: {match_reason}. 카탈리스트 창: {catalyst_window}개월. "
+            "수동 검증 후 진입 권장."
+        )
+
+        proposals.append({
+            "asset_type": "stock",
+            "asset_name": cand.get("asset_name") or ticker,
+            "ticker": ticker,
+            "market": market,
+            "currency": _MARKET_CURRENCY_MAP.get(market),
+            "action": "watch",
+            "conviction": "low",
+            "discovery_type": "screener_fallback",
+            "price_momentum_check": "unknown",
+            "current_price": None,
+            "target_price_low": None,
+            "target_price_high": None,
+            "upside_pct": None,
+            "target_allocation": _FALLBACK_TARGET_ALLOCATION,
+            "rationale": rationale,
+            "risk_factors": "AI 심층 검증 미완 — 폴백 후보. 진입 전 수동 펀더/뉴스 점검 필수.",
+            "sector": sector,
+            "vendor_tier": None,
+            "supply_chain_position": None,
+            "spec_snapshot": spec,
+            "screener_match_reason": match_reason,
+            "is_fallback": True,
+            "fallback_reason": reason,
+        })
+
+    return proposals
+
+
 async def stage1b_universe_first(
     theme: dict, db_cfg: DatabaseConfig, date: str,
     cfg: AnalyzerConfig, screener_cfg: ScreenerConfig,
@@ -1042,7 +1130,9 @@ async def stage1b_universe_first(
 ) -> list[dict]:
     """Universe-First Stage 1-B 통합: 1-B1 → 1-B2 → 1-B3 → 검증된 proposals.
 
-    실패 시 빈 리스트 반환 (caller가 기존 stage1b로 폴백할지는 별도 정책).
+    1-B1/1-B2 실패 시 빈 리스트. 1-B3 가 빈 결과 또는 예외 시 화이트리스트 후보를
+    `screener_fallback` 폴백 제안으로 변환하여 비대칭 결과(테마는 있는데 제안 0건)
+    방지. 폴백 발동 여부는 ScreenerConfig.b3_fallback_enabled 로 제어.
     """
     log = get_logger("stage1b-universe")
     theme_name = theme.get("theme_name", "")
@@ -1076,6 +1166,9 @@ async def stage1b_universe_first(
     # 상위 N개로 제한 (AI 입력 비용 절감)
     candidates = candidates[: screener_cfg.stage1b3_top_n]
 
+    fallback_enabled = getattr(screener_cfg, "b3_fallback_enabled", True)
+    fallback_top_n = getattr(screener_cfg, "b3_fallback_top_n", _FALLBACK_TOP_N)
+
     # 1-B3: 배치 분석 (AI 1회 호출)
     try:
         proposals = await stage1b3_analyze_candidates(
@@ -1084,7 +1177,27 @@ async def stage1b_universe_first(
         )
     except Exception as e:
         log.error(f"[1-B3:{theme_key}] 배치 분석 실패: {e}")
+        if fallback_enabled:
+            fallback = _screener_candidates_to_fallback_proposals(
+                candidates, theme, spec,
+                top_n=fallback_top_n, reason="stage1b3_exception",
+            )
+            log.warning(
+                f"[1-B3:{theme_key}] 폴백 발동 — 스크리너 후보 {len(fallback)}건을 "
+                f"screener_fallback watch 로 노출"
+            )
+            return fallback
         return []
+
+    if not proposals and fallback_enabled:
+        fallback = _screener_candidates_to_fallback_proposals(
+            candidates, theme, spec,
+            top_n=fallback_top_n, reason="stage1b3_empty",
+        )
+        log.warning(
+            f"[1-B3:{theme_key}] AI 응답 0건 — 폴백으로 스크리너 후보 {len(fallback)}건 노출"
+        )
+        return fallback
 
     return proposals
 
@@ -1189,6 +1302,25 @@ async def run_pipeline(
         except Exception as e:
             log.warning(f"[regime] 스냅샷 계산 실패 (무시): {e}")
 
+    # ── 섹터 로테이션 스냅샷 (Tier 1 인사이트) ──
+    sector_rotation_snap: dict = {}
+    sector_rotation_text = ""
+    if db_cfg is not None:
+        try:
+            from analyzer.sector_rotation import (
+                compute_sector_rotation, format_sector_rotation_text, infer_rotation_hint,
+            )
+            sector_rotation_snap = compute_sector_rotation(db_cfg)
+            if sector_rotation_snap:
+                body = format_sector_rotation_text(sector_rotation_snap)
+                hint = infer_rotation_hint(sector_rotation_snap)
+                header = "\n\n## 섹터 로테이션 스냅샷 (DB 산출 — sector_norm cross-section)"
+                if hint:
+                    header += f"\n**회전 흐름:** {hint}\n"
+                sector_rotation_text = f"{header}\n{body}\n"
+        except Exception as e:
+            log.warning(f"[sector_rotation] 스냅샷 계산 실패 (무시): {e}")
+
     # ── 최근 추천 이력 조회 (중복 방지용) ──
     recent_recs = []
     existing_keys = []
@@ -1220,6 +1352,7 @@ async def run_pipeline(
             timeout_sec=timeout,
             bond_yield_section=bond_yield_text,
             market_regime_section=market_regime_text,
+            sector_rotation_section=sector_rotation_text,
         )
 
         if result.get("error"):
@@ -1237,6 +1370,7 @@ async def run_pipeline(
                 timeout_sec=timeout,
                 bond_yield_section=bond_yield_text,
                 market_regime_section=market_regime_text,
+                sector_rotation_section=sector_rotation_text,
             )
             if not retry_result.get("error") and len(retry_result.get("themes", [])) > len(result.get("themes", [])):
                 result = retry_result
@@ -1254,6 +1388,13 @@ async def run_pipeline(
     # B2: 레짐 스냅샷을 결과 dict에 첨부 → save_analysis가 analysis_sessions.market_regime에 저장
     if market_regime_snap:
         result["market_regime"] = market_regime_snap
+
+    # 섹터 로테이션 스냅샷 — diagnostics. analysis_sessions.market_regime JSONB 안에 nested 로 보존.
+    if sector_rotation_snap:
+        if isinstance(result.get("market_regime"), dict):
+            result["market_regime"]["sector_rotation"] = sector_rotation_snap
+        else:
+            result["sector_rotation"] = sector_rotation_snap
 
     # ── Stage 1-B: 테마별 투자 제안 생성 (체크포인트 지원) ──
     if checkpoint and checkpoint.has("stage1b"):
@@ -1552,6 +1693,18 @@ async def run_pipeline(
         except Exception as e:
             log.warning(f"[factor] 스냅샷 계산 실패 (무시): {e}")
 
+    # ── 외국인 수급 인사이트 (Tier 1, KRX 한정) ──
+    foreign_flow_map: dict[tuple[str, str], dict] = {}
+    if db_cfg is not None:
+        try:
+            from analyzer.foreign_flow_insight import compute_foreign_flow_snapshots
+            foreign_flow_map = compute_foreign_flow_snapshots(
+                db_cfg,
+                [(p["ticker"], p.get("market", "")) for p, _ in stock_targets],
+            )
+        except Exception as e:
+            log.warning(f"[foreign_flow_insight] 스냅샷 계산 실패 (무시): {e}")
+
     log.info(f"[Stage 2] 종목 심층분석 시작 — {len(stock_targets)}종목 (병렬 실행)")
 
     _STAGE2_REQUIRED_FIELDS = ("factor_scores", "sentiment_score", "recommendation")
@@ -1598,6 +1751,18 @@ async def run_pipeline(
                         factors_text = ""
                     # proposal에 저장 (session_repo가 JSONB로 삽입)
                     proposal["factor_snapshot"] = factor_snap
+
+                # 외국인 수급 PIT 스냅샷 (Tier 1, KRX 한정) — 정량 팩터 섹션에 합류
+                ff_snap = foreign_flow_map.get((tk_upper, mk_upper))
+                if ff_snap:
+                    try:
+                        from analyzer.foreign_flow_insight import format_foreign_flow_text
+                        ff_text = format_foreign_flow_text(ff_snap)
+                    except Exception:
+                        ff_text = ""
+                    if ff_text:
+                        factors_text = (factors_text + "\n" + ff_text).strip() if factors_text else ff_text
+                    proposal["foreign_flow_snapshot"] = ff_snap
 
                 # KRX 확장 데이터 포맷팅
                 inv_text = ""

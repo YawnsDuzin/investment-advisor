@@ -389,6 +389,15 @@ class ScreenerConfig:
         default_factory=lambda: int(os.getenv("SCREENER_OHLCV_WINDOW_DAYS", "90"))
     )
 
+    # ── Stage 1-B3 폴백 (절름발이 결과 방지) ──
+    # B3 가 빈 결과/예외 시 스크리너 후보 상위 N 개를 watch/screener_fallback proposal 로 노출
+    b3_fallback_enabled: bool = field(
+        default_factory=lambda: _env_bool("STAGE1B3_FALLBACK_ENABLED", True)
+    )
+    b3_fallback_top_n: int = field(
+        default_factory=lambda: int(os.getenv("STAGE1B3_FALLBACK_TOP_N", "5"))
+    )
+
 
 @dataclass
 class AuthConfig:

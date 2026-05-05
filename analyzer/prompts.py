@@ -434,12 +434,14 @@ STAGE1A2_PROMPT = """## 분석 날짜: {date}
 {news_text}
 {bond_yield_section}
 {market_regime_section}
+{sector_rotation_section}
 ---
 
 ## 분석 요청 — Stage 1-A2: 투자 테마 발굴
 
 위 이슈 목록과 뉴스를 바탕으로 **투자 테마만** 도출하세요. 투자 제안은 다음 단계에서 별도 생성합니다.
 위에 **시장 레짐 스냅샷**이 제공된 경우, 테마 신뢰도·시계·시나리오 확률을 국면에 맞춰 조정하세요.
+**섹터 로테이션 스냅샷**이 제공된 경우, 강세 섹터 쪽에 confidence_score 가산·약세 섹터 쪽에 confidence 차감하고 테마 description 에 회전 흐름을 명시적으로 인용하세요.
 
 ### 투자 테마 도출 (4~6개, 권장 5개)
 각 테마에 대해:
