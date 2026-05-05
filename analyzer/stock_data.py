@@ -239,6 +239,104 @@ def _build_krx_lookup() -> None:
                 _krx_ticker_to_name[t] = name
 
 
+# ── US 화이트리스트 검증 (stock_universe DB 기반) ──
+
+_US_MARKETS = {"NYSE", "NASDAQ", "AMEX"}
+
+# {ticker_upper: asset_name} — 세션 중 1회 빌드. (ticker, market) 페어 분리는 ticker 가 시장 간 unique 가정.
+_us_ticker_to_name: dict[str, str] | None = None
+_us_lookup_lock = threading.Lock()
+
+
+def _is_us_market(market: str) -> bool:
+    return (market or "").strip().upper() in _US_MARKETS
+
+
+def _build_us_lookup(db_cfg) -> None:
+    """stock_universe 에서 US 시장 종목 일괄 조회 후 (ticker → name) 캐시.
+
+    DB 호출 1회, 이후 in-memory 매칭. KRX 와 달리 외부 API 비의존.
+    db_cfg 미지정 시 빈 딕셔너리로 빌드 (= 검증 비활성화).
+    """
+    global _us_ticker_to_name
+    if _us_ticker_to_name is not None:
+        return
+
+    with _us_lookup_lock:
+        if _us_ticker_to_name is not None:
+            return
+
+        if db_cfg is None:
+            _us_ticker_to_name = {}
+            return
+
+        try:
+            from shared.db import get_connection
+            conn = get_connection(db_cfg)
+            try:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """SELECT UPPER(ticker), COALESCE(asset_name_en, asset_name)
+                           FROM stock_universe
+                           WHERE UPPER(market) = ANY(%s) AND listed = TRUE""",
+                        (list(_US_MARKETS),),
+                    )
+                    _us_ticker_to_name = {tk: name for tk, name in cur.fetchall() if tk}
+            finally:
+                conn.close()
+        except Exception as e:
+            get_logger("us_validator").warning(f"stock_universe US 조회 실패: {e}")
+            _us_ticker_to_name = {}
+
+
+def _reset_us_lookup() -> None:
+    """테스트 격리용 — module-level 캐시 초기화."""
+    global _us_ticker_to_name
+    with _us_lookup_lock:
+        _us_ticker_to_name = None
+
+
+def validate_us_tickers(proposals: list[dict], db_cfg=None) -> dict:
+    """US 종목 (NYSE/NASDAQ/AMEX) 의 티커 화이트리스트 검증.
+
+    KRX 와 달리 영문 이름 매칭이 어려운 경우(약어·분기·티커 변경) 가 많아 자동 교정은
+    하지 않고, **stock_universe 에 등록되지 않은 ticker 만 invalid 로 표기**한다.
+
+    Args:
+        proposals: in-place 수정 가능한 proposal 리스트
+        db_cfg: stock_universe 조회용 DB cfg. None 이면 검증 스킵.
+
+    Returns:
+        {"corrected": 0 (US는 자동 교정 없음), "invalid": int, "details": [str, ...]}
+    """
+    if db_cfg is None:
+        return {"corrected": 0, "invalid": 0, "details": []}
+
+    _build_us_lookup(db_cfg)
+    if not _us_ticker_to_name:
+        # universe 조회 실패 → 검증 비활성화 (KRX 와 같은 정책)
+        return {"corrected": 0, "invalid": 0, "details": []}
+
+    invalid = 0
+    details: list[str] = []
+
+    for p in proposals:
+        ticker = (p.get("ticker") or "").strip().upper()
+        market = (p.get("market") or "").strip().upper()
+        asset_name = (p.get("asset_name") or "").strip()
+
+        if not _is_us_market(market) or not ticker:
+            continue
+
+        if ticker in _us_ticker_to_name:
+            continue  # 정상
+
+        invalid += 1
+        details.append(f"{asset_name} ({ticker} @ {market}): stock_universe 미등록")
+
+    return {"corrected": 0, "invalid": invalid, "details": details}
+
+
 def validate_krx_tickers(proposals: list[dict]) -> dict:
     """KRX 종목의 티커↔이름 교차 검증 및 교정
 

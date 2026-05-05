@@ -25,7 +25,7 @@ from analyzer.prompts import (
     STAGE1B3_SYSTEM, STAGE1B3_PROMPT,
     STAGE2_SYSTEM, STAGE2_PROMPT,
 )
-from analyzer.stock_data import fetch_multiple_stocks, fetch_stock_data, format_stock_data_text, fetch_momentum_batch, validate_krx_tickers
+from analyzer.stock_data import fetch_multiple_stocks, fetch_stock_data, format_stock_data_text, fetch_momentum_batch, validate_krx_tickers, validate_us_tickers
 from analyzer.screener import screen as screen_universe, candidates_to_prompt_table
 from shared.config import AnalyzerConfig, DatabaseConfig, ScreenerConfig
 from shared.db import get_recent_recommendations, get_existing_theme_keys
@@ -1209,6 +1209,7 @@ async def stage2_analyze_stock(
     theme_context: str, date: str, max_turns: int = 6,
     stock_data_text: str = "",
     quant_factors_text: str = "",
+    fundamentals_text: str = "",
     investor_data_text: str = "",
     short_selling_text: str = "",
     model: str | None = None,
@@ -1226,6 +1227,11 @@ async def stage2_analyze_stock(
             f"{quant_factors_text}\n"
         )
 
+    fundamentals_section = (
+        f"\n\n## 펀더멘털 시계열 (12M PIT — DB 산출, 그대로 인용)\n\n{fundamentals_text}\n"
+        if fundamentals_text else ""
+    )
+
     investor_section = f"\n\n{investor_data_text}\n" if investor_data_text else ""
     short_section = f"\n\n{short_selling_text}\n" if short_selling_text else ""
 
@@ -1234,6 +1240,7 @@ async def stage2_analyze_stock(
         market=market, theme_context=theme_context, date=date,
         stock_data_section=stock_data_section,
         quant_factors_section=quant_factors_section,
+        fundamentals_section=fundamentals_section,
         investor_data_section=investor_section,
         short_selling_section=short_section,
     )
@@ -1471,21 +1478,34 @@ async def run_pipeline(
     if all_stock_proposals:
         try:
             vresult = validate_krx_tickers(all_stock_proposals)
+            # US 화이트리스트 검증 (Tier 2) — stock_universe DB 기반
+            try:
+                us_vresult = validate_us_tickers(all_stock_proposals, db_cfg=db_cfg)
+            except Exception as e:
+                log.warning(f"[티커 검증] US 검증 실패 (무시): {e}")
+                us_vresult = {"corrected": 0, "invalid": 0, "details": []}
+
+            # 합치기 — KRX corrected + US invalid 병합 (incident_report 가 함께 사용)
+            vresult = {
+                "corrected": vresult.get("corrected", 0) + us_vresult.get("corrected", 0),
+                "invalid": vresult.get("invalid", 0) + us_vresult.get("invalid", 0),
+                "details": list(vresult.get("details", [])) + list(us_vresult.get("details", [])),
+            }
             # B-3: 사건 보고서 집계용으로 결과 보존
             result["_ticker_validation"] = vresult
             if vresult["corrected"]:
-                log.info(f"[티커 검증] KRX 티커 {vresult['corrected']}건 교정:")
+                log.info(f"[티커 검증] 티커 {vresult['corrected']}건 교정:")
                 for d in vresult["details"]:
                     if "미등록" not in d:
                         log.info(f"  → {d}")
             if vresult["invalid"]:
                 # A-3: 미등록 종목은 이름·티커를 명시해 로그에 남김
-                log.warning(f"[티커 검증] KRX 미등록 {vresult['invalid']}건 (확인 필요):")
+                log.warning(f"[티커 검증] 미등록 {vresult['invalid']}건 (확인 필요):")
                 for d in vresult["details"]:
                     if "미등록" in d:
                         log.warning(f"  → {d}")
             if not vresult["corrected"] and not vresult["invalid"]:
-                log.info("[티커 검증] KRX 종목 전체 정상")
+                log.info("[티커 검증] KRX/US 종목 전체 정상")
         except Exception as e:
             log.warning(f"[티커 검증] 검증 실패 (무시): {e}")
 
@@ -1705,6 +1725,18 @@ async def run_pipeline(
         except Exception as e:
             log.warning(f"[foreign_flow_insight] 스냅샷 계산 실패 (무시): {e}")
 
+    # ── 펀더 시계열 인사이트 (Tier 2, KR + US) ──
+    fundamentals_map: dict[tuple[str, str], dict] = {}
+    if db_cfg is not None:
+        try:
+            from analyzer.fundamentals_engine import compute_fundamentals_snapshots
+            fundamentals_map = compute_fundamentals_snapshots(
+                db_cfg,
+                [(p["ticker"], p.get("market", "")) for p, _ in stock_targets],
+            )
+        except Exception as e:
+            log.warning(f"[fundamentals_engine] 스냅샷 계산 실패 (무시): {e}")
+
     log.info(f"[Stage 2] 종목 심층분석 시작 — {len(stock_targets)}종목 (병렬 실행)")
 
     _STAGE2_REQUIRED_FIELDS = ("factor_scores", "sentiment_score", "recommendation")
@@ -1764,6 +1796,17 @@ async def run_pipeline(
                         factors_text = (factors_text + "\n" + ff_text).strip() if factors_text else ff_text
                     proposal["foreign_flow_snapshot"] = ff_snap
 
+                # 펀더 시계열 PIT 스냅샷 (Tier 2, KR + US) — 별도 fundamentals_text 로 전달
+                fund_text = ""
+                fund_snap = fundamentals_map.get((tk_upper, mk_upper))
+                if fund_snap:
+                    try:
+                        from analyzer.fundamentals_engine import format_fundamentals_text
+                        fund_text = format_fundamentals_text(fund_snap)
+                    except Exception:
+                        fund_text = ""
+                    proposal["fundamentals_snapshot"] = fund_snap
+
                 # KRX 확장 데이터 포맷팅
                 inv_text = ""
                 sht_text = ""
@@ -1796,6 +1839,7 @@ async def run_pipeline(
                         date=date, max_turns=turns_for_attempt,
                         stock_data_text=sd_text,
                         quant_factors_text=factors_text,
+                        fundamentals_text=fund_text,
                         investor_data_text=inv_text,
                         short_selling_text=sht_text,
                         model=cfg.model_analysis,

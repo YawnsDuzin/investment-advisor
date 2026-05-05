@@ -181,6 +181,20 @@ def _run_analysis(cfg: AppConfig, today: str, run_id: int | None, log,
     except Exception as e:
         log.warning(f"[Stage 4] 가격추적 중 오류 (분석 결과에는 영향 없음): {e}")
 
+    # 7-1) Tier 2: 매도/익절 시그널 평가 + 알림 fan-out (price_tracker 결과 기반)
+    try:
+        from analyzer.exit_signals import evaluate_exit_signals
+        signals_result = evaluate_exit_signals(cfg.db)
+        if signals_result["target_hit_count"] or signals_result["stop_loss_count"]:
+            log.info(
+                f"[exit_signals] 익절 {signals_result['target_hit_count']}건 "
+                f"(알림 {signals_result['target_hit_notifications']}건), "
+                f"손절 {signals_result['stop_loss_count']}건 "
+                f"(알림 {signals_result['stop_loss_notifications']}건)"
+            )
+    except Exception as e:
+        log.warning(f"[exit_signals] 평가 중 오류 (무시): {e}")
+
     # 8) 이상 시그널 탐지 (로드맵 Step 3-2 — market_signals UPSERT)
     try:
         from analyzer.signals import detect_signals, generate_watchlist_notifications
