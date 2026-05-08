@@ -51,6 +51,7 @@
         <div class="chat-bubble chat-bubble-{{ msg.role }}">
             {% if msg.role == 'assistant' %}
             <div class="chat-bubble-content">{{ msg.content }}</div>
+            {% include "partials/_chat_citations.html" %}
             {% else %}
             {{ msg.content }}
             {% endif %}
