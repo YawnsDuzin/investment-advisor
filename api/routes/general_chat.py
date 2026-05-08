@@ -210,8 +210,10 @@ async def send_message(
         _check_quota_or_raise(cur, user)
 
         # 3) 사용자 컨텍스트 + 이력
+        # user_message 를 함께 전달하면 stock_universe 화이트리스트 기반으로
+        # 메시지 언급 종목의 D-1 종가 스냅샷을 컨텍스트에 추가 주입한다 (DB only).
         owner_id = session.get("user_id") or user.id
-        user_context = build_user_context(conn, owner_id)
+        user_context = build_user_context(conn, owner_id, user_message=body.content)
         cur.execute(
             """SELECT role, content FROM general_chat_messages
                WHERE chat_session_id = %s ORDER BY created_at""",

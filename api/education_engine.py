@@ -74,6 +74,9 @@ async def _query_edu_chat(
                 system_prompt=system,
                 max_turns=max_turns,
                 stderr=_on_stderr,
+                tools=[],
+                permission_mode="plan",
+                setting_sources=[],
             ),
         ):
             if isinstance(message, AssistantMessage):
