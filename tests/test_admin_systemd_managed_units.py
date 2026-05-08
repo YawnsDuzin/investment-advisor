@@ -43,3 +43,20 @@ def test_foreign_flow_unit_has_descriptive_metadata():
     assert unit["label"], "label 비어 있음 — UI 카드 제목 누락"
     assert unit["description"], "description 비어 있음 — UI 부제 누락"
     assert "06:40" in unit["schedule"], "schedule 표기 누락 (KST 06:40)"
+
+
+def test_macro_observer_unit_registered():
+    unit = _find_unit("macro-observer")
+    assert unit is not None, "macro-observer unit not in MANAGED_UNITS"
+    assert unit["service"] == "investment-advisor-macro-observer.service"
+    assert unit["timer"] == "investment-advisor-macro-observer.timer"
+    assert unit["self_protected"] is False, (
+        "self_protected=True면 웹 UI에서 제어 불가 — 매크로 관측은 운영자가 수동 트리거 가능해야 함"
+    )
+
+
+def test_macro_observer_unit_has_descriptive_metadata():
+    unit = _find_unit("macro-observer")
+    assert unit["label"], "label 비어 있음 — UI 카드 제목 누락"
+    assert unit["description"], "description 비어 있음 — UI 부제 누락"
+    assert "06:50" in unit["schedule"], "schedule 표기 누락 (KST 06:50)"

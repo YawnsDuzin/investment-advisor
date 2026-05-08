@@ -103,6 +103,14 @@ MANAGED_UNITS: list[dict] = [
         "schedule": "매일 06:40 KST",
         "description": "외국인/기관/개인 수급 PIT 일배치 sync (KRX KOSPI+KOSDAQ, stock_universe_foreign_flow v44)",
     },
+    {
+        "key": "macro-observer", "category": "B", "label": "매크로 관측 일배치",
+        "service": "investment-advisor-macro-observer.service",
+        "timer": "investment-advisor-macro-observer.timer",
+        "self_protected": False,
+        "schedule": "매일 06:50 KST",
+        "description": "yfinance EOD 매크로 5종 (10Y 금리/USDKRW/WTI/VIX/금) — macro_observations v50",
+    },
 ]
 
 
