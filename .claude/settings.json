@@ -37,8 +37,9 @@
   },
   "enabledPlugins": {
     "context7@claude-plugins-official": true,
-    "skill-creator@claude-plugins-official": true,
+    "skill-creator@claude-plugins-official": false,
     "claude-code-setup@claude-plugins-official": true,
-    "superpowers@claude-plugins-official": true
+    "superpowers@claude-plugins-official": true,
+    "superpowers@superpowers-marketplace": true
   }
 }
