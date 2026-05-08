@@ -66,6 +66,9 @@ async def stream_claude_chat(
                 max_turns=max_turns,
                 include_partial_messages=True,
                 stderr=_on_stderr,
+                tools=[],
+                permission_mode="plan",
+                setting_sources=[],
             ),
         ):
             new_text = _extract_text(message)

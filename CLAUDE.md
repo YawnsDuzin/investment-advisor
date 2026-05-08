@@ -150,6 +150,7 @@ sudo systemctl enable --now pre-market-briefing.timer            # 매일 06:30 
 | `FOREIGN_FLOW_STALENESS_DAYS` | `2` | health check — 최근 N일 내 row 보유 = "신선" |
 | `FOREIGN_FLOW_MISSING_THRESHOLD_KOSPI` | `5.0` | 결측률 경고 임계 — KOSPI (%) |
 | `FOREIGN_FLOW_MISSING_THRESHOLD_KOSDAQ` | `10.0` | 결측률 경고 임계 — KOSDAQ (%) |
+| `GENERAL_CHAT_TICKER_INJECTION` | `true` | 자유 채팅(Ask AI) 메시지에서 종목명/티커 추출 후 D-1 종가 스냅샷 자동 주입 (false=스킵) |
 
 - `.env`는 `.gitignore`에 포함 — Git에 커밋되지 않음
 - `.env.example`은 Git에 포함 — 플레이스홀더 값으로 구성
@@ -206,7 +207,8 @@ sudo systemctl enable --now pre-market-briefing.timer            # 매일 06:30 
 - `routes/general_chat.py` — 자유 질문 채팅(Ask AI) API. 테마/토픽 비종속 — 사용자 워치리스트 + 최근 7일 추천을 시스템 프롬프트에 동적 주입. 인증 필수, 티어별 일일 턴 제한(`GENERAL_CHAT_DAILY_TURNS`: Free 5 / Pro 50 / Premium ∞). 도메인은 투자/시장 한정 (페르소나가 비투자 질문 거절).
 - `routes/inquiry.py` — 고객 문의 게시판. 문의 CRUD, 답변/댓글, 상태 관리(open→answered→closed). 카테고리: general/bug/feature. `is_private` 플래그로 비공개 문의 지원. Admin/Moderator만 답변·상태 변경 가능.
 - `chat_engine.py` — Claude Agent SDK 기반 테마 채팅 엔진. 테마 컨텍스트를 시스템 프롬프트에 주입하여 대화.
-- `general_chat_engine.py` — Claude SDK 기반 자유 채팅 엔진. `build_user_context()`가 워치리스트·최근 추천을 시스템 프롬프트로 변환 → 투자 어시스턴트 페르소나로 답변. user_id=None(비로그인) 또는 조회 실패 시 빈 컨텍스트로 안전 폴백.
+- `general_chat_engine.py` — Claude SDK 기반 자유 채팅 엔진. `build_user_context()`가 워치리스트·최근 추천을 시스템 프롬프트로 변환 → 투자 어시스턴트 페르소나로 답변. user_id=None(비로그인) 또는 조회 실패 시 빈 컨텍스트로 안전 폴백. **메시지 사전 처리(v1, DB only)**: `user_message` 인자가 주어지면 `_extract_tickers_from_message()`(stock_universe 화이트리스트 + asset_name/asset_name_en substring + 직접 티커 정규식 `\d{6}`/`[A-Z]{2,5}`) → `_fetch_ticker_snapshot()`(stock_universe_ohlcv 최신 종가 + investment_proposals 통계, 외부 API 호출 없음, market_cap_krw DESC 우선 5개 한도) → 시스템 프롬프트에 "## 메시지에 언급된 종목 스냅샷 (출처: stock_universe_ohlcv, 기준일 YYYY-MM-DD 종가)" 블록 자동 주입. `GENERAL_CHAT_TICKER_INJECTION=false` 로 비활성화 가능. 추출/조회 실패는 침묵 폴백(채팅 자체는 안 죽음).
+- **채팅 엔진 SDK 옵션 정합성**: `chat_engine.py` / `general_chat_engine.py` / `education_engine.py` / `chat_stream_helpers.py` 4종 모두 `ClaudeAgentOptions(tools=[], permission_mode="plan", setting_sources=[])` 강제. 도구 사용 시도 시 stdin TTY 부재로 권한 프롬프트가 hang → CLI exit 1 회귀 차단. `analyzer/analyzer.py` 와 동일 패턴. 실시간 데이터가 필요하면 별도 컨텍스트 주입 경로(예: 위 ticker injection)나 종목 상세 페이지 안내로 처리.
 - `education_engine.py` — Claude SDK 기반 투자 교육 AI 튜터. 토픽별 커리큘럼을 시스템 프롬프트에 주입하여 대화형 학습 제공.
 - `templates/` — 다크 테마 UI. base(우측 상단 유저 드롭다운 + 알림 배지 + 401 자동 갱신 인터셉터), landing, pricing, dashboard, sessions, session_detail, themes, proposals, theme_history, stock_cockpit(종목 페이지 — 옛 ticker_history 흡수: 헤더 구독+외부링크, § 6 타임라인 + 요약 라인 + § 6-B 일자별 상세 표), track_record, watchlist, notifications, profile, chat_list, chat_room, general_chat_list, general_chat_room, education(topic/chat_list/chat_room), inquiry(list/detail/new), admin, admin_audit_logs, login, register, user_admin.
 
