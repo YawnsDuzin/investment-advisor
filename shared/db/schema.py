@@ -9,7 +9,7 @@ from shared.db.migrations import run_migrations
 
 
 # ── 스키마 버전 관리 ──────────────────────────────
-SCHEMA_VERSION = 47  # v47: ticker 구독 알림 회사명·테마 backfill — user_notifications.title/detail 재생성
+SCHEMA_VERSION = 48  # v48: 채팅 starter 질문 캐시 — investment_themes.starter_questions / education_topics.starter_questions JSONB
 
 
 def _create_base_schema(cur) -> None:

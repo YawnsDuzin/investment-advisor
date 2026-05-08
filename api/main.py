@@ -140,6 +140,10 @@ from api.routes import general_chat as _general_chat_routes
 app.include_router(_general_chat_routes.router)
 app.include_router(_general_chat_routes.pages_router)
 
+# 채팅 starter 질문 (Ask AI / Theme Chat / AI Tutor 빈 채팅방 진입 시 동적 예시)
+from api.routes import chat_starters as _chat_starters_routes
+app.include_router(_chat_starters_routes.router)
+
 
 if __name__ == "__main__":
     import uvicorn
