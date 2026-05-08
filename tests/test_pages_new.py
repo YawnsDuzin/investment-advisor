@@ -188,6 +188,12 @@ class TestDashboardMarketQuotes:
             "api.routes.dashboard._fetch_market_quotes",
             lambda cur_arg: fake_quotes,
         )
+        # Tier 1 #2: 새로 추가된 hero 헬퍼는 본 테스트의 fetchone 시퀀스 외부에서
+        # 호출되므로 무관한 None 반환으로 stub.
+        monkeypatch.setattr(
+            "api.routes.dashboard._fetch_latest_briefing",
+            lambda cur_arg: None,
+        )
 
         try:
             client = _make_client()

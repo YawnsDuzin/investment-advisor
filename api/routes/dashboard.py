@@ -30,6 +30,59 @@ _MARKET_QUOTE_WINDOW = 21        # sparkline 포인트 수 (영업일)
 _MARKET_QUOTE_LOOKBACK_DAYS = 60  # 영업일 21개 확보용 캘린더 윈도우
 
 
+# Tier 1 #2 — 체온계 점수 → 한국어 라벨 (UI 표시용)
+def _temperature_label(t):
+    if t is None:
+        return "데이터 부족"
+    if t >= 75:
+        return "과열"
+    if t >= 60:
+        return "강세"
+    if t >= 40:
+        return "중립"
+    if t >= 25:
+        return "약세"
+    return "빙하"
+
+
+def _fetch_latest_briefing(cur) -> dict | None:
+    """가장 최근 프리마켓 브리핑 — hero 카드 데이터.
+
+    pre_market_briefings (v34+) + one_liner/market_temperature (v49+) 컬럼 필요.
+    백필 이전 환경에서도 graceful — 컬럼 미존재 / 테이블 미존재 모두 None 반환.
+    """
+    try:
+        cur.execute(
+            """
+            SELECT briefing_date, status, one_liner, market_temperature,
+                   source_trade_date,
+                   regime_snapshot
+            FROM pre_market_briefings
+            WHERE status IN ('success', 'partial')
+            ORDER BY briefing_date DESC
+            LIMIT 1
+            """
+        )
+    except Exception:
+        # 테이블/컬럼 미존재 — 마이그레이션 v34/v49 적용 이전
+        return None
+    row = cur.fetchone()
+    if not row:
+        return None
+    temp = row.get("market_temperature")
+    return {
+        "briefing_date": row["briefing_date"].isoformat() if row.get("briefing_date") else None,
+        "status": row.get("status"),
+        "source_trade_date": (
+            row["source_trade_date"].isoformat()
+            if row.get("source_trade_date") else None
+        ),
+        "one_liner": row.get("one_liner"),
+        "market_temperature": int(temp) if temp is not None else None,
+        "temperature_label": _temperature_label(int(temp) if temp is not None else None),
+    }
+
+
 def _fetch_market_quotes(cur) -> dict:
     """market_indices_ohlcv 에서 4개 인덱스 × 21영업일 EOD 데이터를 조회해
     대시보드 시세 바 카드 렌더용 dict 로 가공.
@@ -135,14 +188,24 @@ def dashboard(conn = Depends(get_db_conn), ctx: dict = Depends(make_page_ctx("da
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         # 시세 바 (regime banner 위 — spec §3.1) — early return 분기에서도 안전하도록 미리 None 초기화
         market_quotes = None
+        latest_briefing = None
 
         # 최신 세션
         cur.execute("SELECT * FROM analysis_sessions ORDER BY analysis_date DESC LIMIT 1")
         session = cur.fetchone()
         if not session:
+            # 세션 없는 빈 환경에서도 브리핑 hero 는 노출 가능
+            try:
+                latest_briefing = _fetch_latest_briefing(cur)
+            except Exception:
+                latest_briefing = None
             return templates.TemplateResponse(
                 request=ctx["request"], name="dashboard.html",
-                context={**ctx, "session": None, "market_quotes": market_quotes},
+                context={
+                    **ctx, "session": None,
+                    "market_quotes": market_quotes,
+                    "latest_briefing": latest_briefing,
+                },
             )
 
         session_id = session["id"]
@@ -346,6 +409,9 @@ def dashboard(conn = Depends(get_db_conn), ctx: dict = Depends(make_page_ctx("da
             _logger.warning("market_quotes 조회 실패 — 배너 비표시: %s", e)
             market_quotes = None
 
+        # ── 프리마켓 브리핑 hero (Tier 1 #2) ──
+        latest_briefing = _fetch_latest_briefing(cur)
+
     # Top Picks 직렬화 + 개인화 플래그 주입
     top_picks = []
     for row in top_picks_raw:
@@ -430,4 +496,5 @@ def dashboard(conn = Depends(get_db_conn), ctx: dict = Depends(make_page_ctx("da
         "watched_in_today": watched_in_today,
         "theme_view_limit": theme_view_limit,
         "market_quotes": market_quotes,
+        "latest_briefing": latest_briefing,
     })

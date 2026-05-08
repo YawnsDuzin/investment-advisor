@@ -41,6 +41,7 @@ from analyzer.regime import (
     format_regime_text,
     infer_positioning_hint,
 )
+from analyzer.market_temperature import compute_temperature
 
 
 # 후보군 추출 시 우선 매핑할 sector_norm 화이트리스트
@@ -169,6 +170,14 @@ def run_briefing_pipeline(cfg: AppConfig, today: str, log) -> dict:
     # 5-1) 후보 화이트리스트 검증 — AI 환각 차단
     briefing_data = _validate_kr_picks(briefing_data, kr_candidates, log)
 
+    # 5-1-B) 한 줄 요약 + 시장 체온계 (Tier 1 #2)
+    one_liner = _extract_one_liner(briefing_data)
+    market_temperature = compute_temperature(regime)
+    log.info(
+        f"[브리핑] one_liner={'(채움)' if one_liner else '(없음)'} "
+        f"temperature={market_temperature}"
+    )
+
     # 5-2) DB 저장
     log.info("[5/5] DB 저장 + 알림 생성...")
     _save_briefing(
@@ -178,6 +187,8 @@ def run_briefing_pipeline(cfg: AppConfig, today: str, log) -> dict:
         us_summary=us_summary,
         regime_snapshot=regime,
         briefing_data=briefing_data,
+        one_liner=one_liner,
+        market_temperature=market_temperature,
     )
 
     # 5-3) 알림 생성
@@ -297,14 +308,17 @@ def _save_briefing(
     regime_snapshot: Optional[dict] = None,
     briefing_data: Optional[dict] = None,
     error_message: Optional[str] = None,
+    one_liner: Optional[str] = None,
+    market_temperature: Optional[int] = None,
 ) -> None:
     """pre_market_briefings UPSERT (PK = briefing_date)."""
     sql = """
     INSERT INTO pre_market_briefings (
         briefing_date, source_trade_date, status,
         us_summary, briefing_data, regime_snapshot, error_message,
+        one_liner, market_temperature,
         generated_at, updated_at
-    ) VALUES (%s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
+    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
     ON CONFLICT (briefing_date) DO UPDATE SET
         source_trade_date = EXCLUDED.source_trade_date,
         status = EXCLUDED.status,
@@ -312,6 +326,8 @@ def _save_briefing(
         briefing_data = EXCLUDED.briefing_data,
         regime_snapshot = EXCLUDED.regime_snapshot,
         error_message = EXCLUDED.error_message,
+        one_liner = EXCLUDED.one_liner,
+        market_temperature = EXCLUDED.market_temperature,
         updated_at = NOW()
     """
     conn = get_connection(db_cfg)
@@ -325,6 +341,8 @@ def _save_briefing(
                 Json(briefing_data) if briefing_data else None,
                 Json(regime_snapshot) if regime_snapshot else None,
                 error_message,
+                one_liner,
+                market_temperature,
             ))
         conn.commit()
     except Exception as e:
@@ -332,6 +350,27 @@ def _save_briefing(
         get_logger("briefing").error(f"브리핑 DB 저장 실패: {e}")
     finally:
         conn.close()
+
+
+def _extract_one_liner(briefing_data: Optional[dict]) -> Optional[str]:
+    """briefing_data 에서 80자 한 줄 요약 추출. 결측·비정형 시 None.
+
+    1순위: `one_liner` 필드 (BRIEFING_PROMPT 가 새로 출력)
+    2순위: `morning_brief` 의 첫 문장 (구버전 호환)
+    """
+    if not briefing_data or not isinstance(briefing_data, dict):
+        return None
+    raw = briefing_data.get("one_liner")
+    if isinstance(raw, str) and raw.strip():
+        s = raw.strip().replace("\n", " ")
+        return s[:120]  # DB TEXT 이지만 절단 가드
+    # 폴백 — morning_brief 첫 문장
+    mb = briefing_data.get("morning_brief")
+    if isinstance(mb, str) and mb.strip():
+        first = mb.split(".")[0].strip()
+        if 5 <= len(first) <= 120:
+            return first + ("." if not first.endswith(".") else "")
+    return None
 
 
 def _generate_briefing_notifications(

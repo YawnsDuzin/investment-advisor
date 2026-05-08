@@ -9,7 +9,7 @@ from shared.db.migrations import run_migrations
 
 
 # ── 스키마 버전 관리 ──────────────────────────────
-SCHEMA_VERSION = 48  # v48: 채팅 starter 질문 캐시 — investment_themes.starter_questions / education_topics.starter_questions JSONB
+SCHEMA_VERSION = 49  # v49: 프리마켓 브리핑 한 줄 + 시장 체온계 — pre_market_briefings.one_liner / market_temperature
 
 
 def _create_base_schema(cur) -> None:
