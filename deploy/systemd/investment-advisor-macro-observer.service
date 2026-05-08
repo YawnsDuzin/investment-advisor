@@ -1,0 +1,28 @@
+[Unit]
+Description=Investment Advisor — 매크로 관측 일배치 (10Y 금리/USDKRW/WTI/VIX/금)
+Documentation=https://github.com/yawnsduzin/investment-advisor
+After=network-online.target
+Wants=network-online.target
+# Note: foreign-flow-sync.timer 가 06:40 에 fire 되고
+# 본 service 는 06:50 에 실행되어 KR/US 시장 sync 일괄 종료 후 매크로 변수 기록.
+# postgresql.service 의존성은 의도적으로 미설정 — 외부 DB 호스트 호환.
+
+[Service]
+Type=oneshot
+User=__SYSTEM_USER__
+Group=__SYSTEM_USER__
+WorkingDirectory=__INSTALL_DIR__
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONIOENCODING=utf-8
+ExecStart=__VENV_PYTHON__ -m analyzer.macro_observer
+TimeoutStartSec=900
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=5
+
+Restart=no
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

@@ -65,7 +65,8 @@ class TestUnitRegistry:
         keys = {u["key"] for u in MANAGED_UNITS}
         expected = {"api", "analyzer", "sync-price", "sync-indices",
                     "sync-meta", "ohlcv-cleanup", "sector-refresh",
-                    "briefing", "fundamentals", "foreign-flow-sync"}
+                    "briefing", "fundamentals", "foreign-flow-sync",
+                    "macro-observer"}
         assert keys == expected, f"MANAGED_UNITS 키 불일치: 예상 {expected} vs 실제 {keys}"
         assert len(MANAGED_UNITS) == len(expected), \
             f"MANAGED_UNITS 길이 {len(MANAGED_UNITS)} != 예상 {len(expected)}"
@@ -239,9 +240,10 @@ def _summary_stub(u):
 
 
 class TestUnitsListEndpoint:
-    def test_returns_ten_units_when_systemd_available(self):
+    def test_returns_eleven_units_when_systemd_available(self):
         from fastapi.testclient import TestClient
         from api.main import app
+        from api.routes.admin_systemd import MANAGED_UNITS
         with patch("api.routes.admin_systemd._systemd_available",
                    return_value=(True, "Linux")), \
              patch("api.routes.admin_systemd._summarize_unit",
@@ -252,7 +254,8 @@ class TestUnitsListEndpoint:
         assert resp.status_code == 200
         body = resp.json()
         assert body["systemd_available"] is True
-        assert len(body["units"]) == 10
+        # 단일 진실 — MANAGED_UNITS 길이와 일치 (새 unit 추가 시 자동 통과)
+        assert len(body["units"]) == len(MANAGED_UNITS)
 
     def test_returns_empty_when_unavailable(self):
         from fastapi.testclient import TestClient

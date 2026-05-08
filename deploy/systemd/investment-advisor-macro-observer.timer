@@ -1,0 +1,14 @@
+[Unit]
+Description=Investment Advisor — 매크로 관측 일배치 매일 06:50 KST (foreign-flow-sync 직후)
+Documentation=https://github.com/yawnsduzin/investment-advisor
+
+[Timer]
+# 매일 06:50 KST — investment-advisor-foreign-flow-sync.timer(06:40) 이후 10분
+# yfinance 기준 EOD 데이터 수집이라 KR 시장 시간과 직접 연동 안 됨 — 06:30 일괄
+# 트랜잭션 끝에 fire 해 시스템 부하 분산.
+OnCalendar=*-*-* 06:50:00 Asia/Seoul
+Persistent=true
+Unit=investment-advisor-macro-observer.service
+
+[Install]
+WantedBy=timers.target

@@ -37,6 +37,8 @@
 | `investment-advisor-fundamentals.timer` | 매일 06:35 KST (sync-price 5분 후) | 위 service 트리거 |
 | `investment-advisor-foreign-flow-sync.service` | 외국인/기관/개인 수급 PIT 일별 sync (`--mode foreign`) — KRX KOSPI+KOSDAQ (v44) | `investment-advisor-foreign-flow-sync.timer` |
 | `investment-advisor-foreign-flow-sync.timer` | 매일 06:40 KST (fundamentals 5분 후) | 위 service 트리거 |
+| `investment-advisor-macro-observer.service` | 매크로 관측 일배치 (10Y 금리/USDKRW/WTI/VIX/금) — `analyzer.macro_observer` (v50) | `investment-advisor-macro-observer.timer` |
+| `investment-advisor-macro-observer.timer` | 매일 06:50 KST (foreign-flow-sync 10분 후) | 위 service 트리거 |
 
 ### C. 섹터 분류 유지보수 (P1-ext2 이후)
 
@@ -66,6 +68,7 @@
 
 06:35  investment-advisor-fundamentals  ← 펀더멘털 PIT (stock_universe_fundamentals) — sync-price 직후
 06:40  investment-advisor-foreign-flow-sync  ← 외국인/기관/개인 수급 PIT (stock_universe_foreign_flow) — fundamentals 직후
+06:50  investment-advisor-macro-observer  ← 매크로 5종 EOD (macro_observations) — foreign-flow 직후
 07:30  universe-sync-meta        ← 주간 메타 (일요일만)
 07:45  monthly-sector-refresh    ← 월간 섹터 리프레시 (매월 1일)
 08:00  ohlcv-cleanup             ← retention 정리 (일요일만)
@@ -208,7 +211,10 @@ Cmnd_Alias INV_SVC_ACTIONS = \
   /bin/systemctl restart investment-advisor-fundamentals.service, \
   /bin/systemctl start   investment-advisor-foreign-flow-sync.service, \
   /bin/systemctl stop    investment-advisor-foreign-flow-sync.service, \
-  /bin/systemctl restart investment-advisor-foreign-flow-sync.service
+  /bin/systemctl restart investment-advisor-foreign-flow-sync.service, \
+  /bin/systemctl start   investment-advisor-macro-observer.service, \
+  /bin/systemctl stop    investment-advisor-macro-observer.service, \
+  /bin/systemctl restart investment-advisor-macro-observer.service
 
 Cmnd_Alias INV_TIMER_ACTIONS = \
   /bin/systemctl enable  --now investment-advisor-analyzer.timer, \
@@ -228,7 +234,9 @@ Cmnd_Alias INV_TIMER_ACTIONS = \
   /bin/systemctl enable  --now investment-advisor-fundamentals.timer, \
   /bin/systemctl disable --now investment-advisor-fundamentals.timer, \
   /bin/systemctl enable  --now investment-advisor-foreign-flow-sync.timer, \
-  /bin/systemctl disable --now investment-advisor-foreign-flow-sync.timer
+  /bin/systemctl disable --now investment-advisor-foreign-flow-sync.timer, \
+  /bin/systemctl enable  --now investment-advisor-macro-observer.timer, \
+  /bin/systemctl disable --now investment-advisor-macro-observer.timer
 
 dzp ALL=(root) NOPASSWD: INV_SVC_ACTIONS, INV_TIMER_ACTIONS
 ```
