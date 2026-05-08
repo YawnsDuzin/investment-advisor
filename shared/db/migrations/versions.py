@@ -2076,6 +2076,37 @@ def _migrate_to_v48(cur) -> None:
     print("[DB] v48 마이그레이션 완료 — investment_themes.starter_questions + education_topics.starter_questions JSONB 추가")
 
 
+def _migrate_to_v50(cur) -> None:
+    """v50: 매크로 관측 시계열 (Tier 2 #4 인프라).
+
+    `theme_scenarios.base/worse/better` 의 매크로 가정을 사후 검증하기 위한 데이터 레이어.
+    yfinance/FRED 등에서 일배치 수집한 매크로 변수(10Y 금리, USDKRW, WTI, VIX, 금) 저장.
+
+    PK `(variable_name, observed_at)` — 재실행 멱등. FK 미설정 — 외부 source 변경 시 보존.
+    UI 는 **테마 페이지 매크로 환경 카드** + 향후 시나리오 적중률 게이지 (LLM 이 매크로 가정을
+    명시 필드로 출력하는 분석 파이프라인 변경 후 합류).
+    """
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS macro_observations (
+            variable_name VARCHAR(40) NOT NULL,
+            observed_at   DATE NOT NULL,
+            value         NUMERIC(18,6),
+            source        VARCHAR(20) NOT NULL,
+            fetched_at    TIMESTAMPTZ DEFAULT NOW(),
+            PRIMARY KEY (variable_name, observed_at)
+        );
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_macro_obs_var_date
+            ON macro_observations(variable_name, observed_at DESC);
+    """)
+    cur.execute("""
+        INSERT INTO schema_version (version) VALUES (50)
+        ON CONFLICT (version) DO NOTHING;
+    """)
+    print("[DB] v50 마이그레이션 완료 — macro_observations (매크로 관측 시계열)")
+
+
 def _migrate_to_v49(cur) -> None:
     """v49: 프리마켓 브리핑 한 줄 요약 + 시장 체온계 (Tier 1 #2).
 

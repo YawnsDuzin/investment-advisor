@@ -9,7 +9,7 @@ from shared.db.migrations import run_migrations
 
 
 # ── 스키마 버전 관리 ──────────────────────────────
-SCHEMA_VERSION = 49  # v49: 프리마켓 브리핑 한 줄 + 시장 체온계 — pre_market_briefings.one_liner / market_temperature
+SCHEMA_VERSION = 50  # v50: 매크로 관측 시계열 — macro_observations (시나리오 진행 추적 인프라)
 
 
 def _create_base_schema(cur) -> None:

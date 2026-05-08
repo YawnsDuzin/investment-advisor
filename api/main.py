@@ -117,6 +117,8 @@ app.include_router(stocks.pages_router)
 app.include_router(stocks.indices_router)
 from api.routes import signals as _signals_routes
 app.include_router(_signals_routes.router)
+from api.routes import macro as _macro_routes
+app.include_router(_macro_routes.router)
 from api.routes import sectors as _sectors_routes
 app.include_router(_sectors_routes.router)
 from api.routes import screener as _screener_routes
