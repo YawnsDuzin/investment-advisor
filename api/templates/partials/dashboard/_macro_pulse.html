@@ -1,0 +1,105 @@
+{#
+  Macro Pulse — Tier 2 #4 (시나리오 진행 추적 인프라).
+  /api/macro/recent 호출 → 5개 매크로 변수 미니 카드 + sparkline.
+  데이터 0건이면 비표시 (백필 이전 환경 호환).
+#}
+<div id="macro-pulse" class="macro-pulse" style="display:none;" data-fetched="0">
+  <div class="macro-pulse-head">
+    <span class="macro-pulse-title">매크로 환경</span>
+    <span class="macro-pulse-meta" id="macro-pulse-asof"></span>
+  </div>
+  <div class="macro-pulse-cards" id="macro-pulse-cards"></div>
+</div>
+
+<style>
+  .macro-pulse { padding:12px 14px; margin-bottom:12px;
+                 background:rgba(255,255,255,0.03);
+                 border:1px solid var(--border, rgba(255,255,255,0.08));
+                 border-radius:8px; }
+  .macro-pulse-head { display:flex; align-items:baseline; gap:10px; margin-bottom:8px; }
+  .macro-pulse-title { color:var(--accent, #4f8cff); font-weight:600; font-size:13px; }
+  .macro-pulse-meta { color:var(--text-muted, #9ca3af); font-size:11px; margin-left:auto; }
+  .macro-pulse-cards { display:flex; flex-wrap:nowrap; gap:8px; overflow-x:auto;
+                       scroll-snap-type: x mandatory; }
+  .macro-card { flex:1 1 0; min-width:130px; padding:8px 10px;
+                background:rgba(255,255,255,0.04);
+                border:1px solid var(--border, rgba(255,255,255,0.08));
+                border-radius:6px; scroll-snap-align: start; }
+  .macro-card-label { color:var(--text-muted, #9ca3af); font-size:11px; }
+  .macro-card-value { font-weight:600; font-size:14px; color:var(--text);
+                      margin-top:2px; font-variant-numeric:tabular-nums; }
+  .macro-card-change { font-size:11px; margin-top:2px; font-variant-numeric:tabular-nums; }
+  .macro-card-change-up { color:#10b981; }
+  .macro-card-change-down { color:#ef4444; }
+  .macro-card-change-flat { color:var(--text-muted, #9ca3af); }
+  .macro-card-spark { margin-top:4px; }
+  .macro-spark-line { fill:none; stroke-width:1.5; stroke:currentColor; }
+  .macro-spark-up { color:#10b981; }
+  .macro-spark-down { color:#ef4444; }
+  .macro-spark-flat { color:var(--text-muted, #9ca3af); }
+</style>
+
+<script>
+(function() {
+  var root = document.getElementById('macro-pulse');
+  if (!root || root.dataset.fetched === '1') return;
+  root.dataset.fetched = '1';
+
+  function fmtVal(v, unit, varName) {
+    if (v == null) return '-';
+    var num;
+    if (varName === 'us_10y_yield' || varName === 'vix') {
+      num = v.toFixed(2);
+    } else if (varName === 'usdkrw') {
+      num = Math.round(v).toLocaleString('ko-KR');
+    } else {
+      num = v.toLocaleString('en-US', {maximumFractionDigits:2});
+    }
+    if (unit === '%') return num + '%';
+    return (unit || '') + num;
+  }
+  function fmtChangePct(v) {
+    if (v == null) return '';
+    var sign = v > 0 ? '+' : '';
+    return sign + v.toFixed(2) + '%';
+  }
+  function sparkPath(values, w, h) {
+    if (!values || values.length < 2) return '';
+    var mn = Math.min.apply(null, values);
+    var mx = Math.max.apply(null, values);
+    var rng = mx - mn || 1;
+    return values.map(function(v, i) {
+      var x = (i / (values.length - 1) * w).toFixed(1);
+      var y = (h - (v - mn) / rng * (h - 2) - 1).toFixed(1);
+      return x + ',' + y;
+    }).join(' ');
+  }
+
+  fetch('/api/macro/recent?days=30')
+    .then(function(r) { return r.ok ? r.json() : null; })
+    .then(function(d) {
+      if (!d || !d.items || d.items.length === 0) return;
+      var asof = document.getElementById('macro-pulse-asof');
+      if (asof && d.as_of) asof.textContent = '기준일 ' + d.as_of;
+      var wrap = document.getElementById('macro-pulse-cards');
+      var w = 90, h = 24;
+      var html = d.items.map(function(it) {
+        var trend = it.trend || 'flat';
+        var changeCls = 'macro-card-change-' + trend;
+        var sparkCls = 'macro-spark-' + trend;
+        var pts = sparkPath(it.spark_points, w, h);
+        return '<div class="macro-card">'
+          + '<div class="macro-card-label">' + it.label + '</div>'
+          + '<div class="macro-card-value">' + fmtVal(it.latest_value, it.unit, it.variable_name) + '</div>'
+          + '<div class="macro-card-change ' + changeCls + '">'
+          +   (it.change_pct != null ? fmtChangePct(it.change_pct) : '-')
+          + '</div>'
+          + (pts ? '<svg class="macro-card-spark ' + sparkCls + '" width="' + w + '" height="' + h + '" viewBox="0 0 ' + w + ' ' + h + '"><polyline class="macro-spark-line" points="' + pts + '"/></svg>' : '')
+          + '</div>';
+      }).join('');
+      wrap.innerHTML = html;
+      root.style.display = 'block';
+    })
+    .catch(function() {});
+})();
+</script>

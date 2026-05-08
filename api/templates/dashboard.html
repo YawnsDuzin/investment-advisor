@@ -7,6 +7,12 @@
 {# Free 사용자에게만 렌더 (tier 기준) #}
 {{ ad_slot('banner') }}
 
+{# 프리마켓 브리핑 hero (Tier 1 #2) — session 유무 무관하게 노출 #}
+{% include "partials/dashboard/_briefing_hero.html" %}
+
+{# 매크로 펄스 (Tier 2 #4) — JS fetch, 데이터 0건이면 비표시 #}
+{% include "partials/dashboard/_macro_pulse.html" %}
+
 {% if session %}
 {# 시장 시세 바 (EOD) — regime banner 위 #}
 {% include "partials/dashboard/_market_quotes_bar.html" %}

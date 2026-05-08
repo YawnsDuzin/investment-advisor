@@ -251,6 +251,38 @@
     </div>
   </section>
 
+  {# ─────────────── § 7. 비슷한 종목 (Tier 1 #5) ─────────────── #}
+  <section class="cockpit-section" id="sec-similar">
+    <div class="cockpit-section-head">
+      <h3>비슷한 종목</h3>
+      <span class="muted" id="similar-meta" style="font-size:12px;color:var(--text-muted);"></span>
+    </div>
+    <div id="similar-empty" style="display:none;text-align:center;padding:24px 0;
+         color:var(--text-muted);font-size:13px;
+         background:var(--bg-card);border:1px solid var(--border);border-radius:10px;">
+      OHLCV 이력 부족 — universe 진입 후 채워집니다.
+    </div>
+    <div id="similar-table-wrap" class="table-wrap" style="background:var(--bg-card);
+         border:1px solid var(--border);border-radius:10px;display:none;">
+      <table id="similar-table" style="width:100%;border-collapse:separate;
+             border-spacing:0;font-size:13px;">
+        <thead>
+          <tr style="color:var(--text-muted);font-size:12px;">
+            <th style="text-align:left;padding:8px 12px;">종목</th>
+            <th style="text-align:left;padding:8px 12px;">시장</th>
+            <th style="text-align:left;padding:8px 12px;">섹터</th>
+            <th style="text-align:right;padding:8px 12px;">유사도</th>
+            <th style="text-align:right;padding:8px 12px;">1M</th>
+            <th style="text-align:right;padding:8px 12px;">3M</th>
+            <th style="text-align:right;padding:8px 12px;">12M</th>
+            <th style="text-align:right;padding:8px 12px;">현재가</th>
+          </tr>
+        </thead>
+        <tbody id="similar-table-body"></tbody>
+      </table>
+    </div>
+  </section>
+
 </div>
 {% endblock %}
 

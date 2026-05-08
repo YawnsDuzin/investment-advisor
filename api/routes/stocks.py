@@ -10,6 +10,7 @@ from analyzer.krx_data import fetch_krx_extended, fetch_us_extended
 from analyzer.stock_data import fetch_fundamentals
 from api.auth.dependencies import get_current_user_required
 from api.auth.models import UserInDB
+from api.similar_stocks import compute_similar
 from api.templates_provider import templates
 from api.deps import make_page_ctx
 from shared.config import AppConfig
@@ -516,6 +517,50 @@ def get_stock_proposals(ticker: str):
 # § 5 Cockpit — 시장 특화 수급/공매도/지수 (lazy fetch)
 # ──────────────────────────────────────────────
 _KRX_MARKETS = {"KOSPI", "KOSDAQ", "KRX", "KSE", "KQ"}
+
+
+@router.get("/{ticker}/similar")
+def get_similar_stocks(
+    ticker: str,
+    market: str = Query(default="", description="시장 코드 (KOSPI/KOSDAQ/NASDAQ/NYSE)"),
+    top_k: int = Query(default=5, ge=1, le=20),
+    same_sector_only: bool = Query(default=False),
+):
+    """유사 종목 추천 (Tier 1 #5).
+
+    target 의 6축 percentile 팩터 벡터(r1m/r3m/r6m/r12m/low_vol/volume) 와
+    동일 시장 그룹(KRX/US) universe 사이 Euclidean 거리 기준 Top-K.
+    같은 sector_norm 후보 우선, 부족 시 그룹 전체 fallback.
+    """
+    cfg = AppConfig()
+    tk = ticker.strip().upper()
+    mk = (market or "").strip().upper()
+
+    # market 미지정 시 stock_universe 에서 자동 보완
+    if not mk:
+        conn = get_connection(cfg.db)
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(
+                    "SELECT market FROM stock_universe "
+                    "WHERE UPPER(ticker) = %s "
+                    "ORDER BY (CASE WHEN listed THEN 0 ELSE 1 END), market_cap_krw DESC NULLS LAST "
+                    "LIMIT 1",
+                    (tk,),
+                )
+                row = cur.fetchone()
+                if row and row.get("market"):
+                    mk = row["market"].upper()
+        finally:
+            conn.close()
+        if not mk:
+            raise HTTPException(status_code=404, detail=f"종목 '{ticker}' 시장 정보 없음")
+
+    return compute_similar(
+        cfg.db, tk, mk,
+        top_k=top_k,
+        same_sector_only=same_sector_only,
+    )
 
 
 @router.get("/{ticker}/extended-supply")

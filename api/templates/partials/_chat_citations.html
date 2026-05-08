@@ -1,0 +1,64 @@
+{#
+  Chat Citations — Tier 1 #6.
+  답변에 등장한 종목·테마를 inline 카드로. assistant 메시지 bubble 하단에 include.
+  CONTEXT:
+    - msg (dict): {role, content, citations: {tickers: [...], themes: [...]}}
+  결측 정책: msg.citations 없거나 모두 빈 리스트 → 비표시.
+#}
+{% set _cits = msg.citations if msg is mapping else None %}
+{% if _cits and (_cits.tickers or _cits.themes) %}
+<style>
+  /* once per page; 중복 정의는 브라우저가 흡수 */
+  .chat-citations { margin-top:8px; padding-top:8px;
+                    border-top:1px dashed var(--border, rgba(255,255,255,0.08));
+                    display:flex; flex-direction:column; gap:6px; }
+  .chat-citations-row { display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+  .chat-citations-label { font-size:10px; color:var(--text-muted, #9ca3af);
+                          letter-spacing:0.04em; margin-right:4px; }
+  .chat-citation { display:inline-flex; align-items:center; gap:6px;
+                   padding:4px 10px; border-radius:6px;
+                   background:rgba(255,255,255,0.04);
+                   border:1px solid var(--border, rgba(255,255,255,0.08));
+                   font-size:12px; color:var(--text, #e5e7eb);
+                   text-decoration:none; transition: background 0.12s; }
+  .chat-citation:hover { background:rgba(79,140,255,0.12);
+                         border-color:rgba(79,140,255,0.35); }
+  .chat-citation-name { font-weight:600; }
+  .chat-citation-sub { color:var(--text-muted, #9ca3af); font-size:11px;
+                       font-variant-numeric:tabular-nums; }
+  .chat-citation-tag { font-size:10px; color:var(--text-muted, #9ca3af);
+                       padding:1px 5px; border-radius:3px;
+                       background:rgba(255,255,255,0.04);
+                       border:1px solid var(--border, rgba(255,255,255,0.08)); }
+  .chat-citation-ticker .chat-citation-name::before { content:"📈 "; }
+</style>
+<div class="chat-citations" role="region" aria-label="답변 참조 카드">
+  {% if _cits.tickers %}
+  <div class="chat-citations-row">
+    <span class="chat-citations-label">언급된 종목</span>
+    {% for t in _cits.tickers %}
+    <a href="/pages/stocks/{{ t.ticker }}{% if t.market %}?market={{ t.market }}{% endif %}"
+       class="chat-citation chat-citation-ticker"
+       title="{{ t.ticker }} · {{ t.market }}{% if t.sector_norm %} · {{ t.sector_norm }}{% endif %}">
+      <span class="chat-citation-name">{{ t.asset_name }}</span>
+      <span class="chat-citation-sub">{{ t.ticker }}</span>
+      {% if t.sector_norm %}<span class="chat-citation-tag">{{ t.sector_norm }}</span>{% endif %}
+    </a>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% if _cits.themes %}
+  <div class="chat-citations-row">
+    <span class="chat-citations-label">관련 테마</span>
+    {% for th in _cits.themes %}
+    <a href="{% if th.theme_key %}/pages/themes/history/{{ th.theme_key }}{% else %}/pages/themes{% endif %}"
+       class="chat-citation chat-citation-theme"
+       title="{{ th.theme_name }}{% if th.analysis_date %} · {{ th.analysis_date }}{% endif %}">
+      <span class="chat-citation-name">🎯 {{ th.theme_name }}</span>
+      {% if th.confidence_score %}<span class="chat-citation-tag">신뢰 {{ (th.confidence_score * 100)|round(0)|int }}%</span>{% endif %}
+    </a>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+{% endif %}

@@ -449,9 +449,14 @@ def education_chat_room_page(session_id: int, ctx: dict = Depends(make_page_ctx(
         """, (session_id,))
         messages = cur.fetchall()
 
+    serialized = [_serialize_row(m) for m in messages]
+    # Tier 1 #6: assistant 메시지에 인용 카드 주입
+    from api.chat_citations import attach_citations_to_messages
+    attach_citations_to_messages(serialized, conn)
+
     return templates.TemplateResponse(request=ctx["request"], name="education_chat_room.html", context={
         **ctx,
         "session": _serialize_row(session),
-        "messages": [_serialize_row(m) for m in messages],
+        "messages": serialized,
         "category_label": _EDU_CATEGORIES.get(session.get("category", ""), ""),
     })

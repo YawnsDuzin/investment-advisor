@@ -14,6 +14,7 @@ from api.auth.dependencies import get_current_user_required, quota_exceeded_deta
 from api.auth.models import UserInDB
 from api.templates_provider import templates
 from api.deps import get_db_conn, make_page_ctx
+from api.watchlist_health import compute_watchlist_health
 
 router = APIRouter(tags=["개인화"])
 pages_router = APIRouter(tags=["개인화 페이지"])  # prefix 없음 — path는 라우트별 명시
@@ -110,6 +111,94 @@ def remove_watchlist(
             raise HTTPException(status_code=404, detail="워치리스트에 없는 종목입니다")
     conn.commit()
     return {"ok": True}
+
+
+# ── 워치리스트 헬스 체크 (Tier 1 #3) ────────────
+
+
+def _fetch_watchlist_health_rows(conn, user_id: int) -> list[dict]:
+    """워치리스트 종목 + stock_universe 메타 + 최신 PER 조회.
+
+    `(ticker, market)` UNIQUE 이지만 미국 종목 한정 동일 ticker 가 NASDAQ/NYSE 양쪽에 있을 수 있어
+    LATERAL 로 listed=TRUE 우선 + 시총 큰 row 1건만 매칭.
+    """
+    sql = """
+        SELECT w.ticker,
+               u.market,
+               u.sector_norm,
+               u.market_cap_krw,
+               u.asset_name,
+               f.per
+        FROM user_watchlist w
+        LEFT JOIN LATERAL (
+            SELECT market, sector_norm, market_cap_krw, asset_name
+            FROM stock_universe
+            WHERE UPPER(ticker) = UPPER(w.ticker)
+            ORDER BY listed DESC, market_cap_krw DESC NULLS LAST
+            LIMIT 1
+        ) u ON TRUE
+        LEFT JOIN LATERAL (
+            SELECT per
+            FROM stock_universe_fundamentals
+            WHERE ticker = w.ticker AND market = u.market
+              AND per IS NOT NULL AND per > 0
+              AND snapshot_date >= CURRENT_DATE - INTERVAL '30 days'
+            ORDER BY snapshot_date DESC
+            LIMIT 1
+        ) f ON TRUE
+        WHERE w.user_id = %s
+    """
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute(sql, (user_id,))
+        return [dict(r) for r in cur.fetchall()]
+
+
+def _fetch_market_per_medians(conn) -> dict[str, Optional[float]]:
+    """시장별 PER 중앙값 (최근 7일 latest snapshot per ticker 기준)."""
+    sql = """
+        WITH latest AS (
+            SELECT DISTINCT ON (ticker, market)
+                ticker, market, per
+            FROM stock_universe_fundamentals
+            WHERE snapshot_date >= CURRENT_DATE - INTERVAL '7 days'
+              AND per IS NOT NULL AND per > 0
+            ORDER BY ticker, market, snapshot_date DESC
+        )
+        SELECT market,
+               percentile_cont(0.5) WITHIN GROUP (ORDER BY per)::NUMERIC AS per_median
+        FROM latest
+        GROUP BY market
+    """
+    out: dict[str, Optional[float]] = {}
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute(sql)
+        for r in cur.fetchall():
+            mk = (r.get("market") or "").upper()
+            med = r.get("per_median")
+            out[mk] = float(med) if med is not None else None
+    return out
+
+
+def _build_watchlist_health(conn, user_id: int) -> dict:
+    """페이지·API 양쪽에서 호출되는 합성 함수. DB 결측 시 빈 결과 반환."""
+    try:
+        rows = _fetch_watchlist_health_rows(conn, user_id)
+    except Exception:
+        rows = []
+    try:
+        medians = _fetch_market_per_medians(conn)
+    except Exception:
+        medians = {}
+    return compute_watchlist_health(rows, medians)
+
+
+@router.get("/api/watchlist/health")
+def watchlist_health(
+    conn=Depends(get_db_conn),
+    user: UserInDB = Depends(_require_user),
+):
+    """워치리스트 분산도 진단 — 섹터 HHI, 시장 편향, 시총 분포, 평균 PER 비교."""
+    return _build_watchlist_health(conn, user.id)
 
 
 # ── 알림 구독 ─────────────────────────────────────
@@ -347,10 +436,13 @@ def watchlist_page(conn=Depends(get_db_conn), ctx: dict = Depends(make_page_ctx(
         )
         subscriptions = [_serialize_row(r) for r in cur.fetchall()]
 
+    health = _build_watchlist_health(conn, user.id)
+
     return templates.TemplateResponse(request=ctx["request"], name="watchlist.html", context={
         **ctx,
         "watchlist": watchlist,
         "subscriptions": subscriptions,
+        "health": health,
     })
 
 

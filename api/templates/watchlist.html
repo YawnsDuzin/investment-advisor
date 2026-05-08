@@ -68,6 +68,106 @@
     /* 한도 표시 행이 모바일에서 세로 정렬되도록 */
     .wl-tabs-limit-row { gap: 6px; }
 }
+
+/* Tier 1 #3: 분산도 헬스 카드 */
+.wl-health {
+    background: var(--card-bg, var(--bg));
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-bottom: 16px;
+}
+.wl-health-head {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+.wl-health-head h3 {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+}
+.wl-health-head .muted {
+    color: var(--text-muted);
+    font-size: 12px;
+}
+.wl-health-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 10px;
+    margin-bottom: 10px;
+}
+.wl-health-tile {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+}
+.wl-health-tile-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+    letter-spacing: 0.02em;
+}
+.wl-health-tile-value {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1.1;
+}
+.wl-health-tile-sub {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 3px;
+}
+.wl-health-bar {
+    display: flex;
+    height: 6px;
+    border-radius: 4px;
+    overflow: hidden;
+    background: var(--border);
+    margin-top: 6px;
+}
+.wl-health-bar-seg {
+    height: 100%;
+}
+.wl-health-bar-kr { background: #4f8cff; }
+.wl-health-bar-us { background: #10b981; }
+.wl-health-bar-other { background: #6b7280; }
+.wl-health-bar-large { background: #4f8cff; }
+.wl-health-bar-mid { background: #f59e0b; }
+.wl-health-bar-small { background: #ef4444; }
+.wl-health-bar-unknown { background: #6b7280; }
+.wl-health-warnings {
+    border-top: 1px dashed var(--border);
+    padding-top: 8px;
+    margin-top: 4px;
+}
+.wl-health-warning {
+    font-size: 12px;
+    color: #fca5a5;
+    padding: 3px 0;
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+}
+.wl-health-warning::before {
+    content: "⚠";
+    color: #f59e0b;
+    font-size: 12px;
+}
+.wl-health-empty {
+    font-size: 12px;
+    color: var(--text-muted);
+    padding: 4px 0;
+}
+.wl-health-sectors {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 4px;
+    line-height: 1.5;
+}
 </style>
 {% endblock %}
 
@@ -89,6 +189,98 @@
 
     <!-- 관심 종목 탭 -->
     <div class="wl-tabs-panel active" id="wl-watchlist" role="tabpanel">
+        {% if health and health.count and health.count > 0 %}
+        {% set sc = health.sector_concentration %}
+        {% set mb = health.market_balance %}
+        {% set cd = health.cap_distribution %}
+        {% set vl = health.valuation %}
+        <div class="wl-health">
+            <div class="wl-health-head">
+                <h3>분산도 진단</h3>
+                <span class="muted">{{ health.count }}종목 기준</span>
+            </div>
+            <div class="wl-health-grid">
+                <!-- 섹터 집중도 -->
+                <div class="wl-health-tile">
+                    <div class="wl-health-tile-label">섹터 집중도 (HHI)</div>
+                    <div class="wl-health-tile-value">{{ '%.2f'|format(sc.hhi) }}</div>
+                    <div class="wl-health-tile-sub">
+                        {{ sc.top_sector }} {{ (sc.top_sector_share * 100)|round(0)|int }}% · {{ sc.sector_count }}개 섹터
+                    </div>
+                </div>
+                <!-- 시장 편향 -->
+                <div class="wl-health-tile">
+                    <div class="wl-health-tile-label">시장 편향</div>
+                    <div class="wl-health-tile-value">
+                        KR {{ (mb.kr_share * 100)|round(0)|int }}% · US {{ (mb.us_share * 100)|round(0)|int }}%
+                    </div>
+                    <div class="wl-health-bar">
+                        {% if mb.kr_share > 0 %}<div class="wl-health-bar-seg wl-health-bar-kr" style="width:{{ (mb.kr_share * 100)|round(1) }}%"></div>{% endif %}
+                        {% if mb.us_share > 0 %}<div class="wl-health-bar-seg wl-health-bar-us" style="width:{{ (mb.us_share * 100)|round(1) }}%"></div>{% endif %}
+                        {% set other_share = 1 - mb.kr_share - mb.us_share %}
+                        {% if other_share > 0 %}<div class="wl-health-bar-seg wl-health-bar-other" style="width:{{ (other_share * 100)|round(1) }}%"></div>{% endif %}
+                    </div>
+                </div>
+                <!-- 시총 분포 -->
+                <div class="wl-health-tile">
+                    <div class="wl-health-tile-label">시총 분포</div>
+                    <div class="wl-health-tile-value">
+                        대 {{ (cd.large_share * 100)|round(0)|int }}% · 중 {{ (cd.mid_share * 100)|round(0)|int }}% · 소 {{ (cd.small_share * 100)|round(0)|int }}%
+                    </div>
+                    <div class="wl-health-bar">
+                        {% if cd.large_share > 0 %}<div class="wl-health-bar-seg wl-health-bar-large" style="width:{{ (cd.large_share * 100)|round(1) }}%"></div>{% endif %}
+                        {% if cd.mid_share > 0 %}<div class="wl-health-bar-seg wl-health-bar-mid" style="width:{{ (cd.mid_share * 100)|round(1) }}%"></div>{% endif %}
+                        {% if cd.small_share > 0 %}<div class="wl-health-bar-seg wl-health-bar-small" style="width:{{ (cd.small_share * 100)|round(1) }}%"></div>{% endif %}
+                        {% if cd.unknown_share > 0 %}<div class="wl-health-bar-seg wl-health-bar-unknown" style="width:{{ (cd.unknown_share * 100)|round(1) }}%"></div>{% endif %}
+                    </div>
+                </div>
+                <!-- 평균 PER -->
+                <div class="wl-health-tile">
+                    <div class="wl-health-tile-label">평균 PER</div>
+                    {% if vl %}
+                    <div class="wl-health-tile-value">{{ vl.avg_per }}x</div>
+                    <div class="wl-health-tile-sub">
+                        {% if vl.bench_per %}
+                            시장 {{ vl.bench_per }}x ·
+                            {% if vl.premium_pct is not none %}
+                                {% if vl.premium_pct > 0 %}<span style="color:#f59e0b;">+{{ vl.premium_pct }}%</span>{% else %}<span style="color:#10b981;">{{ vl.premium_pct }}%</span>{% endif %}
+                            {% endif %}
+                        {% else %}
+                            벤치 데이터 없음
+                        {% endif %}
+                        · 커버 {{ vl.per_count }}/{{ health.count }}
+                    </div>
+                    {% else %}
+                    <div class="wl-health-tile-value" style="color:var(--text-muted);">—</div>
+                    <div class="wl-health-tile-sub">PER 데이터 없음</div>
+                    {% endif %}
+                </div>
+            </div>
+
+            {% if sc.breakdown and sc.breakdown|length > 1 %}
+            <div class="wl-health-sectors">
+                <strong style="color:var(--text);">섹터별</strong>:
+                {% for b in sc.breakdown[:5] %}
+                    {{ b.sector }} {{ b.count }}{% if not loop.last %} · {% endif %}
+                {% endfor %}
+                {% if sc.breakdown|length > 5 %} · 외 {{ sc.breakdown|length - 5 }}{% endif %}
+            </div>
+            {% endif %}
+
+            {% if health.warnings %}
+            <div class="wl-health-warnings">
+                {% for w in health.warnings %}
+                <div class="wl-health-warning">{{ w }}</div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="wl-health-warnings">
+                <div class="wl-health-empty">눈에 띄는 편중 신호 없음</div>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+
         <div class="wl-tabs-limit-row">
             {% if watchlist_limit %}
                 <span class="badge-plan badge-plan-{{ tier_badge_color }}" style="font-size:11px;">

@@ -9,7 +9,7 @@ from shared.db.migrations import run_migrations
 
 
 # ── 스키마 버전 관리 ──────────────────────────────
-SCHEMA_VERSION = 48  # v48: 채팅 starter 질문 캐시 — investment_themes.starter_questions / education_topics.starter_questions JSONB
+SCHEMA_VERSION = 50  # v50: 매크로 관측 시계열 — macro_observations (시나리오 진행 추적 인프라)
 
 
 def _create_base_schema(cur) -> None:

@@ -1020,3 +1020,94 @@
       emptyEl.style.display = 'block';
     });
 })();
+
+/* § 7 — 비슷한 종목 (Tier 1 #5) */
+(function() {
+  var root = document.getElementById('stock-cockpit');
+  if (!root) return;
+  var ticker = root.dataset.ticker;
+  var market = root.dataset.market || '';
+
+  var emptyEl = document.getElementById('similar-empty');
+  var wrapEl = document.getElementById('similar-table-wrap');
+  var bodyEl = document.getElementById('similar-table-body');
+  var metaEl = document.getElementById('similar-meta');
+  if (!emptyEl || !wrapEl || !bodyEl) return;
+
+  var CURRENCY_SYMBOLS = {KRW:'₩', USD:'$', EUR:'€', JPY:'¥', GBP:'£', CNY:'¥', HKD:'HK$', TWD:'NT$'};
+  var INT_CURRENCIES = ['KRW', 'JPY'];
+
+  function esc(s) {
+    if (s == null) return '';
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+  function fmtPrice(v, cur) {
+    if (v == null) return '-';
+    var sym = CURRENCY_SYMBOLS[cur] || '';
+    if (INT_CURRENCIES.indexOf(cur) >= 0) return sym + v.toLocaleString('ko-KR', {maximumFractionDigits:0});
+    return sym + v.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+  }
+  function fmtPct(v) {
+    if (v == null) return '<span style="color:var(--text-muted)">-</span>';
+    var cls = v > 0 ? 'color:#10b981' : (v < 0 ? 'color:#ef4444' : 'color:var(--text-muted)');
+    var sign = v > 0 ? '+' : '';
+    return '<span style="' + cls + '">' + sign + v.toFixed(1) + '%</span>';
+  }
+
+  var url = '/api/stocks/' + encodeURIComponent(ticker) + '/similar'
+    + '?top_k=5'
+    + (market ? '&market=' + encodeURIComponent(market) : '');
+
+  fetch(url)
+    .then(function(r) { return r.ok ? r.json() : null; })
+    .then(function(d) {
+      if (!d || !d.items || d.items.length === 0) {
+        emptyEl.style.display = 'block';
+        wrapEl.style.display = 'none';
+        return;
+      }
+
+      // 메타 라벨 — 같은 섹터 우선 / fallback 표시
+      var sameSector = d.items.filter(function(i) { return !i.fallback; }).length;
+      var fbCount = d.items.length - sameSector;
+      var label = '시장 그룹 ' + (d.market_group || '?')
+        + ' · universe ' + (d.universe_size || 0).toLocaleString();
+      if (d.sector) {
+        label += ' · 섹터 ' + esc(d.sector);
+        if (fbCount > 0) label += ' (섹터 ' + sameSector + ' + 그룹 fallback ' + fbCount + ')';
+      }
+      if (metaEl) metaEl.textContent = label;
+
+      var html = d.items.map(function(it) {
+        var fs = it.factor_snapshot || {};
+        var simPct = (it.similarity * 100).toFixed(1);
+        var fbBadge = it.fallback
+          ? ' <span style="font-size:10px;color:var(--text-muted);background:var(--bg);padding:1px 4px;border-radius:3px;margin-left:4px;">fallback</span>'
+          : '';
+        return '<tr style="border-top:1px solid var(--border);">'
+          + '<td style="padding:8px 12px;">'
+          +   '<a href="/pages/stocks/' + esc(it.ticker) + '?market=' + esc(it.market) + '" '
+          +     'style="color:var(--accent);text-decoration:none;">'
+          +     esc(it.asset_name || it.ticker) + ' <span style="color:var(--text-muted);font-size:11px;">(' + esc(it.ticker) + ')</span>'
+          +   '</a>' + fbBadge
+          + '</td>'
+          + '<td style="padding:8px 12px;font-size:12px;color:var(--text-muted);">' + esc(it.market) + '</td>'
+          + '<td style="padding:8px 12px;font-size:12px;">' + esc(it.sector || '-') + '</td>'
+          + '<td style="padding:8px 12px;text-align:right;font-variant-numeric:tabular-nums;">' + simPct + '%</td>'
+          + '<td style="padding:8px 12px;text-align:right;font-variant-numeric:tabular-nums;">' + fmtPct(fs.r1m_pct) + '</td>'
+          + '<td style="padding:8px 12px;text-align:right;font-variant-numeric:tabular-nums;">' + fmtPct(fs.r3m_pct) + '</td>'
+          + '<td style="padding:8px 12px;text-align:right;font-variant-numeric:tabular-nums;">' + fmtPct(fs.r12m_pct) + '</td>'
+          + '<td style="padding:8px 12px;text-align:right;font-variant-numeric:tabular-nums;">' + fmtPrice(it.last_price, it.currency) + '</td>'
+          + '</tr>';
+      }).join('');
+      bodyEl.innerHTML = html;
+      wrapEl.style.display = 'block';
+      emptyEl.style.display = 'none';
+    })
+    .catch(function() {
+      emptyEl.textContent = '유사 종목 조회 실패';
+      emptyEl.style.display = 'block';
+      wrapEl.style.display = 'none';
+    });
+})();
