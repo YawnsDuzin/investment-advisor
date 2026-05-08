@@ -218,7 +218,154 @@ _SIGNAL_LABELS_KR = {
     "below_200ma_cross": "200일 이평 하향 돌파",
     "gap_up": "갭 상승",
     "gap_down": "갭 하락",
+    # 외국인 수급 시그널 (KR 한정 — stock_universe_foreign_flow 기반)
+    "foreign_streak_buy_5d": "외국인 5일 연속 순매수",
+    "foreign_ownership_jump_5d": "외국인 지분율 급증",
 }
+
+
+# ── 외국인 수급 시그널 (KR 한정) ──────────────────
+# `stock_universe_foreign_flow` (v44) 기반. KOSPI/KOSDAQ 만 데이터 존재.
+# market_latest CTE 로 시장별 latest_date 분기 (OHLCV signals.py 패턴 그대로).
+
+_FOREIGN_DETECT_SQL = """
+WITH ranked AS (
+    SELECT ticker, UPPER(market) AS market, snapshot_date,
+           foreign_ownership_pct, foreign_net_buy_value,
+           ROW_NUMBER() OVER (
+               PARTITION BY ticker, UPPER(market)
+               ORDER BY snapshot_date DESC
+           ) AS rn
+    FROM stock_universe_foreign_flow
+    WHERE snapshot_date >= CURRENT_DATE - 30
+),
+market_latest AS (
+    SELECT UPPER(market) AS market, MAX(snapshot_date) AS m_latest
+    FROM stock_universe_foreign_flow
+    GROUP BY UPPER(market)
+),
+agg AS (
+    SELECT ticker, market,
+           MAX(CASE WHEN rn = 1 THEN snapshot_date END)               AS latest_date,
+           MAX(CASE WHEN rn = 1 THEN foreign_ownership_pct END)       AS own_latest,
+           MAX(CASE WHEN rn = 6 THEN foreign_ownership_pct END)       AS own_5d_ago,
+           SUM(CASE WHEN rn <= 5 THEN foreign_net_buy_value ELSE 0 END) AS net5_total,
+           COUNT(CASE WHEN rn <= 5 AND foreign_net_buy_value > 0 THEN 1 END) AS pos_days_5,
+           COUNT(CASE WHEN rn <= 5 THEN 1 END)                       AS rows_5
+    FROM ranked
+    GROUP BY ticker, market
+)
+SELECT a.ticker, a.market, a.latest_date,
+       a.own_latest, a.own_5d_ago, a.net5_total, a.pos_days_5, a.rows_5
+FROM agg a
+JOIN market_latest ml USING (market)
+WHERE a.latest_date = COALESCE(%s::date, ml.m_latest)
+  AND a.market IN ('KOSPI', 'KOSDAQ')
+"""
+
+
+def _is_streak_buy_5d(rows_5: int | None, pos_days_5: int | None) -> bool:
+    """최근 5거래일 모두 외국인 순매수(>0)였는지."""
+    if rows_5 is None or pos_days_5 is None:
+        return False
+    return int(rows_5) == 5 and int(pos_days_5) == 5
+
+
+def _is_ownership_jump_5d(
+    own_latest: float | None,
+    own_5d_ago: float | None,
+    threshold_pp: float,
+) -> bool:
+    """외국인 보유율이 5일 전 대비 threshold_pp 이상 상승했는지."""
+    if own_latest is None or own_5d_ago is None:
+        return False
+    return float(own_latest) - float(own_5d_ago) >= threshold_pp
+
+
+def detect_foreign_signals(
+    db_cfg: DatabaseConfig,
+    *,
+    as_of: date | None = None,
+    ownership_jump_pp: float = 0.5,
+) -> dict[str, int]:
+    """KR 외국인 수급 시그널 탐지 — `stock_universe_foreign_flow` 기반.
+
+    탐지 시그널:
+      - foreign_streak_buy_5d: 최근 5거래일 모두 foreign_net_buy_value > 0
+      - foreign_ownership_jump_5d: own_latest - own_5d_ago >= ownership_jump_pp (기본 0.5pp)
+
+    Returns: {signal_type: count}. foreign_flow 미수집 시 빈 dict (silent).
+    """
+    started = time.time()
+    conn = get_connection(db_cfg)
+    try:
+        with conn.cursor() as cur:
+            cur.execute(_FOREIGN_DETECT_SQL, (as_of,))
+            rows = cur.fetchall()
+    except Exception as e:
+        # foreign_flow 테이블 미수집 환경 (개발기) 에서 그래이스풀 폴백
+        _log.warning(f"[signals] 외국인 시그널 탐지 스킵 — {e}")
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        conn.close()
+        return {}
+
+    if not rows:
+        _log.info("[signals] 외국인 시그널 — 탐지 결과 0건 (foreign_flow 미수집 가능)")
+        conn.close()
+        return {}
+
+    upserts: list[tuple] = []
+    counts: dict[str, int] = {}
+    for r in rows:
+        (ticker, market, latest_date, own_latest, own_5d_ago,
+         net5_total, pos_days_5, rows_5) = r
+
+        if _is_streak_buy_5d(rows_5, pos_days_5):
+            metric = {
+                "pos_days_5": int(pos_days_5),
+                "net5_total": int(net5_total) if net5_total is not None else None,
+            }
+            upserts.append((
+                latest_date, "foreign_streak_buy_5d", ticker, market,
+                json.dumps(metric, ensure_ascii=False),
+            ))
+            counts["foreign_streak_buy_5d"] = counts.get("foreign_streak_buy_5d", 0) + 1
+
+        if _is_ownership_jump_5d(own_latest, own_5d_ago, ownership_jump_pp):
+            metric = {
+                "own_latest": round(float(own_latest), 4),
+                "own_5d_ago": round(float(own_5d_ago), 4),
+                "delta_pp": round(float(own_latest) - float(own_5d_ago), 4),
+            }
+            upserts.append((
+                latest_date, "foreign_ownership_jump_5d", ticker, market,
+                json.dumps(metric, ensure_ascii=False),
+            ))
+            counts["foreign_ownership_jump_5d"] = counts.get("foreign_ownership_jump_5d", 0) + 1
+
+    if upserts:
+        try:
+            from psycopg2.extras import execute_values
+            with conn.cursor() as cur:
+                execute_values(cur, _UPSERT_SIGNAL_SQL, upserts, page_size=1000)
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            _log.error(f"[signals] 외국인 시그널 UPSERT 실패: {e}")
+            conn.close()
+            return counts
+    conn.close()
+
+    duration = time.time() - started
+    total = sum(counts.values())
+    _log.info(
+        f"[signals] 외국인 시그널 {total}건 탐지·저장 "
+        f"({counts}) / {duration*1000:.0f}ms"
+    )
+    return counts
 
 
 def generate_watchlist_notifications(
@@ -237,14 +384,38 @@ def generate_watchlist_notifications(
         FROM market_signals
         WHERE signal_date = COALESCE(%s::date, (SELECT MAX(signal_date) FROM market_signals))
     """
+    # user_watchlist + user_subscriptions(ticker) 양쪽 매칭. 같은 유저가 둘 다 가지면
+    # DISTINCT ON (user_id) — 워치리스트 우선(sub_id NULLS FIRST).
     sql_watchers = """
-        SELECT uw.user_id, uw.ticker, uw.asset_name
-        FROM user_watchlist uw
-        WHERE UPPER(uw.ticker) = %s
+        WITH watchers AS (
+            SELECT user_id,
+                   UPPER(ticker)  AS ticker,
+                   asset_name,
+                   NULL::int      AS sub_id
+            FROM user_watchlist
+            WHERE UPPER(ticker) = %s
+            UNION
+            SELECT us.user_id,
+                   UPPER(us.sub_key) AS ticker,
+                   COALESCE(us.label, su.asset_name) AS asset_name,
+                   us.id            AS sub_id
+            FROM user_subscriptions us
+            LEFT JOIN LATERAL (
+                SELECT asset_name FROM stock_universe
+                WHERE UPPER(ticker) = UPPER(us.sub_key)
+                ORDER BY listed DESC, market_cap_krw DESC NULLS LAST
+                LIMIT 1
+            ) su ON TRUE
+            WHERE us.sub_type = 'ticker' AND UPPER(us.sub_key) = %s
+        )
+        SELECT DISTINCT ON (user_id)
+            user_id, ticker, asset_name, sub_id
+        FROM watchers
+        ORDER BY user_id, sub_id NULLS FIRST
     """
     sql_insert = """
-        INSERT INTO user_notifications (user_id, title, detail, link)
-        SELECT %s, %s, %s, %s
+        INSERT INTO user_notifications (user_id, sub_id, title, detail, link)
+        SELECT %s, %s, %s, %s, %s
         WHERE NOT EXISTS (
             SELECT 1 FROM user_notifications
             WHERE user_id = %s
@@ -266,25 +437,29 @@ def generate_watchlist_notifications(
                 label = _SIGNAL_LABELS_KR.get(signal_type, signal_type)
                 ticker_upper = str(ticker).strip().upper()
 
-                cur.execute(sql_watchers, (ticker_upper,))
+                cur.execute(sql_watchers, (ticker_upper, ticker_upper))
                 watchers = cur.fetchall()
                 if not watchers:
                     continue
 
-                for user_id, wl_ticker, asset_name in watchers:
+                for user_id, wl_ticker, asset_name, sub_id in watchers:
                     display_name = asset_name or wl_ticker
                     title = f"{display_name} ({ticker_upper}) — {label}"
-                    # metric을 한 줄 상세로
+                    # metric을 한 줄 상세로 (외국인 시그널 키도 노출)
                     detail_parts: list[str] = []
                     if isinstance(metric, dict):
-                        for k in ("close", "ratio", "gap_pct", "ma200", "high_252d", "low_252d"):
+                        for k in (
+                            "close", "ratio", "gap_pct",
+                            "ma200", "high_252d", "low_252d",
+                            "delta_pp", "own_latest", "pos_days_5",
+                        ):
                             if k in metric and metric[k] is not None:
                                 detail_parts.append(f"{k}={metric[k]}")
                     detail = ", ".join(detail_parts) if detail_parts else None
                     link = f"/pages/stocks/{ticker_upper}"
 
                     cur.execute(sql_insert, (
-                        user_id, title, detail, link,
+                        user_id, sub_id, title, detail, link,
                         user_id, title,
                     ))
                     created += cur.rowcount

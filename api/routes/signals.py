@@ -23,6 +23,9 @@ SIGNAL_LABELS = {
     "below_200ma_cross": "200MA 하향 돌파",
     "gap_up": "갭 상승",
     "gap_down": "갭 하락",
+    # 외국인 수급 시그널 (KR 한정)
+    "foreign_streak_buy_5d": "외국인 5일 연속 순매수",
+    "foreign_ownership_jump_5d": "외국인 지분율 급증",
 }
 
 
@@ -35,6 +38,8 @@ SIGNAL_TONE = {
     "below_200ma_cross": "negative",
     "gap_up": "positive",
     "gap_down": "negative",
+    "foreign_streak_buy_5d": "positive",
+    "foreign_ownership_jump_5d": "positive",
 }
 
 
