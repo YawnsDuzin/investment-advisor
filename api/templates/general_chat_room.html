@@ -11,6 +11,7 @@
 {% block head %}
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script src="/static/js/chat_stream_client.js"></script>
+<script src="/static/js/chat_starters.js"></script>
 {% endblock %}
 
 {% block content %}
@@ -22,6 +23,7 @@
             <p style="font-size:13px;margin-top:8px;color:var(--text-muted);">
                 관심 종목·최근 추천 이력이 답변에 자동 반영됩니다.
             </p>
+            <div class="chat-starters" id="chatStarters"></div>
         </div>
         {% endif %}
 
@@ -273,20 +275,34 @@ chatInput.focus();
 // /pages/general-chat/{id}?prefill=<urlencoded text>
 // 첫 진입 시 textarea 에 prefill 채우고 자동 전송. 새로고침 시 두 번 전송 방지 위해
 // auto-send 후 query 제거 (history.replaceState).
-(function() {
+var _hadPrefill = (function() {
     var params = new URLSearchParams(window.location.search);
     var prefill = params.get('prefill');
-    if (!prefill) return;
+    if (!prefill) return false;
     // 메시지가 이미 있으면 (새로고침 등) prefill 무시 — 기존 대화 보존
     if ({{ messages | length }} > 0) {
         history.replaceState({}, '', window.location.pathname);
-        return;
+        return false;
     }
     chatInput.value = prefill;
     chatInput.style.height = Math.min(chatInput.scrollHeight, 160) + 'px';
     history.replaceState({}, '', window.location.pathname);
     // 약간의 지연 후 자동 전송 (UI 그려진 뒤)
     setTimeout(sendMessage, 200);
+    return true;
 })();
+
+// ── Starter 카드 (빈 채팅방 진입 시) ──
+// prefill 자동전송 케이스 / 이미 메시지 있는 케이스에는 컨테이너가 없거나 곧 사라지므로 skip
+if (!_hadPrefill && document.getElementById('chatStarters')) {
+    attachChatStarters({
+        scope: 'general',
+        onPick: function(text) {
+            chatInput.value = text;
+            chatInput.style.height = Math.min(chatInput.scrollHeight, 160) + 'px';
+            sendMessage();
+        },
+    });
+}
 </script>
 {% endblock %}

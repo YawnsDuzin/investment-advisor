@@ -11,6 +11,7 @@
 {% block head %}
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script src="/static/js/chat_stream_client.js"></script>
+<script src="/static/js/chat_starters.js"></script>
 {% endblock %}
 
 {% block content %}
@@ -42,7 +43,7 @@
         {% if not messages %}
         <div class="chat-empty" id="chatWelcome">
             <p>이 테마에 대해 궁금한 점을 질문해 보세요.</p>
-            <p style="font-size:13px;margin-top:8px;">예: "이 테마의 주요 리스크는?", "추천 종목의 밸류에이션 분석"</p>
+            <div class="chat-starters" id="chatStarters"></div>
         </div>
         {% endif %}
 
@@ -296,5 +297,20 @@ const _stream = attachChatStream('theme', SESSION_ID, {
 window.addEventListener('beforeunload', function() { _stream.detach(); });
 
 chatInput.focus();
+
+// ── Starter 카드 (빈 채팅방 진입 시) ──
+{% if session.theme_id %}
+if (document.getElementById('chatStarters')) {
+    attachChatStarters({
+        scope: 'theme',
+        themeId: {{ session.theme_id }},
+        onPick: function(text) {
+            chatInput.value = text;
+            chatInput.style.height = Math.min(chatInput.scrollHeight, 160) + 'px';
+            sendMessage();
+        },
+    });
+}
+{% endif %}
 </script>
 {% endblock %}

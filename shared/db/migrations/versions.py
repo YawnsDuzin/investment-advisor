@@ -2050,3 +2050,27 @@ def _migrate_to_v47(cur) -> None:
         ON CONFLICT (version) DO NOTHING;
     """)
     print(f"[DB] v47 마이그레이션 완료 — ticker 알림 backfill {len(updates)}건")
+
+
+def _migrate_to_v48(cur) -> None:
+    """v48: 채팅 starter 질문 캐시 컬럼 추가.
+
+    Theme Chat / AI Tutor 의 빈 채팅방 진입 시 노출할 동적 질문 예시 3개를
+    JSONB 로 저장하여 재방문 시 AI 호출 비용 0 으로 즉시 노출.
+    Ask AI(general_chat) 는 사용자별/일자별로 변하므로 in-memory 캐시(별도)
+    를 사용하고 DB 컬럼을 두지 않는다.
+
+    포맷: {"questions": ["...", "...", "..."], "generated_at": "ISO-8601"}
+    NULL 이면 lazy 생성 (첫 진입 시 채움).
+    """
+    cur.execute("""
+        ALTER TABLE investment_themes
+        ADD COLUMN IF NOT EXISTS starter_questions JSONB;
+
+        ALTER TABLE education_topics
+        ADD COLUMN IF NOT EXISTS starter_questions JSONB;
+
+        INSERT INTO schema_version (version) VALUES (48)
+        ON CONFLICT (version) DO NOTHING;
+    """)
+    print("[DB] v48 마이그레이션 완료 — investment_themes.starter_questions + education_topics.starter_questions JSONB 추가")
