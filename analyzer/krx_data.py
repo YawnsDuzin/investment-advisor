@@ -10,17 +10,23 @@ Phase 3: 시가총액/외인보유율, 지수 편입, ETF 자금흐름
 from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from shared.logger import get_logger
-from analyzer.stock_data import _check_pykrx, _safe_pykrx_call, _is_korean_market
+from analyzer.stock_data import _check_pykrx, _safe_pykrx_call, _is_korean_market, _get_pykrx_stock
 
-try:
-    from pykrx import stock as pykrx_stock
-except ImportError:
-    pykrx_stock = None
+# pykrx 는 import 시점에 KRX 자동 로그인을 수행하므로(1.2.7+ auth.py),
+# top-level import 를 피하고 lazy load 한다. 자세한 배경은 stock_data.py 상단 주석 참고.
+_pykrx_bond = None  # sentinel: None=미시도, False=import 실패, module=성공
 
-try:
-    from pykrx import bond as pykrx_bond
-except ImportError:
-    pykrx_bond = None
+
+def _get_pykrx_bond():
+    """pykrx.bond 모듈을 lazy load. 첫 호출 시 import 부수효과로 KRX 로그인 발생."""
+    global _pykrx_bond
+    if _pykrx_bond is None:
+        try:
+            from pykrx import bond as _imported
+            _pykrx_bond = _imported
+        except ImportError:
+            _pykrx_bond = False
+    return _pykrx_bond if _pykrx_bond is not False else None
 
 
 # ── Phase 2-1: 투자자별 수급 데이터 ──────────────────
@@ -49,8 +55,9 @@ def fetch_investor_trading(ticker: str, days: int = 20) -> dict | None:
     start = (today - timedelta(days=days + 10)).strftime("%Y%m%d")
     end = today.strftime("%Y%m%d")
 
+    pk = _get_pykrx_stock()
     df = _safe_pykrx_call(
-        pykrx_stock.get_market_trading_value_by_date, start, end, raw_ticker
+        pk.get_market_trading_value_by_date, start, end, raw_ticker
     )
     if df is None or df.empty:
         return None
@@ -170,9 +177,10 @@ def fetch_short_selling(ticker: str, days: int = 20) -> dict | None:
     start = (today - timedelta(days=days + 10)).strftime("%Y%m%d")
     end = today.strftime("%Y%m%d")
 
+    pk = _get_pykrx_stock()
     # 공매도 잔고 조회
     balance_df = _safe_pykrx_call(
-        pykrx_stock.get_shorting_balance_by_date, start, end, raw_ticker
+        pk.get_shorting_balance_by_date, start, end, raw_ticker
     )
 
     if balance_df is None or balance_df.empty:
@@ -200,7 +208,7 @@ def fetch_short_selling(ticker: str, days: int = 20) -> dict | None:
 
         # 공매도 거래 비중 (당일)
         volume_df = _safe_pykrx_call(
-            pykrx_stock.get_shorting_volume_by_date, start, end, raw_ticker
+            pk.get_shorting_volume_by_date, start, end, raw_ticker
         )
         short_vol_ratio = 0.0
         if volume_df is not None and not volume_df.empty:
@@ -283,7 +291,8 @@ def fetch_korea_bond_yields() -> dict | None:
          "yield_curve_status": "normal"|"flat"|"inverted",
          "summary": "국고10Y 3.50%, 스프레드 0.25%p (정상)"}
     """
-    if pykrx_bond is None:
+    pb = _get_pykrx_bond()
+    if pb is None:
         return None
 
     today = datetime.now().strftime("%Y%m%d")
@@ -294,7 +303,7 @@ def fetch_korea_bond_yields() -> dict | None:
     for offset in range(5):
         check_date = (datetime.now() - timedelta(days=offset)).strftime("%Y%m%d")
         try:
-            df = pykrx_bond.get_otc_treasury_yields(check_date)
+            df = pb.get_otc_treasury_yields(check_date)
             if df is not None and not df.empty:
                 yields_data = df
                 break
@@ -448,13 +457,14 @@ def fetch_market_cap_info(ticker: str) -> dict | None:
     today = datetime.now()
     date_str = today.strftime("%Y%m%d")
 
+    pk = _get_pykrx_stock()
     # 시가총액 조회
-    cap_df = _safe_pykrx_call(pykrx_stock.get_market_cap, date_str, date_str, raw_ticker)
+    cap_df = _safe_pykrx_call(pk.get_market_cap, date_str, date_str, raw_ticker)
     if cap_df is None or cap_df.empty:
         # 최근 거래일 재시도
         for offset in range(1, 5):
             date_str = (today - timedelta(days=offset)).strftime("%Y%m%d")
-            cap_df = _safe_pykrx_call(pykrx_stock.get_market_cap, date_str, date_str, raw_ticker)
+            cap_df = _safe_pykrx_call(pk.get_market_cap, date_str, date_str, raw_ticker)
             if cap_df is not None and not cap_df.empty:
                 break
 
@@ -469,7 +479,7 @@ def fetch_market_cap_info(ticker: str) -> dict | None:
         # 외인 보유비율
         foreign_pct = None
         foreign_df = _safe_pykrx_call(
-            pykrx_stock.get_exhaustion_rates_of_foreign_investment, date_str, date_str, raw_ticker
+            pk.get_exhaustion_rates_of_foreign_investment, date_str, date_str, raw_ticker
         )
         if foreign_df is not None and not foreign_df.empty:
             for col in foreign_df.columns:
@@ -519,9 +529,10 @@ def _build_index_cache() -> dict[str, set[str]]:
     log = get_logger("KRX지수")
     today = datetime.now().strftime("%Y%m%d")
 
+    pk = _get_pykrx_stock()
     for idx_code, idx_name in _MAJOR_INDICES.items():
         tickers = _safe_pykrx_call(
-            pykrx_stock.get_index_portfolio_deposit_file, today, idx_code
+            pk.get_index_portfolio_deposit_file, today, idx_code
         )
         if tickers is not None:
             _index_cache[idx_name] = set(tickers)
@@ -581,6 +592,7 @@ def fetch_theme_etf_flows(theme_keywords: list[str], days: int = 5) -> dict[str,
     start = (today - timedelta(days=days + 5)).strftime("%Y%m%d")
     end = today.strftime("%Y%m%d")
 
+    pk = _get_pykrx_stock()
     for keyword in theme_keywords:
         matched_etfs = _THEME_ETF_MAP.get(keyword)
         if not matched_etfs:
@@ -590,14 +602,14 @@ def fetch_theme_etf_flows(theme_keywords: list[str], days: int = 5) -> dict[str,
             try:
                 # ETF OHLCV로 거래대금 추이 확인
                 etf_df = _safe_pykrx_call(
-                    pykrx_stock.get_market_ohlcv, start, end, etf_ticker
+                    pk.get_market_ohlcv, start, end, etf_ticker
                 )
                 if etf_df is None or etf_df.empty:
                     continue
 
                 # ETF 이름
                 etf_name = _safe_pykrx_call(
-                    pykrx_stock.get_market_ticker_name, etf_ticker
+                    pk.get_market_ticker_name, etf_ticker
                 ) or etf_ticker
 
                 # 최근 N일 거래대금 합계 (순유입 근사치)
@@ -739,10 +751,11 @@ def _fetch_krx_series(ticker: str, days: int = 60) -> dict:
     start = (today - timedelta(days=days + 30)).strftime("%Y%m%d")
     end = today.strftime("%Y%m%d")
 
+    pk = _get_pykrx_stock()
     # 1) 외국인 보유율 시계열
     try:
         df = _safe_pykrx_call(
-            pykrx_stock.get_exhaustion_rates_of_foreign_investment,
+            pk.get_exhaustion_rates_of_foreign_investment,
             start, end, raw_ticker,
         )
         if df is not None and not df.empty:
@@ -765,7 +778,7 @@ def _fetch_krx_series(ticker: str, days: int = 60) -> dict:
     # 2) 외국인/기관 순매수 시계열 (억원)
     try:
         df = _safe_pykrx_call(
-            pykrx_stock.get_market_trading_value_by_date,
+            pk.get_market_trading_value_by_date,
             start, end, raw_ticker,
         )
         if df is not None and not df.empty:
@@ -786,7 +799,7 @@ def _fetch_krx_series(ticker: str, days: int = 60) -> dict:
     # 3) 공매도 잔고 비율 시계열
     try:
         df = _safe_pykrx_call(
-            pykrx_stock.get_shorting_balance_by_date,
+            pk.get_shorting_balance_by_date,
             start, end, raw_ticker,
         )
         if df is not None and not df.empty:

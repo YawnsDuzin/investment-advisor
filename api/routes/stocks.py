@@ -6,6 +6,10 @@ from psycopg2 import ProgrammingError as _Psycopg2ProgrammingError
 from psycopg2.extras import RealDictCursor
 
 from analyzer.factor_engine import compute_sector_pctiles
+# analyzer.krx_data / analyzer.stock_data 의 top-level import 는 안전 —
+# 두 모듈 모두 pykrx 를 lazy 헬퍼(_get_pykrx_stock / _get_pykrx_bond)로 import 하므로
+# 이 import 자체로는 KRX 로그인이 발생하지 않는다. API 가 startup 시 KRX 세션을
+# 점유해 새벽 배치를 차단했던 회귀(2026-05-13) 의 근본 처방은 그쪽 lazy 화이다.
 from analyzer.krx_data import fetch_krx_extended, fetch_us_extended
 from analyzer.stock_data import fetch_fundamentals
 from api.auth.dependencies import get_current_user_required

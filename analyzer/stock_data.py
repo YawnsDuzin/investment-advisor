@@ -9,10 +9,23 @@ try:
 except ImportError:
     yf = None
 
-try:
-    from pykrx import stock as pykrx_stock
-except ImportError:
-    pykrx_stock = None
+# pykrx 는 import 시점에 KRX 자동 로그인을 수행한다(1.2.7+ auth.py).
+# top-level import 로 두면 이 모듈을 사이드이펙트로 로드하는 모든 프로세스
+# (특히 24/7 떠 있는 API) 가 KRX 세션을 점유해, 새벽 06:30 배치들의 KRX 로그인을
+# "동일 ID 중복 세션" 으로 차단당하는 회귀가 발생한다. 사용 시점까지 지연.
+_pykrx_stock = None  # sentinel: None=미시도, False=import 실패, module=성공
+
+
+def _get_pykrx_stock():
+    """pykrx.stock 모듈을 lazy load. 첫 호출 시 import 부수효과로 KRX 로그인 발생."""
+    global _pykrx_stock
+    if _pykrx_stock is None:
+        try:
+            from pykrx import stock as _imported
+            _pykrx_stock = _imported
+        except ImportError:
+            _pykrx_stock = False
+    return _pykrx_stock if _pykrx_stock is not False else None
 
 
 # ── pykrx 사용 가능 여부 캐싱 ──────────────────────
@@ -26,8 +39,11 @@ _PYKRX_LOGIN_FAIL_PATTERNS = ("로그인", "자격 증명", "Expecting value", "
 
 
 def _check_pykrx() -> bool:
-    """pykrx 사용 가능 여부 반환 (로그인 실패 시 비활성화)"""
-    return pykrx_stock is not None and _pykrx_available
+    """pykrx 사용 가능 여부 반환 (로그인 실패 시 비활성화).
+
+    첫 호출에서 lazy import 가 트리거되어 KRX 로그인이 발생할 수 있다.
+    """
+    return _get_pykrx_stock() is not None and _pykrx_available
 
 
 def _disable_pykrx(reason: str) -> None:
@@ -144,8 +160,9 @@ def _pykrx_fetch_price(ticker: str) -> dict | None:
     start = (today - timedelta(days=7)).strftime("%Y%m%d")
     end = today.strftime("%Y%m%d")
 
+    pk = _get_pykrx_stock()
     try:
-        ohlcv = pykrx_stock.get_market_ohlcv(start, end, raw_ticker)
+        ohlcv = pk.get_market_ohlcv(start, end, raw_ticker)
         if ohlcv.empty:
             return None
 
@@ -155,7 +172,7 @@ def _pykrx_fetch_price(ticker: str) -> dict | None:
             return None
 
         last_date = ohlcv.index[-1].strftime("%Y%m%d")
-        fund = pykrx_stock.get_market_fundamental(last_date, last_date, raw_ticker)
+        fund = pk.get_market_fundamental(last_date, last_date, raw_ticker)
         per = pbr = div_yield = None
         if not fund.empty:
             f = fund.iloc[-1]
@@ -192,8 +209,9 @@ def _pykrx_fetch_history(ticker: str, days: int = 365) -> "list[tuple[str, float
     start = (today - timedelta(days=days + 10)).strftime("%Y%m%d")
     end = today.strftime("%Y%m%d")
 
+    pk = _get_pykrx_stock()
     try:
-        ohlcv = pykrx_stock.get_market_ohlcv(start, end, raw_ticker)
+        ohlcv = pk.get_market_ohlcv(start, end, raw_ticker)
         if ohlcv.empty:
             return []
         return [
@@ -228,12 +246,13 @@ def _build_krx_lookup() -> None:
     _krx_ticker_to_name = {}
     today = datetime.now().strftime("%Y%m%d")
 
+    pk = _get_pykrx_stock()
     for market in ("KOSPI", "KOSDAQ"):
-        tickers = _safe_pykrx_call(pykrx_stock.get_market_ticker_list, today, market=market)
+        tickers = _safe_pykrx_call(pk.get_market_ticker_list, today, market=market)
         if tickers is None:
             continue
         for t in tickers:
-            name = _safe_pykrx_call(pykrx_stock.get_market_ticker_name, t)
+            name = _safe_pykrx_call(pk.get_market_ticker_name, t)
             if name:
                 _krx_name_to_ticker[name] = t
                 _krx_ticker_to_name[t] = name
@@ -343,7 +362,7 @@ def validate_krx_tickers(proposals: list[dict]) -> dict:
     Returns:
         {"corrected": 교정 건수, "invalid": 검증 불가 건수, "details": [...]}
     """
-    if pykrx_stock is None:
+    if _get_pykrx_stock() is None:
         return {"corrected": 0, "invalid": 0, "details": []}
 
     _build_krx_lookup()
