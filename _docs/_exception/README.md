@@ -62,6 +62,7 @@
 | 2026-04-18 | Stage 2 파싱 실패·DB tuple index 오류 (원시 로그) | Stage 2 / DB | 기록 | [202604182005_분석오류.md](202604182005_%EB%B6%84%EC%84%9D%EC%98%A4%EB%A5%98.md) |
 | 2026-04-22 | Stage 1-A JSON 파싱 실패 (쪼개진 블록 + raw 개행) | Stage 1-A | ✅ 해결됨 | [20260422_stage1a_json_parse_failure.md](20260422_stage1a_json_parse_failure.md) |
 | 2026-04-22 | Stage 1-A 재발 — 문자열 값 내부 ```json 펜스 삽입 (4중 대응) | Stage 1-A | ✅ 해결됨 | [20260422_stage1a_fence_injection_in_string.md](20260422_stage1a_fence_injection_in_string.md) |
+| 2026-05-13 | KRX 세션 점유 충돌 — API ↔ 새벽 배치 (pykrx import 사이드이펙트) | API / Briefing / Analyzer | ✅ 해결됨 | [20260513140057_krx_session_contention_with_api.md](20260513140057_krx_session_contention_with_api.md) |
 
 ---
 
@@ -86,3 +87,15 @@
 - `.env`의 `KRX_ID`/`KRX_PW` 미설정 시 pykrx 로그인 실패가 스레드별로 수십 번 반복 출력
 - 해외 주식은 yfinance 폴백이 있지만, 로그 가독성 저하
 - 대응: `shared/config.py`에서 빈 credential 감지 시 로그인 시도 자체를 스킵하도록 가드
+
+### 4. pykrx import 부수효과 → KRX 세션 점유 충돌 (2026-05-13)
+- **증상**: 새벽 배치(`pre-market-briefing.service` / `investment-advisor-analyzer.service`) 가 시작 직후 `Expecting value: line 1 column 1 (char 0)` 로 사망. API 재시작 후 정상화.
+- **원인 클래스**:
+  - `pykrx` 1.2.7+ 는 `from pykrx import stock` 만으로 모듈 로딩 도중 KRX 자동 로그인 수행
+  - top-level import 로 보유한 프로세스(특히 24/7 떠 있는 API) 가 KRX 세션을 점유
+  - KRX 측이 같은 ID 의 중복 세션 로그인 시도를 빈 응답으로 거부 → 새벽 배치가 import 단계에서 사망
+- **진단 키**: 정상 흐름에서 찍히는 `KRX 로그인 완료.` 라인이 없으면 빈 응답 거부 패턴
+- **대응 레이어**:
+  - **코드**: pykrx 의존 모듈(`stock_data.py`, `krx_data.py`) 의 top-level import 를 lazy 헬퍼(`_get_pykrx_stock()` / `_get_pykrx_bond()`)로 전환 — import 부수효과 차단
+  - **운영**: 배치 timer 시각을 서로 어긋나게 (`OnCalendar` 차등) 두면 배치 간 자체 경합도 회피
+  - **장기**: pykrx 1.2.8 업그레이드 검토 (응답 가드 강화 가능성)
