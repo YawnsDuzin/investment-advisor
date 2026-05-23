@@ -27,6 +27,16 @@ if _env_path.exists():
         os.environ.setdefault(key, value)
 
 
+# P5d: pykrx 가 KRX_ID/KRX_PW 환경변수를 자동 감지하여 import 시점에 KRX 로그인을 시도하고,
+# KRX(Akamai) 차단 또는 인증 만료 시 JSONDecodeError 로 import 자체가 실패하거나 sync 서비스가
+# 죽는 회귀 사고 발생 (2026-05-23). 익명 모드는 OHLCV·외국인보유율·거래대금·펀더 모두 동작하므로
+# 기본은 강제 unset 으로 안정성 확보. KRX 회원 전용 API 가 진짜 필요한 경우에만 명시적으로
+# DISABLE_PYKRX_AUTH=false 로 설정해 원래 동작 복귀.
+if os.environ.get("DISABLE_PYKRX_AUTH", "true").strip().lower() == "true":
+    os.environ.pop("KRX_ID", None)
+    os.environ.pop("KRX_PW", None)
+
+
 @dataclass
 class DatabaseConfig:
     host: str = field(default_factory=lambda: os.getenv("DB_HOST", "localhost"))

@@ -2,9 +2,14 @@ venv/
 __pycache__/
 *.pyc
 .env
+.env.bak*
+.env.save*
 .claude/hooks/logs/
 _checkpoints/
 .superpowers/
 _baselines/
 server.log
 server.pid
+
+# 임시 진단/배포 스크립트 (작업 후 삭제 대상)
+_tmp_*
