@@ -184,6 +184,12 @@ _CONSENSUS_MAP = {
     "SELL": 0.25, "STRONG_SELL": 0.0,
 }
 
+# Hero 등락률 표시용 직전 거래일 간격 가드.
+# 정상 1~3일, 추석·설 연휴 최대 5일. 7일 초과면 sync 갭 — 다일간 변화를
+# 일간으로 둔갑시키지 않도록 change_pct=None 으로 노출.
+# analyzer.universe_sync._CHANGE_PCT_MAX_GAP_DAYS 와 정의 일치.
+_HERO_CHANGE_PCT_MAX_GAP_DAYS = 7
+
 
 def _clamp(v, lo=0.0, hi=1.0):
     """v를 [lo, hi] 범위로 제한."""
@@ -322,21 +328,26 @@ def get_stock_overview(
     finally:
         conn.close()
 
-    # 최신가 + 변동률
+    # 최신가 + 변동률 (직전 거래일 갭 _HERO_CHANGE_PCT_MAX_GAP_DAYS 초과면 None)
     latest = None
     if latest_rows:
         last = latest_rows[0]
         prev = latest_rows[1] if len(latest_rows) >= 2 else None
         change_pct = None
+        change_window_days = None
         if prev and prev.get("close") and float(prev["close"]) > 0:
-            change_pct = round(
-                (float(last["close"]) - float(prev["close"])) / float(prev["close"]) * 100,
-                2,
-            )
+            change_window_days = (last["trade_date"] - prev["trade_date"]).days
+            if change_window_days <= _HERO_CHANGE_PCT_MAX_GAP_DAYS:
+                change_pct = round(
+                    (float(last["close"]) - float(prev["close"])) / float(prev["close"]) * 100,
+                    2,
+                )
+            # else: sync 갭 — 다일간 변화를 일간으로 노출하지 않음
         latest = {
             "date": last["trade_date"].isoformat(),
             "close": float(last["close"]) if last.get("close") is not None else None,
             "change_pct": change_pct,
+            "change_window_days": change_window_days,
             "volume": int(last["volume"]) if last.get("volume") is not None else None,
             "source": "ohlcv_db",
         }

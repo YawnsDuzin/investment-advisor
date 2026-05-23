@@ -328,7 +328,17 @@ def sync_prices_krx(db_cfg: DatabaseConfig, *, markets: tuple[str, ...] = _MARKE
     per_market: dict[str, int] = {}
 
     for market in markets:
-        ohlcv = pykrx_stock.get_market_ohlcv(date, market=market)
+        # P5c: pykrx 호출을 try/except 로 감싸 휴장일 KeyError / KRX 차단 JSONDecodeError /
+        # rate limit 등에 의한 서비스 전체 사망 차단. 한 시장 실패는 다른 시장에 영향 없도록.
+        try:
+            ohlcv = pykrx_stock.get_market_ohlcv(date, market=market)
+        except Exception as e:
+            _log.warning(
+                f"[{market}] {date} OHLCV 조회 실패 - 휴장일/KRX 차단/응답 형식 이상 의심 "
+                f"({type(e).__name__}: {e}). 이 시장은 건너뜀."
+            )
+            per_market[market] = 0
+            continue
         if ohlcv is None or ohlcv.empty:
             _log.warning(f"[{market}] {date} OHLCV 비어 있음")
             per_market[market] = 0
@@ -1118,6 +1128,12 @@ def sync_ohlcv_ticker(db_cfg: DatabaseConfig, *, ticker: str, days: int) -> dict
 # 역분할·상폐·수정주가 미반영으로 한계 초과 row가 들어올 수 있어 UPDATE 시 가드로 사용.
 _CHANGE_PCT_ABS_LIMIT = 999999.9999
 
+# 직전 거래일 간격 가드 (영업일 단위 PostgreSQL DATE 차이).
+# 정상 거래일 1~3일, 추석·설 연휴 최대 5일. 7일 초과면 sync 누락에 의한 갭 —
+# (close - prev_close) / prev_close 계산은 실제 일간 등락률이 아니라 누락 구간
+# 전체의 변화를 단일 일간으로 둔갑시키므로 change_pct=NULL 유지.
+_CHANGE_PCT_MAX_GAP_DAYS = 7
+
 
 def recompute_change_pct(db_cfg: DatabaseConfig) -> int:
     """change_pct가 NULL인 row들을 window 함수로 일괄 재계산.
@@ -1130,15 +1146,18 @@ def recompute_change_pct(db_cfg: DatabaseConfig) -> int:
       1. 오버플로우 가능 row(|계산값| >= _CHANGE_PCT_ABS_LIMIT)를 UPDATE 전에 식별하여
          WARNING 로그로 티커·날짜·close·prev_close 샘플 출력 (최대 20건).
          → 조작된 수정주가/상폐 직전 이상 체결 / 역분할 미반영 의심 케이스 조기 발견.
-      2. UPDATE SQL에 동일 범위 가드(WHERE ABS(...) < _CHANGE_PCT_ABS_LIMIT) 추가 —
-         한계 초과 row는 NULL 유지(이력 손실 아님, 재계산 시도는 다음 배치에서 반복).
-      3. 최종 UPDATE는 try/except로 감싸 psycopg2 오버플로우 등 예외 발생 시
+      2. **갭 가드 (P5a)**: prev row 가 _CHANGE_PCT_MAX_GAP_DAYS 초과 과거면 NULL 유지.
+         sync 누락 갭에서 잘못된 다일간 등락률이 일간으로 둔갑하는 회귀 차단.
+      3. UPDATE SQL에 동일 범위 가드(WHERE ABS(...) < _CHANGE_PCT_ABS_LIMIT
+         AND gap_days <= MAX_GAP) 추가 — 한계 초과/갭 row는 NULL 유지
+         (이력 손실 아님, sync 가 갭을 채우면 다음 재계산에서 자연 회복).
+      4. 최종 UPDATE는 try/except로 감싸 psycopg2 오버플로우 등 예외 발생 시
          rollback + ERROR 로그만 남기고 0 반환. **호출자로 예외 전파하지 않음** —
          백필/가격 동기화 파이프라인이 이 단계 실패로 종료되지 않도록.
 
     Returns: 업데이트된 row 수 (실패 시 0)
     """
-    # 1) 오버플로우 가능 후보 사전 식별 (관측/모니터링 목적)
+    # 1) 오버플로우/갭 가능 후보 사전 식별 (관측/모니터링 목적)
     probe_sql = """
     WITH affected AS (
         SELECT DISTINCT ticker, market
@@ -1147,17 +1166,23 @@ def recompute_change_pct(db_cfg: DatabaseConfig) -> int:
     ),
     ranked AS (
         SELECT o.ticker, o.market, o.trade_date, o.close,
-               LAG(o.close) OVER (PARTITION BY o.ticker, o.market ORDER BY o.trade_date) AS prev_close
+               LAG(o.close)      OVER (PARTITION BY o.ticker, o.market ORDER BY o.trade_date) AS prev_close,
+               LAG(o.trade_date) OVER (PARTITION BY o.ticker, o.market ORDER BY o.trade_date) AS prev_trade_date
         FROM stock_universe_ohlcv o
         JOIN affected a USING (ticker, market)
     )
-    SELECT ticker, market, trade_date, close, prev_close,
+    SELECT ticker, market, trade_date, close, prev_close, prev_trade_date,
+           (trade_date - prev_trade_date) AS gap_days,
            ((close - prev_close) / prev_close * 100)::numeric AS raw_pct
     FROM ranked
     WHERE prev_close IS NOT NULL
       AND prev_close > 0
-      AND ABS((close - prev_close) / prev_close * 100) >= %s
-    ORDER BY ABS((close - prev_close) / prev_close * 100) DESC
+      AND (
+          ABS((close - prev_close) / prev_close * 100) >= %s
+          OR (trade_date - prev_trade_date) > %s
+      )
+    ORDER BY (trade_date - prev_trade_date) DESC,
+             ABS((close - prev_close) / prev_close * 100) DESC
     LIMIT 20;
     """
     update_sql = """
@@ -1168,7 +1193,8 @@ def recompute_change_pct(db_cfg: DatabaseConfig) -> int:
     ),
     ranked AS (
         SELECT o.ticker, o.market, o.trade_date, o.close,
-               LAG(o.close) OVER (PARTITION BY o.ticker, o.market ORDER BY o.trade_date) AS prev_close
+               LAG(o.close)      OVER (PARTITION BY o.ticker, o.market ORDER BY o.trade_date) AS prev_close,
+               LAG(o.trade_date) OVER (PARTITION BY o.ticker, o.market ORDER BY o.trade_date) AS prev_trade_date
         FROM stock_universe_ohlcv o
         JOIN affected a USING (ticker, market)
     )
@@ -1181,37 +1207,47 @@ def recompute_change_pct(db_cfg: DatabaseConfig) -> int:
       AND o.change_pct IS NULL
       AND r.prev_close IS NOT NULL
       AND r.prev_close > 0
-      AND ABS((r.close - r.prev_close) / r.prev_close * 100) < %s;
+      AND ABS((r.close - r.prev_close) / r.prev_close * 100) < %s
+      AND (r.trade_date - r.prev_trade_date) <= %s;
     """
 
     updated = 0
     conn = get_connection(db_cfg)
     try:
-        # 1a) 오버플로우 후보 스캔
+        # 1a) 오버플로우/갭 후보 스캔
         try:
             with conn.cursor() as cur:
-                cur.execute(probe_sql, (_CHANGE_PCT_ABS_LIMIT,))
-                overflow_rows = cur.fetchall()
+                cur.execute(probe_sql, (_CHANGE_PCT_ABS_LIMIT, _CHANGE_PCT_MAX_GAP_DAYS))
+                probe_rows = cur.fetchall()
             conn.commit()
-            if overflow_rows:
-                _log.warning(
-                    f"[OHLCV] change_pct 계산값이 한계(|{_CHANGE_PCT_ABS_LIMIT}%|) 초과 -"
-                    f"{len(overflow_rows)}건 (상위 20개 샘플 출력). "
-                    f"역분할/수정주가 미반영/상폐 직전 이상 체결 의심 -해당 row는 NULL 유지."
+            if probe_rows:
+                overflow_n = sum(
+                    1 for r in probe_rows
+                    if r[7] is not None and abs(float(r[7])) >= _CHANGE_PCT_ABS_LIMIT
                 )
-                for tk, mk, dt, close, prev, raw in overflow_rows:
+                gap_n = sum(
+                    1 for r in probe_rows
+                    if r[6] is not None and int(r[6]) > _CHANGE_PCT_MAX_GAP_DAYS
+                )
+                _log.warning(
+                    f"[OHLCV] change_pct 가드 위반 후보 {len(probe_rows)}건 "
+                    f"(오버플로우 {overflow_n} / 갭 {gap_n}, 상위 20개 샘플 출력). "
+                    f"해당 row는 NULL 유지 -sync 가 갭/이상치를 정정하면 다음 재계산에서 자연 회복."
+                )
+                for tk, mk, dt, close, prev, prev_dt, gap, raw in probe_rows:
                     _log.warning(
-                        f"  └ {tk}({mk}) {dt} close={close} prev_close={prev} raw_pct={raw:+.2f}%"
+                        f"  └ {tk}({mk}) {dt} close={close} prev_close={prev}@{prev_dt} "
+                        f"gap={gap}d raw_pct={raw:+.2f}%"
                     )
         except Exception as e:
             # probe 실패해도 본 UPDATE는 시도 (진단용이므로)
             conn.rollback()
-            _log.warning(f"[OHLCV] change_pct 오버플로우 사전 스캔 실패 (UPDATE는 계속 시도): {e}")
+            _log.warning(f"[OHLCV] change_pct 가드 사전 스캔 실패 (UPDATE는 계속 시도): {e}")
 
         # 2) 가드 포함 UPDATE -실패해도 예외 전파 안 함
         try:
             with conn.cursor() as cur:
-                cur.execute(update_sql, (_CHANGE_PCT_ABS_LIMIT,))
+                cur.execute(update_sql, (_CHANGE_PCT_ABS_LIMIT, _CHANGE_PCT_MAX_GAP_DAYS))
                 updated = cur.rowcount
             conn.commit()
             _log.info(f"[OHLCV] change_pct 재계산: {updated}건 업데이트")

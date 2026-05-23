@@ -41,5 +41,17 @@
     "claude-code-setup@claude-plugins-official": true,
     "superpowers@claude-plugins-official": true,
     "superpowers@superpowers-marketplace": true
+  },
+  "permissions": {
+    "allow": [
+      "Bash(plink:*)",
+      "Bash(pscp:*)"
+    ]
+  },
+  "autoMode": {
+    "allow": [
+      "$defaults",
+      "Bash(plink:*) / Bash(pscp:*) — 운영기 라즈베리파이(dzp@192.168.0.231) SSH 진단·배포 도구. 사용자 명시 승인 완료. systemd unit deploy / OHLCV sync / 운영 상태 조회 컨텍스트에서 자유롭게 호출 가능."
+    ]
   }
 }
