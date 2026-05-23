@@ -1128,10 +1128,12 @@ def sync_ohlcv_ticker(db_cfg: DatabaseConfig, *, ticker: str, days: int) -> dict
 # 역분할·상폐·수정주가 미반영으로 한계 초과 row가 들어올 수 있어 UPDATE 시 가드로 사용.
 _CHANGE_PCT_ABS_LIMIT = 999999.9999
 
-# 직전 거래일 간격 가드 (영업일 단위 PostgreSQL DATE 차이).
-# 정상 거래일 1~3일, 추석·설 연휴 최대 5일. 7일 초과면 sync 누락에 의한 갭 —
+# 직전 거래일 간격 가드 (calendar days, PostgreSQL DATE 차이).
+# 정상 거래일 간격: 평일 1일 / 금→월 3일. 평일 단독 공휴일(어린이날 등) 또는
+# 추석/설 3거래일 연휴까지 끼면 최대 6일. 7일 이상은 명백한 sync 누락 갭 —
 # (close - prev_close) / prev_close 계산은 실제 일간 등락률이 아니라 누락 구간
 # 전체의 변화를 단일 일간으로 둔갑시키므로 change_pct=NULL 유지.
+# 비교는 strict `<` — 정확히 7일 점프 (예: 5거래일 누락) 도 가드 발동.
 _CHANGE_PCT_MAX_GAP_DAYS = 7
 
 
@@ -1179,7 +1181,7 @@ def recompute_change_pct(db_cfg: DatabaseConfig) -> int:
       AND prev_close > 0
       AND (
           ABS((close - prev_close) / prev_close * 100) >= %s
-          OR (trade_date - prev_trade_date) > %s
+          OR (trade_date - prev_trade_date) >= %s
       )
     ORDER BY (trade_date - prev_trade_date) DESC,
              ABS((close - prev_close) / prev_close * 100) DESC
@@ -1208,7 +1210,7 @@ def recompute_change_pct(db_cfg: DatabaseConfig) -> int:
       AND r.prev_close IS NOT NULL
       AND r.prev_close > 0
       AND ABS((r.close - r.prev_close) / r.prev_close * 100) < %s
-      AND (r.trade_date - r.prev_trade_date) <= %s;
+      AND (r.trade_date - r.prev_trade_date) < %s;
     """
 
     updated = 0
@@ -1227,7 +1229,7 @@ def recompute_change_pct(db_cfg: DatabaseConfig) -> int:
                 )
                 gap_n = sum(
                     1 for r in probe_rows
-                    if r[6] is not None and int(r[6]) > _CHANGE_PCT_MAX_GAP_DAYS
+                    if r[6] is not None and int(r[6]) >= _CHANGE_PCT_MAX_GAP_DAYS
                 )
                 _log.warning(
                     f"[OHLCV] change_pct 가드 위반 후보 {len(probe_rows)}건 "
