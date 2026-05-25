@@ -28,6 +28,13 @@ async def lifespan(app: FastAPI):
         print(f"[AUTH] 인증 활성화 (Access: {auth_cfg.access_token_expire_minutes}분, Refresh: {auth_cfg.refresh_token_expire_days}일)")
     else:
         print("[AUTH] 인증 비활성화 (AUTH_ENABLED=false)")
+    # OAuth 활성화 시 SessionMiddleware secret 검증 + 클라이언트 등록
+    if auth_cfg.oauth_enabled:
+        auth_cfg.validate_oauth()  # RuntimeError if OAUTH_SESSION_SECRET 비어있음
+        from api.auth.oauth_providers import register_providers
+        register_providers(auth_cfg)
+        print(f"[OAUTH] 활성화 — Google={'on' if auth_cfg.google_active else 'off'}, "
+              f"Kakao={'on' if auth_cfg.kakao_active else 'off'}")
     yield
     # ── shutdown — active broker 채널을 fail 로 종료 (구독자 hang 방지)
     # uvicorn 종료 시 BG task 가 CancelledError 로 끊기는데, _runner 의
@@ -48,6 +55,18 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+# OAuth state CSRF 저장용 SessionMiddleware
+_auth_cfg_init = AuthConfig()
+if _auth_cfg_init.oauth_enabled and _auth_cfg_init.oauth_session_secret:
+    from starlette.middleware.sessions import SessionMiddleware
+    app.add_middleware(
+        SessionMiddleware,
+        secret_key=_auth_cfg_init.oauth_session_secret,
+        same_site="lax",
+        https_only=_auth_cfg_init.cookie_secure,
+        max_age=600,  # 10분 — OAuth 흐름 안에서만 유효
+    )
 
 # ── 글로벌 예외 핸들러 (B3) ──────────────────────────
 _STATUS_CODE_MAP = {
@@ -91,6 +110,8 @@ app.mount("/static", StaticFiles(directory="api/static"), name="static")
 
 # 인증 라우트 (/auth/*)
 app.include_router(auth_routes.router)
+from api.routes import auth_oauth as _auth_oauth_routes
+app.include_router(_auth_oauth_routes.router)
 
 # 도메인 라우터: 각 도메인의 JSON API + HTML 페이지 (B1 콜로케이션)
 app.include_router(sessions.router)
