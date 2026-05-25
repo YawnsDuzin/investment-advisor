@@ -8,7 +8,7 @@
 """
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
 
 import api.auth.oauth_providers as _oauth_mod
@@ -72,49 +72,40 @@ async def oauth_start(provider: str, request: Request, next: str = "/"):
 
 
 @router.get("/{provider}/callback")
-async def oauth_callback(provider: str, request: Request):
+async def oauth_callback(provider: str, request: Request, conn=Depends(get_db_conn)):
     """OAuth provider 콜백 — 토큰 교환 → upsert → 쿠키 발급 → next 302."""
     _validate_provider(provider)
     auth_cfg = _get_auth_cfg()
 
     next_url = _safe_next(request.session.pop("oauth_next_url", "/"))
 
-    # get_db_conn 을 런타임에 호출 — 테스트에서 patch 가능하도록 Depends 대신 직접 호출
-    db_gen = get_db_conn()
-    conn = next(db_gen)
     try:
-        try:
-            user, next_url = await handle_oauth_callback(
-                provider=provider, request=request, conn=conn, next_url=next_url,
-            )
-        except OAuthCallbackError as e:
-            return RedirectResponse(
-                f"/auth/login?error={e.error_code}", status_code=302,
-            )
-
-        conn.commit()
-
-        # 기존 _set_auth_cookies 경로 재사용 — local 로그인과 동일한 토큰 형태
-        access_token = create_access_token(
-            user["id"], user["role"],
-            auth_cfg.jwt_secret_key, auth_cfg.jwt_algorithm,
-            auth_cfg.access_token_expire_minutes,
+        user, next_url = await handle_oauth_callback(
+            provider=provider, request=request, conn=conn, next_url=next_url,
         )
-        refresh_raw = create_refresh_token()
-        expires_at = datetime.now(timezone.utc) + timedelta(days=auth_cfg.refresh_token_expire_days)
-        with conn.cursor() as cur:
-            cur.execute(
-                "INSERT INTO refresh_tokens (user_id, token_hash, expires_at) VALUES (%s, %s, %s)",
-                (user["id"], hash_token(refresh_raw), expires_at),
-            )
-            cur.execute("UPDATE users SET last_login_at = NOW() WHERE id = %s", (user["id"],))
-        conn.commit()
+    except OAuthCallbackError as e:
+        return RedirectResponse(
+            f"/auth/login?error={e.error_code}", status_code=302,
+        )
 
-        response = RedirectResponse(next_url, status_code=302)
-        _set_auth_cookies(response, access_token, refresh_raw, auth_cfg)
-        return response
-    finally:
-        try:
-            next(db_gen)
-        except StopIteration:
-            pass
+    conn.commit()
+
+    # 기존 _set_auth_cookies 경로 재사용 — local 로그인과 동일한 토큰 형태
+    access_token = create_access_token(
+        user["id"], user["role"],
+        auth_cfg.jwt_secret_key, auth_cfg.jwt_algorithm,
+        auth_cfg.access_token_expire_minutes,
+    )
+    refresh_raw = create_refresh_token()
+    expires_at = datetime.now(timezone.utc) + timedelta(days=auth_cfg.refresh_token_expire_days)
+    with conn.cursor() as cur:
+        cur.execute(
+            "INSERT INTO refresh_tokens (user_id, token_hash, expires_at) VALUES (%s, %s, %s)",
+            (user["id"], hash_token(refresh_raw), expires_at),
+        )
+        cur.execute("UPDATE users SET last_login_at = NOW() WHERE id = %s", (user["id"],))
+    conn.commit()
+
+    response = RedirectResponse(next_url, status_code=302)
+    _set_auth_cookies(response, access_token, refresh_raw, auth_cfg)
+    return response

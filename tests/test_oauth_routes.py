@@ -59,18 +59,25 @@ def test_start_rejects_external_next_url():
         assert captured["next"] == "/"
 
 
+def _override_db_conn(app, fake_conn=None):
+    """FastAPI dependency_overrides 패턴 — get_db_conn 을 fake conn 으로 교체."""
+    from api.deps import get_db_conn
+    conn = fake_conn if fake_conn is not None else MagicMock()
+    app.dependency_overrides[get_db_conn] = lambda: conn
+    return conn
+
+
 def test_callback_success_sets_cookies_and_redirects():
     from api.auth.oauth_handlers import OAuthCallbackError
 
     app = _make_test_app()
+    fake_conn = _override_db_conn(app)
     fake_user = {"id": 1, "role": "user", "is_active": True, "email": "u@x.com", "nickname": "U"}
     with TestClient(app) as client, \
-         patch("api.routes.auth_oauth.handle_oauth_callback", new=AsyncMock(return_value=(fake_user, "/dashboard"))), \
-         patch("api.routes.auth_oauth.get_db_conn", return_value=MagicMock()):
+         patch("api.routes.auth_oauth.handle_oauth_callback", new=AsyncMock(return_value=(fake_user, "/dashboard"))):
         r = client.get("/auth/oauth/google/callback?code=fake&state=fake", follow_redirects=False)
         assert r.status_code == 302
         assert r.headers["location"] == "/dashboard"
-        # Set-Cookie 헤더에 access_token / refresh_token 둘 다 있어야 함
         cookies = r.headers.get("set-cookie", "")
         assert "access_token" in cookies or "Set-Cookie" in r.headers
 
@@ -79,10 +86,10 @@ def test_callback_oauth_error_redirects_with_error_param():
     from api.auth.oauth_handlers import OAuthCallbackError
 
     app = _make_test_app()
+    _override_db_conn(app)
     with TestClient(app) as client, \
          patch("api.routes.auth_oauth.handle_oauth_callback",
-               new=AsyncMock(side_effect=OAuthCallbackError("kakao_email_required"))), \
-         patch("api.routes.auth_oauth.get_db_conn", return_value=MagicMock()):
+               new=AsyncMock(side_effect=OAuthCallbackError("kakao_email_required"))):
         r = client.get("/auth/oauth/kakao/callback?code=fake&state=fake", follow_redirects=False)
         assert r.status_code == 302
         assert "/auth/login" in r.headers["location"]
