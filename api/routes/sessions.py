@@ -192,20 +192,27 @@ def session_detail_page(session_id: int, conn = Depends(get_db_conn), ctx: dict 
             )
             theme["macro_impacts"] = [_serialize_row(m) for m in cur.fetchall()]
 
-            # 투자 제안
+            # 투자 제안 — stock_universe LEFT JOIN으로 회사 한 줄 소개 (industry/sector_krx)
+            # has_stock_analysis 를 EXISTS 로 한방에 계산하여 N+1 제거 + ORDER BY 키로 사용
+            # (Stage 2 통과 종목을 상단으로 끌어올림)
             cur.execute(
-                "SELECT * FROM investment_proposals WHERE theme_id = %s ORDER BY target_allocation DESC",
+                """SELECT p.*,
+                          u.industry      AS u_industry,
+                          u.sector_krx    AS u_sector_krx,
+                          u.asset_name    AS u_asset_name,
+                          (EXISTS (SELECT 1 FROM stock_analyses sa WHERE sa.proposal_id = p.id))
+                              AS has_stock_analysis
+                   FROM investment_proposals p
+                   LEFT JOIN stock_universe u
+                          ON UPPER(u.ticker) = UPPER(p.ticker)
+                         AND UPPER(u.market) = UPPER(p.market)
+                   WHERE p.theme_id = %s
+                   ORDER BY
+                       (EXISTS (SELECT 1 FROM stock_analyses sa WHERE sa.proposal_id = p.id)) DESC,
+                       p.target_allocation DESC NULLS LAST""",
                 (theme["id"],)
             )
-            proposals = cur.fetchall()
-            for p in proposals:
-                cur.execute(
-                    "SELECT id FROM stock_analyses WHERE proposal_id = %s LIMIT 1",
-                    (p["id"],)
-                )
-                sa = cur.fetchone()
-                p["has_stock_analysis"] = sa is not None
-            theme["proposals"] = [_serialize_row(p) for p in proposals]
+            theme["proposals"] = [_serialize_row(p) for p in cur.fetchall()]
 
         # 추적 데이터 연결
         cur.execute("""

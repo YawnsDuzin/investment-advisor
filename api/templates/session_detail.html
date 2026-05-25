@@ -75,7 +75,23 @@
     {{ macro_impact_table(theme.macro_impacts) }}
 
     {% if theme.proposals %}
-    <div style="margin-top:16px;">
+    {# Stage 2 통과 / 기초 추천 카운트 요약 (A-2) #}
+    {% set deep_count = theme.proposals|selectattr('has_stock_analysis')|list|length %}
+    {% set base_count = theme.proposals|rejectattr('has_stock_analysis')|list|length %}
+    <div style="margin-top:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--text-muted);">
+        <span><strong style="color:var(--text);">{{ theme.proposals|length }}건</strong> 추천</span>
+        {% if deep_count %}
+        <span style="padding:3px 10px;border-radius:6px;background:rgba(52,211,153,0.12);border:1px solid rgba(52,211,153,0.25);color:var(--green);">
+            <strong>심층분석 완료 {{ deep_count }}건</strong> (Stage 2 통과 — 신뢰도 ↑)
+        </span>
+        {% endif %}
+        {% if base_count %}
+        <span style="padding:3px 10px;border-radius:6px;background:rgba(139,143,163,0.1);border:1px solid var(--border);color:var(--text-muted);">
+            기초 추천 {{ base_count }}건 (스크리너 매칭, 미검증)
+        </span>
+        {% endif %}
+    </div>
+    <div style="margin-top:8px;">
         <div class="table-wrap">
         <table class="screener-table" style="font-size:13px;">
             <thead>
@@ -94,9 +110,26 @@
             </thead>
             <tbody>
                 {% for p in theme.proposals %}
-                <tr class="screener-row" data-idx="t{{ theme.id }}-{{ loop.index0 }}" style="cursor:pointer;">
+                {# A-1: 회사 한 줄 소개 (industry → sector_krx 폴백) #}
+                {% set company_brief = p.u_industry or p.u_sector_krx or p.sector %}
+                {# A-2: rationale 첫 1문장 인라인 미리보기 #}
+                {% set rationale_preview = '' %}
+                {% if p.rationale %}
+                    {% set rationale_preview = (p.rationale.split('.')[0] ~ '.')|truncate(110, true, '...') %}
+                {% endif %}
+                <tr class="screener-row {% if p.has_stock_analysis %}row-deep-analyzed{% endif %}" data-idx="t{{ theme.id }}-{{ loop.index0 }}" style="cursor:pointer;{% if p.has_stock_analysis %}border-left:3px solid var(--green);{% endif %}">
                     <td><span class="badge badge-{{ p.action }}">{{ p.action|upper }}</span></td>
-                    <td style="font-weight:600;">{{ p.asset_name }}</td>
+                    <td style="font-weight:600;">
+                        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                            <span>{{ p.asset_name }}</span>
+                            {% if p.has_stock_analysis %}
+                            <span title="Stage 2 심층분석 완료 — 펀더멘털/모멘텀/리스크 검증됨" style="font-size:10px;padding:1px 6px;border-radius:4px;background:var(--green);color:#0b0d14;font-weight:700;letter-spacing:0.3px;">DEEP</span>
+                            {% endif %}
+                        </div>
+                        {% if company_brief %}
+                        <div style="font-size:11px;color:var(--text-muted);font-weight:400;margin-top:2px;line-height:1.3;">{{ company_brief|truncate(40, true, '...') }}</div>
+                        {% endif %}
+                    </td>
                     <td>
                         <a href="/pages/stocks/{{ p.ticker }}" style="color:var(--accent);" onclick="event.stopPropagation();">{{ p.ticker }}</a>
                         <span onclick="event.stopPropagation();">{{ external_links(p.ticker, p.market or '') }}</span>
@@ -119,6 +152,15 @@
                     <td>{% if p.quant_score %}<span class="score-display">{{ p.quant_score }}/5</span>{% else %}-{% endif %}</td>
                     <td>{% if p.discovery_type %}<span style="font-size:12px;padding:2px 8px;border-radius:5px;background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.2);color:var(--green);white-space:nowrap;">{{ p.discovery_type }}</span>{% else %}-{% endif %}</td>
                 </tr>
+                {% if rationale_preview %}
+                <tr class="rationale-preview" data-idx="t{{ theme.id }}-{{ loop.index0 }}" style="cursor:pointer;">
+                    <td></td>
+                    <td colspan="9" style="padding:2px 12px 8px;font-size:12px;color:var(--text-muted);line-height:1.5;border-top:none;">
+                        <span style="opacity:0.6;">▸</span> {{ rationale_preview }}
+                        <span style="opacity:0.5;font-size:11px;">— 클릭하여 전체 보기</span>
+                    </td>
+                </tr>
+                {% endif %}
                 <tr class="detail-row" data-idx="t{{ theme.id }}-{{ loop.index0 }}" style="display:none;">
                     <td colspan="10" style="padding:0;">
                         <div style="padding:14px 18px;background:rgba(79,140,255,0.04);border-left:3px solid var(--accent);font-size:14px;line-height:1.7;">
@@ -185,6 +227,56 @@
                             {% endif %}
 
                             {{ factor_snapshot_panel(p.factor_snapshot) }}
+
+                            {# C-6: 왜 추천됐는가 — 스크리너 매칭 근거 패널 #}
+                            {% if p.spec_snapshot or p.screener_match_reason %}
+                            <div style="margin-top:14px;padding:12px 14px;background:rgba(147,130,255,0.06);border:1px solid rgba(147,130,255,0.2);border-radius:8px;">
+                                <div style="font-size:11px;color:var(--purple);text-transform:uppercase;letter-spacing:0.5px;font-weight:700;margin-bottom:8px;">
+                                    🔍 이 종목이 추천된 이유 (스크리너 매칭 근거)
+                                </div>
+                                {% set spec = p.spec_snapshot %}
+                                {% if spec %}
+                                    {% if spec.thesis %}
+                                    <div style="margin-bottom:8px;font-size:13px;line-height:1.5;">
+                                        <strong style="color:var(--text-muted);font-size:11px;">테마 가설:</strong>
+                                        <span style="color:var(--text);">{{ spec.thesis }}</span>
+                                    </div>
+                                    {% endif %}
+                                    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;font-size:11px;">
+                                        {% if spec.value_chain_tier %}
+                                            {% for tier in spec.value_chain_tier %}
+                                            <span style="padding:2px 8px;border-radius:4px;background:rgba(79,140,255,0.1);border:1px solid rgba(79,140,255,0.2);color:var(--accent);">밸류체인: {{ tier }}</span>
+                                            {% endfor %}
+                                        {% endif %}
+                                        {% if spec.market_cap_bucket %}
+                                            {% for bucket in spec.market_cap_bucket %}
+                                            <span style="padding:2px 8px;border-radius:4px;background:rgba(255,255,255,0.04);border:1px solid var(--border);color:var(--text-muted);">시총: {{ bucket }}</span>
+                                            {% endfor %}
+                                        {% endif %}
+                                        {% if spec.expected_catalyst_window_months %}
+                                        <span style="padding:2px 8px;border-radius:4px;background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.2);color:var(--orange);">카탈리스트: {{ spec.expected_catalyst_window_months }}개월</span>
+                                        {% endif %}
+                                    </div>
+                                    {% if spec.required_keywords %}
+                                    <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px;">
+                                        <strong style="font-size:11px;">스크리너 검색 키워드:</strong>
+                                        {% for kw in spec.required_keywords %}<code style="font-size:11px;padding:1px 5px;margin:0 2px;background:rgba(255,255,255,0.06);border-radius:3px;">{{ kw }}</code>{% endfor %}
+                                    </div>
+                                    {% endif %}
+                                {% endif %}
+                                {% if p.screener_match_reason %}
+                                <div style="margin-top:6px;font-size:12px;color:var(--text-muted);">
+                                    <strong style="font-size:11px;">매칭 결과:</strong>
+                                    <span style="color:var(--green);">{{ p.screener_match_reason }}</span>
+                                </div>
+                                {% endif %}
+                                {% if not p.has_stock_analysis %}
+                                <div style="margin-top:10px;padding:8px 10px;background:rgba(251,191,36,0.08);border-left:3px solid var(--orange);border-radius:4px;font-size:12px;color:var(--text-muted);">
+                                    ⚠ <strong style="color:var(--orange);">기초 추천 단계</strong> — 스크리너 매칭 + AI 1차 검토만 거친 종목입니다. 실제 진입 전 펀더멘털/뉴스 수동 검증을 권장합니다.
+                                </div>
+                                {% endif %}
+                            </div>
+                            {% endif %}
                         </div>
                     </td>
                 </tr>
@@ -204,14 +296,18 @@
 
 {% block scripts %}
 <script>
-// 제안 테이블 행 클릭 시 상세 행 토글
-document.querySelectorAll('.screener-row').forEach(function(row) {
+// 제안 테이블 행 클릭 시 상세 행 토글 — screener-row + rationale-preview 양쪽 모두 트리거
+function toggleProposalDetail(idx) {
+    var detail = document.querySelector('.detail-row[data-idx="' + idx + '"]');
+    if (!detail) return;
+    var mainRow = document.querySelector('.screener-row[data-idx="' + idx + '"]');
+    var isOpen = detail.style.display !== 'none';
+    detail.style.display = isOpen ? 'none' : 'table-row';
+    if (mainRow) mainRow.classList.toggle('row-selected', !isOpen);
+}
+document.querySelectorAll('.screener-row, .rationale-preview').forEach(function(row) {
     row.addEventListener('click', function() {
-        var idx = row.getAttribute('data-idx');
-        var detail = document.querySelector('.detail-row[data-idx="' + idx + '"]');
-        var isOpen = detail.style.display !== 'none';
-        detail.style.display = isOpen ? 'none' : 'table-row';
-        row.classList.toggle('row-selected', !isOpen);
+        toggleProposalDetail(row.getAttribute('data-idx'));
     });
 });
 </script>

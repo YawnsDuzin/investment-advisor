@@ -546,7 +546,7 @@
       emptyEl.style.display = 'block';
       return;
     }
-    items.forEach(function(it) {
+    items.forEach(function(it, idx) {
       var card = document.createElement('div');
       card.className = 'timeline-card';
       var dt = (it.created_at || it.analysis_date || '').slice(0, 10);
@@ -556,15 +556,72 @@
         validation = ' <span class="tl-warn" title="AI 제시값과 실측 mismatch">⚠ ' +
                      it.validation_mismatches.length + '</span>';
       }
+      var deepBadge = it.has_stock_analysis
+        ? ' <span class="tl-deep" title="Stage 2 심층분석 완료 — 펀더멘털/모멘텀/리스크 검증됨">DEEP</span>'
+        : '';
       var rationale = (it.rationale || '');
       var rationaleHtml = esc(rationale.slice(0, 240)) + (rationale.length > 240 ? '...' : '');
+
+      // ── C-6: 추천 매칭 근거 패널 (spec_snapshot + screener_match_reason) ──
+      var matchPanel = '';
+      var spec = it.spec_snapshot;
+      if (spec || it.screener_match_reason) {
+        var thesisLine = (spec && spec.thesis)
+          ? '<div class="tl-match-thesis"><strong>테마 가설:</strong> ' + esc(spec.thesis) + '</div>'
+          : '';
+        var chips = '';
+        if (spec) {
+          if (Array.isArray(spec.value_chain_tier)) {
+            spec.value_chain_tier.forEach(function(t) {
+              chips += '<span class="tl-match-chip tl-chip-tier">밸류체인: ' + esc(t) + '</span>';
+            });
+          }
+          if (Array.isArray(spec.market_cap_bucket)) {
+            spec.market_cap_bucket.forEach(function(b) {
+              chips += '<span class="tl-match-chip tl-chip-cap">시총: ' + esc(b) + '</span>';
+            });
+          }
+          if (spec.expected_catalyst_window_months) {
+            chips += '<span class="tl-match-chip tl-chip-cat">카탈리스트: ' +
+                     esc(String(spec.expected_catalyst_window_months)) + '개월</span>';
+          }
+        }
+        var kwLine = '';
+        if (spec && Array.isArray(spec.required_keywords) && spec.required_keywords.length) {
+          var kwHtml = spec.required_keywords.map(function(k) {
+            return '<code class="tl-kw">' + esc(k) + '</code>';
+          }).join(' ');
+          kwLine = '<div class="tl-match-kw"><strong>스크리너 키워드:</strong> ' + kwHtml + '</div>';
+        }
+        var matchReason = it.screener_match_reason
+          ? '<div class="tl-match-reason"><strong>매칭 결과:</strong> ' + esc(it.screener_match_reason) + '</div>'
+          : '';
+        var trustNote = !it.has_stock_analysis
+          ? '<div class="tl-trust-note">⚠ <strong>기초 추천 단계</strong> — 스크리너 매칭 + AI 1차 검토만 통과. 진입 전 펀더/뉴스 수동 검증 권장.</div>'
+          : '';
+        var panelId = 'tl-match-' + idx;
+        matchPanel =
+          '<details class="tl-match-panel" id="' + panelId + '">' +
+            '<summary class="tl-match-toggle">🔍 왜 이 종목이 추천됐나? (매칭 근거 보기)</summary>' +
+            '<div class="tl-match-body">' +
+              thesisLine +
+              (chips ? '<div class="tl-match-chips">' + chips + '</div>' : '') +
+              kwLine +
+              matchReason +
+              trustNote +
+            '</div>' +
+          '</details>';
+      }
+
       card.innerHTML =
         '<div class="timeline-card-head">' +
           '<span class="timeline-date">' + dt + '</span>' +
           '<a class="timeline-theme" href="/pages/themes#theme-' + it.theme_id + '">' +
             esc(it.theme_name || '-') + '</a>' +
+          deepBadge +
         '</div>' +
         '<div class="timeline-rationale">' + rationaleHtml + '</div>' +
+        matchPanel +
         '<div class="timeline-metrics">' +
           '<span>' + esc((it.action || '-').toUpperCase()) + ' · ' + esc(it.conviction || '-') + entry + validation + '</span>' +
           '<span>1m ' + pctSpan(it.post_return_1m_pct) + '</span>' +
