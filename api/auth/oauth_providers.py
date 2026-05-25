@@ -2,6 +2,10 @@
 
 `register_providers(cfg)` 를 앱 lifespan startup 에서 호출.
 provider 별 `*_CLIENT_ID` 가 비어있으면 등록 skip → UI 버튼도 자동 숨김.
+
+주: `cfg.google_redirect_uri` / `cfg.kakao_redirect_uri` 는 여기서 사용하지 않는다.
+Authlib 표준 패턴 — 라우트의 `client.authorize_redirect(request, redirect_uri=...)`
+호출 시점에 주입한다 (Task 7 `auth_oauth.py` 참조).
 """
 from authlib.integrations.starlette_client import OAuth
 
@@ -35,6 +39,7 @@ def register_providers(cfg: AuthConfig) -> None:
         )
 
     if cfg.kakao_client_id and oauth.create_client("kakao") is None:
+        # Kakao 는 JS 키 방식 또는 콘솔에서 client_secret 미사용 설정 가능 → 빈 문자열 폴백
         oauth.register(
             name="kakao",
             client_id=cfg.kakao_client_id,
