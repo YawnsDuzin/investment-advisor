@@ -78,12 +78,19 @@ async def oauth_callback(provider: str, request: Request, conn=Depends(get_db_co
     """OAuth provider 콜백 — 토큰 교환 → upsert → 쿠키 발급 → next 302."""
     _validate_provider(provider)
     auth_cfg = _get_auth_cfg()
+    # OAUTH_ENABLED=false 인데 외부에서 콜백 URL 직접 호출 → SessionMiddleware 미등록 상태에서
+    # request.session 접근 시 RuntimeError. 명시적으로 404 로 종료.
+    if not auth_cfg.oauth_enabled:
+        raise HTTPException(status_code=404, detail="OAuth disabled")
 
     next_url = _safe_next(request.session.pop("oauth_next_url", "/"))
+    # /link 라우트가 저장한 linking user id (있으면 manual_link 분기로 강제 연결)
+    linking_user_id = request.session.pop("oauth_linking_user_id", None)
 
     try:
         user, next_url = await handle_oauth_callback(
             provider=provider, request=request, conn=conn, next_url=next_url,
+            linking_user_id=linking_user_id,
         )
     except OAuthCallbackError as e:
         return RedirectResponse(
@@ -122,10 +129,11 @@ async def oauth_link(
     request: Request,
     user: UserInDB = Depends(get_current_user_required),
 ):
-    """로그인 상태에서 추가 provider 연결 — start 와 동일하게 동의 화면으로 redirect.
+    """로그인 상태에서 추가 provider 연결 — 동의 화면으로 redirect.
 
-    콜백에서 _find_oauth_account 가 None 이면 이메일 매칭 → 기존 user 에 자동 연결.
-    (handle_oauth_callback 의 자동 연결 분기 재사용 — 별도 link 콜백 불필요.)
+    session 에 linking_user_id 저장 → 콜백에서 이메일 매칭 우회하고 현재
+    user 에 강제 INSERT (provider 이메일이 서비스 이메일과 다른 경우에도
+    orphan account 생성 방지).
     """
     _validate_provider(provider)
     cfg = _get_auth_cfg()
@@ -135,6 +143,7 @@ async def oauth_link(
         raise HTTPException(status_code=404, detail=f"{provider} OAuth not configured")
 
     request.session["oauth_next_url"] = "/profile"
+    request.session["oauth_linking_user_id"] = user.id
     redirect_uri = (cfg.google_redirect_uri if provider == "google"
                     else cfg.kakao_redirect_uri)
     return await client.authorize_redirect(request, redirect_uri)

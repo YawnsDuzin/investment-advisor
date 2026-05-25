@@ -67,13 +67,23 @@ def _override_db_conn(app, fake_conn=None):
     return conn
 
 
+def _fake_oauth_enabled_cfg():
+    """oauth_enabled=True 인 AuthConfig 인스턴스 — patch 용."""
+    from shared.config import AuthConfig
+    cfg = AuthConfig()
+    object.__setattr__(cfg, "oauth_enabled", True)
+    object.__setattr__(cfg, "oauth_session_secret", "x" * 64)
+    return cfg
+
+
 def test_callback_success_sets_cookies_and_redirects():
     from api.auth.oauth_handlers import OAuthCallbackError
 
     app = _make_test_app()
-    fake_conn = _override_db_conn(app)
+    _override_db_conn(app)
     fake_user = {"id": 1, "role": "user", "is_active": True, "email": "u@x.com", "nickname": "U"}
     with TestClient(app) as client, \
+         patch("api.routes.auth_oauth._get_auth_cfg", new=_fake_oauth_enabled_cfg), \
          patch("api.routes.auth_oauth.handle_oauth_callback", new=AsyncMock(return_value=(fake_user, "/dashboard"))):
         r = client.get("/auth/oauth/google/callback?code=fake&state=fake", follow_redirects=False)
         assert r.status_code == 302
@@ -88,12 +98,23 @@ def test_callback_oauth_error_redirects_with_error_param():
     app = _make_test_app()
     _override_db_conn(app)
     with TestClient(app) as client, \
+         patch("api.routes.auth_oauth._get_auth_cfg", new=_fake_oauth_enabled_cfg), \
          patch("api.routes.auth_oauth.handle_oauth_callback",
                new=AsyncMock(side_effect=OAuthCallbackError("kakao_email_required"))):
         r = client.get("/auth/oauth/kakao/callback?code=fake&state=fake", follow_redirects=False)
         assert r.status_code == 302
         assert "/auth/login" in r.headers["location"]
         assert "error=kakao_email_required" in r.headers["location"]
+
+
+def test_callback_returns_404_when_oauth_disabled():
+    """OAUTH_ENABLED=false 일 때 callback 직접 호출 → 500 대신 404."""
+    app = _make_test_app()
+    _override_db_conn(app)
+    # _fake_oauth_enabled_cfg patch 안 함 → 기본 AuthConfig (oauth_enabled=False)
+    with TestClient(app) as client:
+        r = client.get("/auth/oauth/google/callback?code=fake&state=fake", follow_redirects=False)
+        assert r.status_code == 404
 
 
 def test_link_requires_login():

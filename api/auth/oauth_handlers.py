@@ -8,10 +8,13 @@ OAuthCallbackError. 토큰 발급은 라우트 레이어 책임.
 error_code 기반 안내 메시지를 보여야 한다 (api/routes/auth.py 의
 _OAUTH_ERROR_MESSAGES 매핑 참조).
 """
+import logging
 from typing import Optional
 
 from authlib.integrations.starlette_client import OAuthError
 from psycopg2.extras import RealDictCursor
+
+_logger = logging.getLogger(__name__)
 
 
 def _find_oauth_account(conn, provider: str, provider_user_id: str) -> Optional[dict]:
@@ -148,8 +151,7 @@ def _audit_log(conn, user_id: int, action: str, provider: Optional[str] = None,
                 (user_id, target_email, user_id, target_email, action, reason_text),
             )
     except Exception as exc:
-        import logging
-        logging.getLogger(__name__).warning("OAuth _audit_log INSERT failed: %s", exc)
+        _logger.warning("OAuth _audit_log INSERT failed: %s", exc)
 
 
 def _list_linked_providers(conn, user_id: int) -> dict:
@@ -211,14 +213,19 @@ async def _extract_userinfo(provider: str, token: dict) -> dict:
     raise ValueError(f"Unknown provider: {provider}")
 
 
-async def handle_oauth_callback(provider: str, request, conn, next_url: str) -> tuple:
+async def handle_oauth_callback(provider: str, request, conn, next_url: str,
+                                 linking_user_id: Optional[int] = None) -> tuple:
     """OAuth 콜백 메인 — 토큰 교환 → upsert → audit → (user, next_url) 반환.
 
     토큰 발급(`_set_auth_cookies`)는 라우트 레이어 책임. 이 함수는 user 식별까지.
 
+    linking_user_id: /link 라우트에서 저장된 현재 로그인 user_id. 있으면 email
+    매칭 우회하고 해당 user 에 강제 연결 (oauth_manual_link). 다른 user 의
+    provider 계정이면 충돌 — oauth_failed 로 거부.
+
     Raises:
         OAuthCallbackError(error_code=...): 사용자 안내 가능한 실패
-            - "oauth_failed" — state/code 오류
+            - "oauth_failed" — state/code 오류 / 충돌
             - "kakao_email_required" — Kakao 이메일 미동의
             - "email_unverified" — provider 이메일 미검증
             - "account_disabled" — is_active=false
@@ -238,13 +245,16 @@ async def handle_oauth_callback(provider: str, request, conn, next_url: str) -> 
 
     userinfo = await _extract_userinfo(provider, token)
 
-    # 2. Kakao 이메일 필수
-    if provider == "kakao" and not userinfo["email"]:
+    # 2. Kakao 이메일 필수 (단, manual link 흐름은 이메일 없어도 가능 — provider id 만으로 연결)
+    if provider == "kakao" and not userinfo["email"] and linking_user_id is None:
         raise OAuthCallbackError("kakao_email_required")
 
-    # 3. 기존 OAuth 연결 조회 → 즉시 로그인
+    # 3. 기존 OAuth 연결 조회 → 즉시 로그인 (또는 manual link 충돌 검사)
     existing = _find_oauth_account(conn, provider, userinfo["provider_user_id"])
     if existing:
+        if linking_user_id is not None and existing["user_id"] != linking_user_id:
+            # 다른 user 가 이미 이 provider 계정을 점유 — 연결 거부
+            raise OAuthCallbackError("oauth_failed", "provider account already linked to another user")
         user = _get_user(conn, existing["user_id"])
         if user is None:
             raise OAuthCallbackError("oauth_failed", "linked user not found")
@@ -253,6 +263,17 @@ async def handle_oauth_callback(provider: str, request, conn, next_url: str) -> 
         _update_oauth_last_login(conn, existing["id"])
         _audit_log(conn, user["id"], "oauth_login", provider=provider)
         return (user, next_url)
+
+    # 3-B. manual link 흐름 — 현재 로그인 user 에 강제 INSERT (email 매칭 우회)
+    if linking_user_id is not None:
+        link_user = _get_user(conn, linking_user_id)
+        if link_user is None:
+            raise OAuthCallbackError("oauth_failed", "linking user not found")
+        if not link_user["is_active"]:
+            raise OAuthCallbackError("account_disabled")
+        _insert_oauth_account(conn, linking_user_id, provider, userinfo)
+        _audit_log(conn, linking_user_id, "oauth_manual_link", provider=provider)
+        return (link_user, next_url)
 
     # 4. 이메일 매칭 → 자동 연결 또는 신규 생성
     user = _find_user_by_email(conn, userinfo["email"]) if userinfo["email"] else None
