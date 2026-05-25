@@ -101,13 +101,28 @@ def _fetch_market_snapshot(date: str, market: str) -> dict[str, dict]:
     out: dict[str, dict] = {}
 
     # 시총 + 상장주식수 (배치 1회)
-    cap_df = pykrx_stock.get_market_cap(date, market=market)
+    # P5e: pykrx 응답 실패 가드 (KRX Akamai 차단/휴장일/rate limit → JSONDecodeError·KeyError·빈 DF).
+    # 가드 없으면 sync_meta_krx 전체가 죽으면서 universe-sync-meta.service 가 status=1 로 실패한다 (2026-05-24).
+    try:
+        cap_df = pykrx_stock.get_market_cap(date, market=market)
+    except Exception as e:
+        _log.warning(
+            f"[{market}] {date} 시총 조회 실패 - 휴장일/KRX 차단/응답 형식 이상 의심 "
+            f"({type(e).__name__}: {e}). 이 시장은 건너뜀."
+        )
+        return out
     if cap_df is None or cap_df.empty:
         _log.warning(f"[{market}] {date} 시총 데이터 없음 -휴장일/조회 실패 가능")
         return out
 
     # OHLCV (배치 1회) -종가 추출용
-    ohlcv_df = pykrx_stock.get_market_ohlcv(date, market=market)
+    try:
+        ohlcv_df = pykrx_stock.get_market_ohlcv(date, market=market)
+    except Exception as e:
+        _log.warning(
+            f"[{market}] {date} 메타용 OHLCV 조회 실패 ({type(e).__name__}: {e}). 종가 매핑 생략."
+        )
+        ohlcv_df = None
     close_map: dict[str, float] = {}
     if ohlcv_df is not None and not ohlcv_df.empty and "종가" in ohlcv_df.columns:
         for tk, row in ohlcv_df.iterrows():
@@ -246,8 +261,19 @@ def sync_meta_krx(db_cfg: DatabaseConfig, *, markets: tuple[str, ...] = _MARKET_
     per_market: dict[str, int] = {}
 
     for market in markets:
-        snap = _fetch_market_snapshot(date, market)
-        sectors = _fetch_sector_map(date, market)
+        # P5e: 시장 단위 격리 — _fetch_market_snapshot 내부 가드를 통과해도
+        # 후속 가공(sector normalize 등)에서 예외가 나면 다른 시장까지 죽을 수 있으므로
+        # 외곽도 try/except 로 한 번 더 감싼다 (sync_prices_krx 패턴과 일관성).
+        try:
+            snap = _fetch_market_snapshot(date, market)
+            sectors = _fetch_sector_map(date, market)
+        except Exception as e:
+            _log.warning(
+                f"[{market}] {date} 메타 수집 단계 예외 — 이 시장 건너뜀 "
+                f"({type(e).__name__}: {e})"
+            )
+            per_market[market] = 0
+            continue
         per_market[market] = len(snap)
         _log.info(f"[{market}] {len(snap)}종목 메타 수집 (업종 매핑 {len(sectors)}건)")
 
