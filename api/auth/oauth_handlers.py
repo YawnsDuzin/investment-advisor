@@ -1,10 +1,16 @@
 """OAuth 콜백 핸들러 — DB helper + callback 메인 로직.
 
-callback 메인 (`handle_oauth_callback`) 는 Task 6 에서 추가됩니다.
-이 파일은 우선 DB helper 함수만 정의.
+DB helper 9종 + handle_oauth_callback (5분기) + _extract_userinfo +
+OAuthCallbackError. 토큰 발급은 라우트 레이어 책임.
+
+라우트 작성 주의: OAuthCallbackError.message (str(e)) 는 Authlib 내부
+상세를 포함할 수 있어 사용자 노출 금지. 로그용으로만 사용하고, 사용자에게는
+error_code 기반 안내 메시지를 보여야 한다 (api/routes/auth.py 의
+_OAUTH_ERROR_MESSAGES 매핑 참조).
 """
 from typing import Optional
 
+from authlib.integrations.starlette_client import OAuthError
 from psycopg2.extras import RealDictCursor
 
 
@@ -171,6 +177,9 @@ async def _extract_userinfo(provider: str, token: dict) -> dict:
 
     Returns:
         {"provider_user_id", "email", "email_verified", "name"}
+
+    Raises:
+        OAuthCallbackError("oauth_failed"): Kakao API 호출 (네트워크/5xx) 실패 시
     """
     from api.auth.oauth_providers import oauth
 
@@ -183,7 +192,13 @@ async def _extract_userinfo(provider: str, token: dict) -> dict:
             "name": ui.get("name", ""),
         }
     elif provider == "kakao":
-        resp = await oauth.kakao.get("v2/user/me", token=token)
+        client = oauth.create_client("kakao")
+        if client is None:
+            raise OAuthCallbackError("oauth_failed", "kakao client not registered")
+        try:
+            resp = await client.get("v2/user/me", token=token)
+        except Exception as e:
+            raise OAuthCallbackError("oauth_failed", f"kakao userinfo fetch failed: {e}")
         data = resp.json()
         account = data.get("kakao_account", {})
         profile = account.get("profile", {})
@@ -210,21 +225,15 @@ async def handle_oauth_callback(provider: str, request, conn, next_url: str) -> 
     """
     from api.auth.oauth_providers import oauth
 
-    # authlib 의존성은 선택적 — import 실패 시 graceful fallback
-    try:
-        from authlib.integrations.starlette_client import OAuthError
-    except ImportError:
-        OAuthError = Exception  # type: ignore[misc,assignment]
-
     # 1. Authlib 토큰 교환 (state 검증 자동)
+    client = oauth.create_client(provider)
+    if client is None:
+        raise OAuthCallbackError("oauth_failed", f"provider {provider} not registered")
     try:
-        client = oauth.create_client(provider)
-        if client is None:
-            raise OAuthCallbackError("oauth_failed", f"provider {provider} not registered")
         token = await client.authorize_access_token(request)
-    except OAuthCallbackError:
-        raise
-    except Exception as e:
+    except OAuthError as e:
+        # state 불일치 / code 만료 등 OAuth 프로토콜 오류만 oauth_failed 로 매핑
+        # DB·내부 버그는 그대로 전파 — 라우트에서 500
         raise OAuthCallbackError("oauth_failed", str(e))
 
     userinfo = await _extract_userinfo(provider, token)
@@ -260,5 +269,8 @@ async def handle_oauth_callback(provider: str, request, conn, next_url: str) -> 
     new_user_id = _create_user_from_oauth(conn, userinfo)
     _insert_oauth_account(conn, new_user_id, provider, userinfo)
     new_user = _get_user(conn, new_user_id)
+    if new_user is None:
+        # INSERT 직후 SELECT 가 None — DB 비정상. 라우트에서 사용자 안내 매핑.
+        raise OAuthCallbackError("oauth_failed", "user creation lookup failed")
     _audit_log(conn, new_user_id, "oauth_signup", provider=provider)
     return (new_user, next_url)
