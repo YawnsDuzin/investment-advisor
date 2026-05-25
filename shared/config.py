@@ -411,7 +411,7 @@ class ScreenerConfig:
 
 @dataclass
 class AuthConfig:
-    """JWT 인증 설정"""
+    """JWT 인증 + OAuth(Google/Kakao) 설정"""
     enabled: bool = field(default_factory=lambda: _env_bool("AUTH_ENABLED", False))
     jwt_secret_key: str = field(default_factory=lambda: os.getenv("JWT_SECRET_KEY", "INSECURE_DEFAULT_CHANGE_IN_PRODUCTION"))
     jwt_algorithm: str = field(default_factory=lambda: os.getenv("JWT_ALGORITHM", "HS256"))
@@ -420,6 +420,38 @@ class AuthConfig:
     admin_email: str = field(default_factory=lambda: os.getenv("ADMIN_EMAIL", "admin@example.com"))
     admin_password: str = field(default_factory=lambda: os.getenv("ADMIN_PASSWORD", "changeme123"))
     cookie_secure: bool = field(default_factory=lambda: _env_bool("COOKIE_SECURE", False))
+
+    # ── OAuth (Google + Kakao) ──
+    oauth_enabled: bool = field(default_factory=lambda: _env_bool("OAUTH_ENABLED", False))
+    oauth_session_secret: str = field(default_factory=lambda: os.getenv("OAUTH_SESSION_SECRET", ""))
+    google_client_id: str = field(default_factory=lambda: os.getenv("GOOGLE_CLIENT_ID", ""))
+    google_client_secret: str = field(default_factory=lambda: os.getenv("GOOGLE_CLIENT_SECRET", ""))
+    google_redirect_uri: str = field(default_factory=lambda: os.getenv("GOOGLE_REDIRECT_URI", ""))
+    kakao_client_id: str = field(default_factory=lambda: os.getenv("KAKAO_CLIENT_ID", ""))
+    kakao_client_secret: str = field(default_factory=lambda: os.getenv("KAKAO_CLIENT_SECRET", ""))
+    kakao_redirect_uri: str = field(default_factory=lambda: os.getenv("KAKAO_REDIRECT_URI", ""))
+
+    @property
+    def google_active(self) -> bool:
+        return self.oauth_enabled and bool(self.google_client_id)
+
+    @property
+    def kakao_active(self) -> bool:
+        return self.oauth_enabled and bool(self.kakao_client_id)
+
+    def validate_oauth(self) -> None:
+        """OAuth 설정 검증. enabled=true 이면 session_secret 필수.
+
+        Raises:
+            RuntimeError: 필수 설정 누락 시.
+        """
+        if not self.oauth_enabled:
+            return
+        if not self.oauth_session_secret:
+            raise RuntimeError(
+                "OAUTH_ENABLED=true 인데 OAUTH_SESSION_SECRET 이 비어있습니다. "
+                "생성: python -c \"import secrets; print(secrets.token_hex(32))\""
+            )
 
 
 @dataclass
