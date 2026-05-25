@@ -305,3 +305,30 @@ async def test_callback_inactive_account_refuses():
         with pytest.raises(h.OAuthCallbackError) as exc:
             await h.handle_oauth_callback("google", _FakeRequest(), conn, "/")
         assert exc.value.error_code == "account_disabled"
+
+
+def test_change_password_blocks_oauth_only_user():
+    """password_hash IS NULL 인 유저는 change-password 진입 시 안내 페이지."""
+    from api.routes.auth import _is_oauth_only_user
+
+    cur = MagicMock()
+    cur.__enter__.return_value = cur
+    cur.__exit__.return_value = False
+    cur.fetchone.return_value = {"password_hash": None}
+    conn = MagicMock()
+    conn.cursor.return_value = cur
+
+    assert _is_oauth_only_user(conn, user_id=1) is True
+
+
+def test_change_password_allows_local_user():
+    from api.routes.auth import _is_oauth_only_user
+
+    cur = MagicMock()
+    cur.__enter__.return_value = cur
+    cur.__exit__.return_value = False
+    cur.fetchone.return_value = {"password_hash": "bcrypt-hash"}
+    conn = MagicMock()
+    conn.cursor.return_value = cur
+
+    assert _is_oauth_only_user(conn, user_id=1) is False

@@ -325,6 +325,15 @@ def refresh_token(
 # ── 비밀번호 변경 ────────────────────────────────
 
 
+def _is_oauth_only_user(conn, user_id: int) -> bool:
+    """password_hash IS NULL 이면 True — local 비밀번호 없는 OAuth-only 유저."""
+    from psycopg2.extras import RealDictCursor
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute("SELECT password_hash FROM users WHERE id = %s", (user_id,))
+        row = cur.fetchone()
+        return row is not None and row["password_hash"] is None
+
+
 @router.post("/change-password")
 def change_password(
     request: Request,
@@ -348,6 +357,10 @@ def change_password(
             "error": msg,
             "success": "",
         })
+
+    # OAuth-only 유저 가드 — password_hash 없는 계정은 비밀번호 변경 불가
+    if _is_oauth_only_user(conn, user.id):
+        return _error("소셜 로그인 계정은 비밀번호가 없습니다. 비밀번호 설정 기능은 추후 제공 예정입니다.")
 
     # 새 비밀번호 확인 일치
     if new_password != new_password_confirm:
