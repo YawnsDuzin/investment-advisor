@@ -3,11 +3,13 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query, Depends
 from fastapi.responses import RedirectResponse
 from psycopg2.extras import RealDictCursor
+from analyzer.entry_signals import compute_entry_signals
 from api.auth.dependencies import get_current_user_required
 from api.auth.models import UserInDB
 from api.serialization import serialize_row as _serialize_row
 from api.templates_provider import templates
 from api.deps import get_db_conn, make_page_ctx
+from shared.config import AppConfig
 
 router = APIRouter(prefix="/sessions", tags=["세션"])
 
@@ -221,6 +223,22 @@ def session_detail_page(session_id: int, conn = Depends(get_db_conn), ctx: dict 
         tracking_map = {}
         for row in cur.fetchall():
             tracking_map[row["theme_key"]] = _serialize_row(row)
+
+    # ── C-7 + B-5: 진입 신호 계산 후 각 proposal 에 주입 ──
+    # 모든 테마의 proposals 를 모아 한 번의 SQL 로 일괄 처리. 펀더/수급 미존재 시
+    # compute_entry_signals 가 자체적으로 빈 신호 폴백 → UI 도 침묵 처리.
+    all_proposals = [p for theme in themes for p in theme.get("proposals", [])]
+    if all_proposals:
+        try:
+            signals_map = compute_entry_signals(AppConfig().db, all_proposals)
+        except Exception:
+            signals_map = {}
+        for theme in themes:
+            for p in theme["proposals"]:
+                key = ((p.get("ticker") or "").upper(), (p.get("market") or "").upper())
+                p["entry_signal"] = signals_map.get(key) or {
+                    "blocks": [], "signals": [], "score": 0, "has_data": False,
+                }
 
     return templates.TemplateResponse(request=ctx["request"], name="session_detail.html", context={
         **ctx,
