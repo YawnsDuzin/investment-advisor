@@ -51,21 +51,40 @@ def _clear_auth_cookies(response):
 
 # ── 페이지 ────────────────────────────────────
 
+_OAUTH_ERROR_MESSAGES = {
+    "oauth_failed": "소셜 로그인에 실패했습니다. 다시 시도해주세요.",
+    "kakao_email_required": "카카오 로그인 시 이메일 제공에 동의해야 가입할 수 있습니다.",
+    "email_unverified": "이메일 인증이 완료되지 않은 계정입니다. 이메일을 확인하거나 직접 로그인 후 프로필에서 연결해주세요.",
+    "account_disabled": "비활성화된 계정입니다. 관리자에게 문의하세요.",
+}
+
+
+def _map_oauth_error(error_code: str) -> str:
+    if not error_code:
+        return ""
+    return _OAUTH_ERROR_MESSAGES.get(error_code, error_code)
+
 
 @router.get("/login")
 def login_page(request: Request, error: str = "", next: str = "/"):
+    cfg = AuthConfig()
     return templates.TemplateResponse(request=request, name="login.html", context={
         "active_page": "login",
-        "error": error,
+        "error": _map_oauth_error(error),
         "next_url": next,
+        "oauth_google_enabled": cfg.google_active,
+        "oauth_kakao_enabled": cfg.kakao_active,
     })
 
 
 @router.get("/register")
 def register_page(request: Request, error: str = ""):
+    cfg = AuthConfig()
     return templates.TemplateResponse(request=request, name="register.html", context={
         "active_page": "register",
-        "error": error,
+        "error": _map_oauth_error(error),
+        "oauth_google_enabled": cfg.google_active,
+        "oauth_kakao_enabled": cfg.kakao_active,
     })
 
 
