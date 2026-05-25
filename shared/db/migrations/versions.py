@@ -2129,3 +2129,31 @@ def _migrate_to_v49(cur) -> None:
         ON CONFLICT (version) DO NOTHING;
     """)
     print("[DB] v49 마이그레이션 완료 — pre_market_briefings.one_liner + market_temperature 추가")
+
+
+def _migrate_to_v51(cur) -> None:
+    """v51: OAuth provider 계정 연결 — user_oauth_accounts 테이블.
+
+    한 user 가 Google + Kakao + local 동시 보유 가능 (1:N).
+    Spec: _docs/20260525144745_oauth-google-kakao-design.md §4
+    """
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS user_oauth_accounts (
+            id               SERIAL PRIMARY KEY,
+            user_id          INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            provider         VARCHAR(20) NOT NULL,
+            provider_user_id VARCHAR(255) NOT NULL,
+            provider_email   VARCHAR(255),
+            provider_name    VARCHAR(100),
+            linked_at        TIMESTAMP NOT NULL DEFAULT NOW(),
+            last_login_at    TIMESTAMP,
+            UNIQUE (provider, provider_user_id),
+            UNIQUE (user_id, provider)
+        );
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_user_oauth_accounts_user ON user_oauth_accounts(user_id);")
+    cur.execute("""
+        INSERT INTO schema_version (version) VALUES (51)
+        ON CONFLICT (version) DO NOTHING;
+    """)
+    print("[DB] v51 마이그레이션 완료 — user_oauth_accounts (OAuth 1:N)")

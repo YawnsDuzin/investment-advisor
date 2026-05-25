@@ -9,7 +9,7 @@ from shared.db.migrations import run_migrations
 
 
 # ── 스키마 버전 관리 ──────────────────────────────
-SCHEMA_VERSION = 50  # v50: 매크로 관측 시계열 — macro_observations (시나리오 진행 추적 인프라)
+SCHEMA_VERSION = 51  # v51: OAuth provider 계정 연결 (user_oauth_accounts)
 
 
 def _create_base_schema(cur) -> None:
