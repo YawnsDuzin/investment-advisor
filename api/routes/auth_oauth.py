@@ -13,8 +13,10 @@ from fastapi.responses import RedirectResponse
 
 import api.auth.oauth_providers as _oauth_mod
 
+from api.auth.dependencies import get_current_user_required
 from api.auth.jwt_handler import create_access_token, create_refresh_token, hash_token
-from api.auth.oauth_handlers import OAuthCallbackError, handle_oauth_callback
+from api.auth.models import UserInDB
+from api.auth.oauth_handlers import OAuthCallbackError, _audit_log, _can_unlink, handle_oauth_callback
 from api.deps import get_db_conn
 from api.routes.auth import _set_auth_cookies
 from shared.config import AuthConfig
@@ -109,3 +111,56 @@ async def oauth_callback(provider: str, request: Request, conn=Depends(get_db_co
     response = RedirectResponse(next_url, status_code=302)
     _set_auth_cookies(response, access_token, refresh_raw, auth_cfg)
     return response
+
+
+# ── link / unlink ─────────────────────────────
+
+
+@router.post("/{provider}/link")
+async def oauth_link(
+    provider: str,
+    request: Request,
+    user: UserInDB = Depends(get_current_user_required),
+):
+    """로그인 상태에서 추가 provider 연결 — start 와 동일하게 동의 화면으로 redirect.
+
+    콜백에서 _find_oauth_account 가 None 이면 이메일 매칭 → 기존 user 에 자동 연결.
+    (handle_oauth_callback 의 자동 연결 분기 재사용 — 별도 link 콜백 불필요.)
+    """
+    _validate_provider(provider)
+    cfg = _get_auth_cfg()
+
+    client = _oauth_mod.oauth.create_client(provider)
+    if client is None:
+        raise HTTPException(status_code=404, detail=f"{provider} OAuth not configured")
+
+    request.session["oauth_next_url"] = "/profile"
+    redirect_uri = (cfg.google_redirect_uri if provider == "google"
+                    else cfg.kakao_redirect_uri)
+    return await client.authorize_redirect(request, redirect_uri)
+
+
+@router.post("/{provider}/unlink")
+async def oauth_unlink(
+    provider: str,
+    user: UserInDB = Depends(get_current_user_required),
+    conn=Depends(get_db_conn),
+):
+    """provider 연결 해제 — 마지막 로그인 수단이면 거부."""
+    _validate_provider(provider)
+
+    # 모듈 경로 import — monkeypatch 호환
+    from api.auth import oauth_handlers as _h
+    if not _h._can_unlink(conn, user.id, provider):
+        return RedirectResponse(
+            "/profile?error=last_login_method", status_code=302,
+        )
+
+    with conn.cursor() as cur:
+        cur.execute(
+            "DELETE FROM user_oauth_accounts WHERE user_id = %s AND provider = %s",
+            (user.id, provider),
+        )
+    _audit_log(conn, user.id, "oauth_unlink", provider=provider)
+    conn.commit()
+    return RedirectResponse("/profile?success=unlinked", status_code=302)
