@@ -120,20 +120,30 @@ def _audit_log(conn, user_id: int, action: str, provider: Optional[str] = None,
                detail: Optional[str] = None) -> None:
     """admin_audit_logs 에 OAuth action 기록 (v17 테이블 재사용).
 
-    user 조회 실패해도 best-effort 로 INSERT 진행.
+    user 조회 실패해도 best-effort 로 INSERT 진행. INSERT 자체가 실패하면
+    logging.warning 으로만 남기고 호출자로 예외 전파 안 함 (감사 실패가 OAuth
+    로그인 자체를 막아선 안 됨).
+
+    v17 컬럼: actor_id / actor_email / target_user_id / target_email / action
+    / before_state JSONB / after_state JSONB / reason TEXT. OAuth 는 상태 변경
+    추적 의도가 아니므로 before/after 는 비우고 reason 에 provider 정보를 담는다.
     """
     target_email = ""
     user = _get_user(conn, user_id)
     if user:
         target_email = user.get("email", "")
-    full_detail = detail or (f"provider={provider}" if provider else "")
-    with conn.cursor() as cur:
-        cur.execute(
-            "INSERT INTO admin_audit_logs "
-            "(actor_id, actor_email, target_id, target_email, action, detail) "
-            "VALUES (%s, %s, %s, %s, %s, %s)",
-            (user_id, target_email, user_id, target_email, action, full_detail),
-        )
+    reason_text = detail or (f"provider={provider}" if provider else "")
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO admin_audit_logs "
+                "(actor_id, actor_email, target_user_id, target_email, action, reason) "
+                "VALUES (%s, %s, %s, %s, %s, %s)",
+                (user_id, target_email, user_id, target_email, action, reason_text),
+            )
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning("OAuth _audit_log INSERT failed: %s", exc)
 
 
 def _list_linked_providers(conn, user_id: int) -> dict:
