@@ -455,7 +455,10 @@ def get_stock_proposals(ticker: str):
                     p.max_drawdown_pct, p.max_drawdown_date,
                     p.alpha_vs_benchmark_pct,
                     p.target_allocation, p.current_price, p.upside_pct,
-                    p.quant_score, p.sentiment_score, p.currency, p.market
+                    p.quant_score, p.sentiment_score, p.currency, p.market,
+                    p.spec_snapshot, p.screener_match_reason,
+                    (EXISTS (SELECT 1 FROM stock_analyses sa WHERE sa.proposal_id = p.id))
+                        AS has_stock_analysis
                 FROM investment_proposals p
                 JOIN investment_themes t ON p.theme_id = t.id
                 JOIN analysis_sessions s ON t.session_id = s.id
@@ -495,6 +498,12 @@ def get_stock_proposals(ticker: str):
     def _d(v):
         return v.isoformat() if v is not None else None
 
+    # spec_snapshot 안전 직렬화 — psycopg2가 JSONB는 dict로 반환하므로 그대로 통과
+    def _spec(v):
+        if v is None or isinstance(v, dict):
+            return v
+        return None  # 예상치 못한 타입은 안전하게 drop
+
     items = []
     for r in prop_rows:
         items.append({
@@ -526,6 +535,9 @@ def get_stock_proposals(ticker: str):
             "currency": r.get("currency"),
             "market": r.get("market"),
             "validation_mismatches": mismatches_by_pid.get(r["id"], []),
+            "spec_snapshot": _spec(r.get("spec_snapshot")),
+            "screener_match_reason": r.get("screener_match_reason"),
+            "has_stock_analysis": bool(r.get("has_stock_analysis")),
         })
 
     return {"ticker": tk, "count": len(items), "items": items}
