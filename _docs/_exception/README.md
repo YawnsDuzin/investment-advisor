@@ -63,6 +63,7 @@
 | 2026-04-22 | Stage 1-A JSON 파싱 실패 (쪼개진 블록 + raw 개행) | Stage 1-A | ✅ 해결됨 | [20260422_stage1a_json_parse_failure.md](20260422_stage1a_json_parse_failure.md) |
 | 2026-04-22 | Stage 1-A 재발 — 문자열 값 내부 ```json 펜스 삽입 (4중 대응) | Stage 1-A | ✅ 해결됨 | [20260422_stage1a_fence_injection_in_string.md](20260422_stage1a_fence_injection_in_string.md) |
 | 2026-05-13 | KRX 세션 점유 충돌 — API ↔ 새벽 배치 (pykrx import 사이드이펙트) | API / Briefing / Analyzer | ✅ 해결됨 | [20260513140057_krx_session_contention_with_api.md](20260513140057_krx_session_contention_with_api.md) |
+| 2026-05-25 | universe-sync-meta.service — KRX 차단 시 sync_meta_krx 전체 사망 | Universe / KRX | ✅ 해결됨 | [20260525_universe_sync_meta_krx_block.md](20260525_universe_sync_meta_krx_block.md) |
 
 ---
 

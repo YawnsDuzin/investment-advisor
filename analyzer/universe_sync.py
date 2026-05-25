@@ -101,13 +101,28 @@ def _fetch_market_snapshot(date: str, market: str) -> dict[str, dict]:
     out: dict[str, dict] = {}
 
     # 시총 + 상장주식수 (배치 1회)
-    cap_df = pykrx_stock.get_market_cap(date, market=market)
+    # P5e: pykrx 응답 실패 가드 (KRX Akamai 차단/휴장일/rate limit → JSONDecodeError·KeyError·빈 DF).
+    # 가드 없으면 sync_meta_krx 전체가 죽으면서 universe-sync-meta.service 가 status=1 로 실패한다 (2026-05-24).
+    try:
+        cap_df = pykrx_stock.get_market_cap(date, market=market)
+    except Exception as e:
+        _log.warning(
+            f"[{market}] {date} 시총 조회 실패 - 휴장일/KRX 차단/응답 형식 이상 의심 "
+            f"({type(e).__name__}: {e}). 이 시장은 건너뜀."
+        )
+        return out
     if cap_df is None or cap_df.empty:
         _log.warning(f"[{market}] {date} 시총 데이터 없음 -휴장일/조회 실패 가능")
         return out
 
     # OHLCV (배치 1회) -종가 추출용
-    ohlcv_df = pykrx_stock.get_market_ohlcv(date, market=market)
+    try:
+        ohlcv_df = pykrx_stock.get_market_ohlcv(date, market=market)
+    except Exception as e:
+        _log.warning(
+            f"[{market}] {date} 메타용 OHLCV 조회 실패 ({type(e).__name__}: {e}). 종가 매핑 생략."
+        )
+        ohlcv_df = None
     close_map: dict[str, float] = {}
     if ohlcv_df is not None and not ohlcv_df.empty and "종가" in ohlcv_df.columns:
         for tk, row in ohlcv_df.iterrows():
@@ -246,8 +261,19 @@ def sync_meta_krx(db_cfg: DatabaseConfig, *, markets: tuple[str, ...] = _MARKET_
     per_market: dict[str, int] = {}
 
     for market in markets:
-        snap = _fetch_market_snapshot(date, market)
-        sectors = _fetch_sector_map(date, market)
+        # P5e: 시장 단위 격리 — _fetch_market_snapshot 내부 가드를 통과해도
+        # 후속 가공(sector normalize 등)에서 예외가 나면 다른 시장까지 죽을 수 있으므로
+        # 외곽도 try/except 로 한 번 더 감싼다 (sync_prices_krx 패턴과 일관성).
+        try:
+            snap = _fetch_market_snapshot(date, market)
+            sectors = _fetch_sector_map(date, market)
+        except Exception as e:
+            _log.warning(
+                f"[{market}] {date} 메타 수집 단계 예외 — 이 시장 건너뜀 "
+                f"({type(e).__name__}: {e})"
+            )
+            per_market[market] = 0
+            continue
         per_market[market] = len(snap)
         _log.info(f"[{market}] {len(snap)}종목 메타 수집 (업종 매핑 {len(sectors)}건)")
 
@@ -1128,10 +1154,12 @@ def sync_ohlcv_ticker(db_cfg: DatabaseConfig, *, ticker: str, days: int) -> dict
 # 역분할·상폐·수정주가 미반영으로 한계 초과 row가 들어올 수 있어 UPDATE 시 가드로 사용.
 _CHANGE_PCT_ABS_LIMIT = 999999.9999
 
-# 직전 거래일 간격 가드 (영업일 단위 PostgreSQL DATE 차이).
-# 정상 거래일 1~3일, 추석·설 연휴 최대 5일. 7일 초과면 sync 누락에 의한 갭 —
+# 직전 거래일 간격 가드 (calendar days, PostgreSQL DATE 차이).
+# 정상 거래일 간격: 평일 1일 / 금→월 3일. 평일 단독 공휴일(어린이날 등) 또는
+# 추석/설 3거래일 연휴까지 끼면 최대 6일. 7일 이상은 명백한 sync 누락 갭 —
 # (close - prev_close) / prev_close 계산은 실제 일간 등락률이 아니라 누락 구간
 # 전체의 변화를 단일 일간으로 둔갑시키므로 change_pct=NULL 유지.
+# 비교는 strict `<` — 정확히 7일 점프 (예: 5거래일 누락) 도 가드 발동.
 _CHANGE_PCT_MAX_GAP_DAYS = 7
 
 
@@ -1179,7 +1207,7 @@ def recompute_change_pct(db_cfg: DatabaseConfig) -> int:
       AND prev_close > 0
       AND (
           ABS((close - prev_close) / prev_close * 100) >= %s
-          OR (trade_date - prev_trade_date) > %s
+          OR (trade_date - prev_trade_date) >= %s
       )
     ORDER BY (trade_date - prev_trade_date) DESC,
              ABS((close - prev_close) / prev_close * 100) DESC
@@ -1208,7 +1236,7 @@ def recompute_change_pct(db_cfg: DatabaseConfig) -> int:
       AND r.prev_close IS NOT NULL
       AND r.prev_close > 0
       AND ABS((r.close - r.prev_close) / r.prev_close * 100) < %s
-      AND (r.trade_date - r.prev_trade_date) <= %s;
+      AND (r.trade_date - r.prev_trade_date) < %s;
     """
 
     updated = 0
@@ -1227,7 +1255,7 @@ def recompute_change_pct(db_cfg: DatabaseConfig) -> int:
                 )
                 gap_n = sum(
                     1 for r in probe_rows
-                    if r[6] is not None and int(r[6]) > _CHANGE_PCT_MAX_GAP_DAYS
+                    if r[6] is not None and int(r[6]) >= _CHANGE_PCT_MAX_GAP_DAYS
                 )
                 _log.warning(
                     f"[OHLCV] change_pct 가드 위반 후보 {len(probe_rows)}건 "
