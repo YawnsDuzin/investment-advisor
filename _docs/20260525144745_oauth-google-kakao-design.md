@@ -79,7 +79,9 @@
 
 ---
 
-## 4. DB 스키마 (마이그레이션 v48)
+## 4. DB 스키마 (마이그레이션 v51)
+
+> ⚠ 정정: 현재 `SCHEMA_VERSION=50` (v48~v50 이미 사용 중). 새 마이그레이션은 **v51**.
 
 ```sql
 CREATE TABLE IF NOT EXISTS user_oauth_accounts (
@@ -103,7 +105,7 @@ CREATE INDEX idx_user_oauth_accounts_user ON user_oauth_accounts(user_id);
 - `(user_id, provider)` UNIQUE — 한 user 가 같은 provider 에 두 번 연결 불가.
 - `provider_email` / `provider_name` 은 감사 + UI 표시용 (최초 1회 기록, 갱신 안 함).
 
-**마이그레이션 함수**: `shared/db/migrations/versions.py` 에 `_migrate_to_v48()` 추가 + `init_db()` 에 `if current < 48: ...` 분기.
+**마이그레이션 함수**: `shared/db/migrations/versions.py` 에 `_migrate_to_v51(cur)` 추가 + `shared/db/migrations/__init__.py` 의 `_MIGRATIONS` dict 에 `51: _v._migrate_to_v51,` 등록 + `shared/db/schema.py:SCHEMA_VERSION` 을 `50` → `51` 로 증가. `init_db()` 본체는 수정 불필요 (`run_migrations()` 가 자동 적용).
 
 ---
 
@@ -157,7 +159,9 @@ api/
 └── main.py                    ← SessionMiddleware 등록 + auth_oauth router include + register_providers() 호출
 
 shared/
-├── db/migrations/versions.py  ← _migrate_to_v48() 추가
+├── db/migrations/versions.py  ← _migrate_to_v51() 추가
+├── db/migrations/__init__.py  ← _MIGRATIONS dict 에 v51 등록
+├── db/schema.py               ← SCHEMA_VERSION 50 → 51
 └── config.py                  ← AuthConfig 에 OAuth 필드 6개 추가
 
 api/templates/
@@ -370,7 +374,7 @@ def _can_unlink(conn, user_id, provider):
 
 ## 12. 롤백 + 운영
 
-**롤백**: `OAUTH_ENABLED=false` → API 재시작 → 버튼 자동 숨김 + OAuth 라우트 404. v48 마이그레이션은 destructive 아니므로 별도 다운그레이드 불필요. 기존 OAuth 가입자는 OAuth 만 가진 경우 로그인 불가 — 운영자가 `users.password_hash` 를 콘솔에서 임시 부여하거나 OAuth 다시 켜야 함.
+**롤백**: `OAUTH_ENABLED=false` → API 재시작 → 버튼 자동 숨김 + OAuth 라우트 404. v51 마이그레이션은 destructive 아니므로 별도 다운그레이드 불필요. 기존 OAuth 가입자는 OAuth 만 가진 경우 로그인 불가 — 운영자가 `users.password_hash` 를 콘솔에서 임시 부여하거나 OAuth 다시 켜야 함.
 
 **모니터링**:
 - `admin_audit_logs` 에서 `oauth_*` action 일별 카운트 (대시보드 추가 안 함, ad-hoc 쿼리)
@@ -394,7 +398,7 @@ def _can_unlink(conn, user_id, provider):
 | 단계 | 소요 |
 |---|---|
 | Cloudflare Tunnel + DDNS + Kakao 비즈앱 신청 | 0.5~3일 (Kakao 심사 변수) |
-| v48 마이그레이션 + `AuthConfig` 확장 | 1시간 |
+| v51 마이그레이션 + `AuthConfig` 확장 | 1시간 |
 | `oauth_providers.py` + `oauth_handlers.py` + `auth_oauth.py` | 3~4시간 |
 | `login.html` / `register.html` / `profile.html` + CSS | 1.5시간 |
 | pytest 시나리오 13종 + Authlib mock fixture | 2시간 |
