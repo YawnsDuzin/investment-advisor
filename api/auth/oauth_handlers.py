@@ -156,3 +156,109 @@ def _list_linked_providers(conn, user_id: int) -> dict:
         )
         rows = cur.fetchall()
     return {row["provider"]: dict(row) for row in rows}
+
+
+class OAuthCallbackError(Exception):
+    """OAuth 콜백 처리 실패 — error_code 로 사용자 안내 메시지 매핑."""
+
+    def __init__(self, error_code: str, message: str = ""):
+        super().__init__(message or error_code)
+        self.error_code = error_code
+
+
+async def _extract_userinfo(provider: str, token: dict) -> dict:
+    """provider 별 userinfo 응답 표준화.
+
+    Returns:
+        {"provider_user_id", "email", "email_verified", "name"}
+    """
+    from api.auth.oauth_providers import oauth
+
+    if provider == "google":
+        ui = token.get("userinfo") or {}
+        return {
+            "provider_user_id": str(ui.get("sub", "")),
+            "email": ui.get("email"),
+            "email_verified": bool(ui.get("email_verified", False)),
+            "name": ui.get("name", ""),
+        }
+    elif provider == "kakao":
+        resp = await oauth.kakao.get("v2/user/me", token=token)
+        data = resp.json()
+        account = data.get("kakao_account", {})
+        profile = account.get("profile", {})
+        return {
+            "provider_user_id": str(data.get("id", "")),
+            "email": account.get("email"),
+            "email_verified": bool(account.get("is_email_verified", False)),
+            "name": profile.get("nickname", ""),
+        }
+    raise ValueError(f"Unknown provider: {provider}")
+
+
+async def handle_oauth_callback(provider: str, request, conn, next_url: str) -> tuple:
+    """OAuth 콜백 메인 — 토큰 교환 → upsert → audit → (user, next_url) 반환.
+
+    토큰 발급(`_set_auth_cookies`)는 라우트 레이어 책임. 이 함수는 user 식별까지.
+
+    Raises:
+        OAuthCallbackError(error_code=...): 사용자 안내 가능한 실패
+            - "oauth_failed" — state/code 오류
+            - "kakao_email_required" — Kakao 이메일 미동의
+            - "email_unverified" — provider 이메일 미검증
+            - "account_disabled" — is_active=false
+    """
+    from api.auth.oauth_providers import oauth
+
+    # authlib 의존성은 선택적 — import 실패 시 graceful fallback
+    try:
+        from authlib.integrations.starlette_client import OAuthError
+    except ImportError:
+        OAuthError = Exception  # type: ignore[misc,assignment]
+
+    # 1. Authlib 토큰 교환 (state 검증 자동)
+    try:
+        client = oauth.create_client(provider)
+        if client is None:
+            raise OAuthCallbackError("oauth_failed", f"provider {provider} not registered")
+        token = await client.authorize_access_token(request)
+    except OAuthCallbackError:
+        raise
+    except Exception as e:
+        raise OAuthCallbackError("oauth_failed", str(e))
+
+    userinfo = await _extract_userinfo(provider, token)
+
+    # 2. Kakao 이메일 필수
+    if provider == "kakao" and not userinfo["email"]:
+        raise OAuthCallbackError("kakao_email_required")
+
+    # 3. 기존 OAuth 연결 조회 → 즉시 로그인
+    existing = _find_oauth_account(conn, provider, userinfo["provider_user_id"])
+    if existing:
+        user = _get_user(conn, existing["user_id"])
+        if user is None:
+            raise OAuthCallbackError("oauth_failed", "linked user not found")
+        if not user["is_active"]:
+            raise OAuthCallbackError("account_disabled")
+        _update_oauth_last_login(conn, existing["id"])
+        _audit_log(conn, user["id"], "oauth_login", provider=provider)
+        return (user, next_url)
+
+    # 4. 이메일 매칭 → 자동 연결 또는 신규 생성
+    user = _find_user_by_email(conn, userinfo["email"]) if userinfo["email"] else None
+    if user:
+        if not userinfo["email_verified"]:
+            raise OAuthCallbackError("email_unverified")
+        if not user["is_active"]:
+            raise OAuthCallbackError("account_disabled")
+        _insert_oauth_account(conn, user["id"], provider, userinfo)
+        _audit_log(conn, user["id"], "oauth_auto_link", provider=provider)
+        return (user, next_url)
+
+    # 5. 신규 가입
+    new_user_id = _create_user_from_oauth(conn, userinfo)
+    _insert_oauth_account(conn, new_user_id, provider, userinfo)
+    new_user = _get_user(conn, new_user_id)
+    _audit_log(conn, new_user_id, "oauth_signup", provider=provider)
+    return (new_user, next_url)
