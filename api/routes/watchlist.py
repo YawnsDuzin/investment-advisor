@@ -469,14 +469,30 @@ def notifications_page(conn=Depends(get_db_conn), ctx: dict = Depends(make_page_
     })
 
 
-# ── Profile (비밀번호 변경) ────────────────────
+# ── Profile (비밀번호 변경 + 연결된 계정) ────────────────────
 @pages_router.get("/pages/profile")
 def profile_page(ctx: dict = Depends(make_page_ctx("profile"))):
     """프로필 페이지 — 로그인 사용자만"""
     if not ctx["auth_enabled"] or ctx["_user"] is None:
         return RedirectResponse("/auth/login?next=/pages/profile", status_code=302)
+
+    from api.auth.oauth_handlers import _list_linked_providers, _can_unlink
+    from shared.config import AuthConfig
+
+    conn = ctx["_conn"]
+    user = ctx["_user"]
+    auth_cfg = ctx["_auth_cfg"]
+
+    linked = _list_linked_providers(conn, user.id) if auth_cfg.oauth_enabled else {}
+    can_unlink_map = {p: _can_unlink(conn, user.id, p) for p in linked.keys()}
+
     return templates.TemplateResponse(request=ctx["request"], name="profile.html", context={
         **ctx,
-        "error": "",
-        "success": "",
+        "error": ctx["request"].query_params.get("error", ""),
+        "success": ctx["request"].query_params.get("success", ""),
+        "linked_providers": linked,
+        "can_unlink_map": can_unlink_map,
+        "oauth_enabled": auth_cfg.oauth_enabled,
+        "oauth_google_enabled": auth_cfg.google_active,
+        "oauth_kakao_enabled": auth_cfg.kakao_active,
     })

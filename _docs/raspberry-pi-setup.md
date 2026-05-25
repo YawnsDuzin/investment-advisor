@@ -607,6 +607,14 @@ sudo certbot --nginx -d myadvisor.duckdns.org
 
 Nginx 사용 시에는 공유기에서 **80/443** 만 내부 RPi의 **80/443** 으로 포워딩하고, `ufw` 의 8000 포트는 닫는다(외부 노출 방지). 자세한 내용은 [Nginx 공식 문서](https://nginx.org/en/docs/) 와 [Certbot 공식 문서](https://certbot.eff.org/) 참고.
 
+### 8.5 Cloudflare Tunnel (HTTPS 외부 노출 — OAuth 운영 시 필수)
+
+OAuth 운영을 위해서는 도메인 + HTTPS 가 필수다 (Google/Kakao 양쪽 정책).
+Cloudflare Tunnel 을 사용하면 공유기 포트포워딩 없이 무료로 HTTPS 를 제공할 수 있다.
+8.4 의 Nginx + Let's Encrypt 대신 더 간단한 대안이다.
+
+상세 설치/설정 절차: [_docs/20260525150854_oauth-setup.md](_docs/20260525150854_oauth-setup.md) §1
+
 ---
 
 ## 9. 운영 체크리스트

@@ -51,21 +51,40 @@ def _clear_auth_cookies(response):
 
 # ── 페이지 ────────────────────────────────────
 
+_OAUTH_ERROR_MESSAGES = {
+    "oauth_failed": "소셜 로그인에 실패했습니다. 다시 시도해주세요.",
+    "kakao_email_required": "카카오 로그인 시 이메일 제공에 동의해야 가입할 수 있습니다.",
+    "email_unverified": "이메일 인증이 완료되지 않은 계정입니다. 이메일을 확인하거나 직접 로그인 후 프로필에서 연결해주세요.",
+    "account_disabled": "비활성화된 계정입니다. 관리자에게 문의하세요.",
+}
+
+
+def _map_oauth_error(error_code: str) -> str:
+    if not error_code:
+        return ""
+    return _OAUTH_ERROR_MESSAGES.get(error_code, error_code)
+
 
 @router.get("/login")
 def login_page(request: Request, error: str = "", next: str = "/"):
+    cfg = AuthConfig()
     return templates.TemplateResponse(request=request, name="login.html", context={
         "active_page": "login",
-        "error": error,
+        "error": _map_oauth_error(error),
         "next_url": next,
+        "oauth_google_enabled": cfg.google_active,
+        "oauth_kakao_enabled": cfg.kakao_active,
     })
 
 
 @router.get("/register")
 def register_page(request: Request, error: str = ""):
+    cfg = AuthConfig()
     return templates.TemplateResponse(request=request, name="register.html", context={
         "active_page": "register",
-        "error": error,
+        "error": _map_oauth_error(error),
+        "oauth_google_enabled": cfg.google_active,
+        "oauth_kakao_enabled": cfg.kakao_active,
     })
 
 
@@ -306,6 +325,15 @@ def refresh_token(
 # ── 비밀번호 변경 ────────────────────────────────
 
 
+def _is_oauth_only_user(conn, user_id: int) -> bool:
+    """password_hash IS NULL 이면 True — local 비밀번호 없는 OAuth-only 유저."""
+    from psycopg2.extras import RealDictCursor
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute("SELECT password_hash FROM users WHERE id = %s", (user_id,))
+        row = cur.fetchone()
+        return row is not None and row["password_hash"] is None
+
+
 @router.post("/change-password")
 def change_password(
     request: Request,
@@ -329,6 +357,10 @@ def change_password(
             "error": msg,
             "success": "",
         })
+
+    # OAuth-only 유저 가드 — password_hash 없는 계정은 비밀번호 변경 불가
+    if _is_oauth_only_user(conn, user.id):
+        return _error("소셜 로그인 계정은 비밀번호가 없습니다. 비밀번호 설정 기능은 추후 제공 예정입니다.")
 
     # 새 비밀번호 확인 일치
     if new_password != new_password_confirm:

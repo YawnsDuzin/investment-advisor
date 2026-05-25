@@ -75,9 +75,10 @@
     {{ macro_impact_table(theme.macro_impacts) }}
 
     {% if theme.proposals %}
-    {# Stage 2 통과 / 기초 추천 카운트 요약 (A-2) #}
+    {# Stage 2 통과 / 기초 추천 / low conviction 카운트 요약 (A-2 + B-4) #}
     {% set deep_count = theme.proposals|selectattr('has_stock_analysis')|list|length %}
     {% set base_count = theme.proposals|rejectattr('has_stock_analysis')|list|length %}
+    {% set low_count = theme.proposals|selectattr('conviction', 'equalto', 'low')|list|length %}
     <div style="margin-top:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--text-muted);">
         <span><strong style="color:var(--text);">{{ theme.proposals|length }}건</strong> 추천</span>
         {% if deep_count %}
@@ -89,6 +90,12 @@
         <span style="padding:3px 10px;border-radius:6px;background:rgba(139,143,163,0.1);border:1px solid var(--border);color:var(--text-muted);">
             기초 추천 {{ base_count }}건 (스크리너 매칭, 미검증)
         </span>
+        {% endif %}
+        {% if low_count and low_count < theme.proposals|length %}
+        <button type="button" class="btn-toggle-low" data-theme-id="{{ theme.id }}"
+                style="padding:3px 10px;border-radius:6px;background:rgba(255,255,255,0.04);border:1px dashed var(--border);color:var(--text-muted);font-size:12px;cursor:pointer;font-family:inherit;">
+            <span class="low-toggle-label">low 확신도 {{ low_count }}건 펼치기 ▾</span>
+        </button>
         {% endif %}
     </div>
     <div style="margin-top:8px;">
@@ -117,13 +124,24 @@
                 {% if p.rationale %}
                     {% set rationale_preview = (p.rationale.split('.')[0] ~ '.')|truncate(110, true, '...') %}
                 {% endif %}
-                <tr class="screener-row {% if p.has_stock_analysis %}row-deep-analyzed{% endif %}" data-idx="t{{ theme.id }}-{{ loop.index0 }}" style="cursor:pointer;{% if p.has_stock_analysis %}border-left:3px solid var(--green);{% endif %}">
+                {# B-4: low conviction 은 기본 숨김, 토글로 표시 (Stage 2 통과 종목은 항상 표시) #}
+                {% set is_low_hidden = (p.conviction == 'low' and not p.has_stock_analysis) %}
+                <tr class="screener-row {% if p.has_stock_analysis %}row-deep-analyzed{% endif %} {% if is_low_hidden %}low-conv-row low-conv-theme-{{ theme.id }}{% endif %}" data-idx="t{{ theme.id }}-{{ loop.index0 }}" style="cursor:pointer;{% if p.has_stock_analysis %}border-left:3px solid var(--green);{% endif %}{% if is_low_hidden %}display:none;{% endif %}">
                     <td><span class="badge badge-{{ p.action }}">{{ p.action|upper }}</span></td>
                     <td style="font-weight:600;">
                         <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
                             <span>{{ p.asset_name }}</span>
                             {% if p.has_stock_analysis %}
                             <span title="Stage 2 심층분석 완료 — 펀더멘털/모멘텀/리스크 검증됨" style="font-size:10px;padding:1px 6px;border-radius:4px;background:var(--green);color:#0b0d14;font-weight:700;letter-spacing:0.3px;">DEEP</span>
+                            {% endif %}
+                            {# C-7: 진입 부적합 배지 #}
+                            {% set es = p.entry_signal %}
+                            {% if es and es.blocks %}
+                            <span title="진입 부적합 사유: {{ es.blocks|join(' / ') }}" style="font-size:10px;padding:1px 6px;border-radius:4px;background:rgba(239,68,68,0.15);color:var(--red);font-weight:700;border:1px solid rgba(239,68,68,0.4);">⚠{{ es.blocks|length }} 진입주의</span>
+                            {% endif %}
+                            {# B-5: 진입신호 컴퍼짓 점수 #}
+                            {% if es and es.score > 0 %}
+                            <span title="진입 매력 신호: {{ es.signals|join(' / ') }}" style="font-size:10px;padding:1px 6px;border-radius:4px;background:rgba(52,211,153,0.15);color:var(--green);font-weight:700;border:1px solid rgba(52,211,153,0.4);">★{{ es.score }}/3 진입신호</span>
                             {% endif %}
                         </div>
                         {% if company_brief %}
@@ -153,7 +171,7 @@
                     <td>{% if p.discovery_type %}<span style="font-size:12px;padding:2px 8px;border-radius:5px;background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.2);color:var(--green);white-space:nowrap;">{{ p.discovery_type }}</span>{% else %}-{% endif %}</td>
                 </tr>
                 {% if rationale_preview %}
-                <tr class="rationale-preview" data-idx="t{{ theme.id }}-{{ loop.index0 }}" style="cursor:pointer;">
+                <tr class="rationale-preview {% if is_low_hidden %}low-conv-row low-conv-theme-{{ theme.id }}{% endif %}" data-idx="t{{ theme.id }}-{{ loop.index0 }}" style="cursor:pointer;{% if is_low_hidden %}display:none;{% endif %}">
                     <td></td>
                     <td colspan="9" style="padding:2px 12px 8px;font-size:12px;color:var(--text-muted);line-height:1.5;border-top:none;">
                         <span style="opacity:0.6;">▸</span> {{ rationale_preview }}
@@ -161,7 +179,7 @@
                     </td>
                 </tr>
                 {% endif %}
-                <tr class="detail-row" data-idx="t{{ theme.id }}-{{ loop.index0 }}" style="display:none;">
+                <tr class="detail-row {% if is_low_hidden %}low-conv-theme-{{ theme.id }}{% endif %}" data-idx="t{{ theme.id }}-{{ loop.index0 }}" style="display:none;">
                     <td colspan="10" style="padding:0;">
                         <div style="padding:14px 18px;background:rgba(79,140,255,0.04);border-left:3px solid var(--accent);font-size:14px;line-height:1.7;">
                             {# 메타 태그 #}
@@ -184,6 +202,29 @@
                                 {% endif %}
                                 {% if p.sentiment_score is not none and p.sentiment_score != None %}
                                 <span style="font-size:12px;padding:3px 10px;border-radius:6px;background:rgba(255,255,255,0.05);border:1px solid var(--border);">센티먼트 {{ p.sentiment_score }}</span>
+                                {% endif %}
+                            </div>
+                            {% endif %}
+
+                            {# C-7 + B-5: 진입 신호 상세 박스 (펀더/수급/OHLCV 기반) #}
+                            {% set es = p.entry_signal %}
+                            {% if es and (es.blocks or es.signals) %}
+                            <div style="display:grid;grid-template-columns:{% if es.blocks and es.signals %}1fr 1fr{% else %}1fr{% endif %};gap:10px;margin-bottom:12px;">
+                                {% if es.blocks %}
+                                <div style="padding:10px 12px;background:rgba(239,68,68,0.06);border-left:3px solid var(--red);border-radius:6px;">
+                                    <div style="font-size:11px;color:var(--red);text-transform:uppercase;font-weight:700;letter-spacing:0.5px;margin-bottom:6px;">⚠ 진입 부적합 사유</div>
+                                    <ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.6;color:var(--text);">
+                                        {% for b in es.blocks %}<li>{{ b }}</li>{% endfor %}
+                                    </ul>
+                                </div>
+                                {% endif %}
+                                {% if es.signals %}
+                                <div style="padding:10px 12px;background:rgba(52,211,153,0.06);border-left:3px solid var(--green);border-radius:6px;">
+                                    <div style="font-size:11px;color:var(--green);text-transform:uppercase;font-weight:700;letter-spacing:0.5px;margin-bottom:6px;">★ 진입 매력 신호 ({{ es.score }}/3)</div>
+                                    <ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.6;color:var(--text);">
+                                        {% for s in es.signals %}<li>{{ s }}</li>{% endfor %}
+                                    </ul>
+                                </div>
                                 {% endif %}
                             </div>
                             {% endif %}
@@ -308,6 +349,37 @@ function toggleProposalDetail(idx) {
 document.querySelectorAll('.screener-row, .rationale-preview').forEach(function(row) {
     row.addEventListener('click', function() {
         toggleProposalDetail(row.getAttribute('data-idx'));
+    });
+});
+
+// B-4: low conviction 행 토글
+document.querySelectorAll('.btn-toggle-low').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        var themeId = btn.getAttribute('data-theme-id');
+        var rows = document.querySelectorAll('.low-conv-theme-' + themeId);
+        var label = btn.querySelector('.low-toggle-label');
+        var firstRow = rows[0];
+        // detail-row 는 display:table-row 가 아니라 항상 행 클릭으로만 펴짐 → 토글 대상에서 제외
+        var firstVisible = firstRow && firstRow.classList.contains('low-conv-row')
+            ? (firstRow.style.display !== 'none')
+            : false;
+        var labelText = label ? label.textContent : '';
+        var countMatch = labelText.match(/(\d+)건/);
+        var count = countMatch ? countMatch[1] : '';
+        rows.forEach(function(r) {
+            if (r.classList.contains('low-conv-row')) {
+                r.style.display = firstVisible ? 'none' : '';
+            }
+            // detail-row 는 행 클릭으로만 펴지므로 토글하지 않음. 단 접을 때는 같이 닫음.
+            if (r.classList.contains('detail-row') && firstVisible) {
+                r.style.display = 'none';
+            }
+        });
+        if (label) {
+            label.textContent = firstVisible
+                ? 'low 확신도 ' + count + '건 펼치기 ▾'
+                : 'low 확신도 ' + count + '건 접기 ▴';
+        }
     });
 });
 </script>

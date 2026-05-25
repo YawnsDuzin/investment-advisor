@@ -24,5 +24,11 @@ passlib[bcrypt]>=1.7.4
 bcrypt>=4.0.0,<4.1
 email-validator>=2.0.0
 
+# oauth (Google + Kakao 소셜 로그인)
+# httpx 는 analyzer 섹션에 이미 등록 — 중복 추가 X
+# authlib 상한 pin: 2.x 는 StarletteOAuth2App 인터페이스 브레이킹 가능성 (bcrypt 패턴 동일)
+authlib>=1.3.0,<2.0
+itsdangerous>=2.2.0
+
 # tests
 pytest-asyncio>=1.3.0

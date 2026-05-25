@@ -138,10 +138,10 @@
 
     <h3>비밀번호 변경</h3>
 
-    {% if error %}
+    {% if error and error != "last_login_method" %}
     <div class="msg-error">{{ error }}</div>
     {% endif %}
-    {% if success %}
+    {% if success and success != "unlinked" %}
     <div class="msg-success">{{ success }}</div>
     {% endif %}
 
@@ -157,5 +157,43 @@
 
         <button type="submit">비밀번호 변경</button>
     </form>
+
+    {% if oauth_enabled %}
+    <h3 style="margin-top:32px;">연결된 계정</h3>
+
+    {% if error == "last_login_method" %}
+    <div class="msg-error">다른 로그인 수단이 없어 연결 해제할 수 없습니다. 비밀번호를 먼저 설정하거나 다른 소셜 계정을 연결해주세요.</div>
+    {% endif %}
+    {% if success == "unlinked" %}
+    <div class="msg-success">연결이 해제되었습니다.</div>
+    {% endif %}
+
+    <ul class="oauth-links">
+        {% for provider, label in [('google', 'Google'), ('kakao', 'Kakao')] %}
+            {% set is_enabled = (provider == 'google' and oauth_google_enabled) or (provider == 'kakao' and oauth_kakao_enabled) %}
+            {% if is_enabled %}
+                {% set info = linked_providers.get(provider) %}
+                <li class="oauth-link-row">
+                    <span class="provider-name">{{ label }}</span>
+                    {% if info %}
+                        <span class="linked-email">{{ info.provider_email or '(이메일 없음)' }}</span>
+                        <span class="linked-at">{{ info.linked_at.strftime('%Y-%m-%d') }} 연결</span>
+                        <form method="post" action="/auth/oauth/{{ provider }}/unlink" style="display:inline">
+                            <button type="submit" class="btn-unlink"
+                                {% if not can_unlink_map.get(provider) %}disabled title="다른 로그인 수단이 없어 해제할 수 없습니다"{% endif %}>
+                                연결 해제
+                            </button>
+                        </form>
+                    {% else %}
+                        <span class="linked-email" style="color:var(--text-muted);font-style:italic;">미연결</span>
+                        <form method="post" action="/auth/oauth/{{ provider }}/link" style="display:inline">
+                            <button type="submit" class="btn-link">연결하기</button>
+                        </form>
+                    {% endif %}
+                </li>
+            {% endif %}
+        {% endfor %}
+    </ul>
+    {% endif %}
 </div>
 {% endblock %}
