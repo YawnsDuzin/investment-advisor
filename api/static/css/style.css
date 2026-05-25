@@ -4648,3 +4648,140 @@ tbody tr:hover { background: var(--bg-card-hover); }
 }
 .view-mobile-select { display: none; }
 
+/* ======== 21_auth_oauth.css ======== */
+/* ───────────────────────────────────────────────
+ * OAuth 버튼 (로그인 / 회원가입 / 프로필 — 연결 계정)
+ * ─────────────────────────────────────────────── */
+
+/* ── 버튼 래퍼 ──────────────────────────────── */
+.oauth-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 16px;
+}
+
+/* ── 공통 버튼 베이스 ──────────────────────── */
+.btn-oauth {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+    padding: 11px 12px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    text-decoration: none;
+    transition: opacity 0.15s;
+    box-sizing: border-box;
+}
+
+.btn-oauth:hover { opacity: 0.85; }
+
+/* ── Google ─────────────────────────────────── */
+.btn-google {
+    background: #fff;
+    color: #3c4043;
+    border: 1px solid #dadce0;
+}
+
+/* ── Kakao ──────────────────────────────────── */
+.btn-kakao {
+    background: #fee500;
+    color: #000;
+    border: 1px solid #fee500;
+}
+
+/* ── 구분선 (또는) ──────────────────────────── */
+.oauth-divider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+    color: var(--text-muted);
+    font-size: 12px;
+}
+
+.oauth-divider::before,
+.oauth-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+}
+
+/* ── 프로필 — 연결된 계정 목록 ─────────────── */
+.oauth-links {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.oauth-link-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 14px;
+    flex-wrap: wrap;
+}
+
+.oauth-link-row:last-child {
+    border-bottom: none;
+}
+
+.provider-name {
+    font-weight: 600;
+    width: 60px;
+    flex-shrink: 0;
+}
+
+.linked-email {
+    color: var(--text-muted);
+    flex: 1;
+}
+
+.linked-at {
+    color: var(--text-muted);
+    font-size: 12px;
+}
+
+/* ── 연결/해제 버튼 ─────────────────────────── */
+.btn-link,
+.btn-unlink {
+    padding: 5px 14px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid;
+    transition: all 0.15s;
+}
+
+.btn-link {
+    background: rgba(79, 140, 255, 0.12);
+    border-color: rgba(79, 140, 255, 0.3);
+    color: var(--accent);
+}
+
+.btn-link:hover {
+    background: rgba(79, 140, 255, 0.22);
+}
+
+.btn-unlink {
+    background: rgba(248, 113, 113, 0.10);
+    border-color: rgba(248, 113, 113, 0.3);
+    color: var(--red);
+}
+
+.btn-unlink:hover:not(:disabled) {
+    background: rgba(248, 113, 113, 0.20);
+}
+
+.btn-unlink:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
