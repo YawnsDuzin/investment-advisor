@@ -64,6 +64,7 @@
 | 2026-04-22 | Stage 1-A 재발 — 문자열 값 내부 ```json 펜스 삽입 (4중 대응) | Stage 1-A | ✅ 해결됨 | [20260422_stage1a_fence_injection_in_string.md](20260422_stage1a_fence_injection_in_string.md) |
 | 2026-05-13 | KRX 세션 점유 충돌 — API ↔ 새벽 배치 (pykrx import 사이드이펙트) | API / Briefing / Analyzer | ✅ 해결됨 | [20260513140057_krx_session_contention_with_api.md](20260513140057_krx_session_contention_with_api.md) |
 | 2026-05-25 | universe-sync-meta.service — KRX 차단 시 sync_meta_krx 전체 사망 | Universe / KRX | ✅ 해결됨 | [20260525_universe_sync_meta_krx_block.md](20260525_universe_sync_meta_krx_block.md) |
+| 2026-05-27 | systemd EnvironmentFile 인라인 주석 → AppConfig int() 폭발 (analyzer 2일 연속 사망) | Config / systemd | ✅ 해결됨 | [20260527063141_systemd_envfile_inline_comment.md](20260527063141_systemd_envfile_inline_comment.md) |
 
 ---
 
@@ -88,6 +89,11 @@
 - `.env`의 `KRX_ID`/`KRX_PW` 미설정 시 pykrx 로그인 실패가 스레드별로 수십 번 반복 출력
 - 해외 주식은 yfinance 폴백이 있지만, 로그 가독성 저하
 - 대응: `shared/config.py`에서 빈 credential 감지 시 로그인 시도 자체를 스킵하도록 가드
+
+### 5. systemd EnvironmentFile vs Python .env 파서 (2026-05-27)
+- **증상**: 운영기에서만 `int(os.getenv(...))` 류가 `ValueError: invalid literal for int()` 로 폭발. 로컬 `python -m analyzer.main` 실행 시 동일 `.env` 로 재현 안 됨.
+- **원인**: systemd `EnvironmentFile=` 파서는 **인라인 주석 미지원** (`KEY=val  # cmt` 에서 `val  # cmt` 통째 export). `shared/config.py` 의 자체 파서가 인라인 주석을 떼더라도, `os.environ.setdefault` 가 systemd 가 이미 set 한 더러운 값을 덮어쓰지 않아 그대로 흐른다.
+- **대응**: `.env.example` / 운영기 `.env` 에서 인라인 주석 금지. 주석은 항상 **별도 라인**으로 분리. 회귀 차단 grep: `^[A-Z_][A-Z_0-9]*=[^\s].*#`
 
 ### 4. pykrx import 부수효과 → KRX 세션 점유 충돌 (2026-05-13)
 - **증상**: 새벽 배치(`pre-market-briefing.service` / `investment-advisor-analyzer.service`) 가 시작 직후 `Expecting value: line 1 column 1 (char 0)` 로 사망. API 재시작 후 정상화.
